@@ -16,6 +16,9 @@ on:
       - "scripts/run_urbanloco_ulhk4.sh"
       - "scripts/evaluate_urbanloco_ulhk4.sh"
       - "scripts/tests/test_urbanloco_ulhk4.py"
+      - "datasets/external_sha256.txt"
+      - "scripts/verify_public_dataset_checksum.sh"
+      - "scripts/tests/test_verify_public_dataset_checksum.sh"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   pull_request:
     paths:
@@ -27,6 +30,9 @@ on:
       - "scripts/run_urbanloco_ulhk4.sh"
       - "scripts/evaluate_urbanloco_ulhk4.sh"
       - "scripts/tests/test_urbanloco_ulhk4.py"
+      - "datasets/external_sha256.txt"
+      - "scripts/verify_public_dataset_checksum.sh"
+      - "scripts/tests/test_verify_public_dataset_checksum.sh"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   workflow_dispatch:
 
@@ -54,7 +60,10 @@ jobs:
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
             scripts/evaluate_urbanloco_ulhk4.sh
+            scripts/verify_public_dataset_checksum.sh \
+            scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
+          bash scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_urbanloco_ulhk4.py" \
