@@ -10,6 +10,7 @@ on:
     paths:
       - "scripts/urbanloco_gt_helpers.py"
       - "scripts/extract_urbanloco_ulhk4_gt.py"
+      - "scripts/audit_urbanloco_ulhk4_db3.py"
       - "scripts/record_point_lio_odometry_tum.py"
       - "scripts/prepare_urbanloco_ulhk4.sh"
       - "scripts/run_urbanloco_ulhk4.sh"
@@ -46,6 +47,7 @@ jobs:
           python3 -m py_compile \
             scripts/urbanloco_gt_helpers.py \
             scripts/extract_urbanloco_ulhk4_gt.py \
+            scripts/audit_urbanloco_ulhk4_db3.py \
             scripts/record_point_lio_odometry_tum.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
