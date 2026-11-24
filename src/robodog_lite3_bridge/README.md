@@ -5,7 +5,8 @@ This initial package intentionally does not connect to the Lite3 vendor SDK and 
 ## Included nodes
 
 - lite3_state_mock: publishes neutral synthetic /mock/lite3/leg_odom2, /mock/lite3/imu/data, and /mock/lite3/joint_states messages. Odometry carries very large covariances, IMU orientation is marked unavailable, and JointState arrays are empty. All synthetic topics use the /mock/lite3 namespace and mock_* frame IDs so they cannot shadow real robot topics. This is only for topic/type and launch integration tests.
-- lite3_topic_contract_monitor: subscribes to those three standard Lite3 state topics and publishes diagnostic_msgs/DiagnosticArray on /diagnostics/robodog_lite3. Freshness uses host monotonic receive time and a configurable timeout.
+- lite3_topic_contract_monitor: subscribes to those three mock state topics and publishes diagnostic_msgs/DiagnosticArray on /diagnostics/robodog_lite3. Freshness uses host monotonic receive time and a configurable timeout.
+- telemetry_contract.py: transport-agnostic validation for a proposed versioned gateway envelope, session/sequence tracking, and finite vector values. It does not implement a wire protocol or network I/O.
 
 ## Build
 
@@ -18,6 +19,10 @@ This initial package intentionally does not connect to the Lite3 vendor SDK and 
 
     ros2 launch robodog_lite3_bridge mock_state.launch.py
     ros2 topic echo /diagnostics/robodog_lite3
+
+## Unit tests
+
+The pytest suite covers freshness boundaries, invalid timeout values, envelope version/metadata validation, source timestamp/clock pairing, session resets, packet gaps/duplicates/reordering, NaN/Inf rejection, and vector lengths.
 
 ## Important safety boundary
 
