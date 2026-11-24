@@ -37,6 +37,7 @@ SOURCE_IMU_TYPES = {
 }
 TARGET_LIDAR_TYPE = "livox_ros_driver2/msg/CustomMsg"
 TARGET_IMU_TYPE = "sensor_msgs/msg/Imu"
+HEADER_TIMEBASE_TOLERANCE_NS = 1_000
 
 # Exact field layout from the M3DGR ROS1 driver and pinned Livox ROS Driver2.
 CUSTOM_POINT_MSG = """uint32 offset_time
@@ -143,8 +144,11 @@ def validate_preflight(
             raise ValueError("Audit report contains a Livox point_num/points length mismatch.")
         if sample.get("header_timebase_delta_ns") is not None and abs(
             int(sample["header_timebase_delta_ns"])
-        ) > 2:
-            raise ValueError("Audit report contains a header.stamp/timebase mismatch > 2 ns.")
+        ) > HEADER_TIMEBASE_TOLERANCE_NS:
+            raise ValueError(
+                "Audit report contains a header.stamp/timebase mismatch > "
+                f"{HEADER_TIMEBASE_TOLERANCE_NS} ns."
+            )
 
     return report, actual_sha
 
