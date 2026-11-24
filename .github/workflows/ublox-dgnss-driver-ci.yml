@@ -106,6 +106,16 @@ jobs:
           set -u
           ros2 pkg prefix ublox_dgnss_node
           ros2 pkg prefix ublox_ubx_msgs
-          ros2 interface show ublox_ubx_msgs/msg/UBXNavPVT | grep -q "uint32 itow"
-          ros2 interface show ublox_ubx_msgs/msg/UBXNavHPPosLLH | grep -q "uint32 itow"
-          ros2 interface show ublox_ubx_msgs/msg/UBXNavCov | grep -q "uint32 itow"
+
+          # Capture complete CLI output before grep. Piping ros2 interface show
+          # directly to grep -q closes stdout early and causes BrokenPipeError
+          # under pipefail even when the requested field exists.
+          PVT_INTERFACE="$(ros2 interface show ublox_ubx_msgs/msg/UBXNavPVT)"
+          HPPOSLLH_INTERFACE="$(ros2 interface show ublox_ubx_msgs/msg/UBXNavHPPosLLH)"
+          NAVCOV_INTERFACE="$(ros2 interface show ublox_ubx_msgs/msg/UBXNavCov)"
+          grep -Fq "uint32 itow" <<<"$PVT_INTERFACE"
+          grep -Fq "bool gnss_fix_ok" <<<"$PVT_INTERFACE"
+          grep -Fq "uint32 itow" <<<"$HPPOSLLH_INTERFACE"
+          grep -Fq "bool invalid_lat" <<<"$HPPOSLLH_INTERFACE"
+          grep -Fq "uint32 itow" <<<"$NAVCOV_INTERFACE"
+          grep -Fq "bool pos_cor_valid" <<<"$NAVCOV_INTERFACE"
