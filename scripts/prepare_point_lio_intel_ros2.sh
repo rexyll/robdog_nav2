@@ -16,8 +16,11 @@ intel_repo=decbb06fc1b746b229957b66b92ab972e1f05609
 patches=0001,0002,0003"
 
 mkdir -p "$WORKSPACE/src"
+CLONED_NEW_TREE=0
 if [[ ! -e "$POINTLIO_DIR" ]]; then
-  git clone "$UPSTREAM_URL" "$POINTLIO_DIR"
+  git clone --branch point-lio-with-grid-map --no-checkout "$UPSTREAM_URL" "$POINTLIO_DIR"
+  git -C "$POINTLIO_DIR" checkout --detach "$UPSTREAM_COMMIT"
+  CLONED_NEW_TREE=1
 fi
 
 if [[ ! -d "$POINTLIO_DIR/.git" ]]; then
