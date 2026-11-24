@@ -46,3 +46,4 @@
 | 2026-11-24 | v0.3.30 | 新增原生 ubuntu-24.04-arm + ROS Jazzy ARM64 构建 gate，用来预验证 aarch64 SDK2/Driver2/Point-LIO；明确 generic ARM64 不等于 Jetson Orin/JetPack 实机验收 | ARM64 workflow 4685af67/12387915; run 45339955465; POC doc f2d30fd8 |
 | 2026-11-24 | v0.3.31 | P2 UrbanLoco 准备脚本增加 raw bag 每次重算 SHA256、DB3 checksums 与 dataset manifest；回放脚本强化整组进程清理；新增 SQLite rosbag INSPVAX integration tests，P2 CI run 45340287093 10/10 tests passed | prep 40921631/86493c97; replay 29937a81; tests a9b2a1b2; P2 CI 45340287093; POC doc 8138c4f0 |
 | 2026-11-24 | v0.3.32 | P2 SQLite rosbag INSPVAX integration tests 与全套 10/10 测试通过；数据 SHA256 provenance 和回放进程组清理已实现；P3a native ARM64 build 仍运行中 | P2 CI 45340287093; prep 40921631/86493c97; replay 29937a81; tests a9b2a1b2; P3a 45339955465 |
+| 2026-11-24 | v0.3.33 | ARM64 run 45339955465 已实际完成 SDK2/Driver2/Point-LIO 两包编译；job 仅因 post-build file 命令缺失失败，现改成纯 shell 文件/可执行检查并重跑 | ARM64 workflow d7bc7b37; first run 45339955465; retry 45340700005 |
