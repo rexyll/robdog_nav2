@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.14
+- 文档版本：v0.3.15
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -78,7 +78,7 @@
 - [~] A7. 已核对 simpleRTK2B Budget / ZED-F9P 当前 SKU 与最高 10Hz RTK 输出；板卡不含天线，目标场地及 NTRIP/自建基站尚未确定。
 - [~] A8. 已审计 current sdk_deploy 公共 RobotStatus：包含 base_rpy/base_angular_velocity、joint/status/timeout/freshness，但不含 base xyz/linear velocity/covariance；不能据此发布 Odometry。Motion SDK 可读 IMU/12 joints/contact force；lite3_transfer 启动可能获取 SDK 控制权，实机 bring-up 前必须有厂商 SOP。见 [公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)。
 - [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
-- [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
+- [~] A10. 已建立定位、感知、端到端时延、停车距离、Nav2 路径跟踪、RTK 降级、地形和长时运行的指标定义与测量方法；最终数值阈值待 Lite3 实际速度/制动能力、部署场地和风险等级确定。见 [验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)。
 - [~] A11. 已核实 ROS 发行版与 Jetson 组合：首轮复现厂商 Humble 栈，同时评估 AGX Orin DevKit JetPack 7.2.1 ISO base → 7.2.2 apt upgrade / Ubuntu 24.04 / Jazzy；ROS Lyrical（Ubuntu 26.04）暂不纳入当前 Orin 正式基线。完成实际兼容性矩阵后冻结版本；采购前风险评审作为后续 A12。
 - [ ] A12. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
 - [ ] A13. 向云深处确认当前 Venture 固件/SDK 的推荐 ROS 路径、motion host / AGX Orin host 分工、正式 legged odometry/body velocity（含时间戳/frame/covariance）、contact force 语义、SDK_MODE 是否获取控制权及物理急停/驱动禁能方案；问题扩展至供应商矩阵 V-32。
@@ -91,7 +91,7 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [ ] B3. 构建 vendor-side gateway 与 Jazzy robodog_lite3_bridge 的非 DDS 消息契约；携带 source timestamp、clock domain、frame、sequence、quality、covariance 和健康状态。
-- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 候选 commit；尚未在 Jazzy x86_64 和 Orin aarch64 编译。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
+- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 候选 commit，并新增 Jazzy x86_64 build workflow（run 45332455019，当前运行中）；Orin aarch64 与真实 MID-360 仍待验证。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
@@ -220,6 +220,7 @@
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
+| 2026-11-24 | v0.3.15 | 建立导航/避障验收指标和测量方法框架，A10 部分完成；新增 Livox Jazzy x86_64 build workflow，仍需等待结果并完成 Orin ARM64 验证 | acceptance metrics 30a81088; Livox CI run 45332455019 |
 
 ---
 
@@ -241,6 +242,7 @@
 - [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
 - [Lite3 公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)
 - [MID-360 Livox 驱动锁定基线](docs/implementation/livox_mid360_driver_baseline.md)
+- [导航与避障验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
