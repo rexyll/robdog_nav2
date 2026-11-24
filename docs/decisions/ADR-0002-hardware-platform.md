@@ -105,7 +105,7 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 ## 4. 软件基线决策
 
-**更新说明（2026-11-24）：** ROS 2 Lyrical Luth 已于 2026-05 发布、支持至 2031-05；NVIDIA JetPack 7.2.2 已支持 Jetson Orin Family，但其 L4T 系统为 Ubuntu 24.04。由于 Lyrical Tier 1 Ubuntu 平台是 26.04，当前 Orin 平台应优先验证 Jazzy，而不是为了追最新 ROS distro 跨到未获 JetPack 支持的系统。
+**更新说明（2026-11-24）：** ROS 2 Lyrical Luth 已于 2026-05 发布、支持至 2031-05；NVIDIA JetPack 7.2.2 已支持 Jetson Orin Family，L4T Ubuntu 24.04。需要注意，Jetson AGX Orin Developer Kit 用户指南的 ISO 安装入口仍以 JetPack 7.2.1 / L4T r39.2.1 为基础镜像，再通过 apt update / dist-upgrade 升级到 7.2.2；该安装路径需要按 AGX DevKit 用户指南实测。由于 Lyrical Tier 1 Ubuntu 平台是 26.04，当前 Orin 平台应优先验证 Jazzy，而不是为了追最新 ROS distro 跨到未获 JetPack 支持的系统。
 
 云深处公开的 Lite3 Venture 感知扩展示例使用：
 - Ubuntu 22.04；
@@ -119,7 +119,7 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 因此策略更新为：
 1. 首轮按厂商示例复现 Humble/JetPack 6.1，核对 Lite3 SDK 和 MID-360 的供应商路径；
-2. 并行在 JetPack 7.2.2/Ubuntu 24.04 上验证 Jazzy，若 Lite3 bridge 和所有驱动可用，则将 Jazzy 作为机载长期运行基线；
+2. 并行在 AGX Orin DevKit 的 JetPack 7.2.1 base ISO → 7.2.2 update / Ubuntu 24.04 上验证 Jazzy，若 Lite3 bridge 和所有驱动可用，则将 Jazzy 作为机载长期运行基线；
 3. 自研 ROS package 保持 Humble/Jazzy 可移植，Lite3 SDK 通过独立 bridge 隔离；
 4. 不在长期运行中依赖 Humble；应在 2027-05 EOL 前完成迁移或形成有维护保障的替代策略；
 5. Lyrical 仅在 Jetson Orin Ubuntu 26.04 官方 BSP 和所有外设驱动可用后再评估；
