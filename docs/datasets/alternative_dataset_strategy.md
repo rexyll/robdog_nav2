@@ -186,3 +186,38 @@ python scripts/audit_m3dgr_ros1_bag.py \\
 
 输出报告建议保存在被 `.gitignore` 忽略的数据目录；不要提交原始 bag 或生成的大型报告。将终端输出中的 topic/type/样本摘要及 JSON 报告关键段提供给项目审查后，再决定是否转换。
 
+
+### 6.5 Livox ROS1 消息的逐点时间单位核验（固定上游来源）
+
+本轮已将 M3DGR 仓库 `main` 固定为 commit `5fc892c84defef42feb2418f7d38897bef40f490` 后核对其自带 ROS1 Livox Driver：
+
+- [CustomPoint.msg](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/Point_LIO_M3DGR/src/livox_ros_driver/msg/CustomPoint.msg)：`uint32 offset_time`，描述为相对 base time 的偏移。
+- [lddc.cpp：FillPointsToCustomMsg / PublishCustomPointcloud](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/Point_LIO_M3DGR/src/livox_ros_driver/livox_ros_driver/lddc.cpp#L356-L461)：`packet_offset_time` 明确注释为 `uint:ns`；逐点 offset 以 packet offset 加 point interval 生成；每帧第一包的 packet timestamp 同时写入 `CustomMsg.timebase`，`header.stamp` 设置为 `ros::Time(timestamp / 1e9)`。
+- [CustomMsg.msg](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/Point_LIO_M3DGR/src/livox_ros_driver/msg/CustomMsg.msg)：`timebase` 注释为 first point time。
+
+因此本数据集所对应的 ROS1 Driver 源码语义为：
+
+- `timebase`：ns，首个 packet 时间；
+- `header.stamp`：同一 packet 时间转换成 ROS 秒/纳秒；
+- `CustomPoint.offset_time`：相对 `timebase` 的 ns；
+- 点时刻可按 `timebase + offset_time` 计算（ns）。
+
+新增 bag audit 会报告 `header_timebase_delta_ns`、`offset_time_raw_min/max`（单位标记 ns）、`point_num_declared` 与实际反序列化 points 数量。**仍不可从这些字段推断设备时钟同步模式**：Driver 的时间转换源码中存在 PPS/PTP/NoSync 等输入时戳分支；录制的 CustomMsg 自身并未携带足以独立确认当前 packet timestamp_type 的完整证据。需结合 bag 内 IMU 时间比较、采集配置/日志以及实际传感器测试分析；header/timebase 一致不能被表述为 PTP 已同步。
+
+### 6.6 Dynamic03 GT 文件格式审计
+
+M3DGR 作者的评测说明使用 TUM trajectory 格式输入 `evo_ape`；仓库中公开的 GT 示例（例如 `Grass01_fixed.txt`）为八列：`timestamp tx ty tz qx qy qz qw`。但 Dynamic03 的独立 GT 尚未由用户下载，因此不能预先断言该文件没有额外头部、是否同样为 TUM 或是否完整覆盖 284 秒。
+
+新增 [`scripts/audit_tum_trajectory.py`](../../scripts/audit_tum_trajectory.py)，下载 GT 后先运行：
+
+```bash
+cd ~/workspace/robdog_nav2
+source .venv-dataset-tools/bin/activate
+python scripts/audit_tum_trajectory.py \\
+  "$HOME/Downloads/Dynamic03_GT.txt" \\
+  --json-out datasets/m3dgr_dynamic03_gt_audit.json
+```
+
+将 `Dynamic03_GT.txt` 替换成实际文件名。该工具只检查 TUM 八列语法、NaN/Inf、重复/倒退 timestamp、四元数范数、位置边界、时间跨度和 SHA256；不自动排序，不修复、不重采样、不对齐，也不推断时间单位/时钟或坐标系。若官方 GT 实际有头部/其他格式，工具将 fail closed；先审查真实格式，再新增显式解析器，不要删除数据行或盲目转换。
+
+TUM audit 通过也不等于与 bag 时间对齐。下一步必须比较 GT timestamp（TUM 秒）和 bag ROS timestamp（ns 除以 1e9）的时间覆盖与起点差；仅在确认同一时钟域、时间偏移/漂移和空间参考框架后才能进行 evo APE/RPE。若不能证明时钟对齐，先按官方采集说明/作者资料补充证据，不允许用 `evo --t_offset` 试到 RMSE 最小后把它报告为真实精度。
