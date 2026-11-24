@@ -16,7 +16,12 @@ GT_TOPIC="${URBANLOCO_GT_TOPIC:-/novatel_data/inspvax}"
 mkdir -p "${DATASET_DIR}"
 
 if [[ -d "${BAG_DIR}" ]]; then
-  echo "ROS 2 bag already present: ${BAG_DIR}"
+  echo "ROS 2 bag directory already present: ${BAG_DIR}"
+elif [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 ]]; then
+  echo "Using existing standalone SQLite3 rosbag: ${BAG_DIR}"
+elif [[ -e "${BAG_DIR}" ]]; then
+  echo "ERROR: rosbag input exists but is neither a directory nor a standalone .db3 file: ${BAG_DIR}" >&2
+  exit 3
 else
   if [[ ! -f "${RAW_BAG}" ]]; then
     cat >&2 <<EOF
@@ -69,11 +74,21 @@ for topic in "${LIDAR_TOPIC}" "${IMU_TOPIC}" "${GT_TOPIC}"; do
   fi
 done
 
-DB3_FILES=("${BAG_DIR}"/*.db3)
-if [[ ! -f "${DB3_FILES[0]}" ]]; then
+if [[ -f "${BAG_DIR}" ]]; then
+  DB3_FILES=("${BAG_DIR}")
+else
+  shopt -s nullglob
+  DB3_FILES=("${BAG_DIR}"/*.db3)
+  shopt -u nullglob
+fi
+if (( ${#DB3_FILES[@]} == 0 )); then
   echo "ERROR: P2 ground-truth extraction currently requires sqlite3 rosbag storage (*.db3)." >&2
   exit 5
 fi
+
+AUDIT_JSON="${DATASET_DIR}/bag_audit.json"
+python3 "${SCRIPT_DIR}/audit_urbanloco_ulhk4_db3.py" "${BAG_DIR}" --json-out "${AUDIT_JSON}"
+echo "P2 input audit: ${AUDIT_JSON}"
 
 # Record provenance and checksums outside the bag directory. Recompute the
 # raw digest on every run so replacing a same-named bag cannot retain a stale hash.
@@ -101,7 +116,8 @@ prepared_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 raw_bag=${RAW_BAG}
 raw_bag_size_bytes=${RAW_SIZE_BYTES}
 raw_bag_sha256=${RAW_SHA256}
-ros2_bag_dir=${BAG_DIR}
+ros2_bag_input=${BAG_DIR}
+ros2_bag_input_kind=$(if [[ -f "${BAG_DIR}" ]]; then echo standalone_db3; else echo rosbag2_directory; fi)
 lidar_topic=${LIDAR_TOPIC}
 imu_topic=${IMU_TOPIC}
 ground_truth_topic=${GT_TOPIC}
