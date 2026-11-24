@@ -139,7 +139,7 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 - 同一固定源码准备脚本和 build_point_lio_jazzy.sh 构建 SDK2/Driver2/Point-LIO；
 - 构建后检查 SDK2 shared library、ROS package prefixes 和 pointlio_mapping executable。
 
-当前运行：[ARM64 build run 45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465)，已排队。GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该运行即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
+当前运行：[ARM64 build run 45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465) 已完成 aarch64/arm64 架构断言、ROS/PCL/Eigen 依赖安装和固定源码准备，正在 SDK2/Driver2/Point-LIO native build。GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该运行即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
 
 ## 7. P2 UrbanLoco u l h k_4 离线回放工具
 
@@ -155,7 +155,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 
 ### 7.2 项目脚本
 
-1. \`scripts/prepare_urbanloco_ulhk4.sh\`：检查手动下载的 ROS1 bag，调用 \`rosbags-convert\` 生成 ROS2 sqlite3 bag，并校验三个 topic。
+1. scripts/prepare_urbanloco_ulhk4.sh：检查手动下载的 ROS1 bag，调用 rosbags-convert 生成 ROS2 sqlite3 bag，并校验三个 topic；每次运行重算 raw bag SHA256、生成 DB3 checksum 清单和 dataset_manifest.txt（采集日期可通过 URBANLOCO_ACQUISITION_DATE 指定）。
 2. \`scripts/run_urbanloco_ulhk4.sh\`：加载已通过 P1 的 \`point_lio\` 安装空间，启动 \`pointlio_mapping\` 与 TUM recorder，确认 LiDAR subscription 和 odometry pub/sub ready 后，以 1x 播放 bag；完成后清理进程并检查有效轨迹样本数量。
 3. \`scripts/extract_urbanloco_ulhk4_gt.py\`：从 rosbag2 sqlite3 的 INSPVAX CDR payload 提取固定 UrbanLoco session 中的 lat/lon/height 字段，按 bag timestamp 排序、去重并转换为 WGS84 ECEF→local ENU，输出 TUM + JSON provenance report。固定 byte offsets 只对该 session/type layout 有效，换数据版本前必须重新验证。
 4. \`scripts/evaluate_urbanloco_ulhk4.sh\`：运行 \`evo_ape tum GT EST -a\`，将 2.17m（Point-LIO 论文该序列参考值）与 +20% 区间作为历史参考输出；它不是本项目导航验收阈值，不能用来判定 MID-360/Orin/Lite3 通过。
@@ -164,7 +164,8 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 
 ### 7.3 当前证据与下一步
 
-- [x] P2 脚本/CLI 静态检查和纯函数测试通过：[run 45339580363](https://github.com/rexyll/robdog_nav2/actions/runs/45339580363)，8/8 tests passed。
+- [x] P2 第一版脚本/CLI 静态检查和 8 项解析/ENU/排序测试通过：run 45339580363。
+- [~] 加入原始/转换 bag SHA256 provenance、SQLite rosbag INSPVAX extraction integration tests，并强化 replay process-group cleanup 后的重跑 [run 45340287093](https://github.com/rexyll/robdog_nav2/actions/runs/45340287093) 仍在执行，完成后确认 10 项测试。
 - [x] P2 数据目录许可/忽略策略已写入 \`datasets/README.md\` 与 .gitignore。
 - [ ] 人工下载并放置 UrbanLoco \`HK-Data20190117.bag\`，记录来源、许可、文件大小与 SHA256。
 - [ ] 执行 ROS1→ROS2 转换，检查 bag metadata、消息数、时间跨度和预期三个 topic。
