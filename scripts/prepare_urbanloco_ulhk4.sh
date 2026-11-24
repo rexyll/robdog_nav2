@@ -108,17 +108,32 @@ done
 
 DB3_INPUT_SHA256="multiple_or_not_applicable"
 DB3_INPUT_SIZE_BYTES="multiple_or_not_applicable"
+DATASET_SOURCE_STATUS="ros2_bag_directory_source_not_yet_verified"
+P2_SOURCE_GATE="blocked_pending_source_provenance"
 if [[ -f "${BAG_DIR}" ]]; then
   DB3_INPUT_SHA256="$(awk '{print $1}' "${DB3_SUMS}")"
   DB3_INPUT_SIZE_BYTES="$(stat -c '%s' "${BAG_DIR}")"
   cp "${DB3_SUMS}" "${DATASET_DIR}/ros2_bag_input.sha256"
+  if [[ "${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}" == "1" ]]; then
+    DATASET_SOURCE_STATUS="user_confirmed_standalone_ros2_db3_conversion_provenance"
+    P2_SOURCE_GATE="user_confirmed_db3_provenance"
+  else
+    DATASET_SOURCE_STATUS="unverified_standalone_ros2_db3_only"
+    P2_SOURCE_GATE="blocked_standalone_db3_is_not_the_expected_ros1_source"
+  fi
+elif [[ -f "${RAW_BAG}" ]]; then
+  DATASET_SOURCE_STATUS="expected_ros1_bag_present; verify exact source entry and provenance"
+  P2_SOURCE_GATE="raw_ros1_source_present_pending_identity_review"
 fi
 
 cat > "${DATASET_DIR}/dataset_manifest.txt" <<EOF
-sequence=ulhk_4
-session=HK-Data20190117
-source=UrbanLoco Hong Kong dataset; manual download/mirror documented in datasets/README.md
-license=CC BY-NC-SA 4.0
+sequence_candidate=ulhk_4
+session_candidate=HK-Data20190117
+dataset_source_status=${DATASET_SOURCE_STATUS}
+p2_source_gate=${P2_SOURCE_GATE}
+expected_original_format=ROS1_bag
+expected_original_filename=HK-Data20190117.bag
+license_candidate=CC BY-NC-SA 4.0; dataset identity/provenance still requires confirmation
 acquisition_date=${URBANLOCO_ACQUISITION_DATE:-unknown}
 prepared_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 raw_bag=${RAW_BAG}
@@ -140,3 +155,10 @@ echo "Dataset provenance: ${DATASET_DIR}/dataset_manifest.txt"
 echo "Raw ROS 1 bag SHA256: ${RAW_SHA256}"
 echo "ROS 2 DB3 input size (bytes): ${DB3_INPUT_SIZE_BYTES}"
 echo "ROS 2 DB3 input SHA256: ${DB3_INPUT_SHA256}"
+echo "Dataset source status: ${DATASET_SOURCE_STATUS}"
+echo "P2 source gate: ${P2_SOURCE_GATE}"
+if [[ "${P2_SOURCE_GATE}" == blocked_standalone_db3_is_not_the_expected_ros1_source ]]; then
+  echo "WARNING: this standalone DB3 is ROS 2 SQLite storage, not the expected UrbanLoco ROS 1 source bag." >&2
+  echo "It may be inspected or replayed diagnostically, but it does not satisfy the original-source acquisition gate." >&2
+  echo "Do not proceed to formal P2 APE/RPE evaluation until source provenance is documented." >&2
+fi
