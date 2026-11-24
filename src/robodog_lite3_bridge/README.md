@@ -22,7 +22,7 @@ This initial package intentionally does not connect to the Lite3 vendor SDK and 
 
 ## Unit tests
 
-The pytest suite contains 25 tests and covers freshness boundaries, invalid timeout values, envelope version/metadata validation, source timestamp/clock pairing, session resets, packet gaps/duplicates/reordering, NaN/Inf rejection, and vector lengths. CI run 45328657069 passed on both ROS 2 Humble and Jazzy (25/25 each).
+The pytest suite now contains 35 tests. It covers freshness boundaries, invalid timeout values, envelope version/metadata validation, allowed message types, frame requirements, source timestamp/clock pairing, session resets, packet gaps/duplicates/reordering, NaN/Inf rejection, vector lengths, and basic ROS covariance shape/diagonal checks. The covariance helper does not prove positive-semidefinite matrices. The previous 25-test baseline passed CI on both Humble and Jazzy; the new 35-test version is awaiting CI. CI run 45328657069 passed on both ROS 2 Humble and Jazzy (25/25 each).
 
 ## Important safety boundary
 
