@@ -70,6 +70,29 @@ Intel patch 添加 \`config/mid360_ros2.yaml\`，参考参数使用：
 
 在上述项目验收前，不能将参考 YAML 作为本项目生产参数，也不能将 Point-LIO 输出接入 Nav2 实机运动链。
 
+### 4.1 Livox CustomMsg 逐点时间语义核验
+
+固定版本 Livox ROS Driver2 1.2.6 的 `src/lddc.cpp`：
+- `pkg.base_time` 被写入 `CustomMsg.timebase`；
+- 同一值被写入 ROS 2 `header.stamp`，使用 `rclcpp::Time(timestamp)`；
+- 每个 `CustomPoint.offset_time` 由 SDK 点时间减去 `pkg.base_time` 得出。
+
+`CustomMsg.msg` 将 `offset_time` 定义为相对 base time 的时间偏移；Driver2 的 ROS 2 header stamp 和 base time 使用纳秒时钟域。Point-LIO 固定 upstream 的 Livox CustomMsg 处理函数将 `offset_time / 1,000,000` 转换为内部毫秒（Point-LIO point curvature），用于逐点时间排序/去畸变。因此当前源码链条所需语义为：
+- `timebase/header.stamp`：基准采样时间，ns；
+- `offset_time`：逐点相对偏移，ns；
+- Point-LIO 内部 per-point time：`offset_time_ns / 1e6`，ms。
+
+**重要：** Intel `mid360_ros2.yaml` 中的 `preprocess.timestamp_unit: 2` 不是 Livox CustomMsg 的 offset_time 换算开关。固定 Point-LIO 源码只在标准 PointCloud2 preprocess 分支按 `timestamp_unit` 设置 `time_unit_scale`；Livox CustomMsg 分支使用独立的 `offset_time / 1e6` 硬编码换算。项目不能依靠改变该参数来修正 CustomMsg 时间单位。
+
+源码定位：
+- [Livox Driver2 v1.2.6 CustomMsg.msg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomMsg.msg)
+- [Livox Driver2 v1.2.6 CustomPoint.msg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomPoint.msg)
+- [Livox Driver2 v1.2.6 lddc.cpp](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/src/lddc.cpp)
+- [Point-LIO upstream preprocess.cpp pinned base](https://github.com/hku-mars/Point-LIO/blob/97b0042e397ec71c327966abebff9b4b7e2c154a/src/preprocess.cpp)
+- [Intel Point-LIO ROS2 port patch](https://github.com/open-edge-platform/edge-ai-suites/blob/decbb06fc1b746b229957b66b92ab972e1f05609/robotics-ai-suite/pipelines/point-lio-demo/patches/0001-Port-Point-LIO-to-ROS2-and-add-benchmarking-instrume.patch)
+
+该源码核验不替代设备/主机时钟同步测试。实际 PTP offset/drift、LiDAR IMU 同时钟性、CustomMsg header stamp 单调性、offset_time 范围和丢点率仍须在真实 MID-360 bag 上测量。
+
 ## 5. 分层验收，避免把 Intel benchmark 误作实机证明
 
 | 层级 | 测试 | 能证明什么 | 不能证明什么 |
