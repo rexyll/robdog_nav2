@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.17
+- 文档版本：v0.3.18
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,7 +98,7 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port/fork、patch 和依赖 commit；Livox driver v1.2.6（13eb05e4e6dd7a765b934d0c5fd6236676a57b49），SDK2 v1.3.1（f5d9375f84efe2b15bc0a052d3e18482ed13adf4，GCC 13 需 -include cstdint）。Point-LIO upstream 当前候选 commit 为 4b86a469eb5572e70ed575af25b5f15dd06e8e3c；Intel Jazzy port patch 来源、patch commits 和完整 license/SBOM 尚待核验，目标 Orin/MID-360 实测仍未完成。
+- [~] B11. 已将 Point-LIO Jazzy POC 来源锁定：HKU upstream gitlink base 97b0042e397ec71c327966abebff9b4b7e2c154a；Intel reference repo decbb06fc1b746b229957b66b92ab972e1f05609；固定三份 port/format/fix patches；Point-LIO BSD-3-Clause、Intel patch repo Apache-2.0。准备脚本和 P0 source-prep CI 已提交（run 45334159646 待结论）；Point-LIO 尚未 build/replay，Orin/MID-360 实测未完成。Livox v1.2.6 + SDK2 v1.3.1 版本与 GCC13 cstdint 参数另见 [Point-LIO POC baseline](docs/implementation/point_lio_jazzy_poc_baseline.md)。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -185,7 +185,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [ ] Point-LIO/FAST-LIO2 尚未在本项目 Jetson AGX Orin + MID-360 上构建和验证；Intel 文档中的 Jazzy port/Velodyne 数据集测试不能替代目标硬件验收。
+- [ ] Point-LIO 尚未在本项目 Jazzy x86_64 构建或以 UrbanLoco 完成 bag replay；Intel UrbanLoco 使用旧 Velodyne 数据，不证明 MID-360 per-point time 或 Jetson Orin 性能。Point-LIO P0 source-prep CI run 45334159646 待结论，之后仍需 P1 build/P2 replay/P3 Orin/P4 sensor/P5 quadruped gates。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -205,9 +205,9 @@
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 等待 Livox Jazzy x86_64 workflow [run 45333666724](https://github.com/rexyll/robdog_nav2/actions/runs/45333666724)；若 driver build 通过，再记录 x86_64 evidence 并设计 Jetson Orin aarch64 workflow；若失败，按最新编译日志逐项修复。
+5. 验证 Livox Jazzy x86_64 workflow [run 45334135171](https://github.com/rexyll/robdog_nav2/actions/runs/45334135171)：SDK2 v1.3.1 compile/install pass 后，driver 由 action-ros-ci 自动导入固定 manifest；若通过，记录 x86_64 evidence 并设计 Orin aarch64 build；若失败，继续按日志定位。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. Lite3 公开 SDK 审计已写入 [lite3_public_sdk_field_audit.md](docs/implementation/lite3_public_sdk_field_audit.md)；取得厂商只读启动 SOP 和状态接口/网络契约后，再实现 readonly gateway POC。
+7. 验证 Point-LIO 固定源准备 [run 45334159646](https://github.com/rexyll/robdog_nav2/actions/runs/45334159646)，确保上游 SHA、三个补丁和 lock marker 均正确；随后进入 Jazzy x86_64 build，再做 UrbanLoco 离线回放。Lite3 仍须取得只读启动 SOP 后才能实现真实 gateway。
 
 ---
 
@@ -223,6 +223,7 @@
 | 2026-11-24 | v0.3.15 | 建立导航/避障验收指标和测量方法框架，A10 部分完成；新增 Livox Jazzy x86_64 build workflow，仍需等待结果并完成 Orin ARM64 验证 | acceptance metrics 30a81088; Livox CI run 45332455019 |
 | 2026-11-24 | v0.3.16 | 将 Lite3 足端接触力纳入只读 telemetry envelope；contact_state 必须带 frame_id，新增 2 项测试；Humble/Jazzy 37 项 CI 双发行版通过 | contract 3341cc7b; tests fb463763; protocol 440ee4a4; CI 45332714322 |
 | 2026-11-24 | v0.3.17 | 修复 Livox CI 缺少 ROS Jazzy 环境初始化的问题，改用 action-ros-ci 与 pin manifest；SDK2 锁定到 v1.3.1 并加入 GCC 13 cstdint 兼容参数，driver build 重测中 | workflow 21e3f186; manifest f4cf74ea; baseline ca297a9b; run 45333666724 |
+| 2026-11-24 | v0.3.18 | 固定 Intel Jazzy Point-LIO 上游 gitlink SHA、三份 patch、Apache/BSD 许可证边界；新增受控源码准备脚本与 P0 CI；修正 Livox workflow 的容器内 manifest 路径 | baseline bf561d3d; prep script 4ae7a0c2; P0 workflow 74d61710; Livox workflow af0cb0bb |
 
 ---
 
@@ -244,6 +245,8 @@
 - [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
 - [Lite3 公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)
 - [MID-360 Livox 驱动锁定基线](docs/implementation/livox_mid360_driver_baseline.md)
+- [Point-LIO Jazzy POC 来源与验收基线](docs/implementation/point_lio_jazzy_poc_baseline.md)
+- [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [导航与避障验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
