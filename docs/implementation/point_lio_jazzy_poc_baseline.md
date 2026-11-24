@@ -155,7 +155,16 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - 下载镜像见 [UrbanLoco dataset preparation instructions](../../datasets/README.md)。整个 \`datasets/*\` 已加入 .gitignore，不得提交 raw bag、转换后的 db3、metadata、轨迹和 PCD/map。
 - 已在 Intel 固定参考脚本中核对该序列的消息 topic：LiDAR \`/velodyne_points_0\`、IMU \`/imu/data\`、GT \`/novatel_data/inspvax\`。运行时仍由 \`ros2 bag info\` 检查，若实际 bag 不同必须以数据自身 metadata 为准，不静默替换。
 
-### 7.2 项目脚本
+### 7.2 INSPVAX CDR 字段偏移的来源核验
+
+本项目 GT extractor 的 CDR byte offsets 不是通过自造 fixture 猜测：
+- NovAtel 官方 ROS message definition 固定到 commit `0c0e135b71c5920b845982358f6c7ec71a952b5e`，`INSPVAX.msg` 依次声明 `latitude`、`longitude`、`height` 为 float64：[官方 INSPVAX.msg](https://github.com/novatel/novatel_oem7_driver/blob/0c0e135b71c5920b845982358f6c7ec71a952b5e/src/novatel_oem7_msgs/msg/INSPVAX.msg)。
+- Intel Point-LIO reference repo 固定 commit `decbb06fc1b746b229957b66b92ab972e1f05609` 的 `extract_ulhk_gt.py` 明确使用 little-endian doubles，offsets 为 latitude=60、longitude=68、height=76：[Intel 固定提取脚本](https://github.com/open-edge-platform/edge-ai-suites/blob/decbb06fc1b746b229957b66b92ab972e1f05609/robotics-ai-suite/pipelines/point-lio-demo/scripts/extract_ulhk_gt.py)。
+- 本项目的 `urbanloco_gt_helpers.py` 和 SQLite rosbag integration tests 使用相同的固定 offsets，并增加 payload 长度、有限值与地理范围检查。
+
+**限制：** 该偏移映射仅适用于 UrbanLoco HK-Data20190117 中匹配的 `novatel_oem7_msgs/msg/INSPVAX` 序列化布局。实际 bag 下载后必须再次核对 SQLite topics.type、CDR payload 大小、首尾及抽样解码合理性；若 bag topic type 或 message schema 不一致，extractor 必须 fail closed，不可按相同 offset 强行输出 GT。
+
+### 7.3 项目脚本
 
 1. scripts/prepare_urbanloco_ulhk4.sh：检查手动下载的 ROS1 bag，调用 rosbags-convert 生成 ROS2 sqlite3 bag，并校验三个 topic；每次运行重算 raw bag SHA256、生成 DB3 checksum 清单和 dataset_manifest.txt（采集日期可通过 URBANLOCO_ACQUISITION_DATE 指定）。
 2. \`scripts/run_urbanloco_ulhk4.sh\`：加载已通过 P1 的 \`point_lio\` 安装空间，启动 \`pointlio_mapping\` 与 TUM recorder，确认 LiDAR subscription 和 odometry pub/sub ready 后，以 1x 播放 bag；完成后清理进程并检查有效轨迹样本数量。
@@ -164,7 +173,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 5. \`scripts/tests/test_urbanloco_ulhk4.py\`：对 CDR payload 范围检查、地理字段有效性、ENU 方向/高度和 bag timestamp 排序去重做纯 Python 回归。
 6. \`.github/workflows/point-lio-urbanloco-p2-tests.yml\`：CI 运行 py_compile、bash -n、CLI help 和测试，无需下载或提交 UrbanLoco 数据。
 
-### 7.3 当前证据与下一步
+### 7.4 当前证据与下一步
 
 - [x] P2 第一版脚本/CLI 静态检查和 8 项解析/ENU/排序测试通过：run 45339580363。
 - [x] 增加 raw bag / DB3 SHA256 provenance、SQLite rosbag INSPVAX GT extraction integration tests 与 replay process-group cleanup 后，P2 语法/CLI/纯函数/SQLite integration 共 10 项测试通过：[run 45340287093](https://github.com/rexyll/robdog_nav2/actions/runs/45340287093)。
