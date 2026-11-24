@@ -121,6 +121,20 @@ The resulting row-major values are `[EE, NE, -ED, NE, NN, -ND, -ED, -ND, DD]`. C
 
 The caller must supply `source_timestamp_ns` from a separately validated receiver-time mapper and a `source_clock_id` that identifies the GPS week and receiver clock generation. The helper deliberately does not synthesize a globally monotonic timestamp from iTOW: iTOW is week-relative and wraps every GPS week.
 
-The pinned driver's ROS `header.stamp` is populated from the host USB receive path; it must not be treated as receiver measurement time or host steady-clock freshness. A future ROS adapter must timestamp each callback using one host monotonic clock, maintain bounded per-topic epoch caches, and clear them on receiver clock-generation changes. `NAV-STATUS.msss` can help detect a receiver reset, but its 32-bit startup counter also wraps and must not be used alone as a permanent generation identifier.
+The pinned driver's ROS `header.stamp` is populated from the host USB receive path; it must not be treated as receiver measurement time or host steady-clock freshness. A future ROS adapter must timestamp each callback using one host monotonic clock and clear its caches on receiver clock-generation changes. `NAV-STATUS.msss` can help detect a receiver reset, but its 32-bit startup counter also wraps and must not be used alone as a permanent generation identifier.
+
+### Bounded multi-topic cache
+
+`ubx_epoch_joiner.UbxFourMessageEpochJoiner` implements the bounded cache policy without depending on ROS:
+
+- Call `begin_generation(source_clock_id)` after the receiver-time mapper has established a valid GPS week and receiver boot generation.
+- Feed each decoded record through `add_pvt()`, `add_position()`, `add_covariance()`, or `add_status()`. Each call also supplies that epoch's validated `source_timestamp_ns`.
+- Records are held in an LRU-bounded cache keyed by iTOW. The same iTOW must carry the same source-time mapping across all four message types.
+- Identical duplicate payloads are ignored; conflicting duplicates discard that incomplete epoch and raise a pairing error.
+- Incomplete epochs are evicted by the configured capacity and by host-monotonic pending age. A complete epoch is emitted only once and only if its mapped receiver timestamp is newer than the last emitted epoch.
+- An unexpected source-clock ID is rejected. After `reset()`, `begin_generation()` must be called explicitly before another message is accepted. Late callbacks from an old generation cannot silently switch the active cache.
+- The cache itself does not discover GPS week or receiver reboot. The ROS adapter remains responsible for a trustworthy generation detector, source-time mapper, bounded queue sizing, and a single monotonic clock for all callbacks.
+
+The configured cache capacity, pair receive-skew limit and pending-age limit in tests are test fixtures, not validated ZED-F9P operating thresholds. Choose production values only after collecting actual topic rates, latency, jitter and receiver-reset behavior.
 
 This helper is pure algorithm code. It is not a serial/USB parser, ROS subscription node, receiver-time mapper, NavSatFix publisher, PPS driver, NTRIP client, or EKF integration.
