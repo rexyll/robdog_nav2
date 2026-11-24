@@ -81,6 +81,13 @@ fi
 echo "==> Configure ROS 2 driver package manifest and resolve dependencies"
 cp "$DRIVER_DIR/package_ROS2.xml" "$DRIVER_DIR/package.xml"
 rosdep update
+# The CI workflow removes apt lists after installing native prerequisites to
+# keep the image small; refresh them before rosdep invokes apt-get.
+if [[ "$EUID" -eq 0 ]]; then
+  apt-get update
+else
+  sudo apt-get update
+fi
 rosdep install --from-paths "$WORKSPACE/src" --ignore-src --rosdistro jazzy -r -y
 
 echo "==> Build Livox ROS Driver2 and Point-LIO using its Jazzy build entrypoint"
