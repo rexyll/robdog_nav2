@@ -1,4 +1,4 @@
-# RobDog Nav2 项目总任务计划（唯一进度台账）
+# TaskPlan Part 1 — 系统架构与硬件设计细节
 
 - 文档版本：v0.2
 - 更新日期：2026-11-24
@@ -6,7 +6,7 @@
 - 项目仓库：https://github.com/rexyll/robdog_nav2
 - 项目目标：基于四足机器狗，使用 **LiDAR + 两台普通 RGB 相机组成被动双目 + RTK GNSS**，结合机器狗 IMU/腿式里程计，构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性系统。
 - **本体预选：DEEP Robotics 绝影 Lite3 Venture（未采购、待厂商确认最终交付和接口）。**
-- **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG Color；ArduSimple simpleRTK2B Budget（u-blox ZED-F9P + ANN-MB 天线）。**
+- **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget（u-blox ZED-F9P + ANN-MB 天线）。**
 - **计算平台预选：NVIDIA Jetson AGX Orin Developer Kit（64GB 版本作为首轮开发配置；安装、电源和质量预算待验证）。**
 - 当前阶段：**阶段 A — 硬件基线与接口冻结**
 - 当前状态：**方案预选已完成；采购、实物测量、驱动编译和机器狗实机验证尚未完成。**
@@ -117,7 +117,7 @@
 |---|---|---:|---|---|
 | 四足本体 | DEEP Robotics Lite3 Venture | 1 | 腿式运动、底层控制、IMU/腿式里程计 | 已预选，未采购 |
 | 3D LiDAR | Livox MID-360 | 1 | Ethernet，PointCloud2；主要几何障碍源 | 已预选，需确认供电线束和安装 |
-| 左/右普通 RGB 相机 | e-con Systems See3CAM_50CUG Color（同型号、同批次优先） | 2 | USB 3.2 Gen 1/UVC，全球快门；组成被动双目 | 已预选，需确认 GPIO 触发和镜头 |
+| 左/右普通 RGB 相机 | e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）（同型号、同批次优先） | 2 | USB 3.2 Gen 1/UVC，全球快门；组成被动双目 | 已预选，需确认 GPIO 触发和镜头 |
 | 双目镜头 | 配套匹配 C-mount 镜头，建议初始水平视场约 70°–80° | 2 | 同焦距、同型号、同光学参数 | 需供应商选型，不使用未经确认的默认窄视场镜头 |
 | 双目同步 | 共同时钟/硬件触发分配板及线束 | 1 套 | 将同一触发信号送入左右相机 GPIO | 需根据相机 pinout/电平确认 |
 | RTK GNSS | ArduSimple simpleRTK2B Budget Starter Kit，u-blox ZED-F9P + ANN-MB 多频天线 | 1 套 | USB/UART，NavSatFix/UBX；室外全局位置 | 已预选，需 RTK 改正服务/基站 |
@@ -179,13 +179,17 @@
 
 ## 3. ROS 2 软件平台决策
 
+> 版本选择以 2026-11-24 已发布的软件为准：Humble 用于厂商参考复现，Jazzy 作为当前 Jetson Orin 长期目标，Lyrical 先记录为未来评估版本。
+
 ### 3.1 发行版策略
 
-- 云深处官方 Lite3 Venture 感知扩展文档示例使用 Ubuntu 22.04、ROS 2 Humble、JetPack 6.1、CUDA 12.6，并以 AGX Jetson Orin + MID-360 为参考。
-- 为降低首轮硬件 bring-up 风险，**阶段 B 首先以 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 复现官方 Lite3 参考栈**。
-- ROS 2 Humble 预计于 **2027 年 5 月**结束上游支持，距离当前方案日期较近。因此项目从第一天起要求自研 ROS 包保持 Humble/Jazzy 可移植，所有厂商 SDK 隔离在 adapter/bridge 内；在阶段 G 前完成 Ubuntu 24.04 + ROS 2 Jazzy 迁移验证，目标在 Humble EOL 前完成。
+- 云深处官方 Lite3 Venture 感知扩展示例使用 Ubuntu 22.04、ROS 2 Humble、JetPack 6.1、CUDA 12.6，并以 AGX Jetson Orin + MID-360 为参考。
+- 阶段 B 首先复现厂商参考栈（Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble），作为 Lite3 驱动兼容性基准，不将它默认定为项目长期部署基线。
+- ROS 2 Humble 上游支持至 **2027 年 5 月**；自研包需保持 Humble/Jazzy API 可移植，所有厂商 SDK 隔离在 adapter/bridge 内。
+- NVIDIA 当前 JetPack 7.2.2 支持 Jetson Orin Family，并以 Ubuntu 24.04 为 L4T 系统基线。项目同时验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy，将 Jazzy 作为当前 Orin 长期部署目标。
+- ROS 2 Lyrical Luth 已于 2026 年 5 月发布，LTS 支持至 2031 年 5 月，但其 Tier 1 Ubuntu 平台为 26.04；当前 JetPack 7.2.2 的 Orin 参考系统为 Ubuntu 24.04，因此暂不把 Lyrical 作为 Orin 项目基线。待 NVIDIA Orin BSP 支持 Ubuntu 26.04、且 Lite3/相机/LiDAR/NAV2 驱动可用后重新评估。
 - Livox 官方 `livox_ros_driver2` 提供 Ubuntu 24.04 / ROS 2 Jazzy 构建说明；仍需在项目锁定 commit 上实际编译测试。
-- 不混用 ROS 2 不同发行版的 DDS 节点作为默认架构。若要隔离厂商栈与 Nav2 栈，应通过明确的 UDP/串口协议、ROS bridge 或标准消息网关传递数据，并限制网络域。
+- 不混用不同 ROS distro 的 DDS 节点作为默认架构；如需隔离厂商旧栈和 Nav2 新栈，应使用 UDP/串口/标准消息网关并限制网络域。
 
 ### 3.2 Lite3 本体接口
 
