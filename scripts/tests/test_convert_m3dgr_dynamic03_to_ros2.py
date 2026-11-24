@@ -187,6 +187,12 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         self._create_source_bag()
         self._write_preflight()
         audit = json.loads(self.audit_path.read_text())
+        for sample in audit["sample_deserialization"]["/livox/mid360/lidar"]["samples"]:
+            sample["header_timebase_delta_ns"] = 128
+        self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
+        # A sub-microsecond difference is expected from the legacy driver's
+        # uint64-ns -> double-seconds -> ROS Time header conversion.
+        audit = json.loads(self.audit_path.read_text())
         audit["status"] = "blocked_review_required"
         audit["issues"] = ["simulated failure"]
         self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
