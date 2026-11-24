@@ -42,6 +42,8 @@
 
 官方说明将 Driver2 定位为调试用途，不建议未经优化直接用于量产；本项目先将其用于原型验证。量产前需要做性能、丢包、恢复、watchdog 和长期运行审查。
 
+2026-11-24 CI 根因补充：livox_ros_driver2 1.2.6 源仓库同时包含 ROS1 默认 package.xml 与 ROS2 package_ROS2.xml。action-ros-ci 在依赖解析前读取默认 ROS1 manifest，导致 ROS2 构建依赖 ament_cmake_auto 未安装，CMake 在 find_package(ament_cmake_auto) 失败。独立 x86_64 workflow 已改为先将 package_ROS2.xml 复制为 package.xml，再显式安装 ros-jazzy-ament-cmake-auto，执行 rosdep install 和 colcon build。该修复正在 run 45334977157 验证；目前不宣称 Driver2 build pass。
+
 ## 3. Point-LIO 与 Nav2 的点云格式策略
 
 Driver2 有两种与本项目相关的输出格式：
