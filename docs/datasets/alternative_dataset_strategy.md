@@ -234,3 +234,51 @@ TUM audit 通过也不等于与 bag 时间对齐。下一步必须比较 GT time
 **当前状态：未执行 ROS1→ROS2 转换，未对用户 bag 作类型匹配实测。** 后续实现应采用显式且测试过的转换路径（优先使用 rosbags API 将源 `livox_ros_driver/CustomMsg` 与嵌套 `CustomPoint` 反序列化后，映射/重序列化为 `livox_ros_driver2/msg/CustomMsg`；或提供有明确消息包名的兼容桥），并对点坐标、reflectivity/tag/line、timebase、逐点 offset、header timestamp、point_num 做逐字段等价测试。禁止通过仅重命名 topic、伪造 metadata 或直接把 bag 文件改名来规避类型不匹配。
 
 在转换器和合成 ROS1 fixture 的转换/回读测试通过之前，不要用 M3DGR Dynamic03 启动本项目 Point-LIO，更不要将回放结果接入 Nav2 控制链。
+
+### 6.8 已实现：受控 ROS1→ROS2 LIO 输入转换器
+
+新增 [`scripts/convert_m3dgr_dynamic03_to_ros2.py`](../../scripts/convert_m3dgr_dynamic03_to_ros2.py)，不使用盲目的通用 `rosbags-convert` 处理 Livox 类型名，而是将已审计的两个原始 topic 反序列化后逐字段重建为本项目 Point-LIO 接受的 Jazzy 消息类型：
+
+| Topic | ROS1 源类型 | ROS2 输出类型 |
+|---|---|---|
+| `/livox/mid360/lidar` | `livox_ros_driver/msg/CustomMsg` | `livox_ros_driver2/msg/CustomMsg` |
+| `/livox/mid360/imu` | `sensor_msgs/msg/Imu` | `sensor_msgs/msg/Imu` |
+
+转换器的安全门禁和行为：
+
+1. 重新计算原始 bag SHA256，并要求与仓库锁定的 M3DGR Dynamic03 官方 SHA256 完全一致；
+2. 必须提供同一文件的 bag audit JSON，状态为 `structural_inputs_present`、路径/文件大小一致、topic/type/样本解码通过；
+3. 对 Livox 抽样样本再次检查 `point_num == len(points)`；
+4. 允许旧驱动 `uint64 ns → double seconds → ROS Time` 头时间舍入产生的最大 **1,000 ns（1 μs）** `header.stamp - timebase` 差值；超过则拒绝转换。该容差不是设备同步精度，也不是 LiDAR/IMU offset 门限；
+5. 只输出两个 MID-360 LIO topic，保留每条消息的原始 bag timestamp；Livox 的 `timebase`、`point_num`、`lidar_id`、`rsvd`、每个点的坐标/reflectivity/tag/line/offset_time 均逐字段映射；IMU header、orientation、covariance、angular velocity 和 linear acceleration 逐字段复制；
+6. 输出写入目标目录旁的临时 staging 目录，完整关闭 rosbag2 writer 并写入 `conversion_manifest.json` 后才原子移动为最终目录；目标已存在时拒绝覆盖；异常时清理 staging；不更改原始 ROS1 bag。
+
+用户本地执行顺序（必须先完成 bag audit）：
+
+```bash
+cd ~/workspace/robdog_nav2
+source .venv-dataset-tools/bin/activate
+
+# 先对已下载的原始 ROS1 bag 做只读审计；exit code 0 才可继续
+python scripts/audit_m3dgr_ros1_bag.py \\
+  "$HOME/Downloads/Dynamic03.bag" \\
+  --json-out datasets/m3dgr_dynamic03_audit.json
+
+# 仅在审计 JSON status=structural_inputs_present 时执行
+python scripts/convert_m3dgr_dynamic03_to_ros2.py \\
+  "$HOME/Downloads/Dynamic03.bag" \\
+  datasets/m3dgr_dynamic03_audit.json \\
+  datasets/m3dgr_dynamic03_lio_ros2
+```
+
+预期输出为 ignored 的 `datasets/m3dgr_dynamic03_lio_ros2/`，内含 rosbag2 `metadata.yaml`、SQLite storage 和 `conversion_manifest.json`。转换完成后先运行 `ros2 bag info datasets/m3dgr_dynamic03_lio_ros2`，核对：
+
+- `/livox/mid360/lidar` type 必须为 `livox_ros_driver2/msg/CustomMsg`；
+- `/livox/mid360/imu` type 必须为 `sensor_msgs/msg/Imu`；
+- 两路消息数应与 conversion manifest 一致；
+- bag timestamp 范围、持续时间、消息频率与原始审计报告一致；
+- 转换目录中的 `conversion_manifest.json` 记录源 bag SHA256、audit path、源/目标类型、消息数和时间范围。
+
+**本次 CI 证据：** [run 45418493538](https://github.com/rexyll/robdog_nav2/actions/runs/45418493538) success：ROS1 bag 审计 5/5、TUM GT 审计 7/7、ROS1→ROS2 显式类型转换合成回读 4/4、UrbanLoco 原有回归 13/13。转换测试确认输出类型名为 `livox_ros_driver2/msg/CustomMsg`，点字段/offset/timebase 和 IMU 数据在写入 ROS2 bag 后可再读回；同时确认拒绝失败 audit、已有输出目录和大于 1 μs 的 header/timebase 差值。
+
+**尚未完成：** 以上是合成 fixture 的转换/回读证据，不是用户真实 Dynamic03 bag 的转换结果；还未执行本地 bag audit、真实数据转换、`ros2 bag info/play`、Point-LIO replay、GT 时间/坐标关联或 evo APE/RPE。Dynamic03 独立 GT 仍需用户下载；在真实 bag/GT 审查和时钟/坐标核验完成前，禁止启动 Point-LIO 评测或宣称定位精度通过。
