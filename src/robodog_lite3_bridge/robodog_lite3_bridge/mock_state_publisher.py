@@ -12,9 +12,9 @@ class MockLite3StatePublisher(Node):
     def __init__(self) -> None:
         super().__init__("mock_lite3_state_publisher")
         self.declare_parameter("publish_rate_hz", 10.0)
-        self.declare_parameter("leg_odom_topic", "/leg_odom2")
-        self.declare_parameter("imu_topic", "/imu/data")
-        self.declare_parameter("joint_states_topic", "/joint_states")
+        self.declare_parameter("leg_odom_topic", "/mock/lite3/leg_odom2")
+        self.declare_parameter("imu_topic", "/mock/lite3/imu/data")
+        self.declare_parameter("joint_states_topic", "/mock/lite3/joint_states")
 
         rate = float(self.get_parameter("publish_rate_hz").value)
         if rate <= 0.0:
@@ -39,8 +39,8 @@ class MockLite3StatePublisher(Node):
 
         odom = Odometry()
         odom.header.stamp = stamp
-        odom.header.frame_id = "odom"
-        odom.child_frame_id = "base_link"
+        odom.header.frame_id = "mock_odom"
+        odom.child_frame_id = "mock_base_link"
         odom.pose.pose.orientation.w = 1.0
         # Large covariance marks synthetic pose/twist as unusable for real
         # localization. This publisher only tests topic integration.
@@ -51,7 +51,7 @@ class MockLite3StatePublisher(Node):
 
         imu = Imu()
         imu.header.stamp = stamp
-        imu.header.frame_id = "imu_link"
+        imu.header.frame_id = "mock_imu_link"
         imu.orientation_covariance[0] = -1.0
         for index in (0, 4, 8):
             imu.angular_velocity_covariance[index] = 1.0e6
