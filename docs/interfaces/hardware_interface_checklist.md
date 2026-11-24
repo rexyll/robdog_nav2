@@ -8,11 +8,12 @@
 |---|---|---|
 | 四足本体 | DEEP Robotics Lite3 Venture | 已预选，未采购，待厂商确认现行 SKU/接口 |
 | LiDAR | Livox MID-360 | 已预选，待采购和驱动验证 |
-| RGB 相机 | 2 × e-con Systems See3CAM_50CUG Color | 已预选，待确认 GPIO 同步、镜头和 Linux Jetson 兼容 |
+| RGB 相机 | 2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头） | 已锁定彩色无镜头候选 SKU，待确认 GPIO 电气/同步、匹配镜头和双路 Linux Jetson 兼容 |
 | RTK | ArduSimple simpleRTK2B Budget / u-blox ZED-F9P + ANN-MB | 已预选，待确定 NTRIP / Base |
 | 机载计算 | NVIDIA Jetson AGX Orin Developer Kit（64GB 开发配置） | 已选参考配置，待核算安装、供电和质量 |
-| 软件首轮基线 | Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble | 对齐云深处 Lite3 Venture 官方扩展示例；需实机复现 |
-| 软件长期目标 | ROS 2 Jazzy | 自研包可移植；Humble EOL 前完成迁移 |
+| 软件兼容基线 | Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble | 复现云深处 Lite3 Venture 官方扩展示例 |
+| Orin 长期目标 | JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy | 需实测 Lite3 bridge/各驱动兼容性 |
+| 未来评估 | ROS 2 Lyrical / Ubuntu 26.04 | 待 Jetson Orin 官方 BSP 与所有驱动支持后评估 |
 
 详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。
 
@@ -44,11 +45,11 @@
 | 驱动 | Livox SDK2 + livox_ros_driver2 | 锁定 commit，Humble/Jazzy 编译 |
 | 安装位姿 | 待测 | lidar_link 相对 base_link 的 xyz/rpy |
 
-## 3. 两台普通 RGB 相机：See3CAM_50CUG Color
+## 3. 两台普通 RGB 相机：See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）
 
 | 项目 | 预选 | 待确认 |
 |---|---|---|
-| 型号 | 两台同型号 See3CAM_50CUG Color | 完整 SKU、批次和固件 |
+| 型号 | 两台同型号 See3CAM_50CUG Color | 制造商 SKU `See3CAM_50CUG_CXXCC_BX_H01R1`，批次和固件 |
 | 传感器 | Sony IMX264，5MP，Global Shutter | 最终分辨率/FPS和图像格式 |
 | 接口 | USB 3.2 Gen1/UVC | Jetson 双相机同时运行带宽、USB控制器拓扑 |
 | 同步 | GPIO Trigger/Strobe | 触发引脚、逻辑电压、电平转换、触发延迟、曝光同步 |
