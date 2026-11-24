@@ -49,6 +49,11 @@ def audit_tum_trajectory(
     data_rows = 0
     comment_rows = 0
     previous_timestamp: float | None = None
+    previous_pose: tuple[float, ...] | None = None
+    identical_pose_adjacent_pairs = 0
+    duplicate_timestamp_same_pose_pairs = 0
+    backwards_timestamp_same_pose_pairs = 0
+    timestamp_anomaly_pose_change_pairs = 0
 
     try:
         text = path.read_text(encoding="utf-8-sig")
@@ -92,12 +97,25 @@ def audit_tum_trajectory(
         quaternion = values[4:8]
         norm = math.sqrt(sum(value * value for value in quaternion))
 
+        pose_signature = position + tuple(quaternion)
         if previous_timestamp is not None:
+            same_pose = pose_signature == previous_pose
+            if same_pose:
+                identical_pose_adjacent_pairs += 1
             if timestamp == previous_timestamp:
                 duplicate_timestamps += 1
+                if same_pose:
+                    duplicate_timestamp_same_pose_pairs += 1
+                else:
+                    timestamp_anomaly_pose_change_pairs += 1
             elif timestamp < previous_timestamp:
                 backwards_timestamps += 1
+                if same_pose:
+                    backwards_timestamp_same_pose_pairs += 1
+                else:
+                    timestamp_anomaly_pose_change_pairs += 1
         previous_timestamp = timestamp
+        previous_pose = pose_signature
 
         timestamps.append(timestamp)
         positions.append(position)
@@ -181,6 +199,13 @@ def audit_tum_trajectory(
             "strictly_increasing": chronological and len(timestamps) >= 2,
         },
         "position_bounds": position_bounds,
+        "pose_repetition": {
+            "adjacent_identical_pose_pairs": identical_pose_adjacent_pairs,
+            "duplicate_timestamp_same_pose_pairs": duplicate_timestamp_same_pose_pairs,
+            "backwards_timestamp_same_pose_pairs": backwards_timestamp_same_pose_pairs,
+            "timestamp_anomaly_pose_change_pairs": timestamp_anomaly_pose_change_pairs,
+            "pose_fields": "tx ty tz qx qy qz qw; exact numeric equality",
+        },
         "path_length_in_file_order_m": path_length if positions else None,
         "quaternion_norm": {
             "minimum": min(quaternion_norms) if quaternion_norms else None,
