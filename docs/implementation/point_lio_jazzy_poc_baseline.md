@@ -177,6 +177,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 
 - [x] P2 第一版脚本/CLI 静态检查和 8 项解析/ENU/排序测试通过：run 45339580363。
 - [x] 增加 raw bag / DB3 SHA256 provenance、SQLite rosbag INSPVAX GT extraction integration tests 与 replay process-group cleanup 后，P2 语法/CLI/纯函数/SQLite integration 共 10 项测试通过：[run 45340287093](https://github.com/rexyll/robdog_nav2/actions/runs/45340287093)。
+- [x] 将 NovAtel 官方 INSPVAX.msg（固定 commit 0c0e135b...）与 Intel 固定 POC 的 `extract_ulhk_gt.py`（固定 commit decbb06...）列为 CDR offsets 的上游依据；source-link/注释更新后再次运行 [P2 CI 45341097202](https://github.com/rexyll/robdog_nav2/actions/runs/45341097202)，10/10 tests passed。
 - [x] P2 数据目录许可/忽略策略已写入 \`datasets/README.md\` 与 .gitignore。
 - [ ] 人工下载并放置 UrbanLoco \`HK-Data20190117.bag\`，记录来源、许可、文件大小与 SHA256。
 - [ ] 执行 ROS1→ROS2 转换，检查 bag metadata、消息数、时间跨度和预期三个 topic。
