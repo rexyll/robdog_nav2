@@ -78,7 +78,7 @@ vendor gateway 在厂商 Foxy 侧运行；Jazzy bridge 在 AGX Orin。实际 mot
 
 当前只定义语义和 envelope，不锁定 protobuf/CBOR，也不提交可被误认为正式的 wire encoder。
 
-仓库已在 `src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py` 实现不依赖编码格式的元数据校验、会话/序列跟踪和数值有效性检查；它尚未实现 socket、序列化或 vendor SDK。该纯逻辑测试已在 CI run 45328657069 的 Humble/Jammy 和 Jazzy/Noble 环境均通过，25 tests each。
+仓库已在 `src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py` 实现不依赖编码格式的元数据校验、消息类型/帧要求、会话/序列跟踪、NaN/Inf 和 ROS covariance 长度/对角线基本检查；它尚未实现 socket、序列化或 vendor SDK。Covariance helper 不证明完整矩阵正半定，只做早期数据卫生检查。该纯逻辑测试已在 CI run 45328657069 的 Humble/Jammy 和 Jazzy/Noble 环境均通过，25 tests each。
 
 ## 4. Envelope 必需字段
 
