@@ -287,6 +287,18 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         joiner.reset()
         self.assertIsNone(joiner.source_clock_id)
         self.assertEqual(joiner.pending_count, 0)
+        with self.assertRaisesRegex(EpochPairingError, "begin_generation"):
+            joiner.add_pvt(
+                make_pvt(),
+                source_clock_id=GENERATION,
+                source_timestamp_ns=1_000_000,
+            )
+        joiner.begin_generation(GENERATION)
+        self.assertIsNone(joiner.add_pvt(
+            make_pvt(),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
 
 
 if __name__ == "__main__":
