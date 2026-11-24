@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.16
+- 文档版本：v0.3.17
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -73,7 +73,7 @@
 - [x] A2. 核对云深处 Lite3 Venture + AGX Orin + MID-360 官方扩展示例与初始软件版本。
 - [ ] A3. 向云深处确认 Venture 当前 SKU、交付件、固件/SDK、安装 CAD、外设接口持续/峰值电流、载荷与重心限制。
 - [~] A4. 已建立初步供电/质量预算：已核实器件 1.330 kg；若采用 CIL530 双镜头，候选小计约 1.664 kg，余 1.936 kg 供相机本体和附件。两台相机本体、交换机、触发板、支架/线束、DC/DC 尚未称重/测功；Lite3 各路电源额定仍待书面确认。
-- [~] A5. 已核对 MID-360 公开规格，并锁定驱动候选 livox_ros_driver2 v1.2.6 commit 13eb05e4e6dd7a765b934d0c5fd6236676a57b49、Livox-SDK2 候选 commit c0796f04c143143899c87a773d9f6b7136453c0b；实际设备 revision、SDK/driver ARM64 构建、线束与网络参数仍待确认。
+- [~] A5. 已核对 MID-360 公开规格，并锁定驱动候选 livox_ros_driver2 v1.2.6 commit 13eb05e4e6dd7a765b934d0c5fd6236676a57b49、Livox-SDK2 release v1.3.1 commit f5d9375f84efe2b15bc0a052d3e18482ed13adf4（GCC 13 使用 -include cstdint）；实际设备 revision、SDK/driver ARM64 构建、线束与网络参数仍待确认。
 - [~] A6. 已锁定 See3CAM 彩色无镜头 SKU；新增 6mm C-Mount 镜头候选 CIL530、120mm 双目基线和 5MP@20fps 初始测试配置。镜头暗角/MTF、GPIO 电气时序、双机曝光同步与 Jetson USB 带宽待样品验证。
 - [~] A7. 已核对 simpleRTK2B Budget / ZED-F9P 当前 SKU 与最高 10Hz RTK 输出；板卡不含天线，目标场地及 NTRIP/自建基站尚未确定。
 - [~] A8. 已审计 current sdk_deploy 公共 RobotStatus：包含 base_rpy/base_angular_velocity、joint/status/timeout/freshness，但不含 base xyz/linear velocity/covariance；不能据此发布 Odometry。Motion SDK 可读 IMU/12 joints/contact force；lite3_transfer 启动可能获取 SDK 控制权，实机 bring-up 前必须有厂商 SOP。见 [公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)。
@@ -91,14 +91,14 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
-- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 候选 commit，并新增 Jazzy x86_64 build workflow（run 45332455019，当前运行中）；Orin aarch64 与真实 MID-360 仍待验证。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
+- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 v1.3.1 commit f5d9375f84efe2b15bc0a052d3e18482ed13adf4；SDK2 在旧 run 45332455019 已成功编译，driver 阶段失败根因是工作流裸 source /opt/ros/jazzy/setup.bash，而镜像尚无 ROS install。工作流已改为 action-ros-ci 自动准备 ROS/rosdep/colcon，并锁定 SDK release；最新重测 run 45333666724。Orin aarch64 与真实 MID-360 仍待验证。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port/fork、patch 和依赖 commit；Livox driver 预选 v1.2.6（13eb05e4e6dd7a765b934d0c5fd6236676a57b49），SDK2 预选 c0796f04c143143899c87a773d9f6b7136453c0b。Point-LIO fork 尚未冻结；先审许可证并以公开 bag 离线 build/replay，目标 Orin/MID-360 实测仍未完成。
+- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port/fork、patch 和依赖 commit；Livox driver v1.2.6（13eb05e4e6dd7a765b934d0c5fd6236676a57b49），SDK2 v1.3.1（f5d9375f84efe2b15bc0a052d3e18482ed13adf4，GCC 13 需 -include cstdint）。Point-LIO upstream 当前候选 commit 为 4b86a469eb5572e70ed575af25b5f15dd06e8e3c；Intel Jazzy port patch 来源、patch commits 和完整 license/SBOM 尚待核验，目标 Orin/MID-360 实测仍未完成。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -171,7 +171,7 @@
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
-- [~] 完成网关协议 v0.1 语义草案及 envelope/sequence/消息类型/frame/数值/covariance 检查；新增 contact_state 必须携带 frame_id 的验证和 2 个单元测试，Humble/Jazzy 37 项复跑进行中（run 45332714322）。
+- [x] 完成网关协议 v0.1 语义草案及 envelope/sequence/消息类型/frame/数值/covariance 检查；新增 contact_state 必须携带 frame_id 的验证和 2 个单元测试，Humble/Jazzy 双发行版 37 项测试均通过（run 45332714322、45332706824、45332702335）。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
@@ -194,7 +194,7 @@
 - [ ] 载荷、供电、热设计、质心和续航未实测；质量预算还缺相机本体、交换机、触发板、DC/DC、支架和线束，功率预算还缺转换损耗与峰值测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
-- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；35 项纯逻辑测试仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
+- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；37 项纯逻辑测试通过仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
 - [x] 新增消息类型/frame/covariance 检查后的最终 CI 已通过；失败 run 45328900700 根因为 `status` 未加入 message_type 白名单，修复后 45328937159 与 45328982630 双发行版均通过。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
@@ -205,7 +205,7 @@
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. Livox 按锁定 commit 先完成 Jazzy x86_64 build，再完成 Orin aarch64 build；Build pass 前不能标记 B4 完成。
+5. 等待 Livox Jazzy x86_64 workflow [run 45333666724](https://github.com/rexyll/robdog_nav2/actions/runs/45333666724)；若 driver build 通过，再记录 x86_64 evidence 并设计 Jetson Orin aarch64 workflow；若失败，按最新编译日志逐项修复。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
 7. Lite3 公开 SDK 审计已写入 [lite3_public_sdk_field_audit.md](docs/implementation/lite3_public_sdk_field_audit.md)；取得厂商只读启动 SOP 和状态接口/网络契约后，再实现 readonly gateway POC。
 
@@ -221,7 +221,8 @@
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
 | 2026-11-24 | v0.3.15 | 建立导航/避障验收指标和测量方法框架，A10 部分完成；新增 Livox Jazzy x86_64 build workflow，仍需等待结果并完成 Orin ARM64 验证 | acceptance metrics 30a81088; Livox CI run 45332455019 |
-| 2026-11-24 | v0.3.16 | 将 Lite3 足端接触力纳入只读 telemetry envelope；contact_state 必须带 frame_id，新增 2 项测试；Humble/Jazzy 37 项 CI 待结果 | contract 3341cc7b; tests fb463763; protocol 440ee4a4; CI 45332714322 |
+| 2026-11-24 | v0.3.16 | 将 Lite3 足端接触力纳入只读 telemetry envelope；contact_state 必须带 frame_id，新增 2 项测试；Humble/Jazzy 37 项 CI 双发行版通过 | contract 3341cc7b; tests fb463763; protocol 440ee4a4; CI 45332714322 |
+| 2026-11-24 | v0.3.17 | 修复 Livox CI 缺少 ROS Jazzy 环境初始化的问题，改用 action-ros-ci 与 pin manifest；SDK2 锁定到 v1.3.1 并加入 GCC 13 cstdint 兼容参数，driver build 重测中 | workflow 21e3f186; manifest f4cf74ea; baseline ca297a9b; run 45333666724 |
 
 ---
 
