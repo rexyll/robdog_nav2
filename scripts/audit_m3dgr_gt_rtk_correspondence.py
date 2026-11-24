@@ -419,6 +419,9 @@ def audit_gt_rtk_correspondence(
             covariance_types.append(int(message.position_covariance_type))
             navsat_messages.append(message)
 
+    with AnyReader([bag_path]) as related_reader:
+        related_topic_report = audit_related_gnss_topics(related_reader, RELATED_GNSS_TOPICS)
+
     if len(set(len(value) for value in (
         fix_bag_times, fix_header_times, latitudes, longitudes, altitudes, statuses,
         covariance_types,
@@ -451,7 +454,7 @@ def audit_gt_rtk_correspondence(
             str(value): covariance_types.count(value) for value in sorted(set(covariance_types))
         },
         "rtk_navsatfix_metadata": summarize_navsatfix_metadata(navsat_messages),
-        "related_gnss_topics": audit_related_gnss_topics(reader, RELATED_GNSS_TOPICS),
+        "related_gnss_topics": related_topic_report,
         "limitations": [
             "This compares GT and NavSatFix records in their stored sequence order; it does not reorder or deduplicate either stream.",
             "A row-count match or timestamp match is source-association evidence, not proof that the RTK solution is ground truth.",
