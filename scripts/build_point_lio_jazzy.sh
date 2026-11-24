@@ -96,6 +96,12 @@ esac
 
 echo "==> Configure ROS 2 driver package manifest and resolve dependencies"
 cp "$DRIVER_DIR/package_ROS2.xml" "$DRIVER_DIR/package.xml"
+# rosdep needs its default source list initialized in a clean official ROS base image.
+if [[ "$EUID" -eq 0 ]]; then
+  rosdep init 2>/dev/null || true
+else
+  sudo rosdep init 2>/dev/null || true
+fi
 rosdep update
 # The CI workflow removes apt lists after installing native prerequisites to
 # keep the image small; refresh them before rosdep invokes apt-get.
