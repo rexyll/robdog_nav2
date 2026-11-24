@@ -80,6 +80,11 @@ else
   sudo ldconfig
 fi
 
+# Driver2's Jazzy CMake uses the installed SDK2 library and public headers.
+test -f /usr/local/lib/liblivox_lidar_sdk_shared.so
+test -f /usr/local/include/livox_lidar_api.h
+test ! -e "$WORKSPACE/src/Livox-SDK2"
+
 echo "==> Configure ROS 2 driver package manifest and resolve dependencies"
 cp "$DRIVER_DIR/package_ROS2.xml" "$DRIVER_DIR/package.xml"
 rosdep update
