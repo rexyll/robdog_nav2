@@ -40,3 +40,4 @@ UrbanLoco `ulhk_4` 的原始来源门禁仍保留；它不再是整个项目的�
 
 - Pinned upstream Livox ROS1 driver semantics for M3DGR commit `5fc892c84defef42feb2418f7d38897bef40f490`: CustomPoint `offset_time` and packet offset are nanoseconds; `CustomMsg.timebase` is first packet time and `header.stamp` derives from timebase / 1e9. This identifies the unit, **not** whether the device clock was PTP/PPS/NoSync.
 - Dynamic03 GT is a separate download. Audit it first with `scripts/audit_tum_trajectory.py`; the tool validates TUM shape/finite values/time order/quaternion norm only and does not establish bag clock alignment or coordinate frame.
+- Compatibility gate: M3DGR ROS1 bag's Livox driver definitions use package `livox_ros_driver`; pinned Jazzy Point-LIO uses `livox_ros_driver2/msg/CustomMsg`. A ROS1→ROS2 converter must explicitly remap and reserialize the custom message type, or provide a tested adapter; identical field layout alone does not make ROS2 topic types compatible.
