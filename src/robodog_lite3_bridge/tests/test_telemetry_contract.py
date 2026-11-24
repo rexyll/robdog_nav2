@@ -64,6 +64,17 @@ class TestEnvelopeValidation(unittest.TestCase):
         validate_envelope(valid_envelope(frame_id=None, message_type="robot_status"))
 
 
+    def test_contact_state_with_frame_is_valid(self):
+        validate_envelope(
+            valid_envelope(message_type="contact_state", frame_id="base_link")
+        )
+
+    def test_contact_state_requires_frame_id(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(
+                valid_envelope(message_type="contact_state", frame_id=None)
+            )
+
     def test_unknown_message_type_rejected(self):
         with self.assertRaises(EnvelopeValidationError):
             validate_envelope(valid_envelope(message_type="unknown"))
