@@ -1,0 +1,65 @@
+name: Point-LIO ROS 2 Jazzy ARM64 Build
+
+concurrency:
+  group: point-lio-jazzy-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "scripts/build_point_lio_jazzy.sh"
+      - ".github/workflows/point-lio-jazzy-arm64-build.yml"
+  pull_request:
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "scripts/build_point_lio_jazzy.sh"
+      - ".github/workflows/point-lio-jazzy-arm64-build.yml"
+  workflow_dispatch:
+
+jobs:
+  jazzy-arm64-build:
+    name: Point-LIO / Livox - Jazzy / Ubuntu 24.04 ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 100
+    container:
+      image: ros:jazzy-ros-base-noble
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Assert native ARM64 and install PCL/Eigen dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "aarch64"
+          test "$(dpkg --print-architecture)" = "arm64"
+          source /opt/ros/jazzy/setup.bash
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake git curl libapr1-dev libeigen3-dev libpcl-dev \
+            python3-colcon-common-extensions python3-rosdep ros-jazzy-ament-cmake-auto
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+          echo "Native architecture: $(uname -m) / $(dpkg --print-architecture)"
+
+      - name: Prepare pinned Point-LIO source
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_point_lio_intel_ros2.sh "$RUNNER_TEMP/point_lio_poc_ws"
+
+      - name: Build SDK2, Livox ROS Driver2 and Point-LIO natively on ARM64
+        shell: bash
+        env:
+          BUILD_JOBS: "2"
+        run: |
+          set -euo pipefail
+          bash scripts/build_point_lio_jazzy.sh "$RUNNER_TEMP/point_lio_poc_ws"
+          test "$(uname -m)" = "aarch64"
+          file /usr/local/lib/liblivox_lidar_sdk_shared.so
+          file "$RUNNER_TEMP/point_lio_poc_ws/install/point_lio/lib/point_lio/pointlio_mapping"
+          ros2 pkg prefix livox_ros_driver2
+          ros2 pkg prefix point_lio
+          ros2 pkg executables point_lio
