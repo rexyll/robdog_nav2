@@ -61,6 +61,16 @@ Driver2 有两种与本项目相关的输出格式：
 - 点云 header stamp、per-point time、IMU stamp 必须分别保留；确认 Livox driver 对 PTP/GPS 时钟的转换语义，禁止只看 header stamp 就宣称 LiDAR/IMU 同步；
 - 不在无硬件时固定猜测 time_offset_lidar_to_imu 或强制开启自动 time sync。对照 Point-LIO 选定 fork 的配置语义实测。
 
+**CustomMsg 时间字段语义（v1.2.6 源码核验）：**
+- Driver2 `lddc.cpp` 将 SDK `pkg.base_time` 写入 `CustomMsg.timebase` 和 ROS 2 `header.stamp`（`rclcpp::Time(timestamp)`）；该时间值使用纳秒。
+- 每个 `CustomPoint.offset_time` = SDK 点采样时间 - `pkg.base_time`，是相对 base time 的纳秒偏移。
+- Point-LIO Livox CustomMsg 分支将 `offset_time / 1e6` 转成毫秒作为内部 per-point time。
+- Point-LIO 的 `preprocess.timestamp_unit` 仅作用于标准 PointCloud2 输入分支；对 Livox CustomMsg 分支不执行该通用换算。
+
+因此：保持 `xfer_format=1`、CustomMsg 和 offset_time 原值完整；不要把 offset_time 先转成秒/毫秒再交给 Point-LIO，也不要通过 timestamp_unit 去补偿该路径。真实设备时钟/PTP 与点内偏移仍必须以 bag 验证。
+
+源码： [Driver2 lddc.cpp](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/src/lddc.cpp) · [CustomMsg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomMsg.msg) · [CustomPoint](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomPoint.msg)
+
 ## 4. 网络/时间配置验收
 
 MID-360 使用 Ethernet 连接；本项目网络配置需由设备实物标签/供应商确认，以下配置值不能直接复制官方示例 IP：
