@@ -4,7 +4,7 @@ This initial package intentionally does not connect to the Lite3 vendor SDK and 
 
 ## Included nodes
 
-- lite3_state_mock: publishes neutral synthetic /leg_odom2, /imu/data, and /joint_states messages. Odometry carries very large covariances, IMU orientation is marked unavailable, and JointState arrays are empty. This is only for topic/type and launch integration tests.
+- lite3_state_mock: publishes neutral synthetic /mock/lite3/leg_odom2, /mock/lite3/imu/data, and /mock/lite3/joint_states messages. Odometry carries very large covariances, IMU orientation is marked unavailable, and JointState arrays are empty. All synthetic topics use the /mock/lite3 namespace and mock_* frame IDs so they cannot shadow real robot topics. This is only for topic/type and launch integration tests.
 - lite3_topic_contract_monitor: subscribes to those three standard Lite3 state topics and publishes diagnostic_msgs/DiagnosticArray on /diagnostics/robodog_lite3. Freshness uses host monotonic receive time and a configurable timeout.
 
 ## Build
