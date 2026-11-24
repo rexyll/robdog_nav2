@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.2.7
+- 文档版本：v0.2.8
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -134,7 +134,7 @@ Lite3 vendor motion SDK / gait controller
 
 ### 阶段 B — 驱动、时间同步和标定
 
-- [~] B0. 已建立 robodog_lite3_bridge ROS 2 Python 包骨架，包含隔离在 /mock/lite3 namespace 和 mock_* frames 的合成状态发布、只读 topic 新鲜度诊断、pytest 单元测试和 Humble/Jazzy GitHub Actions；尚待 CI 构建/测试通过，尚未接入真实 Lite3 SDK。
+- [~] B0. 已建立 robodog_lite3_bridge ROS 2 Python 包骨架，包含隔离在 /mock/lite3 namespace 和 mock_* frames 的合成状态发布、只读 topic 新鲜度诊断、pytest 单元测试和 Humble/Jazzy 容器 CI；尚待 CI 构建/测试通过，尚未接入真实 Lite3 SDK。
 - [ ] B1. 并行构建兼容性基线：复现 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 厂商参考环境；在 AGX Orin 上验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy 目标环境。
 - [ ] B2. 编译 Lite3 SDK/ROS 2 transfer，只读读取 odom/IMU/joint/status。
 - [ ] B3. 建立 Lite3 bridge/adapter，先只读诊断，再验证限幅和 watchdog，不立即开放自主运动。
@@ -219,7 +219,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
 
 ### 未完成 / 阻塞
-- [~] ROS 2 package CI 已触发多轮；最新版本运行记录为 [run 45325875067](https://github.com/rexyll/robdog_nav2/actions/runs/45325875067)，Humble/Jazzy 两个 job 目前仍停留在 ROS 环境安装步骤，尚无 build/test 通过结论，不能标记 CI 完成。后续应只关注包含最终 package tree 的最新 run。
+- [~] ROS 2 package CI 首版裸机 runner 在 setup-ros / APT 安装阶段长时间无进展；依据 ROS tooling 官方建议已改为预制容器 + action-ros-ci。新 CI 记录 [run 45326058355](https://github.com/rexyll/robdog_nav2/actions/runs/45326058355) 已进入队列；尚无 build/test 通过结论，不能标记 CI 完成。
 - [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
 - [ ] 未采购设备，未接收实物。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认。
@@ -254,6 +254,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.5 | 建立 Lite3 ROS 2 只读 mock/诊断软件包骨架和 Humble/Jazzy CI；补充多传感器时间同步与外参标定设计；CI 当前待运行结论 | package: 74a05789–bea3fbfd; pytest layout: ba171479–123d32ec; sync doc: a04b50dd; CI run: 45325569459 |
 | 2026-11-24 | v0.2.6 | 隔离 mock 话题到 /mock/lite3 和 mock_* frames，避免污染真实 Lite3 topic/TF；修正双目同步与设备时钟方案；本地 freshness helper 6 项测试通过，ROS 2 CI 待结论 | mock: f9e37b65; launch: b7dbbfe; README: b5263ef3; latest CI: 45325875067 |
 | 2026-11-24 | v0.2.7 | 更新 ROS 2 package 规划和 Lite3 bridge 接口契约，明确当前 scaffold 只读、mock 隔离、无真实 SDK/运动命令；根台账增加同步风险与 CI 状态 | workspace: 53997cdf; bridge contract: 44e69826 |
+| 2026-11-24 | v0.2.8 | 将 CI 从易受 APT mirror 影响的裸机 setup-ros 安装切换到官方推荐的 Jammy/Noble 预制容器 + action-ros-ci | workflow: 2a218b84; run: 45326058355 |
 
 ---
 
