@@ -93,7 +93,7 @@ MID-360 使用 Ethernet 连接；本项目网络配置需由设备实物标签/�
 
 ## 5. 构建与测试计划（B4 / B11）
 
-- [~] Ubuntu 24.04 + ROS 2 Jazzy x86_64：Livox SDK2 在 run 45332455019 已完成编译/安装；首次 driver 阶段失败原因为 workflow 使用裸 `source /opt/ros/jazzy/setup.bash`，镜像尚未由 CI action 准备 ROS 环境。工作流已切换到 `ros-tooling/action-ros-ci@v0.4` + pin manifest，当前正在复测（run 45333535949 及相邻修正 run）。
+- [~] Ubuntu 24.04 + ROS 2 Jazzy x86_64：SDK2 v1.3.1 已在独立 CMake workflow 成功编译/安装（包含 GCC13 -include cstdint）。Driver2 v1.2.6 手动 workflow 已显式换入 ROS2 manifest、安装 ament_cmake_auto、rosdep 前 apt-get update，并在 source Jazzy 时关闭 nounset；最新 serial run 45336152921 目前停留在 ROS 安装阶段。Driver2 colcon build 尚无通过证据。
 - [ ] 在 JetPack 7.2.2 / Ubuntu 24.04 / ROS 2 Jazzy / aarch64 Orin 上完成同样 build；
 - [ ] 核验 SDK2 v1.3.1 与 driver 1.2.6 的 API/ABI 兼容；
 - [ ] 接入真实 MID-360，确认设备发现、点云和 IMU topic；
