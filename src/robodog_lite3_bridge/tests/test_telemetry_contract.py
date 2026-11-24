@@ -8,6 +8,7 @@ from robodog_lite3_bridge.telemetry_contract import (
     require_finite_values,
     require_vector_length,
     validate_envelope,
+    validate_covariance,
 )
 
 
@@ -60,7 +61,39 @@ class TestEnvelopeValidation(unittest.TestCase):
             validate_envelope(valid_envelope(payload_length=-1))
 
     def test_missing_frame_is_allowed_for_non_spatial_status(self):
-        validate_envelope(valid_envelope(frame_id=None, message_type="status"))
+        validate_envelope(valid_envelope(frame_id=None, message_type="robot_status"))
+
+
+    def test_unknown_message_type_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(message_type="unknown"))
+
+    def test_imu_requires_frame_id(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(frame_id=None))
+
+    def test_base_odometry_requires_child_frame_id(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(
+                valid_envelope(
+                    message_type="base_odometry",
+                    frame_id="odom",
+                    child_frame_id=None,
+                )
+            )
+
+    def test_base_odometry_with_frames_is_valid(self):
+        validate_envelope(
+            valid_envelope(
+                message_type="base_odometry",
+                frame_id="odom",
+                child_frame_id="base_link",
+            )
+        )
+
+    def test_sequence_over_uint64_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(sequence=1 << 64))
 
 
 class TestSequenceTracker(unittest.TestCase):
@@ -124,6 +157,37 @@ class TestNumericValidation(unittest.TestCase):
     def test_wrong_vector_length_rejected(self):
         with self.assertRaises(ValueError):
             require_vector_length([1.0, 2.0], 3, "rpy")
+
+
+    def test_valid_6x6_covariance(self):
+        matrix = [0.0] * 36
+        for index in (0, 7, 14, 21, 28, 35):
+            matrix[index] = 0.01
+        self.assertEqual(validate_covariance(matrix, 6, "pose_covariance"), tuple(matrix))
+
+    def test_covariance_wrong_length_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_covariance([0.0] * 9, 6, "pose_covariance")
+
+    def test_negative_covariance_diagonal_rejected(self):
+        matrix = [0.0] * 36
+        matrix[14] = -0.1
+        with self.assertRaises(ValueError):
+            validate_covariance(matrix, 6, "pose_covariance")
+
+    def test_unknown_imu_covariance_sentinel_allowed(self):
+        matrix = [0.0] * 9
+        matrix[0] = -1.0
+        self.assertEqual(
+            validate_covariance(matrix, 3, "orientation_covariance", allow_unknown=True),
+            tuple(matrix),
+        )
+
+    def test_unknown_covariance_sentinel_rejected_when_not_allowed(self):
+        matrix = [0.0] * 9
+        matrix[0] = -1.0
+        with self.assertRaises(ValueError):
+            validate_covariance(matrix, 3, "position_covariance")
 
 
 if __name__ == "__main__":
