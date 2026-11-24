@@ -27,6 +27,14 @@
 | V-11 | 是否可获取足端接触、足端速度、滑移状态或质量标志？ | topic/message/API 说明 | 改善足滑和动态状态估计 |
 | V-12 | 所有数据的采样时刻、host receive time、时钟域、frame_id 和 covariance 的语义是什么？ | 消息时间戳说明、实际 rosbag | 决定时间同步、TF 和信任模型 |
 
+## 2.1 2026-11-24 公开接口核验补充
+
+- 已审阅的公开 sdk_deploy RobotStatus.msg 发布频率为 10Hz，字段有 joints、base_rpy、base_angular_velocity、状态、timeout 计数和 telemetry_fresh；该消息没有 base xyz position、base linear velocity 或 pose/twist covariance。
+- Motion SDK 公开接口说明可读取 IMU、12 个关节及足端接触力；当前公开材料没有证明其提供完整机身位置/线速度估计。
+- lite3_transfer 的启动/SDK_MODE 流程可能获取 SDK 控制权，不能默认视作无副作用的纯只读采集。实机 bring-up 前必须取得安全操作流程。
+- /EMERGENCY_STOP 与阻尼状态属于公开 SDK 的软件功能；是否有独立硬件急停、驱动器禁能回路及安全认证仍需书面确认。
+- 详细字段审计见 [Lite3 public SDK field audit](../implementation/lite3_public_sdk_field_audit.md)。
+
 ## 3. 高层运动控制与安全
 
 | ID | 需要厂商确认的问题 | 需要的证据/输出 | 对项目的影响 |
@@ -56,6 +64,11 @@
 | V-25 | lite3_sdk_service 的 UDP 端口、on/off/rate/estop 命令及安全限制是什么？ | service API 文档、请求/响应示例 | 建立只读启动与健康监测 |
 | V-26 | SDK 数据包是否包含源采样时间、序列号和丢包计数？ | 协议说明、PCAP/rosbag 样例 | 时间映射与数据完整性 |
 | V-27 | 本体 IMU、motion host clock、AGX system clock 是否支持 PTP/PPS 或其他时间校正？ | 时间同步架构和误差预算 | 与相机/MID-360/RTK 对齐 |
+| V-28 | 当前 Venture 固件是否提供官方 base/legged odometry（position + linear velocity）？若有，其 message/API/UDP schema、频率、时间戳、frame、covariance/quality 是什么？ | 正式接口文档、消息定义、带真值 rosbag | 决定 local odom 主要来源 |
+| V-29 | Motion SDK/RL SDK 的 contact force 字段定义、单位、坐标系、零点标定和采样时刻是什么？是否存在 contact confidence/slip indicator？ | 接口定义、标定说明、样例数据 | 决定是否能用于滑移/接触状态估计 |
+| V-30 | 启动 lite3_transfer 或调用 /SDK_MODE 是否会获取电机/SDK 控制权？如何确保只读 telemetry bring-up？ | 启动状态图、只读步骤、遥控器接管 SOP | 防止启动 telemetry 时意外切换机器人控制权 |
+| V-31 | /EMERGENCY_STOP 和 JointDamping 是否仅为软件层功能？物理急停、无线遥控急停、驱动器禁能/断电路径及安全认证信息是什么？ | 安全手册、电气图、测试流程和认证声明 | 关闭实机测试安全 Gate |
+| V-32 | 目标 Venture SKU/固件的 IMU、关节、接触力、RobotStatus 时间戳单位与 clock domain 分别是什么？能否提供源采样时间 rosbag？ | timestamp 说明、clock-domain 图、原始 rosbag | 决定跨主机时间映射和 EKF 可用性 |
 
 ## 6. 项目采购和集成准入
 
