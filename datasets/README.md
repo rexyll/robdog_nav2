@@ -28,3 +28,12 @@ or generated maps/PCD files.
 ## 替代公开数据集
 
 UrbanLoco `ulhk_4` 的原始来源门禁仍保留；它不再是整个项目的唯一数据入口。GrandTour、Quadruped-SLAM 和 M3DGR 的优先级、适用边界、下载序列、许可和校验要求见 [外部公开数据集替代路线](../docs/datasets/alternative_dataset_strategy.md)。
+
+## M3DGR Dynamic03
+
+- Original ROS 1 bag: user download `~/Downloads/Dynamic03.bag`, size 3,434,689,371 bytes. Upstream SHA256 verified successfully on 2026-11-24: `A54B687A924EE4E9B30673F85D88AC73615A10FCE4A7AB40F6099C24283BCC78`.
+- Matching GT is a separate file. Download only the Dynamic03 GT from [OneDrive](https://1drv.ms/t/c/2b4bfc0edf421186/EYYRQt8O_EsggCsWEAAAAAAB-G7sz7ob3JbPDr8K1eYEDg?e=8GwPON) or [Alipan](https://www.alipan.com/s/2GQnM2gePFr). The GT has not yet been downloaded/audited.
+- Read-only ROS1 bag structure audit: `scripts/audit_m3dgr_ros1_bag.py`; local dependency: `requirements-dataset-tools.txt`; report JSON should be stored under ignored `datasets/m3dgr_dynamic03_audit.json`.
+- Expected MID-360 inputs: `/livox/mid360/lidar` (`livox_ros_driver/CustomMsg`) and `/livox/mid360/imu` (`sensor_msgs/Imu`). Verify the actual bag connections before conversion.
+- Do not reuse `m3dgr_mid360.yaml` blindly: the upstream M3DGR Point-LIO version uses `/camera/imu`; the upstream `mid360.yaml` uses MID-360's built-in `/livox/mid360/imu`. This project must adapt only after bag metadata and custom message definitions have been audited.
+- The Dynamic03 bag byte checksum is verified; ROS structure, custom message decode, timestamp semantics, GT correctness, ROS 1→ROS 2 conversion and Point-LIO replay remain pending.
