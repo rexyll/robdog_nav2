@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.4
+- 文档版本：v0.3.5
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -154,16 +154,19 @@ Lite3 vendor motion SDK / gait controller
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
+- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port、Livox ROS Driver 2 commit 与依赖；先用公开 rosbag 完成离线 build/replay、odom/TF/时间戳检查，确认许可证与 patch 来源；实机 Orin/MID-360 测试仍需设备到位。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
-- [ ] C1. 核实当前 sdk_deploy 是否提供可信 legged odometry/body velocity；若只提供 IMU/joint/status，评估 LiDAR odometry/SLAM 或 stereo VIO 补充 local odom；不得用 IMU-only 积分冒充可信位置。
-- [ ] C2. 配置 local EKF 输出平滑 `odom→base_link`。
-- [ ] C3. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、天线杆臂）。
-- [ ] C4. 配置 GNSS quality gate 与 global EKF 输出 `map→odom`。
-- [ ] C5. 测试 Fixed/Float/Single、遮挡、多路径、断改正和恢复。
-- [ ] C6. 测试静止、直行、转弯、横移（若支持）、步态切换和机身振动。
-- [ ] C7. 完成 GNSS 降级、超时、跳变剔除和恢复策略。
+- [ ] C1. 核实当前 sdk_deploy 是否提供可信 legged odometry/body velocity；若只提供 IMU/joint/status，启动 Point-LIO + MID-360 内置 IMU 备用 POC；不得用 IMU-only 积分冒充可信位置。
+- [ ] C2. 标定 MID-360 LiDAR/内置 IMU 外参、设备时间戳/PTP 和每点 offset_time；验证 Point-LIO 所需点云与 IMU 同步。
+- [ ] C3. 比较 vendor legged odom（若有）与 Point-LIO 的位置/航向误差、漂移、更新频率、延迟和资源开销；选定唯一主要 local odom 来源。
+- [ ] C4. 将通过验收的 local odom 表达为 `odom→base_link`；仅在有额外独立观测且 covariance 合理时再配置 local EKF，避免重复融合同一 IMU/LIO 信息。
+- [ ] C5. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、GNSS 天线杆臂）。
+- [ ] C6. 配置 GNSS quality gate 与 global EKF 输出 `map→odom`。
+- [ ] C7. 测试 Fixed/Float/Single、遮挡、多路径、断改正和恢复。
+- [ ] C8. 测试静止、直行、转弯、横移（若支持）、步态切换和机身振动。
+- [ ] C9. 完成 GNSS 降级、超时、跳变剔除和恢复策略。
 
 ### 阶段 D — LiDAR/双目障碍物感知
 
