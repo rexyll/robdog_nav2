@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.2.3
+- 文档版本：v0.2.4
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -207,6 +207,8 @@ Lite3 vendor motion SDK / gait controller
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
+- [x] 核对 e-con Systems See3CAM 彩色无镜头 SKU 与官方 Trigger / Global Shutter / USB3 规格。
+- [x] 核对 JetPack 7.2.2 对 Jetson Orin 的 Ubuntu 24.04 基线，并据此将 Jazzy 设为 Orin 当前长期目标；记录 Lyrical 的 Ubuntu 26.04 前置条件。
 - [x] 创建 ADR-0002 硬件选型记录和更新硬件接口清单。
 - [x] TaskPlan 拆分为根目录进度台账 + 两份设计分册。
 - [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
@@ -214,7 +216,7 @@ Lite3 vendor motion SDK / gait controller
 ### 未完成 / 阻塞
 - [ ] 未采购设备，未接收实物。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认。
-- [ ] 双目已选无镜头彩色 SKU，GPIO 触发电平/时序、镜头和 Jetson 双机同步尚待供应商确认。
+- [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
 - [ ] RTK NTRIP 改正服务或基站尚未确定。
 - [ ] 载荷、供电、热设计、质心和续航未实测。
 - [ ] ROS 驱动未在目标计算机编译；尚无传感器 rosbag 和 Nav2 实机结果。
@@ -224,7 +226,7 @@ Lite3 vendor motion SDK / gait controller
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 建立质量/功耗/散热预算和初步安装 CAD，检查 3.6 kg 项目外设目标。
-5. 继续完成 A3–A11 供应商确认和质量/电源/时间同步预算；公开 Lite3 接口已整理，目标固件与安全保护待验证。
+5. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
 6. 阶段 A 准入通过后，先实现 Lite3 bridge 的只读诊断与 mock 测试，再开放任何运动命令。
 
 ---
@@ -238,6 +240,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.1 | TaskPlan 超过 30 KB，按规则拆为架构硬件分册和测试风险分册；保留本根文件唯一进度状态 | root: 7532fc78; Part 1: 8cfc024c; Part 2: 7caa7e7d |
 | 2026-11-24 | v0.2.2 | 依据官方 Lite3 ROS 2 transfer/SDK 公开接口建立 bridge contract；补充参考资料和 package 规划；A8/A9 更新为部分完成 | bridge: 83544a98; refs: 5384dd90; architecture: 8d4de365; package plan: 8fb71753; README: 5c444c50 |
 | 2026-11-24 | v0.2.3 | 锁定 See3CAM 彩色无镜头 SKU；补充 ROS Lyrical 与 JetPack 7.2.2 兼容性策略：Jazzy 作为 Orin/Ubuntu 24.04 当前目标，Lyrical 等 Ubuntu 26.04/Jetson 支持成熟后评估 | e-con Systems 官方相机 SKU/规格、Open Robotics Lyrical release、NVIDIA JetPack 7.2.2/Jetson Orin 支持资料 |
+| 2026-11-24 | v0.2.4 | 完成硬件 SKU/ROS 发行版策略在 ADR、接口清单、bridge、参考资料和 README 的同步；更新根 TaskPlan 进度与供应商待确认项 | Part 1: 1c7eea37; ADR-0002: 7d41f8a6; checklist: dfe25143; Lite3 bridge: feef5cf9; references: 1416b088; README: pending current update |
 
 ---
 
