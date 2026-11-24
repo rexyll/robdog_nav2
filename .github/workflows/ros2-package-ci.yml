@@ -34,3 +34,4 @@ jobs:
         with:
           package-name: robodog_lite3_bridge
           target-ros2-distro: ${{ matrix.ros_distro }}
+          coverage-result: false
