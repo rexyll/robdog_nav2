@@ -16,6 +16,7 @@ UINT64_MAX = (1 << 64) - 1
 SUPPORTED_MESSAGE_TYPES = {
     "imu",
     "joint_state",
+    "contact_state",
     "robot_status",
     "base_odometry",
     "heartbeat",
@@ -97,7 +98,7 @@ def validate_envelope(envelope: StreamEnvelope) -> None:
                 "source_clock_id is required when source timestamp is present"
             )
 
-    if envelope.message_type in {"imu", "base_odometry"}:
+    if envelope.message_type in {"imu", "contact_state", "base_odometry"}:
         if not envelope.frame_id or not envelope.frame_id.strip():
             raise EnvelopeValidationError(
                 f"frame_id is required for {envelope.message_type}"
