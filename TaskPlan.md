@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.13
+- 文档版本：v0.3.14
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -35,7 +35,7 @@
 - **双目：** 2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1 Color（无镜头），配两只同型号匹配广角 C-mount 镜头和共同硬件 trigger。
 - **RTK：** ArduSimple simpleRTK2B Budget / u-blox ZED-F9P + ANN-MB 天线；需要 NTRIP 或自建基站。
 - **计算：** NVIDIA Jetson AGX Orin Developer Kit（64GB 开发配置）；另需工业 Ethernet switch、相机触发分配、电源/DC-DC/保险和定制安装板。
-- **载荷预算：** 内部目标外设总质量 ≤3.6 kg（不是厂商认证上装值）。当前已知设备质量小计约 1.33 kg，已知设备端功率估算约 22.8–69.4 W；未称重/测功附件、转换损耗和启动峰值仍需核算。禁止未经厂商确认直接用 Lite3 24V 给 AGX 供电。
+- **载荷预算：** 内部目标外设总质量 ≤3.6 kg（不是厂商认证上装值）。已核实设备小计约 1.330 kg；若采用两只 CIL530 镜头，候选小计约 1.664 kg，仍未包含相机本体与全部附件。已知设备端功率估算约 22.8–69.4 W，转换损耗/启动峰值待测；禁止未经厂商确认直接用 Lite3 24V 给 AGX 供电。
 - 详细规格/风险/供电图见 [TaskPlan Part 1](TaskPlan_Part-01_ArchitectureAndHardware.md)、[ADR-0002](docs/decisions/ADR-0002-hardware-platform.md) 和 [power/mass budget](docs/implementation/power_mass_budget.md)。
 
 ### 1.3 软件版本策略
@@ -64,7 +64,6 @@
 - [ADR-0004：本体 odometry 缺失时的 LIO/VIO 备用方案](docs/decisions/ADR-0004-local-odometry-fallback.md)
 - [Odometry fallback strategy](docs/implementation/odometry_fallback_strategy.md)
 - [Lite3 厂商 SDK 集成评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
-- [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 - [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
 
@@ -74,15 +73,15 @@
 - [x] A2. 核对云深处 Lite3 Venture + AGX Orin + MID-360 官方扩展示例与初始软件版本。
 - [ ] A3. 向云深处确认 Venture 当前 SKU、交付件、固件/SDK、安装 CAD、外设接口持续/峰值电流、载荷与重心限制。
 - [~] A4. 已建立初步供电/质量预算：已核实器件 1.330 kg；若采用 CIL530 双镜头，候选小计约 1.664 kg，余 1.936 kg 供相机本体和附件。两台相机本体、交换机、触发板、支架/线束、DC/DC 尚未称重/测功；Lite3 各路电源额定仍待书面确认。
-- [~] A5. 已核对 MID-360 公开规格：200k points/s（first return）、典型 10Hz、360° × -7°~52°、100BASE-TX、PTPv2/GPS 同步、9–27V、平均 6.5W、265g、IP67；实际硬件 revision、SDK/驱动 commit、线束与网络参数仍待确认。
+- [~] A5. 已核对 MID-360 公开规格，并锁定驱动候选 livox_ros_driver2 v1.2.6 commit 13eb05e4e6dd7a765b934d0c5fd6236676a57b49、Livox-SDK2 候选 commit c0796f04c143143899c87a773d9f6b7136453c0b；实际设备 revision、SDK/driver ARM64 构建、线束与网络参数仍待确认。
 - [~] A6. 已锁定 See3CAM 彩色无镜头 SKU；新增 6mm C-Mount 镜头候选 CIL530、120mm 双目基线和 5MP@20fps 初始测试配置。镜头暗角/MTF、GPIO 电气时序、双机曝光同步与 Jetson USB 带宽待样品验证。
 - [~] A7. 已核对 simpleRTK2B Budget / ZED-F9P 当前 SKU 与最高 10Hz RTK 输出；板卡不含天线，目标场地及 NTRIP/自建基站尚未确定。
-- [~] A8. 已区分 Legacy Lite3_ROS Foxy（标准 /leg_odom2、/imu/data 等）与 Current sdk_deploy（DRDDS /IMU_DATA、/JOINTS_DATA、RobotStatus 和 /rl_deploy/cmd_vel 等）。两者不等价；新版公开 RobotStatus 不是完整 nav_msgs/Odometry。详细评估见 [vendor SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md) 与 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)。
+- [~] A8. 已审计 current sdk_deploy 公共 RobotStatus：包含 base_rpy/base_angular_velocity、joint/status/timeout/freshness，但不含 base xyz/linear velocity/covariance；不能据此发布 Odometry。Motion SDK 可读 IMU/12 joints/contact force；lite3_transfer 启动可能获取 SDK 控制权，实机 bring-up 前必须有厂商 SOP。见 [公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)。
 - [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
 - [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
 - [~] A11. 已核实 ROS 发行版与 Jetson 组合：首轮复现厂商 Humble 栈，同时评估 AGX Orin DevKit JetPack 7.2.1 ISO base → 7.2.2 apt upgrade / Ubuntu 24.04 / Jazzy；ROS Lyrical（Ubuntu 26.04）暂不纳入当前 Orin 正式基线。完成实际兼容性矩阵后冻结版本；采购前风险评审作为后续 A12。
 - [ ] A12. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
-- [ ] A13. 向云深处确认当前 Lite3 Venture 固件/SDK 的推荐 ROS 路径、motion host 与 AGX Orin host 分工、Foxy/Jazzy 隔离方式，以及正式 legged odometry/body velocity topic、消息类型、频率、时间戳、frame 和 covariance。
+- [ ] A13. 向云深处确认当前 Venture 固件/SDK 的推荐 ROS 路径、motion host / AGX Orin host 分工、正式 legged odometry/body velocity（含时间戳/frame/covariance）、contact force 语义、SDK_MODE 是否获取控制权及物理急停/驱动禁能方案；问题扩展至供应商矩阵 V-32。
 
 **阶段 A 准入：** 厂商接口、电源、质量、安装和软件兼容均有资料或测量支持；形成 BOM、CAD、网络/电源拓扑和验收阈值。
 
@@ -92,14 +91,14 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [ ] B3. 构建 vendor-side gateway 与 Jazzy robodog_lite3_bridge 的非 DDS 消息契约；携带 source timestamp、clock domain、frame、sequence、quality、covariance 和健康状态。
-- [ ] B4. 编译 MID-360 Livox SDK2 和 `livox_ros_driver2`。
+- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 候选 commit；尚未在 Jazzy x86_64 和 Orin aarch64 编译。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port、Livox ROS Driver 2 commit 与依赖；先用公开 rosbag 完成离线 build/replay、odom/TF/时间戳检查，确认许可证与 patch 来源；实机 Orin/MID-360 测试仍需设备到位。
+- [ ] B11. 固定 Point-LIO ROS 2 Jazzy port/fork、patch 和依赖 commit；Livox driver 预选 v1.2.6（13eb05e4e6dd7a765b934d0c5fd6236676a57b49），SDK2 预选 c0796f04c143143899c87a773d9f6b7136453c0b。Point-LIO fork 尚未冻结；先审许可证并以公开 bag 离线 build/replay，目标 Orin/MID-360 实测仍未完成。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -184,31 +183,31 @@
 
 ### 未完成 / 阻塞
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
-- [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
+- [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
 - [ ] Point-LIO/FAST-LIO2 尚未在本项目 Jetson AGX Orin + MID-360 上构建和验证；Intel 文档中的 Jazzy port/Velodyne 数据集测试不能替代目标硬件验收。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
-- [!] 当前 sdk_deploy 公开 DRDDS topics 与 Legacy Foxy standard topics 不一致；可信 legged odometry/body velocity 是否有正式输出、以及 Foxy motion host 与 Jazzy AGX host 的支持拓扑尚未得到厂商确认。
+- [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
 - [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
 - [ ] RTK NTRIP 改正服务或基站尚未确定。
-- [ ] 载荷、供电、热设计、质心和续航未实测；已知器件功率/质量预算还不包含转换损耗、交换机和全部线束附件。初步预算仅包含部分设备规格，摄像头/镜头/交换机/支架/电源/线缆的实际质量与功耗仍需测量。
+- [ ] 载荷、供电、热设计、质心和续航未实测；质量预算还缺相机本体、交换机、触发板、DC/DC、支架和线束，功率预算还缺转换损耗与峰值测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
 - [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；35 项纯逻辑测试仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
 - [x] 新增消息类型/frame/covariance 检查后的最终 CI 已通过；失败 run 45328900700 根因为 `status` 未加入 message_type 白名单，修复后 45328937159 与 45328982630 双发行版均通过。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
-- [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
+- [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. 整理 Lite3 Venture + AGX Orin + MID-360 扩展接口/安装/电气确认问题，向厂商取得书面答复。
+1. 按供应商矩阵 V-06/V-13/V-16/V-19/V-21/V-22/V-28–V-32 向云深处取得正式接口、控制权、物理急停、电源、载荷与 CAD 书面答复。
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 遥测契约最新 Humble/Jazzy CI：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，每边 35 passed、0 errors/failures/skipped。获得真实 vendor wire protocol 后才实现 UDP/TCP codec。
+5. Livox 按锁定 commit 先完成 Jazzy x86_64 build，再完成 Orin aarch64 build；Build pass 前不能标记 B4 完成。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、可信 legged odometry 和跨发行版网络拓扑的书面答复；然后再实现只读 gateway POC。
+7. Lite3 公开 SDK 审计已写入 [lite3_public_sdk_field_audit.md](docs/implementation/lite3_public_sdk_field_audit.md)；取得厂商只读启动 SOP 和状态接口/网络契约后，再实现 readonly gateway POC。
 
 ---
 
@@ -234,6 +233,7 @@
 | 2026-11-24 | v0.3.4 | 增加本体 odometry 缺失时的 LIO/VIO 备用设计：Point-LIO/MID-360 内置 IMU 首选 POC，FAST-LIO2 对照，Stereo VIO/FAST-LIVO2 后续评估；尚未实机验证 | odometry strategy: 55aa45a5; ADR-0004: e165237e |
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
+| 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
 
 ---
 
@@ -249,12 +249,12 @@
 - [Lite3 跨发行版遥测网关协议提案](docs/implementation/lite3_gateway_protocol.md)
 - [Telemetry envelope validator](src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py)
 - [Telemetry validator tests](src/robodog_lite3_bridge/tests/test_telemetry_contract.py)
-- [Telemetry envelope validation source](src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
 - [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
-- [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
+- [Lite3 公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)
+- [MID-360 Livox 驱动锁定基线](docs/implementation/livox_mid360_driver_baseline.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
