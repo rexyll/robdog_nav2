@@ -88,7 +88,7 @@ wait_for_subscription() {
   local topic="$1"
   local attempts="${2:-60}"
   local info count
-  for _ in $(seq 1 "$${attempts}"); do
+  for _ in $(seq 1 "${attempts}"); do
     info="$(timeout 3 ros2 topic info "${topic}" 2>/dev/null || true)"
     count="$(printf '%s\n' "${info}" | awk -F': *' '/Subscription count:/ {print $2; exit}')"
     if [[ "${count:-0}" =~ ^[0-9]+$ ]] && (( count > 0 )); then
