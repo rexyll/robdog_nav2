@@ -11,11 +11,12 @@
 
 - 四足本体：DEEP Robotics Lite3 Venture；
 - LiDAR：Livox MID-360；
-- 双目相机：2 × e-con Systems See3CAM_50CUG Color（相同 SKU、硬件触发、匹配 C-mount 镜头）；
+- 双目相机：2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头，GPIO trigger，配匹配 C-mount 镜头）；
 - RTK：ArduSimple simpleRTK2B Budget（u-blox ZED-F9P + ANN-MB 多频天线）；
 - 首轮机载计算：NVIDIA Jetson AGX Orin Developer Kit；
-- 首轮软件参考栈：Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble；
-- ROS 2 长期目标：自研包保持 Humble/Jazzy 可移植，在 Humble 2027-05 EOL 前完成 ROS 2 Jazzy 迁移验证。
+- 首轮厂商参考栈：Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble；
+- 当前 Orin 长期目标：JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy；
+- 未来评估：ROS 2 Lyrical（Ubuntu 26.04，LTS 至 2031-05），待 Orin 官方 BSP/整套驱动支持 Ubuntu 26.04 后再决定。
 
 该决策是技术选型，不代表已采购、已获得供应商确认或已通过真实硬件验证。
 
@@ -55,7 +56,7 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 本项目选 MID-360 原版作为 baseline，以对应配置和驱动版本固定。采购时确认 MID-360 与 MID-360s 型号差异、供电线束、固件和 SDK 版本，不混用配置文件。
 
-### 3.3 两台普通 RGB 相机：See3CAM_50CUG Color
+### 3.3 两台普通 RGB 相机：See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）
 
 选择理由：
 - Sony IMX264 5MP 彩色传感器；
@@ -65,6 +66,7 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 - 5MP 模式最高约 35 fps。
 
 采购规格：
+- 精确预选 SKU：`See3CAM_50CUG_CXXCC_BX_H01R1`，Color / no lens；两台相同批次优先。
 - 两台同型号、同版本、同镜头；
 - 优先采用无镜头 SKU + 两个匹配 C-mount 镜头，避免默认镜头 26.1° 水平视场过窄；
 - 镜头先以约 70°–80° 水平视场作为需求指标，由供应商按 2/3-inch IMX264 成像圈和畸变数据推荐；
@@ -103,6 +105,8 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 ## 4. 软件基线决策
 
+**更新说明（2026-11-24）：** ROS 2 Lyrical Luth 已于 2026-05 发布、支持至 2031-05；NVIDIA JetPack 7.2.2 已支持 Jetson Orin Family，但其 L4T 系统为 Ubuntu 24.04。由于 Lyrical Tier 1 Ubuntu 平台是 26.04，当前 Orin 平台应优先验证 Jazzy，而不是为了追最新 ROS distro 跨到未获 JetPack 支持的系统。
+
 云深处公开的 Lite3 Venture 感知扩展示例使用：
 - Ubuntu 22.04；
 - ROS 2 Humble；
@@ -113,12 +117,13 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 本项目保留其中本体、AGX、MID-360 和 Humble 硬件参考，按用户要求将相机改为双台普通 RGB。RTK 为新增传感器。
 
-ROS 2 Humble 上游支持至 2027 年 5 月；考虑本项目开始时间为 2026-11-24，剩余支持窗口较短。因此选择：
-1. Humble 作为首轮 vendor-reference bring-up 基线；
-2. 自研 ROS package 从设计上保持 Humble/Jazzy API 可移植；
-3. Lite3 SDK 通过独立 bridge 隔离，避免 Nav2 层依赖特定 SDK；
-4. 尽快完成 Jazzy/Ubuntu 24.04 的 CI/集成迁移，不晚于 Humble EOL；
-5. 不默认让不同 ROS distro 的节点共享一个 DDS domain；跨发行版时用 UDP/标准消息网关或独立网络域。
+因此策略更新为：
+1. 首轮按厂商示例复现 Humble/JetPack 6.1，核对 Lite3 SDK 和 MID-360 的供应商路径；
+2. 并行在 JetPack 7.2.2/Ubuntu 24.04 上验证 Jazzy，若 Lite3 bridge 和所有驱动可用，则将 Jazzy 作为机载长期运行基线；
+3. 自研 ROS package 保持 Humble/Jazzy 可移植，Lite3 SDK 通过独立 bridge 隔离；
+4. 不在长期运行中依赖 Humble；应在 2027-05 EOL 前完成迁移或形成有维护保障的替代策略；
+5. Lyrical 仅在 Jetson Orin Ubuntu 26.04 官方 BSP 和所有外设驱动可用后再评估；
+6. 不默认让不同 ROS distro 的节点共享一个 DDS domain；跨发行版时用 UDP/标准消息网关或独立网络域。
 
 ## 5. 关键技术链路
 
