@@ -1,15 +1,15 @@
-# UrbanLoco HK-Data20190117 standalone DB3 input audit
+# Standalone ROS 2 SQLite3 storage-file audit — UrbanLoco identity unverified
 
 - Audit date: 2026-11-24
-- Sequence candidate: `HK-Data20190117` / Intel Point-LIO `ulhk_4`
+- Sequence candidate only: `HK-Data20190117` / Intel Point-LIO `ulhk_4` (not confirmed)
 - User-provided input: `~/Downloads/HK-Data20190117_0.db3`
-- Input kind: ROS 2 rosbag2 SQLite3 standalone database; this is not the original ROS 1 `.bag`
+- Input kind: standalone ROS 2 rosbag2 SQLite3 storage file. ROS 2 Jazzy can read/play this format directly, but the expected UrbanLoco download in Intel's Point-LIO instructions is the original ROS 1 `HK-Data20190117.bag`; the supplied DB3 is not that original file.
 - File size: 5,830,840,320 bytes (reported by rosbag2 as 5.4 GiB)
 - rosbag2 duration: 321.550093281 s
 - Start / end: 1547714239.744714975 / 1547714561.294808256 (bag clock)
 - Total messages: 41,817
 - Local source path is not embedded as a portable project path. The file must remain outside Git; no DB3/raw bag is committed.
-- Provenance: the topic/type and CDR signatures below are consistent with the project's fixed HK-Data20190117 contract, but the dataset source and exact sequence identity are not cryptographically proven by these fields. Record the DB3 SHA256 and source acquisition record separately.
+- **Acquisition gate: NOT SATISFIED.** The user-provided DB3 has matching topic/type signatures and valid INSPVAX payloads, but there is no confirmed source URL/download record or verified conversion chain from the official ROS 1 `HK-Data20190117.bag`. These checks cannot establish exact sequence identity. This report is a storage-file diagnostic only, not proof that the required source dataset has been acquired. Record DB3 SHA256 and source acquisition/conversion chain separately.
 
 ## Required topic/type and temporal summary
 
@@ -37,10 +37,10 @@ The complete bag start/end span is 321.550093281 s. The three core streams each 
 
 ## Current verdict and limitations
 
-**Passed:** SQLite rosbag structure, required topic names, required message types, non-empty message streams, selected-topic timestamp ordering (zero duplicate/backward timestamps in the audit), and all INSPVAX latitude/longitude/height payload parsing.
+**Passed (storage-file diagnostics only):** SQLite rosbag2 storage structure, required topic names/types, non-empty message streams, selected-topic timestamp ordering (zero duplicate/backward timestamps), and all INSPVAX latitude/longitude/height payload parsing. This does not satisfy the original UrbanLoco ROS 1 source-file acquisition gate.
 
-**Not yet tested:** PointCloud2 and IMU payload deserialization/content/field layout; Point-LIO full replay; estimated trajectory completeness; INSPVAX/estimated trajectory time-overlap and interpolation policy; evo APE/RPE; source checksum and acquisition provenance; Jetson Orin and actual robot hardware.
+**Not yet established:** identity/provenance of the supplied DB3; existence and SHA256 of the expected original ROS 1 bag; a documented ROS1→ROS2 conversion chain; PointCloud2/IMU payload content/field layout; formal Point-LIO replay; estimated trajectory completeness; timestamp overlap/interpolation; evo APE/RPE; Jetson Orin and robot hardware.
 
-The initial interactive `ros2 bag play` provided by the user stopped approximately 56 seconds after start, less than the 321.55-second bag duration. It is not evidence of a complete playback. The P2 runner now filters playback to the required LiDAR and IMU topics and records the actual replay result.
+The initial interactive `ros2 bag play` provided by the user stopped approximately 56 seconds after start, less than the 321.55-second bag duration. It is not evidence of a complete playback. The P2 runner filters playback to the required LiDAR and IMU topics. It now rejects standalone DB3 for formal P2 replay/evaluation unless the user explicitly confirms its conversion provenance after verification. Do not set that override merely because ros2 bag info/play succeeds.
 
 UrbanLoco is a historical Velodyne dataset. Even a successful P2 replay and low APE/RPE demonstrate only an offline algorithm regression on this dataset. It does not validate MID-360 per-point timing, Livox/IMU PTP synchronization, Jetson AGX Orin performance, Lite3 gait motion, or safe autonomous navigation.
