@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.8
+- 文档版本：v0.3.9
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -172,7 +172,7 @@
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
-- [x] 完成网关协议 v0.1 语义草案，并实现不依赖编码格式的 envelope/sequence/数值检查。
+- [x] 完成网关协议 v0.1 语义草案，并实现不依赖编码格式的 envelope/sequence/数值检查；Humble/Jazzy 双 CI 均通过 25/25。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
@@ -195,7 +195,7 @@
 - [ ] 载荷、供电、热设计、质心和续航未实测；已知器件功率/质量预算还不包含转换损耗、交换机和全部线束附件。初步预算仅包含部分设备规格，摄像头/镜头/交换机/支架/电源/线缆的实际质量与功耗仍需测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
-- [ ] 新增 telemetry envelope 测试尚需 Humble/Jazzy CI 通过；gateway wire codec、UDP/TCP、vendor source mapping 均未实现。
+- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；当前通过的 25 项仅覆盖 freshness、envelope、sequence、数值校验，不代表实际网络链路/厂商 SDK 验证。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
@@ -205,7 +205,7 @@
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 检查 Humble/Jazzy CI，修复构建/测试错误；保留实际运行日志和 run link。
+5. 新增遥测校验已通过 Humble/Jazzy CI：[run 45328657069](https://github.com/rexyll/robdog_nav2/actions/runs/45328657069)，每边 25 passed、0 errors/failures/skipped。下一步按 vendor matrix 完成厂商确认；获得协议后才实现 UDP/TCP codec。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
 7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、可信 legged odometry 和跨发行版网络拓扑的书面答复；然后再实现只读 gateway POC。
 
@@ -244,6 +244,7 @@
 - [ROS 2 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
 - [Lite3 跨发行版遥测网关协议提案](docs/implementation/lite3_gateway_protocol.md)
+- [Telemetry envelope validation source](src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
