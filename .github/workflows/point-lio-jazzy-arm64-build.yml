@@ -32,10 +32,11 @@ jobs:
       - name: Assert native ARM64 and install PCL/Eigen dependencies
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           test "$(uname -m)" = "aarch64"
           test "$(dpkg --print-architecture)" = "arm64"
           source /opt/ros/jazzy/setup.bash
+          set -u
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake git curl libapr1-dev libeigen3-dev libpcl-dev \
@@ -59,7 +60,8 @@ jobs:
           bash scripts/build_point_lio_jazzy.sh "$RUNNER_TEMP/point_lio_poc_ws"
           test "$(uname -m)" = "aarch64"
           file /usr/local/lib/liblivox_lidar_sdk_shared.so
-          file "$RUNNER_TEMP/point_lio_poc_ws/install/point_lio/lib/point_lio/pointlio_mapping"
           ros2 pkg prefix livox_ros_driver2
-          ros2 pkg prefix point_lio
+          POINTLIO_PREFIX="$(ros2 pkg prefix point_lio)"
+          test -n "$POINTLIO_PREFIX"
+          find "$POINTLIO_PREFIX" -type f -name pointlio_mapping -print -quit | grep -q .
           ros2 pkg executables point_lio
