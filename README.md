@@ -94,7 +94,7 @@ flowchart TB
 | LiDAR | 稳定几何测距、局部占据/障碍物标记与清除 | 单独完成全部语义识别；单线 2D LiDAR 不能看见扫描平面以外所有障碍物 |
 | RTK GNSS | 室外绝对位置、地理航点与全局漂移约束 | 近场避障；静止单天线 RTK 不提供可靠航向；非固定解不能当作厘米级真值 |
 | 双目 RGB | 语义检测、视觉深度、补充 LiDAR 视场/高度盲区 | 在透明/反光/无纹理/弱光场景中保证深度；单独承担安全急停 |
-| IMU + 腿式里程计 | 连续姿态、速度与本体运动估计 | 未验证的足端滑移、腾空/落地状态不能被当成无误差里程计 |
+| IMU + 厂商确认的本体 odometry | 连续姿态、速度与本体运动估计 | 当前 sdk_deploy 是否提供完整 legged odometry 仍待确认；未验证的足端滑移不能视作无误差里程计 |
 
 ## 关键架构约束
 
@@ -125,6 +125,7 @@ flowchart TB
 - [Lite3 本体 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
+- [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
