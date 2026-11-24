@@ -12,6 +12,14 @@ from typing import Iterable, Optional, Sequence, Tuple
 
 
 PROTOCOL_MAJOR_SUPPORTED = 1
+UINT64_MAX = (1 << 64) - 1
+SUPPORTED_MESSAGE_TYPES = {
+    "imu",
+    "joint_state",
+    "robot_status",
+    "base_odometry",
+    "heartbeat",
+}
 
 
 class SequenceDisposition(str, Enum):
@@ -37,6 +45,7 @@ class StreamEnvelope:
     frame_id: Optional[str]
     unit_convention: str
     payload_length: int
+    child_frame_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -57,14 +66,16 @@ def validate_envelope(envelope: StreamEnvelope) -> None:
         )
     if envelope.protocol_minor < 0:
         raise EnvelopeValidationError("protocol_minor must be non-negative")
-    if not envelope.message_type.strip():
-        raise EnvelopeValidationError("message_type is required")
+    if envelope.message_type not in SUPPORTED_MESSAGE_TYPES:
+        raise EnvelopeValidationError(
+            f"unsupported message_type: {envelope.message_type!r}"
+        )
     if not envelope.robot_id.strip():
         raise EnvelopeValidationError("robot_id is required")
     if not envelope.session_id.strip():
         raise EnvelopeValidationError("session_id is required")
-    if envelope.sequence < 0:
-        raise EnvelopeValidationError("sequence must be non-negative")
+    if envelope.sequence < 0 or envelope.sequence > UINT64_MAX:
+        raise EnvelopeValidationError("sequence must be an unsigned 64-bit integer")
     if envelope.gateway_monotonic_ns <= 0:
         raise EnvelopeValidationError("gateway_monotonic_ns must be positive")
     if envelope.payload_length < 0:
@@ -85,6 +96,22 @@ def validate_envelope(envelope: StreamEnvelope) -> None:
             raise EnvelopeValidationError(
                 "source_clock_id is required when source timestamp is present"
             )
+
+    if envelope.message_type in {"imu", "base_odometry"}:
+        if not envelope.frame_id or not envelope.frame_id.strip():
+            raise EnvelopeValidationError(
+                f"frame_id is required for {envelope.message_type}"
+            )
+    elif envelope.frame_id is not None and not envelope.frame_id.strip():
+        raise EnvelopeValidationError("frame_id must be None or a non-empty string")
+
+    if envelope.message_type == "base_odometry":
+        if not envelope.child_frame_id or not envelope.child_frame_id.strip():
+            raise EnvelopeValidationError("child_frame_id is required for base_odometry")
+    elif envelope.child_frame_id is not None and not envelope.child_frame_id.strip():
+        raise EnvelopeValidationError(
+            "child_frame_id must be None or a non-empty string"
+        )
 
 
 class StreamSequenceTracker:
@@ -110,8 +137,8 @@ class StreamSequenceTracker:
     def observe(self, session_id: str, sequence: int) -> SequenceObservation:
         if not session_id or not session_id.strip():
             raise ValueError("session_id is required")
-        if sequence < 0:
-            raise ValueError("sequence must be non-negative")
+        if sequence < 0 or sequence > UINT64_MAX:
+            raise ValueError("sequence must be an unsigned 64-bit integer")
 
         if self._session_id is None:
             self._session_id = session_id
@@ -158,3 +185,37 @@ def require_vector_length(
             f"{field_name} length {len(values)} != expected {expected_length}"
         )
     return require_finite_values(values, field_name)
+
+
+def validate_covariance(
+    values: Sequence[float],
+    dimension: int,
+    field_name: str,
+    allow_unknown: bool = False,
+) -> Tuple[float, ...]:
+    """Validate a flattened 3x3 or 6x6 ROS covariance array.
+
+    This checks array length, finite values, and non-negative diagonal entries.
+    It does not prove the full matrix is positive semidefinite. ROS IMU message
+    conventions permit the first element to be -1 to indicate an unavailable
+    estimate when allow_unknown=True.
+    """
+    if dimension not in (3, 6):
+        raise ValueError("covariance dimension must be 3 or 6")
+    expected_length = dimension * dimension
+    if len(values) != expected_length:
+        raise ValueError(
+            f"{field_name} length {len(values)} != expected {expected_length}"
+        )
+
+    converted = require_finite_values(values, field_name)
+    if allow_unknown and converted[0] == -1.0:
+        return converted
+
+    diagonal_indices = [i * dimension + i for i in range(dimension)]
+    for index in diagonal_indices:
+        if converted[index] < 0.0:
+            raise ValueError(
+                f"{field_name} diagonal[{index}] must be non-negative"
+            )
+    return converted
