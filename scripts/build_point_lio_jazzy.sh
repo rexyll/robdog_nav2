@@ -9,7 +9,9 @@ if [[ "$#" -gt 0 ]]; then
 fi
 POINTLIO_DIR="$WORKSPACE/src/point_lio"
 DRIVER_DIR="$WORKSPACE/src/livox_ros_driver2"
-SDK_DIR="$WORKSPACE/src/Livox-SDK2"
+# Keep the standalone SDK source outside src/: colcon would otherwise
+# rediscover it as a CMake package and rebuild it without the GCC 13 flag.
+SDK_DIR="$WORKSPACE/vendor/Livox-SDK2"
 
 POINTLIO_BASE="97b0042e397ec71c327966abebff9b4b7e2c154a"
 DRIVER_COMMIT="13eb05e4e6dd7a765b934d0c5fd6236676a57b49"
@@ -37,7 +39,7 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 
-mkdir -p "$WORKSPACE/src"
+mkdir -p "$WORKSPACE/src" "$WORKSPACE/vendor"
 
 if [[ ! -e "$DRIVER_DIR" ]]; then
   git clone https://github.com/Livox-SDK/livox_ros_driver2.git "$DRIVER_DIR"
