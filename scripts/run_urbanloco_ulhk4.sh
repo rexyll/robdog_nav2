@@ -15,8 +15,12 @@ ODOM_TOPIC="${POINTLIO_ODOM_TOPIC:-/aft_mapped_to_init}"
 MIN_POSES="${URBANLOCO_MIN_ESTIMATED_POSES:-100}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-223}"
 
-if [[ ! -d "${BAG_DIR}" || ! -f "${BAG_DIR}/metadata.yaml" ]]; then
-  echo "No converted rosbag2 at ${BAG_DIR}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
+if [[ -d "${BAG_DIR}" && -f "${BAG_DIR}/metadata.yaml" ]]; then
+  :
+elif [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 ]]; then
+  :
+else
+  echo "No rosbag2 directory (metadata.yaml) or standalone .db3 at ${BAG_DIR}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
   exit 2
 fi
 if [[ ! -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
@@ -50,10 +54,14 @@ PLAY_LOG="${RESULTS_DIR}/ros2_bag_play.log"
 BAG_INFO="${RESULTS_DIR}/bag_info.txt"
 rm -f "${EST_FILE}"
 ros2 bag info "${BAG_DIR}" > "${BAG_INFO}"
-if ! grep -Fq "${LIDAR_TOPIC}" "${BAG_INFO}"; then
-  echo "Bag does not contain expected LiDAR topic ${LIDAR_TOPIC}." >&2
-  exit 6
-fi
+for topic in "${LIDAR_TOPIC}" "${IMU_TOPIC}"; do
+  if ! grep -Fq "${topic}" "${BAG_INFO}"; then
+    echo "Bag does not contain required Point-LIO input topic ${topic}." >&2
+    exit 6
+  fi
+done
+python3 "${SCRIPT_DIR}/audit_urbanloco_ulhk4_db3.py" "${BAG_DIR}" \
+  --json-out "${RESULTS_DIR}/bag_audit.json" > "${RESULTS_DIR}/bag_audit.log"
 
 ALGO_PID=""
 REC_PID=""
@@ -125,6 +133,7 @@ wait_for_odometry_endpoints() {
 }
 
 wait_for_subscription "${LIDAR_TOPIC}" 90
+wait_for_subscription "${IMU_TOPIC}" 90
 
 echo "Starting TUM odometry recorder..."
 setsid python3 "${SCRIPT_DIR}/record_point_lio_odometry_tum.py" \
@@ -133,7 +142,8 @@ REC_PID=$!
 wait_for_odometry_endpoints
 
 echo "Starting rosbag2 playback at recorded rate..."
-setsid ros2 bag play "${BAG_DIR}" --rate 1.0 >"${PLAY_LOG}" 2>&1 &
+setsid ros2 bag play "${BAG_DIR}" --topics "${LIDAR_TOPIC}" "${IMU_TOPIC}" \
+  --rate 1.0 >"${PLAY_LOG}" 2>&1 &
 BAG_PID=$!
 set +e
 wait "${BAG_PID}"
@@ -167,6 +177,7 @@ dataset_session=HK-Data20190117
 pointlio_workspace=${WS_DIR}
 bag_dir=${BAG_DIR}
 lidar_topic=${LIDAR_TOPIC}
+imu_topic=${IMU_TOPIC}
 odometry_topic=${ODOM_TOPIC}
 ros_domain_id=${ROS_DOMAIN_ID}
 estimated_pose_count=${POSE_COUNT}
