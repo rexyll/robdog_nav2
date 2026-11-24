@@ -60,3 +60,41 @@ The package now includes a receiver-message helper for the UBX-NAV-PVT flags byt
 The helper pairs a position record and NAV-PVT quality record only when their receiver iTOW values match exactly and their host monotonic receive times are within an explicitly supplied skew limit. It rejects mismatched epochs; it never pairs by "nearest arrival" or ROS header timestamps alone.
 
 The position record must preserve a receiver source timestamp and a source_clock_id identifying the GPS week/receiver clock epoch. iTOW is a week-relative counter and must not be treated as a globally monotonic timestamp. The chosen ROS driver must be checked to confirm it exposes the required UBX fields and a reliable way to associate the matching NavSatFix epoch. That driver selection and full ROS adapter remain open.
+
+
+## Raw u-blox UBX exact-epoch assembly
+
+For the pinned `aussierobots/ublox_dgnss` driver, the preferred input to the quality gate is the original UBX-derived topic set, not the driver's convenience `NavSatFix` conversion node. The pure helper `ubx_nav_pvt.build_observation_from_ubx_epochs()` accepts decoded fields from:
+
+- `UBXNavPVT`: `iTOW`, `gnss_fix_ok`, and carrier-solution state;
+- `UBXNavHPPosLLH`: `iTOW`, high-precision LLH components and invalid-component flags;
+- `UBXNavCov`: `iTOW`, `pos_cor_valid`, and the six upper-triangle NED position-covariance elements;
+- `UBXNavStatus`: `iTOW`, GNSS validity, carrier-solution validity and carrier-solution state.
+
+All four records must have exactly equal `iTOW`. The helper also requires their host monotonic receive timestamps to fit within the configured maximum cross-topic skew. A nearest-arrival match is never attempted. NAV-PVT and NAV-STATUS quality fields must agree, HPPOSLLH invalid flags must all be clear, and NAV-COV must explicitly mark its position covariance valid.
+
+### Covariance frame conversion
+
+UBX-NAV-COV expresses position covariance in NED. The helper converts the six values to a symmetric row-major ENU matrix with
+
+```text
+C_NED = [[NN, NE, ND],
+         [NE, EE, ED],
+         [ND, ED, DD]]
+
+R_NED_to_ENU = [[0, 1,  0],
+                [1, 0,  0],
+                [0, 0, -1]]
+
+C_ENU = R_NED_to_ENU * C_NED * transpose(R_NED_to_ENU)
+```
+
+The resulting row-major values are `[EE, NE, -ED, NE, NN, -ND, -ED, -ND, DD]`. Cross terms involving Down change sign. The existing RTK gate subsequently validates finite values, covariance symmetry/PSD, non-degeneracy and uncertainty limits.
+
+### Time-domain boundary
+
+The caller must supply `source_timestamp_ns` from a separately validated receiver-time mapper and a `source_clock_id` that identifies the GPS week and receiver clock generation. The helper deliberately does not synthesize a globally monotonic timestamp from iTOW: iTOW is week-relative and wraps every GPS week.
+
+The pinned driver's ROS `header.stamp` is populated from the host USB receive path; it must not be treated as receiver measurement time or host steady-clock freshness. A future ROS adapter must timestamp each callback using one host monotonic clock, maintain bounded per-topic epoch caches, and clear them on receiver clock-generation changes. `NAV-STATUS.msss` can help detect a receiver reset, but its 32-bit startup counter also wraps and must not be used alone as a permanent generation identifier.
+
+This helper is pure algorithm code. It is not a serial/USB parser, ROS subscription node, receiver-time mapper, NavSatFix publisher, PPS driver, NTRIP client, or EKF integration.
