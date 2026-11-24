@@ -139,7 +139,9 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 - 同一固定源码准备脚本和 build_point_lio_jazzy.sh 构建 SDK2/Driver2/Point-LIO；
 - 构建后检查 SDK2 shared library、ROS package prefixes 和 pointlio_mapping executable。
 
-当前运行：[ARM64 build run 45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465) 已完成 aarch64/arm64 架构断言、ROS/PCL/Eigen 依赖安装和固定源码准备，仍在 SDK2/Driver2/Point-LIO native build。GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该运行即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
+ARM64 run [45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465) 的实际日志确认原生编译成功：SDK2 shared/static targets built、Driver2 Finished、Point-LIO Finished、Summary: 2 packages finished，ROS package prefix 和 pointlio_mapping 检查均完成；仅最后调用 file 命令失败（容器未安装 file，exit 127），不是编译错误。workflow 已改为使用 test -s 检查 SDK shared library、find 定位 pointlio_mapping 并 test -x 检查可执行权限。修正版 [run 45340700005](https://github.com/rexyll/robdog_nav2/actions/runs/45340700005) 已排队，待最终 job success 作为 P3a 通过证据。
+
+GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该 gate 即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
 
 ## 7. P2 UrbanLoco u l h k_4 离线回放工具
 
@@ -183,7 +185,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
 - [~] P2 回放/GT/evo 脚本与 8 项纯函数 CI 已通过（run 45339580363）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
-- [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建预验证已新增（run 45339955465 待结果）；这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
+- [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建已在 run 45339955465 完成 SDK2/Driver2/Point-LIO 编译，但 post-build file 工具检查失败；修正版 run 45340700005 待最终结论。这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
 
