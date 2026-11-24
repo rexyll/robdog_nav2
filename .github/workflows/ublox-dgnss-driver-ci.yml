@@ -60,6 +60,17 @@ jobs:
           test "$ACTUAL_SHA" = "9d4f5addbc72d092c57dde99b20712258e96e81e"
           echo "Pinned ublox_dgnss source: $ACTUAL_SHA"
 
+      - name: Fetch the pinned RTCM message dependency
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch master \
+            https://github.com/tilk/rtcm_msgs.git \
+            "$RUNNER_TEMP/ublox_ws/src/rtcm_msgs"
+          RTCM_SHA="$(git -C "$RUNNER_TEMP/ublox_ws/src/rtcm_msgs" rev-parse HEAD)"
+          test "$RTCM_SHA" = "8d27ab5f4d4a581e1bb9c87d572994c25197f6d4"
+          echo "Pinned rtcm_msgs source: $RTCM_SHA"
+
       - name: Resolve ROS dependencies
         shell: bash
         run: |

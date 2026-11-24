@@ -102,6 +102,17 @@ C_ENU = R_NED_to_ENU * C_NED * transpose(R_NED_to_ENU)
 
 继续复用现有纯算法核心中的 UBX flags 解码、精确 iTOW 配对和 quality gate；未来新增 ROS 2 adapter 与bounded epoch join。上游驱动只负责传输和原始 UBX message decode，项目 adapter 负责来源可信、历元匹配、时间连续性、协方差转换及门控。上游 driver 不应直接发布到 Nav2 global localization 而绕过该门控。
 
+## 6.1 固定的消息包依赖
+
+`ublox_dgnss_node` 与 `ntrip_client_node` 使用外部 ROS 消息包 `rtcm_msgs`。ROS Index 对 Humble/Jazzy 列出 `rtcm_msgs 1.1.6`，但本仓库 CI 使用的官方 ROS base 容器在 apt 安装阶段返回 `Unable to locate package ros-{distro}-rtcm-msgs`。因此测试 workflow 显式从源码构建该依赖，而不是跳过它或模拟一个同名包。
+
+- 来源：[tilk/rtcm_msgs](https://github.com/tilk/rtcm_msgs)
+- 固定版本：package 1.1.6，commit `8d27ab5f4d4a581e1bb9c87d572994c25197f6d4`
+- 许可证：BSD-3-Clause
+- ROS Index：[rtcm_msgs package entry](https://index.ros.org/p/rtcm_msgs/)
+
+这是一项独立的上游依赖锁定，和 `aussierobots/ublox_dgnss` 的 Apache-2.0 许可证分别记录，不得把两个仓库合并视为同一许可证。
+
 ## 6. 构建验证和未完成事项
 
 本仓库 CI 使用固定 commit `9d4f5addbc72d092c57dde99b20712258e96e81e`，分别在 Humble/Jammy 与 Jazzy/Noble 容器构建上游 `ublox_dgnss` 元包，并检查 UBXNavPVT/HPPosLLH/COV 消息接口。该 CI 只证明软件源码可在对应 ROS 发行版构建；不证明 USB 设备发现、serial/USB权限、接收机固件、NTRIP 改正、RTK Fixed 输出或 PPS。
