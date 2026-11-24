@@ -194,7 +194,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 固定源码准备脚本已创建并经 P0 GitHub Actions 实测成功。
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
-- [~] P2 回放/GT/evo 脚本与 8 项纯函数 CI 已通过（run 45339580363）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
+- [~] P2 回放/GT/evo 工具静态检查、纯函数和 SQLite INSPVAX GT extraction integration 共 10 项测试已通过（runs 45340287093、45341097202）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
 - [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建 run 45339955465 和 45340700005 均完成 SDK2/Driver2/Point-LIO 编译与安装；两次分别被 file 工具缺失、独立 post-build shell 未 source ROS 环境阻断。最新修正版 run 45341347087 已在后置 shell 显式 source ROS/workspace 环境，待最终结论。这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
