@@ -9,6 +9,13 @@ from .quality_gate import (
     RejectionReason,
     RtkQualityGate,
 )
+from .ubx_nav_pvt import (
+    EpochPairingError,
+    NavSatEpochRecord,
+    UbxNavPvtQuality,
+    decode_nav_pvt_flags,
+    pair_navsat_fix_with_nav_pvt,
+)
 
 __all__ = [
     "CarrierSolution",
@@ -18,4 +25,9 @@ __all__ = [
     "QualityDecision",
     "RejectionReason",
     "RtkQualityGate",
+    "EpochPairingError",
+    "NavSatEpochRecord",
+    "UbxNavPvtQuality",
+    "decode_nav_pvt_flags",
+    "pair_navsat_fix_with_nav_pvt",
 ]

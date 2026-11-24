@@ -51,3 +51,12 @@ The core tests use only Python's standard library and pytest/unittest. This pack
 - RTK Float, single, differential, unknown or stale solutions are never accepted as RTK Fixed.
 - A mathematically PSD covariance is not proof that the receiver uncertainty is statistically calibrated. The adapter/source quality review remains required.
 - The gate is not a safety-rated system and does not authorize autonomous movement.
+
+
+## UBX-NAV-PVT quality-field adapter contract
+
+The package now includes a receiver-message helper for the UBX-NAV-PVT flags byte. It decodes bit 0 as GNSSFixOK and bits 7:6 as carrSoln (0 no carrier solution, 1 Float, 2 Fixed, 3 reserved/unknown). It does not parse serial bytes or subscribe to a specific ROS driver.
+
+The helper pairs a position record and NAV-PVT quality record only when their receiver iTOW values match exactly and their host monotonic receive times are within an explicitly supplied skew limit. It rejects mismatched epochs; it never pairs by "nearest arrival" or ROS header timestamps alone.
+
+The position record must preserve a receiver source timestamp and a source_clock_id identifying the GPS week/receiver clock epoch. iTOW is a week-relative counter and must not be treated as a globally monotonic timestamp. The chosen ROS driver must be checked to confirm it exposes the required UBX fields and a reliable way to associate the matching NavSatFix epoch. That driver selection and full ROS adapter remain open.
