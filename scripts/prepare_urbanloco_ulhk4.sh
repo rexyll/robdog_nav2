@@ -90,8 +90,8 @@ AUDIT_JSON="${DATASET_DIR}/bag_audit.json"
 python3 "${SCRIPT_DIR}/audit_urbanloco_ulhk4_db3.py" "${BAG_DIR}" --json-out "${AUDIT_JSON}"
 echo "P2 input audit: ${AUDIT_JSON}"
 
-# Record provenance and checksums outside the bag directory. Recompute the
-# raw digest on every run so replacing a same-named bag cannot retain a stale hash.
+# Record provenance and checksums outside the bag directory. Recompute all
+# digests on every run so replacing a same-named source cannot retain a stale hash.
 RAW_SHA256="not_available"
 RAW_SIZE_BYTES="not_available"
 if [[ -f "${RAW_BAG}" ]]; then
@@ -105,6 +105,14 @@ DB3_SUMS="${DATASET_DIR}/ros2_bag_db3.sha256"
 for db3 in "${DB3_FILES[@]}"; do
   [[ -f "${db3}" ]] && sha256sum "${db3}" >> "${DB3_SUMS}"
 done
+
+DB3_INPUT_SHA256="multiple_or_not_applicable"
+DB3_INPUT_SIZE_BYTES="multiple_or_not_applicable"
+if [[ -f "${BAG_DIR}" ]]; then
+  DB3_INPUT_SHA256="$(awk '{print $1}' "${DB3_SUMS}")"
+  DB3_INPUT_SIZE_BYTES="$(stat -c '%s' "${BAG_DIR}")"
+  cp "${DB3_SUMS}" "${DATASET_DIR}/ros2_bag_input.sha256"
+fi
 
 cat > "${DATASET_DIR}/dataset_manifest.txt" <<EOF
 sequence=ulhk_4
@@ -122,9 +130,13 @@ lidar_topic=${LIDAR_TOPIC}
 imu_topic=${IMU_TOPIC}
 ground_truth_topic=${GT_TOPIC}
 ros2_bag_format=sqlite3
+ros2_bag_input_db3_size_bytes=${DB3_INPUT_SIZE_BYTES}
+ros2_bag_input_db3_sha256=${DB3_INPUT_SHA256}
 db3_checksum_file=${DB3_SUMS}
 EOF
 
 echo "UrbanLoco u l h k_4 bag is ready: ${BAG_DIR}"
 echo "Dataset provenance: ${DATASET_DIR}/dataset_manifest.txt"
-echo "Raw bag SHA256: ${RAW_SHA256}"
+echo "Raw ROS 1 bag SHA256: ${RAW_SHA256}"
+echo "ROS 2 DB3 input size (bytes): ${DB3_INPUT_SIZE_BYTES}"
+echo "ROS 2 DB3 input SHA256: ${DB3_INPUT_SHA256}"
