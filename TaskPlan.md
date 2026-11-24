@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.37
+- 文档版本：v0.3.38
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -173,6 +173,7 @@
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
 - [x] 完成网关协议 v0.1 语义草案及 envelope/sequence/消息类型/frame/数值/covariance 检查；新增 contact_state 必须携带 frame_id 的验证和 2 个单元测试，Humble/Jazzy 双发行版 37 项测试均通过（run 45332714322、45332706824、45332702335）。
+- [x] 完成 Lite3 遥测协方差矩阵结构校验：在原长度/有限值/非负对角检查上增加对称性与 3x3/6x6 正半定（PSD）检查，使用无 NumPy 依赖的 Jacobi 特征值算法；保留 sensor_msgs/Imu covariance[0] == -1 未知估计标记的 allow_unknown 语义。新增 5 项边界测试；ROS 2 package CI run 45377526595 的 Humble/Jammy、Jazzy/Noble 两个 job 均 success。代码提交 df302eb6b767bc8dd521ac7fd121b6cf38fef645。
 - [x] Point-LIO P0 来源准备 CI 通过：checkout 上游 gitlink SHA 97b0042...，按顺序应用 Intel 3 份固定补丁，校验 patch commit subjects、lock marker 和 clean worktree（run 45334159646）。只证明源码准备可复现，不代表 build/replay 或硬件验收。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
@@ -182,6 +183,7 @@
 - [x] 创建 ADR-0002 硬件选型记录和更新硬件接口清单。
 - [x] TaskPlan 拆分为根目录进度台账 + 两份设计分册。
 - [x] 更新 Lite3 bridge 接口契约，区分 Legacy standard ROS topics 与 current DRDDS / rl_deploy interfaces；记录 vendor odometry availability 为待确认。
+- [x] 将此前生成的 R3–R5 通用算法原型作为实验参考归档保存至 docs/experimental/assistant_r5_reference/；仅保存选定纯 Python 核心/测试/报告，不并入正式 src/。原型报告的 102/102 是离线单测/配置/源码契约检查，不是 ROS 构建、pluginlib、Nav2 运行或实机验证；集成边界见归档 README。归档提交 73c7996ac8d06e3a71a2288a0e6be50504018303。
 
 - [x] Livox SDK2 v1.3.1 + livox_ros_driver2 v1.2.6 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337301420](https://github.com/rexyll/robdog_nav2/actions/runs/45337301420)。
 - [x] 固定 Point-LIO Intel Jazzy port 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320)；colcon 2 packages finished，`pointlio_mapping` executable 被找到。
@@ -199,7 +201,7 @@
 - [ ] 载荷、供电、热设计、质心和续航未实测；质量预算还缺相机本体、交换机、触发板、DC/DC、支架和线束，功率预算还缺转换损耗与峰值测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
-- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；37 项纯逻辑测试通过仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
+- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；42 项纯逻辑测试通过及双发行版 CI 成功仍不代表实际网络链路/厂商 SDK 验证。Covariance validator 已增加矩阵对称性和 PSD 结构检查，但不证明来源协方差经过统计标定或真实可信；全零矩阵虽为数学 PSD，仍须由来源质量策略决定是否可接受。
 - [x] 新增消息类型/frame/covariance 检查后的最终 CI 已通过；失败 run 45328900700 根因为 `status` 未加入 message_type 白名单，修复后 45328937159 与 45328982630 双发行版均通过。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
@@ -223,6 +225,7 @@
 | 日期 | 版本 | 变更 | 提交/证据 |
 |---|---|---|---|
 | 2026-11-24 | v0.3.37 | 核对 UrbanLoco 目标序列与真实数据大小：`ulhk_4` = `HK-Data20190117`，官方页面 6.11 GB；修正共享目录说明、数据日期字段差异及禁止用其他大序列替代的人工下载 Gate | UrbanLoco README/official page; Intel Point-LIO reproduction guide; datasets README 48a86015; POC doc 37484ad5 |
+| 2026-11-24 | v0.3.38 | Lite3 遥测协方差增加对称/PSD 结构校验与 5 项边界测试；Humble/Jammy、Jazzy/Noble 双 CI success；归档 R3–R5 实验参考原型但不并入正式源代码 | code df302eb6b767bc8dd521ac7fd121b6cf38fef645; CI 45377526595; archive 73c7996ac8d06e3a71a2288a0e6be50504018303 |
 
 ---
 
@@ -236,6 +239,7 @@
 - [ROS 2 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
 - [Lite3 跨发行版遥测网关协议提案](docs/implementation/lite3_gateway_protocol.md)
+- [R3–R5 实验原型归档与集成边界](docs/experimental/assistant_r5_reference/README.md)
 - [Telemetry envelope validator](src/robodog_lite3_bridge/robodog_lite3_bridge/telemetry_contract.py)
 - [Telemetry validator tests](src/robodog_lite3_bridge/tests/test_telemetry_contract.py)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
