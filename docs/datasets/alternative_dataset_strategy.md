@@ -302,3 +302,35 @@ python scripts/convert_m3dgr_dynamic03_to_ros2.py \\
 M3DGR 官方公开的 `Grass01_fixed.txt` 也包含连续相同位姿记录且四元数保持 identity，但其时间戳仍严格递增；因此不能用该样例为 Dynamic03 的重复/倒退时间戳开脱。官方 README 说明传感器无外部触发、采用软件同步。Dynamic03 GT 时间覆盖约 284.420190 s，落在 bag 起止时间范围内；时间范围接近不证明同一时钟域或同步精度。
 
 **当前 GT Gate：阻塞。** `scripts/audit_tum_trajectory.py temp/Dynamic03.txt` 预期返回 `blocked_review_required`（重复/倒退 timestamp），退出码 10。不得对源文件原位排序、去重、重采样或修改四元数；不得直接将该文件输入 evo。需要先核实原始下载文件是否完整、作者的 TF→TUM 导出方式及重复行语义，再决定是否生成带来源记录的派生候选轨迹。即使时间戳问题解决，仍须确认时间偏移/漂移、坐标系和 frame convention，才可运行 APE/RPE。
+
+
+### 6.10 Dynamic03 GT 的独立候选生成（不替换原件）
+
+M3DGR README 提供的 TF→TUM 工具 [Trajectory_saving_for_SLAM](https://github.com/Zjj587/Trajectory_saving_for_SLAM) 的实现采用 20 Hz 循环，并通过 `lookupTransform(..., ros::Time(0), ...)` 查询最新 TF，再写入 `transform.stamp_`。这种采样方式能够解释“同一位姿可能连续被写入多行”的现象；但 README 没有证明 Dynamic03 独立 GT 文件确由该工具生成，不能把它当作 Dynamic03 三重记录/时间乱序的正式根因，也不能据此直接修改原始文件。
+
+新增 `scripts/create_tum_pose_run_candidate.py`，只生成派生候选目录，不修改输入文件：
+
+```bash
+cd ~/workspace/robdog_nav2
+git pull --ff-only origin main
+source .venv-dataset-tools/bin/activate
+
+python scripts/create_tum_pose_run_candidate.py \\
+  temp/Dynamic03.txt \\
+  datasets/m3dgr_dynamic03_gt_pose_run_candidate
+
+python scripts/audit_tum_trajectory.py \\
+  datasets/m3dgr_dynamic03_gt_pose_run_candidate/trajectory.tum \\
+  --json-out datasets/m3dgr_dynamic03_gt_candidate_audit.json
+```
+
+生成器的严格规则：
+1. 只把文件中**连续且 tx..qw 七个 pose 字段完全相等**的记录视为同一个 pose run，不跨越不同 pose 合并。
+2. 仅在该 run 内按 timestamp 排序。
+3. 仅在同一个 pose run 内删除重复 timestamp（该 run 的 pose 字段完全一致，因此它是完全相同 timestamp+pose 记录）。
+4. 下一 run 的最早 timestamp 必须严格大于上一 run 的最晚 timestamp；不同 pose run 只要时间范围重叠、倒退或边界 timestamp 相等就 fail closed。
+5. 输出目录必须不存在；生成 `trajectory.tum` 和 `manifest.json`，manifest 记录输入/输出 SHA256、行数、排序/去重方法和限制。临时目录完整写好后才原子发布；输入 SHA256 在解析前后复核。
+
+按仓库当前 `temp/Dynamic03.txt` 统计，候选预期为 2,594 行、1,422 个连续 pose runs（1,421 个三行 run、1 个六行 run），在 pose run 内排序并删除 1,675 条重复 timestamp+同 pose 行；原始数据中的 728 个倒退对都发生在相同 pose run 内。此数字是生成规则的可复现预期，不代表候选已由用户生成或授权为 GT。
+
+候选文件必须保持 `ordered_tum_candidate_not_validated_ground_truth` 状态。即便第二次 TUM audit 得到 `valid_tum_trajectory`，也只证明格式和时间顺序通过：仍须确认独立 GT 的原始来源/导出过程、设备时钟域/时间偏移/漂移以及坐标系/参考 frame，之后才可将其用于 evo。若脚本在不同 pose run 边界失败，不得放宽 Gate 或跨 pose 自动排序。
