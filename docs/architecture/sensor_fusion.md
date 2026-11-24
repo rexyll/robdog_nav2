@@ -81,17 +81,17 @@ ROS 2 可评估 `image_pipeline` / `stereo_image_proc`、OpenCV StereoSGBM 或�
 
 理想针孔双目模型：
 
-[
-Z = rac{fB}{d}
-]
+\[
+Z = \frac{fB}{d}
+\]
 
 其中 (Z) 为深度，(f) 为像素单位焦距，(B) 为基线，(d) 为左右对应点视差。
 
 近似误差：
 
-[
-sigma_Z approx rac{Z^2}{fB}sigma_d
-]
+\[
+\sigma_Z \approx \frac{Z^2}{fB}\sigma_d
+\]
 
 因此距离越远，深度误差通常以近似平方关系放大；增加基线、有效分辨率或亚像素匹配精度可以改善测距，但更大基线会增加近距离遮挡并缩小重叠范围。
 
@@ -163,7 +163,7 @@ sigma_Z approx rac{Z^2}{fB}sigma_d
 - 运动方向 course-over-ground 在低速/静止时不可靠，不能无条件当作机身航向。
 - 优先使用经过标定的 IMU/magnetometer，或双天线 GNSS heading。
 - RTK 天线与 `base_link` 原点存在杆臂偏移；在 URDF/TF 和 navsat 参数中一致处理。
-- 磁偏角、IMU yaw offset、EN​​U/NED 约定和天线朝向必须显式记录。
+- 磁偏角、IMU yaw offset、ENU/NED 约定和天线朝向必须显式记录。
 
 ## 5. IMU 与腿式里程计
 
