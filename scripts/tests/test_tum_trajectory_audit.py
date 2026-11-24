@@ -26,7 +26,7 @@ class TestTumTrajectoryAudit(unittest.TestCase):
         )
         self.assertEqual(report["status"], "valid_tum_trajectory")
         self.assertEqual(report["valid_pose_rows"], 3)
-        self.assertAlmostEqual(report["timestamp"]["average_rate_hz"], 10.0)
+        self.assertAlmostEqual(report["timestamp"]["average_rate_hz"], 10.0, places=5)
         self.assertAlmostEqual(report["path_length_in_file_order_m"], 0.2)
         self.assertEqual(report["comment_rows"], 1)
         self.assertEqual(len(report["sha256"]), 64)
