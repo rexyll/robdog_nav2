@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.2.4
+- 文档版本：v0.2.5
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -134,6 +134,7 @@ Lite3 vendor motion SDK / gait controller
 
 ### 阶段 B — 驱动、时间同步和标定
 
+- [~] B0. 已建立 robodog_lite3_bridge ROS 2 Python 包骨架，包含 mock 状态发布、只读 topic 新鲜度诊断、pytest 单元测试和 Humble/Jazzy GitHub Actions；尚待 CI 构建/测试通过，尚未接入真实 Lite3 SDK。
 - [ ] B1. 并行构建兼容性基线：复现 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 厂商参考环境；在 AGX Orin 上验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy 目标环境。
 - [ ] B2. 编译 Lite3 SDK/ROS 2 transfer，只读读取 odom/IMU/joint/status。
 - [ ] B3. 建立 Lite3 bridge/adapter，先只读诊断，再验证限幅和 watchdog，不立即开放自主运动。
@@ -202,6 +203,7 @@ Lite3 vendor motion SDK / gait controller
 
 ### 已完成
 - [x] 仓库初始化，默认分支 main。
+- [x] 建立 robodog_lite3_bridge 只读软件骨架：mock odom/IMU/joint topics、DiagnosticArray topic freshness monitor、单元测试和双发行版 CI workflow 文件。
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
@@ -214,20 +216,23 @@ Lite3 vendor motion SDK / gait controller
 - [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
 
 ### 未完成 / 阻塞
+- [~] ROS 2 package CI 已触发，Humble/Jazzy job 运行中；尚无 build/test 通过结论，不能标记 CI 完成。
 - [ ] 未采购设备，未接收实物。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认。
 - [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
 - [ ] RTK NTRIP 改正服务或基站尚未确定。
 - [ ] 载荷、供电、热设计、质心和续航未实测。
 - [ ] ROS 驱动未在目标计算机编译；尚无传感器 rosbag 和 Nav2 实机结果。
+- [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
 
 ### 下一步（按顺序执行）
 1. 整理 Lite3 Venture + AGX Orin + MID-360 扩展接口/安装/电气确认问题，向厂商取得书面答复。
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 建立质量/功耗/散热预算和初步安装 CAD，检查 3.6 kg 项目外设目标。
-5. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-6. 阶段 A 准入通过后，先实现 Lite3 bridge 的只读诊断与 mock 测试，再开放任何运动命令。
+5. 检查 Humble/Jazzy CI，修复构建/测试错误；保留实际运行日志和 run link。
+6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
+7. 阶段 A 准入通过后，将厂商 SDK 数据接入只读 bridge；先记录原始 odom/IMU/joint 和时间戳，不开放任何运动命令。
 
 ---
 
@@ -241,6 +246,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.2 | 依据官方 Lite3 ROS 2 transfer/SDK 公开接口建立 bridge contract；补充参考资料和 package 规划；A8/A9 更新为部分完成 | bridge: 83544a98; refs: 5384dd90; architecture: 8d4de365; package plan: 8fb71753; README: 5c444c50 |
 | 2026-11-24 | v0.2.3 | 锁定 See3CAM 彩色无镜头 SKU；补充 ROS Lyrical 与 JetPack 7.2.2 兼容性策略：Jazzy 作为 Orin/Ubuntu 24.04 当前目标，Lyrical 等 Ubuntu 26.04/Jetson 支持成熟后评估 | e-con Systems 官方相机 SKU/规格、Open Robotics Lyrical release、NVIDIA JetPack 7.2.2/Jetson Orin 支持资料 |
 | 2026-11-24 | v0.2.4 | 完成硬件 SKU/ROS 发行版策略在 ADR、接口清单、bridge、参考资料和 README 的同步；更新根 TaskPlan 进度与供应商待确认项 | Part 1: 1c7eea37; ADR-0002: 7d41f8a6; checklist: dfe25143; Lite3 bridge: feef5cf9; references: 1416b088; README: 3ab67049 |
+| 2026-11-24 | v0.2.5 | 建立 Lite3 ROS 2 只读 mock/诊断软件包骨架和 Humble/Jazzy CI；补充多传感器时间同步与外参标定设计；CI 当前待运行结论 | package: 74a05789–bea3fbfd; pytest layout: ba171479–123d32ec; sync doc: a04b50dd; CI run: https://github.com/rexyll/robdog_nav2/actions/runs/45325569459 |
 
 ---
 
@@ -253,6 +259,7 @@ Lite3 vendor motion SDK / gait controller
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 - [ROS 2 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
+- [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [系统架构](docs/architecture/system_architecture.md)
 - [传感器融合](docs/architecture/sensor_fusion.md)
