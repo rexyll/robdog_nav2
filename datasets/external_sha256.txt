@@ -1,0 +1,4 @@
+# Upstream SHA256 values published by https://github.com/sjtuyinjie/M3DGR/blob/main/checksums.txt
+# Format: dataset-relative-artifact-key  sha256
+m3dgr/Dynamic03.bag A54B687A924EE4E9B30673F85D88AC73615A10FCE4A7AB40F6099C24283BCC78
+m3dgr/Outdoor01.bag 00A270807BCA336BC5191320B9D453CEFEF76507850286E91063BC726C3775C8
