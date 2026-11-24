@@ -116,7 +116,8 @@ Intel README 所述 UrbanLoco \`ulhk_4\` 论文基线 RMSE 2.17m 和 20% 回归�
 - 独立 Livox Driver2 build workflow 使用固定 repos manifest 将 Driver2 锁定到正确的 v1.2.6 commit；SDK2 v1.3.1 单独 build/install，不把 SDK SHA 错配给 Driver2。
 
 当前运行：
-- [Point-LIO P1 Jazzy build run 45334593305](https://github.com/rexyll/robdog_nav2/actions/runs/45334593305)：进行中，尚未进入源码 build。
+- [Point-LIO P1 Jazzy build run 45335382556](https://github.com/rexyll/robdog_nav2/actions/runs/45335382556)：最新重跑，已提交对 rosdep 依赖阶段的 APT 索引刷新修复；仍需等待构建步骤结果。
+- 旧 P1 run 45334667791 失败根因：工作流为减小镜像而在 native dependency step 结束时删除 /var/lib/apt/lists，build script 后续执行 rosdep install 前未刷新 APT index，导致 Ubuntu Noble 仓库中的 libaprutil1-dev 无法被 apt 定位。已在 build script 的 rosdep install 前新增 apt-get update（root/sudo 自适应），不修改依赖版本也不跳过 rosdep。
 - [Livox Driver2 build run 45334563869](https://github.com/rexyll/robdog_nav2/actions/runs/45334563869)：进行中，已修正 manifest 将 Driver2 固定到正确的 v1.2.6 commit。
 
 构建脚本会拒绝错误的源码锁、错误 Driver2 commit 或错误 SDK2 commit；不会重置现有 Point-LIO 用户修改。即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
