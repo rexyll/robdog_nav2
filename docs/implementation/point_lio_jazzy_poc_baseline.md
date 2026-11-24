@@ -114,7 +114,7 @@ Intel README 所述 UrbanLoco \`ulhk_4\` 论文基线 RMSE 2.17m 和 20% 回归�
 
 项目已新增：
 - [scripts/build_point_lio_jazzy.sh](../../scripts/build_point_lio_jazzy.sh)：校验 Point-LIO 锁定的 upstream/Intel patch series；固定 Livox Driver2 v1.2.6 和 SDK2 v1.3.1；SDK2 用 GCC 13 -include cstdint 参数构建安装；调用官方 Driver2 ./build.sh jazzy，在同一 workspace 中构建 Driver2 与 Point-LIO；最后核对两个 ROS package prefix 和 Point-LIO executable。
-- [Point-LIO ROS 2 Jazzy Build](../../.github/workflows/point-lio-jazzy-build.yml)：Ubuntu 24.04 container + ros-tooling/setup-ros@0.7.22 + native PCL/Eigen dependencies，先准备固定源码，再运行上述构建脚本。
+- [Point-LIO ROS 2 Jazzy Build](../../.github/workflows/point-lio-jazzy-build.yml)：使用官方预装镜像 `ros:jazzy-ros-base-noble`（Ubuntu 24.04），显式安装 native PCL/Eigen、colcon、rosdep、ament 依赖，先准备固定源码，再运行上述构建脚本；不再每次从裸 Noble 镜像安装整个 ROS distro。
 
 ### 6.1 P1 编译根因与修复
 
@@ -128,7 +128,7 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 - 在 colcon 前显式检查 /usr/local/lib/liblivox_lidar_sdk_shared.so 和 /usr/local/include/livox_lidar_api.h 已安装；
 - 同时检查 src/Livox-SDK2 不存在，防止 colcon 又将 SDK2 source 作为 package 编译。
 
-修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。最新 Point-LIO serial P1 run [45336830473](https://github.com/rexyll/robdog_nav2/actions/runs/45336830473) 使用 workspace 外 SDK2 source 路径和 colcon list gate，当前在 ROS Jazzy 安装阶段；P0 source preparation run [45336709339](https://github.com/rexyll/robdog_nav2/actions/runs/45336709339) 再次成功。尚未取得最终 build pass。
+修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。最新 Point-LIO P1 run [45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320) 已完成官方 ROS 镜像初始化和 checkout，正在安装 native dependencies；SDK2 source 位于 workspace 外，并有 colcon list gate。P0 source preparation run [45336709339](https://github.com/rexyll/robdog_nav2/actions/runs/45336709339) 再次成功。尚未取得最终 build pass。
 
 两条 build workflow 均已增加同分支 concurrency/cancel-in-progress，并将文档路径从 push/PR 过滤中移除，以免 docs-only 修改触发全量编译。Livox 最新 serial run [45336480583](https://github.com/rexyll/robdog_nav2/actions/runs/45336480583) 正在 ROS Jazzy 安装阶段；ROS source 已避开 nounset，rosdep 前刷新 APT index。当前不宣称 Driver2 build pass。
 
