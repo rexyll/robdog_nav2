@@ -75,15 +75,13 @@ if [[ ! -f "${DB3_FILES[0]}" ]]; then
   exit 5
 fi
 
-# Record provenance and checksums outside the bag directory. For large files,
-# calculate the raw bag digest once and reuse it on subsequent preparation runs.
+# Record provenance and checksums outside the bag directory. Recompute the
+# raw digest on every run so replacing a same-named bag cannot retain a stale hash.
 RAW_SHA256="not_available"
 RAW_SIZE_BYTES="not_available"
 if [[ -f "${RAW_BAG}" ]]; then
   RAW_SIZE_BYTES="$(stat -c '%s' "${RAW_BAG}")"
-  if [[ ! -f "${DATASET_DIR}/raw_bag.sha256" ]]; then
-    sha256sum "${RAW_BAG}" > "${DATASET_DIR}/raw_bag.sha256"
-  fi
+  sha256sum "${RAW_BAG}" > "${DATASET_DIR}/raw_bag.sha256"
   RAW_SHA256="$(awk '{print $1}' "${DATASET_DIR}/raw_bag.sha256")"
 fi
 
