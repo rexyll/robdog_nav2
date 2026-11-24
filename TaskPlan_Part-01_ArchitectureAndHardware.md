@@ -4,7 +4,7 @@
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 项目仓库：https://github.com/rexyll/robdog_nav2
-- 项目目标：基于四足机器狗，使用 **LiDAR + 两台普通 RGB 相机组成被动双目 + RTK GNSS**，结合机器狗 IMU/腿式里程计，构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性系统。
+- 项目目标：基于四足机器狗，使用 **LiDAR + 两台普通 RGB 相机组成被动双目 + RTK GNSS**，结合机器狗 IMU 与经验证的本体状态估计（正式腿式 odometry 输出待厂商确认），构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性系统。
 - **本体预选：DEEP Robotics 绝影 Lite3 Venture（未采购、待厂商确认最终交付和接口）。**
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget（u-blox ZED-F9P + ANN-MB 天线）。**
 - **计算平台预选：NVIDIA Jetson AGX Orin Developer Kit（64GB 版本作为首轮开发配置；安装、电源和质量预算待验证）。**
@@ -191,19 +191,18 @@
 - Livox 官方 `livox_ros_driver2` 提供 Ubuntu 24.04 / ROS 2 Jazzy 构建说明；仍需在项目锁定 commit 上实际编译测试。
 - 不混用不同 ROS distro 的 DDS 节点作为默认架构；如需隔离厂商旧栈和 Nav2 新栈，应使用 UDP/串口/标准消息网关并限制网络域。
 
-### 3.2 Lite3 本体接口
+### 3.2 Lite3 本体接口与 SDK 路线 Gate
 
-优先采用云深处官方 `sdk_deploy` / `Lite3_ROS` 源码与厂商 SDK，不直接控制电机和关节驱动。
+当前已核验的公开 Lite3 软件存在两条不同路径：
 
-官方 ROS 2 接口示例包含：
-- `/leg_odom`：`geometry_msgs/msg/PoseWithCovarianceStamped`；
-- `/leg_odom2`：`nav_msgs/msg/Odometry`（位姿+速度）；
-- `/imu/data`：`sensor_msgs/msg/Imu`；
-- `/joint_states`：`sensor_msgs/msg/JointState`；
-- `/cmd_vel`：`geometry_msgs/msg/Twist`，线速度 x/y 与角速度 z；坐标方向/速度范围/模式要求以具体 SDK 版本手册为准。
-- 厂商 SDK 部分状态消息约 10 Hz、控制有效命令可达约 50 Hz；具体由 SDK 版本和机器人固件决定，必须测量。
+1. **Legacy Lite3_ROS（ros2-foxy）**：UDP transfer 发布标准消息 /leg_odom、/leg_odom2、/imu/data、/joint_states，并订阅旧示例 /cmd_vel。其 source code 使用 steady-clock 赋 header.stamp；/leg_odom2 的 child_frame_id 和 covariance 还需审计，因此不能直接作为 production state estimator 输入。
+2. **Current sdk_deploy（main）**：面向 Venture，lite3_transfer 使用 DRDDS 消息 /IMU_DATA、/JOINTS_DATA 和 /JOINTS_CMD，另有 /SDK_MODE、/EMERGENCY_STOP 服务；rl_deploy 的 /rl_deploy/cmd_vel 只在 rl_control 状态有效。公开 RobotStatus 有 base_rpy、base_angular_velocity、JointState 和 telemetry_fresh，但不等于完整 nav_msgs/Odometry。
 
-本项目需实现 `robodog_lite3_bridge` 或 `robodog_cmd_adapter`，负责命令限幅、状态映射、命令超时、连接状态和 Nav2 topic 适配。不得未经厂商许可改写底层安全控制或直接向关节发送 Nav2 命令。
+**关键前置条件：** 必须向云深处确认当前 Lite3 Venture 固件是否提供可信腿式 odometry/body velocity 输出、消息类型、频率、采集时间戳、frame 和 covariance。若当前 SDK 只提供 IMU/joint/status，则不能只靠 IMU 积分伪造连续本体位置；须评估 LiDAR odometry/SLAM、stereo VIO 或厂商其他腿式估计接口。
+
+sdk_deploy 文档提示 motion host 当前工作流为 Foxy，且 Foxy 与非 Foxy host 的 DDS 跨主机通信存在兼容风险。Nav2 Jazzy 不得与 vendor Foxy 节点默认共用 DDS domain。推荐隔离 vendor-compatible process，通过经过验证的非 DDS UDP/TCP gateway 向项目 bridge 输出标准消息；具体主机角色和网络拓扑待厂商确认。
+
+项目自有 robodog_lite3_bridge 只负责标准消息规范化、时钟/frame/协方差转换和诊断；robodog_cmd_adapter 负责 Nav2 输出安全门控。不得未经厂商许可复制完整 SDK 或直接向关节发送 Nav2 命令。详见 docs/implementation/lite3_vendor_sdk_integration_assessment.md 和 ADR-0003。
 
 ### 3.3 软件层和建议包
 
@@ -211,7 +210,7 @@
 |---|---|
 | `robodog_description` | URDF/Xacro、base/sensor frames、碰撞外形 |
 | `robodog_lite3_bridge` | Lite3 SDK/UDP/ROS2 通信、odom/IMU/status 与 cmd_vel adapter |
-| `robodog_sensor_bringup` | Mid-360、左右相机、RTK 驱动、时间同步 |
+| `robodog_lite3_vendor_gateway` | 未来 vendor Foxy/DRDDS 侧非 DDS gateway；需要厂商确认主机拓扑后再创建 |\n| `robodog_sensor_bringup` | Mid-360、左右相机、RTK 驱动、时间同步 |
 | `robodog_stereo_perception` | 双目同步、校正、视差、深度、点云和置信度 |
 | `robodog_obstacle_perception` | LiDAR/点云过滤、地面分割、聚类、障碍物目标 |
 | `robodog_localization` | local/global EKF、navsat_transform、GNSS gate |
@@ -277,7 +276,7 @@ map
 - 双目左右相机必须硬件同步优先；软件同步误差要根据机器速度、相机帧率、基线和深度误差预算量化。
 - MID-360 支持 PTPv2/GPS 时间同步；优先将 LiDAR 与主机时钟同步。
 - GNSS 提供 PPS/时间信息时，评估将其纳入统一时间基准。
-- Lite3 SDK UDP 状态消息要测量网络时延、抖动和时间戳来源；若仅有接收时间，记录其限制。
+- Lite3 vendor gateway 的状态消息要测量网络时延、抖动和 source timestamp；若只得到 receive time，记录其限制。
 - 记录各节点数据 age；过期数据不允许继续更新 costmap 或作为定位真值。
 
 ### 4.5 RTK 降级
