@@ -17,10 +17,23 @@ from urbanloco_gt_helpers import (
 EXPECTED_TYPE_TOKEN = "INSPVAX"
 
 
-def extract_samples(bag_dir: Path, topic: str) -> tuple[list[tuple[int, float, float, float]], str]:
-    db3_files = sorted(bag_dir.glob("*.db3"))
-    if not db3_files:
-        raise FileNotFoundError(f"No rosbag2 sqlite3 .db3 file found in {bag_dir}")
+def _resolve_db3_files(bag_path: Path) -> list[Path]:
+    path = bag_path.expanduser().resolve()
+    if path.is_file():
+        if path.suffix.lower() != ".db3":
+            raise ValueError(f"Standalone rosbag input must be a .db3 file: {path}")
+        return [path]
+    if path.is_dir():
+        db3_files = sorted(path.glob("*.db3"))
+        if db3_files:
+            return db3_files
+    raise FileNotFoundError(
+        f"No standalone .db3 file or rosbag2 directory containing .db3 files: {path}"
+    )
+
+
+def extract_samples(bag_path: Path, topic: str) -> tuple[list[tuple[int, float, float, float]], str]:
+    db3_files = _resolve_db3_files(bag_path)
 
     samples: list[tuple[int, float, float, float]] = []
     found_type: str | None = None
@@ -54,7 +67,7 @@ def extract_samples(bag_dir: Path, topic: str) -> tuple[list[tuple[int, float, f
 
     if not samples:
         raise ValueError(
-            f"No {topic} INSPVAX messages found in {bag_dir}; check ros2 bag info"
+            f"No {topic} INSPVAX messages found in {bag_path}; check ros2 bag info"
         )
     if found_type is None:
         raise ValueError(f"Ground-truth topic {topic} not found in bag metadata")
@@ -63,14 +76,15 @@ def extract_samples(bag_dir: Path, topic: str) -> tuple[list[tuple[int, float, f
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--bag-dir", type=Path, required=True)
+    parser.add_argument("--bag-path", "--bag-dir", dest="bag_path", type=Path, required=True,
+                        help="rosbag2 directory or standalone SQLite3 .db3 file")
     parser.add_argument("--topic", default="/novatel_data/inspvax")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--json-out", type=Path)
     args = parser.parse_args()
 
     try:
-        raw_samples, topic_type = extract_samples(args.bag_dir, args.topic)
+        raw_samples, topic_type = extract_samples(args.bag_path, args.topic)
         unique_samples, duplicate_count = order_and_deduplicate(raw_samples)
         if len(unique_samples) < 2:
             raise ValueError(
@@ -91,7 +105,7 @@ def main() -> int:
                 )
 
         report: dict[str, Any] = {
-            "bag_dir": str(args.bag_dir.resolve()),
+            "bag_input": str(args.bag_path.resolve()),
             "topic": args.topic,
             "topic_type": topic_type,
             "cdr_layout": "UrbanLoco HK-Data20190117 novatel_oem7_msgs/INSPVAX",
