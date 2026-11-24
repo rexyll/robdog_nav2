@@ -334,3 +334,39 @@ python scripts/audit_tum_trajectory.py \\
 按仓库当前 `temp/Dynamic03.txt` 统计，候选预期为 2,594 行、1,422 个连续 pose runs（1,421 个三行 run、1 个六行 run），在 pose run 内排序并删除 1,675 条重复 timestamp+同 pose 行；原始数据中的 728 个倒退对都发生在相同 pose run 内。此数字是生成规则的可复现预期，不代表候选已由用户生成或授权为 GT。
 
 候选文件必须保持 `ordered_tum_candidate_not_validated_ground_truth` 状态。即便第二次 TUM audit 得到 `valid_tum_trajectory`，也只证明格式和时间顺序通过：仍须确认独立 GT 的原始来源/导出过程、设备时钟域/时间偏移/漂移以及坐标系/参考 frame，之后才可将其用于 evo。若脚本在不同 pose run 边界失败，不得放宽 Gate 或跨 pose 自动排序。
+
+
+### 6.11 Dynamic03 GT 与 RTK /mavros/global_position/raw/fix 的来源关联核查
+
+用户完成真实 bag 审计后，发现一个更强的待验证线索：
+
+- 原始 temp/Dynamic03.txt 恰好 **4,269 行**。
+- 原始 ROS1 bag 的 /mavros/global_position/raw/fix 恰好 **4,269 条**，bag record 时间覆盖与 TUM GT 首尾接近。
+- M3DGR 官方 README 的总览表将 Visual Challenge 中的 Dynamic 场景 GT 标为 **RTK/Mocap**；平台规格列出 15 Hz RTK 接收机 CUAV C-RTK2HP。Dynamic03 是 Outdoor Dynamic Person 序列。官方还注明传感器间没有外部触发，采用软件同步。
+- 这让 /mavros/global_position/raw/fix 成为目前最值得检查的 RTK 来源候选，但官方公开说明未将该 topic 明确映射到 C-RTK2HP，也没有逐序列明确说 Dynamic03 采用 RTK 而非 Mocap。**相同记录数并不证明逐行一一对应。**
+
+新增只读工具 [scripts/audit_m3dgr_gt_rtk_correspondence.py](../../scripts/audit_m3dgr_gt_rtk_correspondence.py) 和回归测试 [scripts/tests/test_m3dgr_gt_rtk_correspondence.py](../../scripts/tests/test_m3dgr_gt_rtk_correspondence.py)。本工具对比未排序、未去重的原始 TUM 行序与 ROS1 bag 中 RTK NavSatFix 的消息顺序，输出：
+1. GT / RTK 消息条数是否相同；
+2. 两者原始顺序的时间戳重复/倒退统计；
+3. 若条数相同，逐行比较 TUM timestamp 与 NavSatFix header stamp、bag record timestamp 的时间差分布（不做 nearest-time 重新配对）；
+4. NavSatFix status / covariance type 分布；
+5. 将 RTK WGS84 lat/lon/alt 转成以首个 Fix 为原点的 ENU，并与原始 TUM xyz 做一次全局刚体变换拟合，报告 3D RMSE/median/p95。该拟合只用于判断轨迹形状是否支持来源关联，**严禁把拟合变换用于调整 evo 评测或宣称 GT 精度**。
+
+本地执行（需要原始 bag 与未修改的 GT 文件）：
+
+~~~bash
+cd ~/workspace/robdog_nav2
+git pull --ff-only origin main
+source .venv-dataset-tools/bin/activate
+
+python scripts/audit_m3dgr_gt_rtk_correspondence.py \
+  "$HOME/Downloads/Dynamic03.bag" \
+  temp/Dynamic03.txt \
+  --json-out datasets/m3dgr_dynamic03_gt_rtk_correspondence.json
+~~~
+
+报告出来前：
+- 不要用 2,594 行 pose-run candidate 替代原始 4,269 行进行来源判断；候选改变了行数和局部行序，可能破坏与 RTK 原始消息的 ordinal correspondence。
+- 不要将 /mavros/global_position/raw/fix 未经检查就命名为权威 RTK GT；必须检查 status/covariance 与逐行时间/位置关联。
+- 不要用此脚本的 SE(3) 拟合结果去调整轨迹或用于 EVO 对齐。
+- 即使时间/位置与 RTK 强匹配，仍需确认接收机身份、RTK Fixed/Float 状态、改正数来源、天线参考点/杆臂以及时间同步误差，才可把它作为 GT 做 APE/RPE。
