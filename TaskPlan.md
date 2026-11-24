@@ -90,7 +90,7 @@
 - [x] B0. 已建立 robodog_lite3_bridge ROS 2 Python 包骨架，包含隔离在 /mock/lite3 namespace 和 mock_* frames 的合成状态发布、只读 topic 新鲜度诊断和 pytest 单元测试；GitHub Actions 在 Humble/Jammy 与 Jazzy/Noble 均成功构建，每个发行版 6/6 测试通过。未接入真实 Lite3 SDK，不发布运动命令。
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
-- [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
+- [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id；ROS 3x3/6x6 covariance 已增加矩阵对称性与 PSD 结构校验，新增 5 项边界测试，Humble/Jammy 与 Jazzy/Noble CI run 45377526595 均通过。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
 - [x] B4. 已在 Ubuntu 24.04 + ROS 2 Jazzy x86_64 完成 Livox SDK2 v1.3.1 与 livox_ros_driver2 v1.2.6 的构建/安装；CI run 45337301420 成功。仅为 x86_64 编译证据，Orin aarch64、真实 MID-360 设备发现/数据采集、PTP 和 60 分钟稳定性仍未验收。CustomMsg/timebase/offset_time ns 语义已源码核验。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
