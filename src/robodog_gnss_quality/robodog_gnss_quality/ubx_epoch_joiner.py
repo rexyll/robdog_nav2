@@ -64,6 +64,7 @@ class UbxFourMessageEpochJoiner:
         self.max_pair_receive_skew_ns = max_pair_receive_skew_ns
         self.max_pending_age_ns = max_pending_age_ns
         self._source_clock_id: Optional[str] = None
+        self._requires_explicit_generation = False
         self._pending: OrderedDict[int, _PendingEpoch] = OrderedDict()
         self._completed: OrderedDict[int, int] = OrderedDict()
         self._last_emitted_source_timestamp_ns: Optional[int] = None
@@ -101,6 +102,7 @@ class UbxFourMessageEpochJoiner:
         if not isinstance(source_clock_id, str) or not source_clock_id.strip():
             raise EpochPairingError("source_clock_id must be a non-empty generation ID")
         self._source_clock_id = source_clock_id
+        self._requires_explicit_generation = False
         self._pending.clear()
         self._completed.clear()
         self._last_emitted_source_timestamp_ns = None
@@ -108,6 +110,7 @@ class UbxFourMessageEpochJoiner:
     def reset(self) -> None:
         """Clear all state and require begin_generation() before the next sample."""
         self._source_clock_id = None
+        self._requires_explicit_generation = True
         self._pending.clear()
         self._completed.clear()
         self._last_emitted_source_timestamp_ns = None
@@ -200,6 +203,10 @@ class UbxFourMessageEpochJoiner:
         ):
             raise EpochPairingError("source_timestamp_ns must be a non-negative integer")
         if self._source_clock_id is None:
+            if self._requires_explicit_generation:
+                raise EpochPairingError(
+                    "begin_generation() is required after reset before accepting new receiver data"
+                )
             self.begin_generation(source_clock_id)
         elif source_clock_id != self._source_clock_id:
             raise EpochPairingError(
