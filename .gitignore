@@ -1,0 +1,33 @@
+# ROS 2 / colcon
+build/
+install/
+log/
+.colcon/
+*.bag
+*.db3
+*.mcap
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Generated runtime artifacts
+*.log
+*.tmp
+*.swp
+*.swo
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Large data by default
+bags/*
+!bags/README.md
+models/*
+!models/README.md
