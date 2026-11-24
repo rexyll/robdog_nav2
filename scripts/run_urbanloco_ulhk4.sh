@@ -16,11 +16,21 @@ ODOM_TOPIC="${POINTLIO_ODOM_TOPIC:-/aft_mapped_to_init}"
 MIN_POSES="${URBANLOCO_MIN_ESTIMATED_POSES:-100}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-223}"
 
-if [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 && "${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}" != "1" ]]; then
-  echo "ERROR: standalone DB3 provenance is not confirmed; this is not the expected original UrbanLoco ROS1 .bag." >&2
-  echo "Use the documented HK-Data20190117.bag source and convert it, or explicitly confirm the DB3 conversion provenance." >&2
+MANIFEST_FILE="${DATASET_DIR}/dataset_manifest.txt"
+if [[ ! -f "${MANIFEST_FILE}" ]]; then
+  echo "ERROR: missing provenance manifest ${MANIFEST_FILE}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
   exit 10
 fi
+P2_SOURCE_GATE="$(awk -F= '$1 == "p2_source_gate" {print $2; exit}' "${MANIFEST_FILE}")"
+case "${P2_SOURCE_GATE}" in
+  ros1_source_provenance_confirmed|user_confirmed_db3_provenance)
+    ;;
+  *)
+    echo "ERROR: formal P2 is blocked by dataset provenance gate: ${P2_SOURCE_GATE:-missing}" >&2
+    echo "Verify the official ROS1 source or DB3 conversion chain, then rerun prepare with its explicit confirmation variable." >&2
+    exit 10
+    ;;
+esac
 if [[ -d "${BAG_DIR}" && -f "${BAG_DIR}/metadata.yaml" ]]; then
   :
 elif [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 ]]; then
