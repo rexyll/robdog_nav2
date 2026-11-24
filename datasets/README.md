@@ -37,3 +37,6 @@ UrbanLoco `ulhk_4` 的原始来源门禁仍保留；它不再是整个项目的�
 - Expected MID-360 inputs: `/livox/mid360/lidar` (`livox_ros_driver/CustomMsg`) and `/livox/mid360/imu` (`sensor_msgs/Imu`). Verify the actual bag connections before conversion.
 - Do not reuse `m3dgr_mid360.yaml` blindly: the upstream M3DGR Point-LIO version uses `/camera/imu`; the upstream `mid360.yaml` uses MID-360's built-in `/livox/mid360/imu`. This project must adapt only after bag metadata and custom message definitions have been audited.
 - The Dynamic03 bag byte checksum is verified; ROS structure, custom message decode, timestamp semantics, GT correctness, ROS 1→ROS 2 conversion and Point-LIO replay remain pending.
+
+- Pinned upstream Livox ROS1 driver semantics for M3DGR commit `5fc892c84defef42feb2418f7d38897bef40f490`: CustomPoint `offset_time` and packet offset are nanoseconds; `CustomMsg.timebase` is first packet time and `header.stamp` derives from timebase / 1e9. This identifies the unit, **not** whether the device clock was PTP/PPS/NoSync.
+- Dynamic03 GT is a separate download. Audit it first with `scripts/audit_tum_trajectory.py`; the tool validates TUM shape/finite values/time order/quaternion norm only and does not establish bag clock alignment or coordinate frame.
