@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.51
+- 文档版本：v0.3.52
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,8 +98,10 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO P0/P1 与通用 ARM64 P3a build 已通过。用户 DB3 已完成 rosbag2 storage/topic/type/318 条 INSPVAX CDR 诊断（[报告](docs/testing/urbanloco_ulhk4_dataset_audit.md)），但不是 Intel 复现说明要求的原始 ROS 1 `HK-Data20190117.bag`，且来源/转换链未证实，**P2 正式数据源 Gate 阻塞**。prepare manifest 已记录 provenance 状态；replay/evaluate 必须先通过 manifest 来源闸门。最新来源闸门 CI [run 45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success。需取得原始 ROS1 bag或补齐可验证来源、SHA256 与转换链后再推进。
+- [~] B11. Point-LIO P0/P1 与 P3a ARM64 build 已通过；UrbanLoco `HK-Data20190117_0.db3` 仅完成 rosbag2/topic/318 条 INSPVAX CDR 诊断，来源不明，不能代替指定 ROS1 原始 bag。UrbanLoco P2 replay/evo 仍被 provenance gate 阻塞（CI [45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success），但不再作为整个项目唯一数据入口；并行替代基准转入 B13。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
+- [~] B13. 已核查三套替代公开基准并建立分工：[GrandTour](https://grand-tour.leggedrobotics.com/)（ANYmal + MID-360 + 双 RTK + 本体状态，首选综合四足基准）、[Quadruped-SLAM](https://github.com/EN3D-Lab/Quadruped-SLAM-dataset)（Go2 步态/足端状态/Leica GT）、[M3DGR](https://github.com/sjtuyinjie/M3DGR)（MID-360/GNSS/动态场景）。详细下载、topic、license 和限制见 [替代数据集策略](docs/datasets/alternative_dataset_strategy.md)。当前仅完成资料审查，下载/校验/转换/回放/evo 均未完成。
+- [ ] B14. 建立通用外部数据集接入与验收工具：ROS1 bag / ROS2 bag / ZARR 元数据、上游和本地 SHA256、custom message definitions、topic/type/count、时间跨度、GT 坐标/时钟和转换 provenance manifest；在实际替代 bag 到位后按 M3DGR、QuadSLAM、GrandTour 分别补充适配器。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -198,7 +200,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [!] P2 standalone DB3 诊断通过，但原始 UrbanLoco ROS 1 `HK-Data20190117.bag` 或可信转换来源证明仍缺失；正式 Point-LIO replay、GT、APE/RPE 暂停。DB3 可播放不等于原始数据集获取完成；run/evaluate 已加 manifest provenance gate（CI 45394849538 success）。
+- [!] UrbanLoco 专项 P2 仍被原始 ROS1 bag/可验证转换来源缺失阻塞；现有 standalone DB3 仅为诊断样本，来源不能推定。该阻塞不再暂停整体 LIO/四足验证：按 B13 使用替代数据集分别建立证据，UrbanLoco 保留为可选复现任务。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -221,31 +223,18 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。当前 `HK-Data20190117_0.db3` 仅是可读取的 ROS 2 SQLite3 storage 文件，其话题/字段诊断不能证明它来自指定 UrbanLoco ROS 1 `HK-Data20190117.bag`。正式 P2 仍需取得官方 ROS1 原始文件，或验证并记录 DB3 的原始来源、原始文件 SHA256 与 ROS1→ROS2 转换链；未完成前不要运行正式 P2 replay/evo。数据诊断脚本与正式评测来源闸门已更新，DB3 provenance override 仅能在完成证据核验后显式设置。之后再做 JetPack 7.2.2 Orin 实机、MID-360 时间审计与 Lite3 受控运动。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。UrbanLoco P2 保持来源闸门，不再等待其数据后才继续项目；按 B13 先获取 GrandTour 单 mission 访问/格式信息、M3DGR `Dynamic03.bag` 和 QuadSLAM `Road00.bag`，逐项完成上游许可/校验和、topic/type、custom message、时间戳/GT 与 ROS1→ROS2 转换验证。替代数据未完成回放前，不得宣称 Point-LIO 精度验收通过。
 
 ---
 
 ## 4. 进度变更记录
 
-历史记录 v0.1–v0.3.36 已归档至 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。本表只保留近期影响当前基线的变更。
+历史记录 v0.1–v0.3.50 已归档至 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。本表只保留最近影响当前基线的变更。
 
 | 日期 | 版本 | 变更 | 提交/证据 |
 |---|---|---|---|
-| 2026-11-24 | v0.3.37 | 核对 UrbanLoco 目标序列与真实数据大小：`ulhk_4` = `HK-Data20190117`，官方页面 6.11 GB；修正共享目录说明、数据日期字段差异及禁止用其他大序列替代的人工下载 Gate | UrbanLoco README/official page; Intel Point-LIO reproduction guide; datasets README 48a86015; POC doc 37484ad5 |
-| 2026-11-24 | v0.3.38 | Lite3 遥测协方差增加对称/PSD 结构校验与 5 项边界测试；Humble/Jammy、Jazzy/Noble 双 CI success；归档 R3–R5 实验参考原型但不并入正式源代码 | code df302eb6b767bc8dd521ac7fd121b6cf38fef645; CI 45377526595; archive 73c7996ac8d06e3a71a2288a0e6be50504018303 |
-| 2026-11-24 | v0.3.39 | 新增 robodog_gnss_quality RTK Fixed 纯算法门控包、30 项跨 Humble/Jazzy 测试和独立 CI；C6 标记部分完成，驱动适配/历元配对/EKF/实测仍待实施 | code d612a8199c5ebb485b5a0fff69700f37ca2c1f49; GNSS CI 45378893084; existing package CI 45378893095 |
-| 2026-11-24 | v0.3.40 | 扩展 GNSS 核心：解码 UBX-NAV-PVT GNSSFixOK/carrSoln 并按 iTOW 严格配对 NavSatFix，补充时钟 epoch 与接收时差 Gate；Humble/Jazzy 各 42/42 测试通过 | code c36cdbcaea5b127df960cd7b0c261cbdf512f478; GNSS CI 45379297789 |
-| 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
-| 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
-| 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
 | 2026-11-24 | v0.3.51 | 加强 P2 来源闸门：manifest 只有在 `URBANLOCO_ROS1_SOURCE_CONFIRMED=1` 或 `URBANLOCO_DB3_PROVENANCE_CONFIRMED=1` 明确确认后才能允许正式 replay/evaluate；未确认的 DB3/目录只允许诊断。CI [run 45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success | prepare b442371468bda4aeef381420d6837a99acc55cc9 / 0bf7586ff0b62d61616b678bbaeba0821149ebc2; run 62bd2d6111bd6f18c92a8f0e8605520d5dffcdde / 1773427d294aff90239db4a3460d2ac2b3108e4f; evaluate 2948a2d631c818c1f06678eca7e0dcc2899ef0b8 / cfe7c79fa1072c5d95dcd539927e88011476cd38; CI 45394849538 |
-| 2026-11-24 | v0.3.50 | 修正数据身份判定：standalone `HK-Data20190117_0.db3` 仅为 ROS2 SQLite storage 诊断输入，不能替代预期 ROS1 `HK-Data20190117.bag`；来源/转换链未证实，正式 P2 Gate 阻塞；prepare manifest 标记 provenance 状态，replay/evaluate 加强来源闸门 | Intel Point-LIO official reproduction docs; ROS2 Jazzy rosbag2 docs; main code b442371468bda4aeef381420d6837a99acc55cc9 / 62bd2d6111bd6f18c92a8f0e8605520d5dffcdde / 2948a2d631c818c1f06678eca7e0dcc2899ef0b8; P2 CI pending |
-| 2026-11-24 | v0.3.49 | P2 回放脚本新增 Point-LIO YAML topic mismatch fail-fast guard；CI 45393185789 success。同步压缩根台账的 P2 重复描述，完整 DB3 审计数据保存在独立报告 | code 81e034943dfe0dd3188c7bc204bb826fc7567454; P2 CI 45393185789 |
-| 2026-11-24 | v0.3.48 | 用户本地 standalone DB3 审计通过：321.55s，LiDAR 3,178 @9.991Hz、IMU 31,808 @99.999Hz、INSPVAX 318 @0.9996Hz；三路时间戳无重复/倒退、INSPVAX 318/318 CDR 解码通过。DB3 input SHA256 字段修复 CI 45392931411 success；全量 Point-LIO replay/evo 待执行 | 用户本地 bag_audit.json；DB3 hash script fix eeccabcced5c16bce343df2cfa5669e60836c0cf; CI 45392931411 |
-| 2026-11-24 | v0.3.47 | standalone DB3 接入 CI [run 45391334101](https://github.com/rexyll/robdog_nav2/actions/runs/45391334101) success：Python 编译、shell syntax、CLI 和 13/13 项 P2 测试均通过；本地 DB3 payload audit/Point-LIO 完整回放/evo 仍未执行 | code main a1c0fa31740569a00c6f9dfdfeac261bdef79208; P2 CI 45391334101 |
-| 2026-11-24 | v0.3.46 | 修复 standalone DB3 回放脚本遗漏的 IMU_TOPIC 默认值；同步记录 P2 数据已获取、最新脚本 CI run 45391334101 等待完成 | main code a1c0fa31740569a00c6f9dfdfeac261bdef79208; P2 CI pending |
-| 2026-11-24 | v0.3.45 | 支持用户已下载的 standalone `HK-Data20190117_0.db3`：prepare/Point-LIO replay/INSPVAX extractor 接受单 DB3 或 rosbag2 目录；新增核心 topic/type 与全量 INSPVAX CDR payload 审计；Point-LIO 回放过滤为 Velodyne+IMU，尚待本地运行与 evo 结果 | 用户提供 ros2 bag info；scripts audit and direct-file regression tests; P2 CI pending |
-| 2026-11-24 | v0.3.44 | 增加 u-blox 四路 UBX 有界 iTOW joiner：乱序/重复/冲突/超时/容量淘汰/迟到回调/显式 generation reset 处理，加入 retired tombstone 和 monotonic watermark；Humble/Jazzy 各 73/73 passed；driver CI Humble/Jazzy build/install/interface success | joiner bfadde73732a1b7fe30f3b78ef29a9d61eb65573 / f2065ca8664acffde50d86b224fe43019c5e363f / 3f95a0f4761f19d486210f0ac8a7bee20a745b9e / 04f47489231cf86c1904cf097d4e3266b4e871ab; tests 23a5ee0965c0ebec249290353ea39b04f6a360d4 / fde1539daa92299999baaaf6ed7a3f35b4928c8f / 746863c6bde8ad8da9bf6103dffc2352f77fa00e / f8b148402bc0103b2648bb819ba53ec211486ee5; docs 30f174fae4eca80b5355f236d282d48c681b67bc / 23809a3895268760a964a2e6df5e2c22dd702244; GNSS CI 45389178931; u-blox driver CI 45388253243 |
+| 2026-11-24 | v0.3.52 | 不再将 UrbanLoco 单包作为整体项目数据门禁；新增 GrandTour（ANYmal+MID-360）、QuadSLAM（Go2 步态）和 M3DGR（MID-360/GNSS）替代数据集策略，明确许可/格式/校验限制；归档 v0.3.37–v0.3.50 历史 | alternative_dataset_strategy.md 6341cc8ec12fb20d94f65459ae4e29aa6039c834; official dataset pages/repositories checked 2026-11-24 |
 
 ---
 
@@ -284,6 +273,7 @@
 - [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [Point-LIO Jazzy 构建脚本](scripts/build_point_lio_jazzy.sh)
 - [UrbanLoco P2 数据准备说明](datasets/README.md)
+- [外部公开数据集替代路线（GrandTour / QuadSLAM / M3DGR）](docs/datasets/alternative_dataset_strategy.md)
 - [UrbanLoco GT 提取脚本](scripts/extract_urbanloco_ulhk4_gt.py)
 - [UrbanLoco P2 回放脚本](scripts/run_urbanloco_ulhk4.sh)
 - [UrbanLoco P2 evo 评测脚本](scripts/evaluate_urbanloco_ulhk4.sh)
