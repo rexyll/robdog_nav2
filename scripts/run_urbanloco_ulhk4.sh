@@ -46,6 +46,12 @@ if [[ ! -f "${CONFIG_FILE}" ]]; then
   echo "Intel UrbanLoco Point-LIO config missing: ${CONFIG_FILE}" >&2
   exit 5
 fi
+for topic in "${LIDAR_TOPIC}" "${IMU_TOPIC}"; do
+  if ! grep -Fq "${topic}" "${CONFIG_FILE}"; then
+    echo "Point-LIO UrbanLoco config does not contain required topic ${topic}: ${CONFIG_FILE}" >&2
+    exit 5
+  fi
+done
 
 mkdir -p "${RESULTS_DIR}"
 EST_FILE="${RESULTS_DIR}/ulhk_4_est_tum.txt"
