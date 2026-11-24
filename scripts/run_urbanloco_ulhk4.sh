@@ -61,10 +61,14 @@ BAG_PID=""
 stop_group() {
   local pid="${1:-}"
   [[ -n "${pid}" ]] || return 0
-  if kill -0 "${pid}" 2>/dev/null; then
+  # Check the whole process group as well as its leader: ros2 run/play may
+  # spawn children, and a dead leader must not leave a child orphan behind.
+  if kill -0 "${pid}" 2>/dev/null || kill -0 -- "-${pid}" 2>/dev/null; then
     kill -INT -- "-${pid}" 2>/dev/null || kill -INT "${pid}" 2>/dev/null || true
     for _ in {1..100}; do
-      kill -0 "${pid}" 2>/dev/null || break
+      if ! kill -0 "${pid}" 2>/dev/null && ! kill -0 -- "-${pid}" 2>/dev/null; then
+        break
+      fi
       sleep 0.1
     done
     kill -TERM -- "-${pid}" 2>/dev/null || true
