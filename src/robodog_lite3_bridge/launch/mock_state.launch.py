@@ -20,9 +20,9 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {
-                        "leg_odom_topic": "/leg_odom2",
-                        "imu_topic": "/imu/data",
-                        "joint_states_topic": "/joint_states",
+                        "leg_odom_topic": "/mock/lite3/leg_odom2",
+                        "imu_topic": "/mock/lite3/imu/data",
+                        "joint_states_topic": "/mock/lite3/joint_states",
                         "diagnostics_topic": "/diagnostics/robodog_lite3",
                         "stale_timeout_sec": 1.0,
                     }
