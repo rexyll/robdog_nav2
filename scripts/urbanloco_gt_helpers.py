@@ -5,9 +5,11 @@ import math
 import struct
 from typing import Sequence
 
-# These offsets are specific to the UrbanLoco HK-Data20190117
-# novatel_oem7_msgs/msg/INSPVAX CDR serialization used by Intel's pinned
-# Point-LIO reference pipeline. Re-validate before using another bag/schema.
+# These offsets are specific to UrbanLoco HK-Data20190117 INSPVAX CDR.
+# Authoritative cross-checks: NovAtel novatel_oem7_driver commit
+# 0c0e135b71c5920b845982358f6c7ec71a952b5e (INSPVAX.msg) and Intel
+# edge-ai-suites commit decbb06fc1b746b229957b66b92ab972e1f05609
+# (point-lio-demo/scripts/extract_ulhk_gt.py). Revalidate any other schema.
 LAT_OFFSET = 60
 LON_OFFSET = 68
 HEIGHT_OFFSET = 76
