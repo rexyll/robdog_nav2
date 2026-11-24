@@ -21,26 +21,22 @@ on:
 jobs:
   jazzy-x86-build:
     name: Point-LIO / Livox - Jazzy / Ubuntu 24.04 x86_64
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     container:
-      image: ubuntu:noble
+      image: ros:jazzy-ros-base-noble
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install ROS 2 Jazzy and build tools
-        uses: ros-tooling/setup-ros@0.7.22
-        with:
-          required-ros-distributions: jazzy
-
-      - name: Install native PCL/Eigen/SDK build dependencies
+      - name: Install native PCL/Eigen/SDK and ROS build dependencies
         shell: bash
         run: |
           set -euo pipefail
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake git curl libapr1-dev libeigen3-dev libpcl-dev
+            build-essential cmake git curl libapr1-dev libeigen3-dev libpcl-dev \
+            python3-colcon-common-extensions python3-rosdep ros-jazzy-ament-cmake-auto
           apt-get clean
           rm -rf /var/lib/apt/lists/*
 
