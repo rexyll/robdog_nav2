@@ -1,10 +1,10 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.0
+- 文档版本：v0.3.1
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
-- 项目目标：以四足机器人为载体，使用 **LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS**，结合机器狗原生 IMU/腿式里程计，构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性能力。
+- 项目目标：以四足机器人为载体，使用 **LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS**，结合机器狗 IMU 与经验证的本体状态估计（厂商腿式 odometry 输出待确认），构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性能力。
 - **本体技术预选：DEEP Robotics Lite3 Venture**（未采购，待供应商确认）。
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
@@ -33,7 +33,7 @@
 选择原因：
 - 云深处官方 Lite3 Venture 扩展感知示例使用 AGX Jetson Orin + Livox Mid-360，给出了机械安装、24V XT30 供电和 Ethernet 接线方式；
 - Venture 公开标称 4.5 kg 载荷，具备 2× Ethernet 与 24V/12V/5V 外部电源接口；
-- 有腿式里程计、IMU、关节状态和基于 Twist 的速度控制 SDK 路径；
+- 公开 SDK 有 IMU、关节状态、状态机和高层速度控制路径；但 Legacy Lite3_ROS 与当前 sdk_deploy 输出接口不同，当前 sdk_deploy 的完整腿式 odometry 是否可用尚待厂商确认；
 - 不需要本项目从零开发四足关节驱动和步态底层。
 
 公开参数约 12.2 kg 本体、4.5 kg 载荷、610×370×445 mm；公开空载续航约 1.5–2 小时。所有参数需按目标 SKU 和交付批次复核，外设搭载后的续航必须实测。
@@ -42,7 +42,7 @@
 
 | 子系统 | 预选型号 | 数量 | 接口/用途 |
 |---|---|---:|---|
-| 四足本体 | DEEP Robotics Lite3 Venture | 1 | 腿式运动、IMU/里程计、运动控制 |
+| 四足本体 | DEEP Robotics Lite3 Venture | 1 | 腿式运动、IMU/关节状态、厂商运动控制；可信 legged odometry 输出待确认 |
 | 3D LiDAR | Livox MID-360 | 1 | Ethernet / PointCloud2，主几何避障 |
 | RGB 左右相机 | e-con Systems See3CAM_50CUG Color | 2 | USB3/UVC、Global Shutter；组成被动双目 |
 | 镜头 | 匹配的 C-mount 镜头，初始目标 HFOV 70°–80° | 2 | 同型号/焦距/成像圈；供应商确认 |
@@ -70,7 +70,7 @@
 ### 1.4 完整系统数据流
 
 ```text
-Lite3 leg odom + IMU ──> Local EKF ──> odom -> base_link
+厂商确认的 legged odom + IMU ──> Local EKF ──> odom -> base_link
                                   └──> navsat_transform <── RTK NavSatFix
                                                    |
                                              GNSS quality gate
@@ -107,6 +107,8 @@ Lite3 vendor motion SDK / gait controller
 
 ---
 
+**Lite3 定位输入 Gate：** 新版 sdk_deploy 的 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不能自动等价成 nav_msgs/Odometry；若供应商不能提供可信 legged odom，则必须评估独立 LiDAR odometry/SLAM 或 stereo VIO，不能仅用 IMU 积分构造可信 local odom。见 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)。
+
 ## 2. 阶段任务清单（所有状态只在本节维护）
 
 详细技术方案和实施说明见：
@@ -124,20 +126,21 @@ Lite3 vendor motion SDK / gait controller
 - [ ] A5. 获取 MID-360 当前版本、SDK、驱动 commit、供电线束和 Ethernet 配置。
 - [~] A6. 已锁定候选彩色无镜头 SKU `See3CAM_50CUG_CXXCC_BX_H01R1`；制造商页面确认 5MP/Global Shutter/USB3/UVC/GPIO Trigger & Strobe。触发电压/极性/硬触发时序、双相机同步模式、Jetson 双路 UVC 带宽和 70°–80° 镜头仍待书面确认。
 - [ ] A7. 确认 simpleRTK2B 的天线、USB/UART、目标地区 NTRIP 改正服务或自建基站。
-- [~] A8. 已依据公开 Lite3_ROS / sdk_deploy 文档核验基础 topic/message 和 Twist 分量语义，并建立 [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)；目标固件的频率、时间戳、协方差、横移可执行性、速度限制、watchdog 和急停仍需厂商确认/实机验证。
+- [~] A8. 已区分 Legacy Lite3_ROS Foxy（标准 /leg_odom2、/imu/data 等）与 Current sdk_deploy（DRDDS /IMU_DATA、/JOINTS_DATA、RobotStatus 和 /rl_deploy/cmd_vel 等）。两者不等价；新版公开 RobotStatus 不是完整 nav_msgs/Odometry。详细评估见 [vendor SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md) 与 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)。
 - [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
 - [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
 - [~] A11. 已核实 ROS 发行版与 Jetson 组合：首轮复现厂商 Humble 栈，同时评估 AGX Orin DevKit JetPack 7.2.1 ISO base → 7.2.2 apt upgrade / Ubuntu 24.04 / Jazzy；ROS Lyrical（Ubuntu 26.04）暂不纳入当前 Orin 正式基线。完成实际兼容性矩阵后冻结版本；采购前风险评审作为后续 A12。
 - [ ] A12. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
+- [ ] A13. 向云深处确认当前 Lite3 Venture 固件/SDK 的推荐 ROS 路径、motion host 与 AGX Orin host 分工、Foxy/Jazzy 隔离方式，以及正式 legged odometry/body velocity topic、消息类型、频率、时间戳、frame 和 covariance。
 
 **阶段 A 准入：** 厂商接口、电源、质量、安装和软件兼容均有资料或测量支持；形成 BOM、CAD、网络/电源拓扑和验收阈值。
 
 ### 阶段 B — 驱动、时间同步和标定
 
 - [x] B0. 已建立 robodog_lite3_bridge ROS 2 Python 包骨架，包含隔离在 /mock/lite3 namespace 和 mock_* frames 的合成状态发布、只读 topic 新鲜度诊断和 pytest 单元测试；GitHub Actions 在 Humble/Jammy 与 Jazzy/Noble 均成功构建，每个发行版 6/6 测试通过。未接入真实 Lite3 SDK，不发布运动命令。
-- [ ] B1. 并行构建兼容性基线：复现 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 厂商参考环境；在 AGX Orin 上验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy 目标环境。
-- [ ] B2. 编译 Lite3 SDK/ROS 2 transfer，只读读取 odom/IMU/joint/status。
-- [ ] B3. 建立 Lite3 bridge/adapter，先只读诊断，再验证限幅和 watchdog，不立即开放自主运动。
+- [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
+- [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
+- [ ] B3. 构建 vendor-side gateway 与 Jazzy robodog_lite3_bridge 的非 DDS 消息契约；携带 source timestamp、clock domain、frame、sequence、quality、covariance 和健康状态。
 - [ ] B4. 编译 MID-360 Livox SDK2 和 `livox_ros_driver2`。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
@@ -148,7 +151,7 @@ Lite3 vendor motion SDK / gait controller
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
-- [ ] C1. 核实厂商腿式 odom 是否已融合 IMU，避免重复融合强相关信息。
+- [ ] C1. 核实当前 sdk_deploy 是否提供可信 legged odometry/body velocity；若只提供 IMU/joint/status，评估 LiDAR odometry/SLAM 或 stereo VIO 补充 local odom；不得用 IMU-only 积分冒充可信位置。
 - [ ] C2. 配置 local EKF 输出平滑 `odom→base_link`。
 - [ ] C3. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、天线杆臂）。
 - [ ] C4. 配置 GNSS quality gate 与 global EKF 输出 `map→odom`。
@@ -208,6 +211,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
+- [x] 完成 Lite3 Legacy Lite3_ROS Foxy 与 current sdk_deploy 路线源码核验，发现两者消息/状态接口不同，并明确不能假设跨 Foxy/Jazzy DDS 互通。
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
@@ -218,10 +222,10 @@ Lite3 vendor motion SDK / gait controller
 - [x] 核对 JetPack 7.2.2 对 Jetson Orin 的 Ubuntu 24.04 基线，并据此将 Jazzy 设为 Orin 当前长期目标；记录 Lyrical 的 Ubuntu 26.04 前置条件。
 - [x] 创建 ADR-0002 硬件选型记录和更新硬件接口清单。
 - [x] TaskPlan 拆分为根目录进度台账 + 两份设计分册。
-- [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
+- [x] 更新 Lite3 bridge 接口契约，区分 Legacy standard ROS topics 与 current DRDDS / rl_deploy interfaces；记录 vendor odometry availability 为待确认。
 
 ### 未完成 / 阻塞
-- [x] ROS 2 package CI 已通过：[run 45326058355](https://github.com/rexyll/robdog_nav2/actions/runs/45326058355)。Humble/Jammy 与 Jazzy/Noble 两个 job 均 success；每个环境均 colcon build 成功，pytest 为 6 passed、0 errors、0 failures、0 skipped。日志有 non-blocking coverage 提示（没有 coverage.info），不影响本次 build/test 结果。
+- [x] ROS 2 package CI 最新复跑已通过：[run 45326457632](https://github.com/rexyll/robdog_nav2/actions/runs/45326457632)。Humble/Jammy 与 Jazzy/Noble 两个 job 均 success；每个环境 colcon build 成功，pytest 6 passed、0 errors、0 failures、0 skipped。该测试只覆盖 mock/新鲜度逻辑，不覆盖厂商 SDK。
 - [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
 - [ ] 未采购设备，未接收实物。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
@@ -231,6 +235,7 @@ Lite3 vendor motion SDK / gait controller
 - [ ] 载荷、供电、热设计、质心和续航未实测；已知器件功率/质量预算还不包含转换损耗、交换机和全部线束附件。初步预算仅包含部分设备规格，摄像头/镜头/交换机/支架/电源/线缆的实际质量与功耗仍需测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
+- [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
@@ -240,7 +245,7 @@ Lite3 vendor motion SDK / gait controller
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 检查 Humble/Jazzy CI，修复构建/测试错误；保留实际运行日志和 run link。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 阶段 A 准入通过后，将厂商 SDK 数据接入只读 bridge；先记录原始 odom/IMU/joint 和时间戳，不开放任何运动命令。
+7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、legged odometry 和跨发行版网络拓扑的书面答复；然后再选择只读 gateway 实施方案。
 
 ---
 
@@ -260,6 +265,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.8 | 将 CI 从易受 APT mirror 影响的裸机 setup-ros 安装切换到官方推荐的 Jammy/Noble 预制容器 + action-ros-ci | workflow: 2a218b84; run: 45326058355 |
 | 2026-11-24 | v0.2.9 | ROS 2 bridge mock 包在 Humble/Jammy 与 Jazzy/Noble 双矩阵均构建成功，每边 6/6 pytest 通过；新增初步上装质量/功耗预算，A4 标记部分完成 | CI run 45326058355; power/mass budget: bcaa2116 |
 | 2026-11-24 | v0.3.0 | 补充 JetPack 7.2.2 在 AGX Orin Developer Kit 上的安装路径细节；完善官方质量/功率证据和电源拓扑；更新双发行版 CI coverage 噪声处理 | ADR-0002: c60a263f; TaskPlan Part 1: 78546093; hardware checklist: 9e29d829; references: 3eed4ad5; workflow: b7dda179 |
+| 2026-11-24 | v0.3.1 | 核验 Lite3 Legacy Foxy 与 current sdk_deploy 两条 ROS 路线，确认消息接口不同、DRDDS state 不是完整 Odometry，且跨 Foxy/Jazzy DDS 不应默认互通；新增 vendor integration assessment/ADR-0003 并更新桥接架构 | assessment: eb1b08b8; ADR-0003: 61e997a7; bridge: b5ca4f50; workspace: 78635dc7; architecture: c7c3ca5e; sensor fusion: eddefafb; references: f98192cd; CI run: 45326457632 |
 
 ---
 
@@ -272,6 +278,8 @@ Lite3 vendor motion SDK / gait controller
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 - [ROS 2 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
+- [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
+- [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
