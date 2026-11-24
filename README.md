@@ -150,6 +150,7 @@ flowchart TB
 - [UrbanLoco P2 script-test workflow](.github/workflows/point-lio-urbanloco-p2-tests.yml)
 - [Point-LIO Jazzy 构建脚本](scripts/build_point_lio_jazzy.sh)
 - [Point-LIO Jazzy build workflow](.github/workflows/point-lio-jazzy-build.yml)
+- [Point-LIO Jazzy ARM64 build workflow](.github/workflows/point-lio-jazzy-arm64-build.yml)
 - [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [导航与避障验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)
 - [TaskPlan 历史归档（2026-11-24）](docs/history/TaskPlan-History-2026-11-24.md)
