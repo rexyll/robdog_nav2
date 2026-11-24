@@ -132,6 +132,10 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
     def test_maps_legacy_livox_type_and_preserves_fields(self):
         self._create_source_bag()
         self._write_preflight()
+        audit = json.loads(self.audit_path.read_text())
+        for sample in audit["sample_deserialization"]["/livox/mid360/lidar"]["samples"]:
+            sample["header_timebase_delta_ns"] = 128
+        self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
         before_hash = hashlib.sha256(self.source_bag.read_bytes()).hexdigest()
 
         manifest = convert_m3dgr_lio_streams(
@@ -187,17 +191,28 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         self._create_source_bag()
         self._write_preflight()
         audit = json.loads(self.audit_path.read_text())
-        for sample in audit["sample_deserialization"]["/livox/mid360/lidar"]["samples"]:
-            sample["header_timebase_delta_ns"] = 128
-        self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
-        # A sub-microsecond difference is expected from the legacy driver's
-        # uint64-ns -> double-seconds -> ROS Time header conversion.
-        audit = json.loads(self.audit_path.read_text())
         audit["status"] = "blocked_review_required"
         audit["issues"] = ["simulated failure"]
         self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
 
         with self.assertRaises(ValueError):
+            convert_m3dgr_lio_streams(
+                self.source_bag,
+                self.output_bag,
+                self.audit_path,
+                self.checksum_path,
+            )
+        self.assertFalse(self.output_bag.exists())
+
+    def test_refuses_header_timebase_delta_over_one_microsecond(self):
+        self._create_source_bag()
+        self._write_preflight()
+        audit = json.loads(self.audit_path.read_text())
+        for sample in audit["sample_deserialization"]["/livox/mid360/lidar"]["samples"]:
+            sample["header_timebase_delta_ns"] = 1_001
+        self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
+
+        with self.assertRaisesRegex(ValueError, "header.stamp/timebase mismatch"):
             convert_m3dgr_lio_streams(
                 self.source_bag,
                 self.output_bag,
