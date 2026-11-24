@@ -87,9 +87,11 @@ Intel patch 添加 \`config/mid360_ros2.yaml\`，参考参数使用：
 源码定位：
 - [Livox Driver2 v1.2.6 CustomMsg.msg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomMsg.msg)
 - [Livox Driver2 v1.2.6 CustomPoint.msg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomPoint.msg)
-- [Livox Driver2 v1.2.6 lddc.cpp](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/src/lddc.cpp)
+- [Livox Driver2 v1.2.6 lddc.cpp (CustomMsg and ImuData timestamps)](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/src/lddc.cpp)
 - [Point-LIO upstream preprocess.cpp pinned base](https://github.com/hku-mars/Point-LIO/blob/97b0042e397ec71c327966abebff9b4b7e2c154a/src/preprocess.cpp)
 - [Intel Point-LIO ROS2 port patch](https://github.com/open-edge-platform/edge-ai-suites/blob/decbb06fc1b746b229957b66b92ab972e1f05609/robotics-ai-suite/pipelines/point-lio-demo/patches/0001-Port-Point-LIO-to-ROS2-and-add-benchmarking-instrume.patch)
+
+Livox Driver2 v1.2.6 的 `InitImuMsg()` 同样将 `ImuData.time_stamp` 写入 IMU `header.stamp`，ROS 2 分支也用 `rclcpp::Time(timestamp)`。因此 driver source 中 LiDAR CustomMsg 的 `timebase/header.stamp` 与 IMU header 都以 ns 作为 ROS 时间输入单位；这提供了两路时间字段的可比较基础，但**不证明** MID-360 当前 PTP 模式已启用、设备时钟已对齐到主机、或实机 LiDAR/IMU offset 为零。
 
 该源码核验不替代设备/主机时钟同步测试。实际 PTP offset/drift、LiDAR IMU 同时钟性、CustomMsg header stamp 单调性、offset_time 范围和丢点率仍须在真实 MID-360 bag 上测量。
 
