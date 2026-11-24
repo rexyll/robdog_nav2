@@ -1,0 +1,56 @@
+name: Livox MID-360 Jazzy Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/livox-mid360-ci.yml"
+      - "docs/implementation/livox_mid360_driver_baseline.md"
+  pull_request:
+    paths:
+      - ".github/workflows/livox-mid360-ci.yml"
+      - "docs/implementation/livox_mid360_driver_baseline.md"
+  workflow_dispatch:
+
+jobs:
+  jazzy-x86-build:
+    name: ROS 2 Jazzy / Ubuntu 24.04 x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    container:
+      image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    steps:
+      - name: Install native build dependencies
+        shell: bash
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake git libapr1-dev libeigen3-dev libpcl-dev
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Build pinned Livox SDK2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2
+          git -C /tmp/Livox-SDK2 checkout c0796f04c143143899c87a773d9f6b7136453c0b
+          cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/Livox-SDK2/build --parallel 2
+          cmake --install /tmp/Livox-SDK2/build
+          ldconfig
+
+      - name: Build pinned livox_ros_driver2 for Jazzy
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/ros_ws/src"
+          git clone https://github.com/Livox-SDK/livox_ros_driver2.git \
+            "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2"
+          git -C "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2" \
+            checkout 13eb05e4e6dd7a765b934d0c5fd6236676a57b49
+          source /opt/ros/jazzy/setup.bash
+          cd "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2"
+          ./build.sh jazzy
+          source "$GITHUB_WORKSPACE/ros_ws/install/setup.bash"
+          ros2 pkg prefix livox_ros_driver2
