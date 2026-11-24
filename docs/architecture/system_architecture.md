@@ -4,7 +4,7 @@
 
 ## 1. 设计目标
 
-用三类外部传感器（LiDAR、RTK GNSS、两台普通 RGB 相机）加机器狗原生 IMU/腿式里程计，形成从传感器到 Nav2 再到底层四足运动控制的闭环。此架构区分五类信息：
+用三类外部传感器（LiDAR、RTK GNSS、两台普通 RGB 相机）加机器狗 IMU 和经验证的本体状态估计，形成从传感器到 Nav2 再到底层四足运动控制的闭环。注意：Lite3 新旧 ROS SDK 路径不同；可信腿式 odometry 是否可从目标 sdk_deploy/Firmware 获取仍是阶段 A Gate，不能默认已存在 /leg_odom2。此架构区分五类信息：
 
 1. **几何测量：** LiDAR、双目深度。
 2. **语义信息：** RGB 目标检测、类别、目标跟踪 ID。
@@ -20,7 +20,7 @@
 |---|---|---|---|
 | Sensor Drivers | LiDAR/cameras/RTK/IMU | 原始 ROS 消息 | 设备驱动、状态、时间戳 |
 | Time & TF | 设备时间、URDF、标定 | TF、同步状态 | 时间统一与坐标变换 |
-| Legged State Estimator | IMU、腿式 odom、足端状态 | local odom、姿态 | 提供连续的本体运动估计 |
+| Legged State Estimator | IMU、经厂商确认的腿式 odom/足端状态；如无则评估独立 LiDAR/stereo odometry | local odom、姿态 | 提供连续的本体运动估计；未取得可信 odometry 前不得假设定位链闭环 |
 | GNSS Localization | NavSatFix、IMU heading、local odom | GNSS odom、map→odom | 地理坐标投影和全局约束 |
 | LiDAR Perception | LaserScan/PointCloud2 | 几何障碍观测 | 主几何障碍源 |
 | Stereo Perception | 左右图像、CameraInfo | disparity/depth/PointCloud2 | 视觉深度及补盲 |
@@ -34,7 +34,7 @@
 ### 定位数据流
 
 ```text
-IMU + Legged Odometry (+ contact/slip)
+IMU + Vendor-verified Legged Odometry (+ contact/slip)
             |
             v
        Local EKF
@@ -120,14 +120,23 @@ Nav2 2D costmap 将环境压到地面平面，不天然表达：
 
 ### 6.3 命令约束
 
-Nav2 的速度输出必须经过 adapter：
+Nav2 的速度输出必须经过 adapter；Lite3 公开 SDK 路径存在 Foxy / DRDDS 与旧版 Foxy 标准消息两种不同接口，不得假设 Jazzy 可直接订阅：
 - 将 Twist 或 TwistStamped 映射到底层真实支持的平移/旋转维度；
 - 限制速度、加速度和 jerk；
 - 处理站立/行走/转向步态状态；
 - 命令过期即停止；
 - 控制器断线或定位/传感器失效进入明确的安全状态。
 
-## 7. 关键设计原则
+## 7. Lite3 SDK 边界
+
+- Legacy Lite3_ROS（Foxy）发布 /leg_odom2、/imu/data、/joint_states，属于旧版 UDP → standard ROS message 路径；其 steady-clock stamp、frame 和 covariance 必须审计。
+- 新 sdk_deploy 的 lite3_transfer 使用 DRDDS /IMU_DATA、/JOINTS_DATA；RobotStatus 有关节和 base RPY/角速度信息，但公开定义不是完整 nav_msgs/Odometry。
+- sdk_deploy 文档提示 Lite3 host Foxy 与非 Foxy host 的 DDS 通信不可靠。Nav2 Jazzy 不得与 vendor Foxy 默认共享 DDS domain。
+- 项目建议 vendor-compatible sidecar/gateway + 非 DDS UDP/TCP protocol，再由 Jazzy robodog_lite3_bridge 生成标准 ROS messages。
+- 若厂商无法提供可信腿式 odometry，则阶段 C 必须评估独立 LiDAR odometry/SLAM 或 stereo VIO；不能只把 IMU 与 RTK 接到 EKF 就宣称获得连续局部定位。
+- 详细证据见 [Lite3 vendor SDK integration assessment](../implementation/lite3_vendor_sdk_integration_assessment.md)。
+
+## 8. 关键设计原则
 
 1. 不让 RTK 参与近距离避障。
 2. 不让视觉语义输出替代原始几何观测。
