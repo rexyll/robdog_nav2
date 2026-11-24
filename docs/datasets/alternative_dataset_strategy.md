@@ -221,3 +221,16 @@ python scripts/audit_tum_trajectory.py \\
 将 `Dynamic03_GT.txt` 替换成实际文件名。该工具只检查 TUM 八列语法、NaN/Inf、重复/倒退 timestamp、四元数范数、位置边界、时间跨度和 SHA256；不自动排序，不修复、不重采样、不对齐，也不推断时间单位/时钟或坐标系。若官方 GT 实际有头部/其他格式，工具将 fail closed；先审查真实格式，再新增显式解析器，不要删除数据行或盲目转换。
 
 TUM audit 通过也不等于与 bag 时间对齐。下一步必须比较 GT timestamp（TUM 秒）和 bag ROS timestamp（ns 除以 1e9）的时间覆盖与起点差；仅在确认同一时钟域、时间偏移/漂移和空间参考框架后才能进行 evo APE/RPE。若不能证明时钟对齐，先按官方采集说明/作者资料补充证据，不允许用 `evo --t_offset` 试到 RMSE 最小后把它报告为真实精度。
+
+### 6.7 ROS1 Livox 类型到本项目 ROS2 Point-LIO 的兼容性门禁
+
+已核对两端的固定来源：
+
+- M3DGR 配套 ROS1 Driver 的 package 为 `livox_ros_driver`，其 [CustomMsg.msg](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/Point_LIO_M3DGR/src/livox_ros_driver/msg/CustomMsg.msg) 和 [CustomPoint.msg](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/Point_LIO_M3DGR/src/livox_ros_driver/msg/CustomPoint.msg) 定义在旧包名下。
+- 本项目 Point-LIO 固定 Intel ROS2 patch 将订阅类型从 ROS1 `livox_ros_driver::CustomMsg` 改为 ROS2 `livox_ros_driver2::msg::CustomMsg`，并把 package dependency 改为 `livox_ros_driver2`：[固定 patch 0001](https://github.com/open-edge-platform/edge-ai-suites/blob/decbb06fc1b746b229957b66b92ab972e1f05609/robotics-ai-suite/pipelines/point-lio-demo/patches/0001-Port-Point-LIO-to-ROS2-and-add-benchmarking-instrume.patch#L1311-L1314)；[消息回调类型变更](https://github.com/open-edge-platform/edge-ai-suites/blob/decbb06fc1b746b229957b66b92ab972e1f05609/robotics-ai-suite/pipelines/point-lio-demo/patches/0001-Port-Point-LIO-to-ROS2-and-add-benchmarking-instrume.patch#L2077-L2078)。
+
+两种消息的字段布局可以相同，但 ROS 2 的 topic type 名称并不相同。因此转换前置 Gate 不是简单检查字段数量，而是检查转换输出实际注册的 ROS2 type 是否为 `livox_ros_driver2/msg/CustomMsg`，并且 ROS2 playback 中该 topic 能被 Point-LIO 的订阅类型匹配。若通用 `rosbags-convert` 保留源包名，转换结果仍会是 `livox_ros_driver/msg/CustomMsg`，Point-LIO 不会因字段布局相同就自动订阅。
+
+**当前状态：未执行 ROS1→ROS2 转换，未对用户 bag 作类型匹配实测。** 后续实现应采用显式且测试过的转换路径（优先使用 rosbags API 将源 `livox_ros_driver/CustomMsg` 与嵌套 `CustomPoint` 反序列化后，映射/重序列化为 `livox_ros_driver2/msg/CustomMsg`；或提供有明确消息包名的兼容桥），并对点坐标、reflectivity/tag/line、timebase、逐点 offset、header timestamp、point_num 做逐字段等价测试。禁止通过仅重命名 topic、伪造 metadata 或直接把 bag 文件改名来规避类型不匹配。
+
+在转换器和合成 ROS1 fixture 的转换/回读测试通过之前，不要用 M3DGR Dynamic03 启动本项目 Point-LIO，更不要将回放结果接入 Nav2 控制链。
