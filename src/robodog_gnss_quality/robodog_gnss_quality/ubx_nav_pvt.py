@@ -6,6 +6,7 @@ alongside the corresponding NavSatFix record.
 """
 
 from dataclasses import dataclass
+import math
 
 from .quality_gate import CarrierSolution, CovarianceType, GnssObservation
 
