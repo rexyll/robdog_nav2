@@ -58,8 +58,10 @@ RTK -> navsat_transform -> Global EKF -> map -> odom
 **为什么首先测试 Point-LIO：**
 - Point-LIO 是逐点更新的 LiDAR-Inertial Odometry，不必等整帧扫描结束；上游论文/README 强调高带宽输出、对 IMU 饱和和强振动/剧烈运动的鲁棒性。
 - Intel Robotics AI Suite 2026.3 文档将 Point-LIO 列为 ROS 2 Humble/Jazzy 已移植的 LIO，并说明其适合高动态 humanoid/quadruped 平台；其 ROS 2 Jazzy port 含 Livox ROS Driver 2 和 MID-360 配置。
-- Intel 文档的端到端验证实际使用 UrbanLoco + Velodyne 数据集，且执行性能验证的平台是 Intel Core Ultra，不是 Jetson AGX Orin，也不是本项目的真实 MID-360；因此这里只能证明 ROS 2/Jazzy 集成路径有参考实现，不能证明 Jetson 上性能已通过。
-- Point-LIO 上游许可为 BSD-3-Clause。仍需审查选定 ROS 2 fork/patch 的每个依赖与许可证。
+- Intel 的 ROS 2 Jazzy port 补丁新增 `mid360_ros2.yaml`，并依赖 `livox_ros_driver2`；但 Intel 文档的端到端验证实际使用 UrbanLoco + Velodyne 数据集，性能验证平台是 Intel Core Ultra，不是 Jetson AGX Orin，也不是本项目真实 MID-360。因此只证明 Jazzy 移植和 MID-360 配置参考存在，不能证明 Jetson + MID-360 已通过。
+- Point-LIO 上游许可为 BSD-3-Clause。仍需审查选定 ROS 2 fork/patch 的来源与每个依赖的许可证。
+- Intel ROS 2 port 补丁说明其对没有 `time` 字段的点云增加了 fallback；旧 UrbanLoco Velodyne 数据集缺少 per-point time 时会按扫描几何估算点时刻，并非生产实时点云应采用的方式。生产输入必须保留 MID-360 每点真实采样时间。
+- Intel port 即使在 Velodyne 回放时也有 `livox_ros_driver2` 构建依赖；因此必须验证 Livox SDK2、ARM64/aarch64 和 Jetson toolchain，不应只看 Intel x86 build pass。
 
 **备选对照：FAST-LIO2**
 - FAST-LIO2 对 Livox 非重复扫描和原始点云直接配准有成熟参考，Intel 2026.3 文档给出 Ubuntu 24.04 / ROS 2 Jazzy + Livox ROS Driver 2 的 build flow。
@@ -158,6 +160,7 @@ MID-360 产品资料列出内置 IMU；Livox ROS Driver 2 源码中存在 IMU �
 
 - [Intel Robotics AI Suite 2026.3 — LIO/LIVO Pipelines](https://developer.robotics.intel.com/2026.3/development-stack/components/navigation/lio-livo-pipelines/index.html)
 - [Intel Robotics AI Suite 2026.3 — Point-LIO Jazzy port and MID-360 config](https://developer.robotics.intel.com/2026.3/development-stack/software_references/humanoid/sample_pipelines/point_lio_demo/index.html)
+- [Intel Point-LIO port patch: ROS 2, MID-360 config, missing per-point timestamp fallback](https://github.com/intel/robotics-ai-suite/blob/main/patches/0001-Port-Point-LIO-to-ROS2-and-add-benchmarking-instrumentation.patch)
 - [Intel Robotics AI Suite 2026.3 — FAST-LIO2 Jazzy build reference](https://developer.robotics.intel.com/2026.3/development-stack/software_references/humanoid/sample_pipelines/fast_lio2_demo/index.html)
 - [Point-LIO upstream](https://github.com/hku-mars/Point-LIO)
 - [FAST-LIO upstream](https://github.com/hku-mars/FAST_LIO)
