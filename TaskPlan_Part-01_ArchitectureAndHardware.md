@@ -186,7 +186,7 @@
 - 云深处官方 Lite3 Venture 感知扩展示例使用 Ubuntu 22.04、ROS 2 Humble、JetPack 6.1、CUDA 12.6，并以 AGX Jetson Orin + MID-360 为参考。
 - 阶段 B 首先复现厂商参考栈（Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble），作为 Lite3 驱动兼容性基准，不将它默认定为项目长期部署基线。
 - ROS 2 Humble 上游支持至 **2027 年 5 月**；自研包需保持 Humble/Jazzy API 可移植，所有厂商 SDK 隔离在 adapter/bridge 内。
-- NVIDIA 当前 JetPack 7.2.2 支持 Jetson Orin Family，并以 Ubuntu 24.04 为 L4T 系统基线。项目同时验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy，将 Jazzy 作为当前 Orin 长期部署目标。
+- NVIDIA 当前 JetPack 7.2.2 支持 Jetson Orin Family，并以 Ubuntu 24.04 为 L4T 系统基线。AGX Orin Developer Kit 官方用户指南以 JetPack 7.2.1 / L4T r39.2.1 ISO 为基础，再通过 apt update / dist-upgrade 升级到 7.2.2。项目按该 devkit 流程验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy，将 Jazzy 作为当前 Orin 长期部署目标。
 - ROS 2 Lyrical Luth 已于 2026 年 5 月发布，LTS 支持至 2031 年 5 月，但其 Tier 1 Ubuntu 平台为 26.04；当前 JetPack 7.2.2 的 Orin 参考系统为 Ubuntu 24.04，因此暂不把 Lyrical 作为 Orin 项目基线。待 NVIDIA Orin BSP 支持 Ubuntu 26.04、且 Lite3/相机/LiDAR/NAV2 驱动可用后重新评估。
 - Livox 官方 `livox_ros_driver2` 提供 Ubuntu 24.04 / ROS 2 Jazzy 构建说明；仍需在项目锁定 commit 上实际编译测试。
 - 不混用不同 ROS distro 的 DDS 节点作为默认架构；如需隔离厂商旧栈和 Nav2 新栈，应使用 UDP/串口/标准消息网关并限制网络域。
