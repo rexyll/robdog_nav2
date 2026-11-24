@@ -89,8 +89,8 @@ Intel README 所述 UrbanLoco \`ulhk_4\` 论文基线 RMSE 2.17m 和 20% 回归�
 
 - [x] 上游子模块 commit、Intel reference commit 和三份 patch blob/commit 均已固定。
 - [x] Point-LIO upstream BSD-3-Clause、Intel patch repository Apache-2.0 的来源边界已记录。
-- [x] 固定源码准备脚本已创建。
-- [ ] 运行准备脚本并确认三个补丁均成功应用。
+- [x] 固定源码准备脚本已创建并经 P0 GitHub Actions 实测成功。
+- [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [ ] 在 Jazzy x86_64 构建 Point-LIO。
 - [ ] 用公开 UrbanLoco bag 完成可复现离线回放和独立真值评估。
 - [ ] 在 Orin aarch64 构建并测量 CPU/RAM/热。
