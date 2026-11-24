@@ -231,7 +231,9 @@ TUM audit 通过也不等于与 bag 时间对齐。下一步必须比较 GT time
 
 两种消息的字段布局可以相同，但 ROS 2 的 topic type 名称并不相同。因此转换前置 Gate 不是简单检查字段数量，而是检查转换输出实际注册的 ROS2 type 是否为 `livox_ros_driver2/msg/CustomMsg`，并且 ROS2 playback 中该 topic 能被 Point-LIO 的订阅类型匹配。若通用 `rosbags-convert` 保留源包名，转换结果仍会是 `livox_ros_driver/msg/CustomMsg`，Point-LIO 不会因字段布局相同就自动订阅。
 
-**当前状态：未执行 ROS1→ROS2 转换，未对用户 bag 作类型匹配实测。** 后续实现应采用显式且测试过的转换路径（优先使用 rosbags API 将源 `livox_ros_driver/CustomMsg` 与嵌套 `CustomPoint` 反序列化后，映射/重序列化为 `livox_ros_driver2/msg/CustomMsg`；或提供有明确消息包名的兼容桥），并对点坐标、reflectivity/tag/line、timebase、逐点 offset、header timestamp、point_num 做逐字段等价测试。禁止通过仅重命名 topic、伪造 metadata 或直接把 bag 文件改名来规避类型不匹配。
+**真实 Dynamic03 bag 审计（2026-11-24）补充：** 用户提供的原始 ROS1 bag 中，`/livox/mid360/lidar` 连接类型实际为 `livox_ros_driver2/msg/CustomMsg`，而不是上游旧 baseline 的 `livox_ros_driver/msg/CustomMsg`；`/livox/avia/lidar` 才是旧包名类型。两者在本次 audit 中的 digest 相同（`e4d6829bdfe657cb6c21a746c86b21a6`），message definition 长度分别为 1570/1569 bytes；真实 MID-360 抽样消息成功解码且 point_num 匹配。这说明真实输入的包名已经与目标 Jazzy Driver2 类型相同，但 ROS1 bag 内仍是 ROS1 序列化，仍需转写 ROS2 CDR rosbag2；不能因此跳过转换，也不能把实际源类型写成旧驱动名。转换器已增加对 `livox_ros_driver2/msg/CustomMsg` 与 ROS1-normalized alias `livox_ros_driver2/CustomMsg` 的白名单，并在 manifest 记录真实 source type。
+
+转换实现应采用显式且测试过的路径，将源 Livox `CustomMsg` 与嵌套 `CustomPoint` 反序列化后按字段重建为 Jazzy `livox_ros_driver2/msg/CustomMsg`；对点坐标、reflectivity/tag/line、timebase、逐点 offset、header timestamp、point_num 做逐字段等价测试。禁止通过仅重命名 topic、伪造 metadata 或直接把 bag 文件改名来规避类型/序列化差异。
 
 在转换器和合成 ROS1 fixture 的转换/回读测试通过之前，不要用 M3DGR Dynamic03 启动本项目 Point-LIO，更不要将回放结果接入 Nav2 控制链。
 
@@ -239,10 +241,12 @@ TUM audit 通过也不等于与 bag 时间对齐。下一步必须比较 GT time
 
 新增 [`scripts/convert_m3dgr_dynamic03_to_ros2.py`](../../scripts/convert_m3dgr_dynamic03_to_ros2.py)，不使用盲目的通用 `rosbags-convert` 处理 Livox 类型名，而是将已审计的两个原始 topic 反序列化后逐字段重建为本项目 Point-LIO 接受的 Jazzy 消息类型：
 
-| Topic | ROS1 源类型 | ROS2 输出类型 |
+| Topic | 已支持的 ROS1 bag 源类型 | ROS2 输出类型 |
 |---|---|---|
-| `/livox/mid360/lidar` | `livox_ros_driver/msg/CustomMsg` | `livox_ros_driver2/msg/CustomMsg` |
+| `/livox/mid360/lidar` | `livox_ros_driver/msg/CustomMsg`；`livox_ros_driver2/msg/CustomMsg`（本次真实 Dynamic03）；兼容 normalized alias | `livox_ros_driver2/msg/CustomMsg` |
 | `/livox/mid360/imu` | `sensor_msgs/msg/Imu` | `sensor_msgs/msg/Imu` |
+
+注意：真实 Dynamic03 的 MID-360 connection 已使用 Driver2 命名空间，所以此路是 ROS1 序列化到 ROS2 CDR 的重写，源/目标类型名相同；旧 baseline 命名空间输入仍走字段映射。
 
 转换器的安全门禁和行为：
 
@@ -282,3 +286,19 @@ python scripts/convert_m3dgr_dynamic03_to_ros2.py \\
 **本次 CI 证据：** [run 45418493538](https://github.com/rexyll/robdog_nav2/actions/runs/45418493538) success：ROS1 bag 审计 5/5、TUM GT 审计 7/7、ROS1→ROS2 显式类型转换合成回读 4/4、UrbanLoco 原有回归 13/13。转换测试确认输出类型名为 `livox_ros_driver2/msg/CustomMsg`，点字段/offset/timebase 和 IMU 数据在写入 ROS2 bag 后可再读回；同时确认拒绝失败 audit、已有输出目录和大于 1 μs 的 header/timebase 差值。
 
 **尚未完成：** 以上是合成 fixture 的转换/回读证据，不是用户真实 Dynamic03 bag 的转换结果；还未执行本地 bag audit、真实数据转换、`ros2 bag info/play`、Point-LIO replay、GT 时间/坐标关联或 evo APE/RPE。Dynamic03 独立 GT 仍需用户下载；在真实 bag/GT 审查和时钟/坐标核验完成前，禁止启动 Point-LIO 评测或宣称定位精度通过。
+
+
+### 6.9 真实 Dynamic03 bag 与独立 GT 审计结果（2026-11-24）
+
+用户本地对原始 bag 执行只读 audit，结果为 `structural_inputs_present`、`issues=[]`：
+
+- 原始文件 3,434,689,371 bytes、210,956 条消息、284.538269992 s；官方 SHA256 已在先前步骤验证通过。
+- `/livox/mid360/lidar`：2,846 条，约 10 Hz，类型 `livox_ros_driver2/msg/CustomMsg`；抽样 3/3 成功，声明 point_num 与解码点数相同，offset_time 范围约 100 ms；header/timebase 抽样差为 -77 至 +139 ns。
+- `/livox/mid360/imu`：56,903 条，约 200 Hz，类型 `sensor_msgs/msg/Imu`；抽样 3/3 成功。
+- 两个必需 topic 均无重复或倒退的 bag timestamp。该结果仅证明结构和抽样解码，不证明设备 PTP/PPS、IMU-LiDAR 同步、GT 正确性或 Point-LIO 精度。
+
+独立 GT 已提交到仓库 `temp/Dynamic03.txt`（360,420 bytes，4,269 行）。逐行检查显示全部为 8 列有限 TUM 数值，四元数范数为 1 且所有四元数均为 identity；但文件包含 1,675 个重复 timestamp 和 728 个倒退 timestamp。所有 2,403 个时间戳异常都发生在相邻两行位姿完全相同的情况下，整份文件按文件顺序共有 2,847 个相邻相同位姿对。按每连续三行检查可见 1,423 组三行位姿完全相同，组起始时间单调递增、间隔中位数约 0.2 s；这只能作为异常模式描述，不能证明三行就是冗余副本或授权删除两行。
+
+M3DGR 官方公开的 `Grass01_fixed.txt` 也包含连续相同位姿记录且四元数保持 identity，但其时间戳仍严格递增；因此不能用该样例为 Dynamic03 的重复/倒退时间戳开脱。官方 README 说明传感器无外部触发、采用软件同步。Dynamic03 GT 时间覆盖约 284.420190 s，落在 bag 起止时间范围内；时间范围接近不证明同一时钟域或同步精度。
+
+**当前 GT Gate：阻塞。** `scripts/audit_tum_trajectory.py temp/Dynamic03.txt` 预期返回 `blocked_review_required`（重复/倒退 timestamp），退出码 10。不得对源文件原位排序、去重、重采样或修改四元数；不得直接将该文件输入 evo。需要先核实原始下载文件是否完整、作者的 TF→TUM 导出方式及重复行语义，再决定是否生成带来源记录的派生候选轨迹。即使时间戳问题解决，仍须确认时间偏移/漂移、坐标系和 frame convention，才可运行 APE/RPE。
