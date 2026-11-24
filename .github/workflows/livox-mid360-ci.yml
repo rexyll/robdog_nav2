@@ -48,8 +48,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             '-DCMAKE_CXX_FLAGS=-include cstdint'
           cmake --build "$RUNNER_TEMP/Livox-SDK2/build" --parallel 2
-          sudo cmake --install "$RUNNER_TEMP/Livox-SDK2/build"
-          sudo ldconfig
+          cmake --install "$RUNNER_TEMP/Livox-SDK2/build"
+          ldconfig
 
       - name: Checkout exact Livox ROS Driver2 v1.2.6 and select ROS 2 manifest
         shell: bash
@@ -70,11 +70,11 @@ jobs:
         run: |
           set -eox pipefail
           source /opt/ros/jazzy/setup.bash
-          sudo rosdep init 2>/dev/null || true
+          rosdep init 2>/dev/null || true
           rosdep update
           # The native dependency step clears apt lists to keep the runner lean.
           # Refresh them before rosdep invokes apt-get for package dependencies.
-          sudo apt-get update
+          apt-get update
           rosdep install \
             --from-paths "$RUNNER_TEMP/livox_ws/src" \
             --ignore-src \
