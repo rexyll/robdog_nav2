@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.43
+- 文档版本：v0.3.44
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -108,7 +108,7 @@
 - [ ] C3. 比较 vendor legged odom（若有）与 Point-LIO 的位置/航向误差、漂移、更新频率、延迟和资源开销；选定唯一主要 local odom 来源。
 - [ ] C4. 将通过验收的 local odom 表达为 `odom→base_link`；仅在有额外独立观测且 covariance 合理时再配置 local EKF，避免重复融合同一 IMU/LIO 信息。
 - [ ] C5. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、GNSS 天线杆臂）。
-- [~] C6. 已实现 `robodog_gnss_quality` RTK Fixed 质量门控、UBX-NAV-PVT flags 解析，以及针对首选 `ublox_dgnss` 原始消息的四路纯算法组装函数 `build_observation_from_ubx_epochs()`：要求 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS 的 iTOW 完全相等、四路 host monotonic arrival skew 不超显式上限、PVT/STATUS 质量字段一致、HPPOSLLH invalid flags 全清、NAV-COV `pos_cor_valid=true`；将完整 NED covariance 变换到 ENU（含交叉项符号）后生成 `GnssObservation`。新增 14 项组装/协方差边界测试；GNSS CI [run 45388146723](https://github.com/rexyll/robdog_nav2/actions/runs/45388146723) 在 Humble/Jammy 与 Jazzy/Noble 均 56/56 passed。候选驱动跨发行版 7 包 build/install/接口验证也已通过 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856)。**仍缺 ROS adapter 的 bounded per-topic cache、receiver week/boot generation 与 source-time mapping、steady-clock callback capture、实际接收机数据、qualified NavSatFix 发布、navsat_transform/global EKF 接线；C6 保持部分完成。**
+- [~] C6. 已实现 `robodog_gnss_quality` RTK Fixed 质量门控、NAV-PVT flags 解码、四路原始 UBX 精确历元组装函数 `build_observation_from_ubx_epochs()` 和 `UbxFourMessageEpochJoiner` 有界缓存器。严格要求 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS 的 iTOW 完全相等、四路 host monotonic receive skew 在配置范围、PVT/STATUS 质量字段一致、HPPOSLLH 无 invalid flags、NAV-COV `pos_cor_valid=true`；完整 NED covariance 转 ENU（包括 Down 轴相关交叉项符号）。缓存器按 iTOW + 单一 source_clock_id 汇合，提供 LRU 容量、pending-age 淘汰、receive-watermark/最大乱序窗口、重复冲突检测和 bounded retired tombstone，禁止被淘汰/过期/迟到历元重新拼接；receiver generation 变化需显式 begin_generation，reset 后不自动接受新时钟域。最新 GNSS CI [run 45389178931](https://github.com/rexyll/robdog_nav2/actions/runs/45389178931) 在 Humble/Jammy、Jazzy/Noble 各 73/73 passed。u-blox 驱动跨发行版 7 包 build/install/接口验证 [run 45388253243](https://github.com/rexyll/robdog_nav2/actions/runs/45388253243) success。**仍缺 ROS subscription adapter 将实际 ROS 消息映射进四类 record、receiver GPS week/boot-generation 检测与 source-time mapper、实际接收机数据、qualified NavSatFix 发布、navsat_transform/global EKF 接线；C6 保持部分完成。**
 - [ ] C7. 测试 Fixed/Float/Single、遮挡、多路径、断改正和恢复。
 - [ ] C8. 测试静止、直行、转弯、横移（若支持）、步态切换和机身振动。
 - [ ] C9. 完成 GNSS 降级、超时、跳变剔除和恢复策略。
@@ -159,6 +159,7 @@
 ## 3. 当前进度（由每轮执行持续更新）
 
 ### 已完成
+- [x] 新增 u-blox 四路原始消息有界历元缓存 `UbxFourMessageEpochJoiner`：按 iTOW 聚合 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS；加入 host monotonic receive watermark、显式 expire-stale、容量/时效淘汰和 bounded retired tombstone，防止 incomplete/late/conflicting epochs 复活；receiver generation 变化需显式 begin_generation。Humble/Jammy、Jazzy/Noble 各 73/73 passed（run 45389178931）。模块：`src/robodog_gnss_quality/robodog_gnss_quality/ubx_epoch_joiner.py`；测试：`src/robodog_gnss_quality/test/test_ubx_epoch_joiner.py`。此为纯算法缓存核心，不含 ROS subscriptions、GPS week mapper 或实际设备接入。
 - [x] 完成 ZED-F9P ROS 2 驱动候选评估与来源固定：`aussierobots/ublox_dgnss` 0.7.6 (`9d4f5add...`, Apache-2.0)；`rtcm_msgs` 1.1.6 (`8d27ab5f...`, BSD-3-Clause)。静态审查记录 header stamp=主机 USB 收包时间、上游 NavSatFix converter 未按 iTOW 配对、NAV-COV 为 NED covariance；严格 join/时钟 epoch/NED→ENU 适配边界见 `docs/implementation/zed_f9p_driver_evaluation.md`。跨 Humble/Jazzy 的 7 个包 build/install 均已成功（run 45386892781），但 CLI message-field check 因 BrokenPipeError 失败；修复后 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856) 仍在执行，暂不记录为完整 CI pass。
 - [x] 仓库初始化，默认分支 main。
 - [x] 补充多传感器时间同步方案：区分双目共触发、LiDAR PTP/GPS、Lite3 SDK 时钟、GNSS PPS 和 host monotonic freshness。
@@ -202,7 +203,7 @@
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
 - [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
-- [ ] RTK NTRIP 改正服务或基站尚未确定；ZED-F9P ROS 驱动候选及跨 Humble/Jazzy 软件构建已通过，但真实板卡 USB/固件配置、UBX topic/频率/丢包/iTOW 匹配、qualified NavSatFix ROS adapter、PPS/timebase 和 Fixed/Float 现场状态仍待实测。
+- [ ] RTK NTRIP 改正服务或基站尚未确定；ZED-F9P ROS 驱动候选及跨 Humble/Jazzy 软件构建已通过，但真实板卡 USB/固件配置、UBX topic/频率/丢包/iTOW 匹配、ROS subscription adapter、PPS/timebase 和 Fixed/Float 现场状态仍待实测。
 - [ ] 载荷、供电、热设计、质心和续航未实测；质量预算还缺相机本体、交换机、触发板、DC/DC、支架和线束，功率预算还缺转换损耗与峰值测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
@@ -237,6 +238,7 @@
 | 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 | 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
 | 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
+| 2026-11-24 | v0.3.44 | 增加 u-blox 四路 UBX 有界 iTOW joiner：乱序/重复/冲突/超时/容量淘汰/迟到回调/显式 generation reset 处理，加入 retired tombstone 和 monotonic watermark；Humble/Jazzy 各 73/73 passed；driver CI Humble/Jazzy build/install/interface success | joiner bfadde73732a1b7fe30f3b78ef29a9d61eb65573 / f2065ca8664acffde50d86b224fe43019c5e363f / 3f95a0f4761f19d486210f0ac8a7bee20a745b9e / 04f47489231cf86c1904cf097d4e3266b4e871ab; tests 23a5ee0965c0ebec249290353ea39b04f6a360d4 / fde1539daa92299999baaaf6ed7a3f35b4928c8f / 746863c6bde8ad8da9bf6103dffc2352f77fa00e / f8b148402bc0103b2648bb819ba53ec211486ee5; docs 30f174fae4eca80b5355f236d282d48c681b67bc / 23809a3895268760a964a2e6df5e2c22dd702244; GNSS CI 45389178931; u-blox driver CI 45388253243 |
 
 ---
 
@@ -259,6 +261,8 @@
 - [UBX-NAV-PVT 解码与 GNSS 历元配对](src/robodog_gnss_quality/robodog_gnss_quality/ubx_nav_pvt.py)
 - [UBX-NAV-PVT 配对测试](src/robodog_gnss_quality/test/test_ubx_nav_pvt.py)
 - [GNSS quality gate CI](.github/workflows/gnss-quality-ci.yml)
+- [u-blox 四路 UBX 有界历元缓存器](src/robodog_gnss_quality/robodog_gnss_quality/ubx_epoch_joiner.py)
+- [u-blox 四路 UBX 缓存器测试](src/robodog_gnss_quality/test/test_ubx_epoch_joiner.py)
 - [ZED-F9P ROS 驱动评估与 iTOW 适配契约](docs/implementation/zed_f9p_driver_evaluation.md)
 - [u-blox ZED-F9P driver Humble/Jazzy build CI](.github/workflows/ublox-dgnss-driver-ci.yml)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
