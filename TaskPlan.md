@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.49
+- 文档版本：v0.3.50
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,7 +98,7 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO 固定源码/补丁 P0 与 Jazzy x86_64 P1、通用 ARM64 P3a 均已通过。UrbanLoco standalone `HK-Data20190117_0.db3` 已由用户本地审计：5.4 GiB/321.55 s；Velodyne 3,178 @9.991 Hz、IMU 31,808 @99.999 Hz、INSPVAX 318 @0.9996 Hz；三流无重复/倒退时间戳，INSPVAX 318/318 CDR 全量解码通过（[审计报告](docs/testing/urbanloco_ulhk4_dataset_audit.md)）。P2 脚本 CI 45391334101、DB3 checksum CI 45392931411、topic-config guard CI 45393185789 均 success；DB3 hash/来源记录待复跑更新，完整 Point-LIO replay、GT/evo APE/RPE 仍待执行。UrbanLoco Velodyne 不验证 MID-360 per-point time，也不等于 Orin/Lite3 实机验收。
+- [~] B11. Point-LIO P0/P1 与通用 ARM64 P3a build 已通过。用户提供的 `HK-Data20190117_0.db3` 完成 rosbag2 storage/topic/type/318 条 INSPVAX CDR 诊断（[报告](docs/testing/urbanloco_ulhk4_dataset_audit.md)），但它是独立 ROS 2 SQLite3 存储文件，不是 Intel 复现说明要求的原始 ROS 1 `HK-Data20190117.bag`；来源/转换链未证实，**P2 正式数据源 Gate 仍阻塞**。未验证 DB3 只允许诊断；正式 replay/evo 拒绝该输入。需取得原始 ROS1 bag 或补齐可验证来源、SHA256 与转换链后再继续。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
@@ -198,7 +198,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [~] P2 DB3 核心话题/INSPVAX CDR 本地审计通过；13 项脚本测试及 DB3 checksum/topic-config guard CI 均通过（45391334101、45392931411、45393185789）。完整 Point-LIO 回放、GT/evo APE-RPE 待本地执行；Orin、MID-360、Lite3 验收未完成。
+- [!] P2 standalone DB3 诊断通过，但原始 UrbanLoco ROS 1 `HK-Data20190117.bag` 或可信转换来源证明仍缺失；正式 Point-LIO replay、GT、APE/RPE 暂停。DB3 可播放不等于原始数据集获取完成。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -221,7 +221,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。UrbanLoco `HK-Data20190117` 数据已由用户下载为 standalone DB3；下一步核验文件 SHA256/下载来源与许可，再进行全量 Point-LIO 回放和 evo APE/RPE。用户已下载 standalone DB3：使用 `URBANLOCO_ROS2_BAG=~/Downloads/HK-Data20190117_0.db3 bash scripts/prepare_urbanloco_ulhk4.sh` 进行只读签名/INSPVAX payload 审计并保存 SHA256，然后执行 `scripts/run_urbanloco_ulhk4.sh` 与 `scripts/evaluate_urbanloco_ulhk4.sh`；全量回放/GT/evo 未通过前不得宣称 P2 通过。之后再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。当前 `HK-Data20190117_0.db3` 仅是可读取的 ROS 2 SQLite3 storage 文件，其话题/字段诊断不能证明它来自指定 UrbanLoco ROS 1 `HK-Data20190117.bag`。正式 P2 仍需取得官方 ROS1 原始文件，或验证并记录 DB3 的原始来源、原始文件 SHA256 与 ROS1→ROS2 转换链；未完成前不要运行正式 P2 replay/evo。数据诊断脚本与正式评测来源闸门已更新，DB3 provenance override 仅能在完成证据核验后显式设置。之后再做 JetPack 7.2.2 Orin 实机、MID-360 时间审计与 Lite3 受控运动。
 
 ---
 
@@ -238,6 +238,7 @@
 | 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 | 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
 | 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
+| 2026-11-24 | v0.3.50 | 修正数据身份判定：standalone `HK-Data20190117_0.db3` 仅为 ROS2 SQLite storage 诊断输入，不能替代预期 ROS1 `HK-Data20190117.bag`；来源/转换链未证实，正式 P2 Gate 阻塞；prepare manifest 标记 provenance 状态，replay/evaluate 加强来源闸门 | Intel Point-LIO official reproduction docs; ROS2 Jazzy rosbag2 docs; main code b442371468bda4aeef381420d6837a99acc55cc9 / 62bd2d6111bd6f18c92a8f0e8605520d5dffcdde / 2948a2d631c818c1f06678eca7e0dcc2899ef0b8; P2 CI pending |
 | 2026-11-24 | v0.3.49 | P2 回放脚本新增 Point-LIO YAML topic mismatch fail-fast guard；CI 45393185789 success。同步压缩根台账的 P2 重复描述，完整 DB3 审计数据保存在独立报告 | code 81e034943dfe0dd3188c7bc204bb826fc7567454; P2 CI 45393185789 |
 | 2026-11-24 | v0.3.48 | 用户本地 standalone DB3 审计通过：321.55s，LiDAR 3,178 @9.991Hz、IMU 31,808 @99.999Hz、INSPVAX 318 @0.9996Hz；三路时间戳无重复/倒退、INSPVAX 318/318 CDR 解码通过。DB3 input SHA256 字段修复 CI 45392931411 success；全量 Point-LIO replay/evo 待执行 | 用户本地 bag_audit.json；DB3 hash script fix eeccabcced5c16bce343df2cfa5669e60836c0cf; CI 45392931411 |
 | 2026-11-24 | v0.3.47 | standalone DB3 接入 CI [run 45391334101](https://github.com/rexyll/robdog_nav2/actions/runs/45391334101) success：Python 编译、shell syntax、CLI 和 13/13 项 P2 测试均通过；本地 DB3 payload audit/Point-LIO 完整回放/evo 仍未执行 | code main a1c0fa31740569a00c6f9dfdfeac261bdef79208; P2 CI 45391334101 |
