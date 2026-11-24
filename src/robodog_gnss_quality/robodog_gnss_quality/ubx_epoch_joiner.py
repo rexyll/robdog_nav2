@@ -138,6 +138,11 @@ class UbxFourMessageEpochJoiner:
             or now_monotonic_ns < 0
         ):
             raise EpochPairingError("now_monotonic_ns must be a non-negative integer")
+        if (
+            self._latest_receive_monotonic_ns is None
+            or now_monotonic_ns > self._latest_receive_monotonic_ns
+        ):
+            self._latest_receive_monotonic_ns = now_monotonic_ns
         stale_keys = [
             i_tow
             for i_tow, entry in self._pending.items()
