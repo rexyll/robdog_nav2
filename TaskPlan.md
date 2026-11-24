@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.5
+- 文档版本：v0.3.6
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -220,7 +220,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 完成 Lite3 厂商 ROS 2 路线源码评估与 ADR-0003，明确 Foxy/Jazzy 不共享默认 DDS，且 new sdk_deploy 的 DRDDS status 不等于完整 Odometry。
-- [x] 建立 odometry fallback strategy 和 ADR-0004，将 Point-LIO 作为缺失厂商 odometry 时的首选备用 POC，并记录 FAST-LIO2/FAST-LIVO2 许可和验证边界。
+- [x] 建立 odometry fallback strategy 和 ADR-0004，将 Point-LIO 作为缺失厂商 odometry 时的首选备用 POC，并记录 FAST-LIO2/FAST-LIVO2 许可、per-point time 和 Orin 实机验证边界。
 - [x] 设计本体 odometry 缺失时的备用路线：Point-LIO + MID-360 内置 IMU 首选 POC，FAST-LIO2 对照，Stereo VIO/FAST-LIVO2 暂缓；尚未在 Orin/MID-360 上实测。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 完成 Lite3 Legacy Lite3_ROS Foxy 与 current sdk_deploy 路线源码核验，发现两者消息/状态接口不同，并明确不能假设跨 Foxy/Jazzy DDS 互通。
@@ -240,6 +240,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] ROS 2 package CI 最新复跑已通过：[run 45326457632](https://github.com/rexyll/robdog_nav2/actions/runs/45326457632)。Humble/Jammy 与 Jazzy/Noble 两个 job 均 success；每个环境 colcon build 成功，pytest 6 passed、0 errors、0 failures、0 skipped。该测试只覆盖 mock/新鲜度逻辑，不覆盖厂商 SDK。
 - [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
 - [ ] 未采购设备，未接收实物。
+- [ ] Point-LIO/FAST-LIO2 尚未在本项目 Jetson AGX Orin + MID-360 上构建和验证；Intel 文档中的 Jazzy port/Velodyne 数据集测试不能替代目标硬件验收。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前 sdk_deploy 公开 DRDDS topics 与 Legacy Foxy standard topics 不一致；可信 legged odometry/body velocity 是否有正式输出、以及 Foxy motion host 与 Jazzy AGX host 的支持拓扑尚未得到厂商确认。
