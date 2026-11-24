@@ -70,3 +70,25 @@
 - 当前级别全部通过并审查风险后，才进入更高速度/更复杂地形。
 - 任意漏停、控制路径绕过安全链、未解释定位跳变，立即停止提高测试等级。
 - 失败记录包含复现步骤、rosbag、日志、问题根因假设、修复提交和回归测试。
+
+
+## 6. Local odometry / LIO fallback 验收
+
+| ID | 场景 | 检查内容 | 证据 |
+|---|---|---|---|
+| O-01 | vendor state only | current sdk_deploy 是否提供可信 legged odometry/body velocity；采样频率、timestamp/frame/covariance | vendor 手册、原始 rosbag、topic echo |
+| O-02 | MID-360 静止采集 | 点云 CustomMsg 每点时间字段、/livox/imu、PTP/GPS time type、source timestamp | rosbag、PTP status、packet/driver log |
+| O-03 | LiDAR/IMU 时钟 | offset、drift、skew、timestamp rollback、丢包 | 多段 rosbag 统计 P50/P95/P99/max |
+| O-04 | LIO bag replay | Point-LIO Jazzy build/replay、Odometry 频率、TF、covariance、CPU/RAM | colcon logs、rosbag、evo APE/RPE |
+| O-05 | MID-360 + Orin bench | JetPack 7.2.2 / Ubuntu 24.04 / Jazzy 构建与实时性能 | AGX Orin log、CPU/温度/内存/latency |
+| O-06 | 机身静止/直行 | LIO drift、yaw drift、odom 连续性 | 独立测量轨迹、P50/P95/RMSE |
+| O-07 | 原地旋转/急转 | motion distortion、IMU saturation、外参影响 | 点云重影、轨迹/姿态误差 |
+| O-08 | 步态冲击/足滑 | Point-LIO 输出是否跳变/发散；与 vendor odom 对比（若有） | rosbag 和 failure snippets |
+| O-09 | GNSS Fixed→Lost→Recovery | global EKF 是否连续，map→odom 修正是否平滑 | GNSS status、local/global odom 轨迹 |
+| O-10 | 传感器 timeout / LIO 崩溃 | Nav2 停止使用 stale odometry 并进入 fail-safe | 故障注入记录、stop latency |
+
+**准入规则：**
+- 不能仅以 RViz 轨迹“看起来平滑”认定 LIO 通过；必须用独立真值计算 APE/RPE、漂移和航向误差。
+- Intel Point-LIO 的 ROS 2 Jazzy port 在 Intel 平台、Velodyne 数据上的成功不能代替 Jetson AGX Orin + MID-360 实测。
+- 若 Point-LIO 需要内置 IMU，必须保留逐点时间戳且完成 IMU/LiDAR 时间同步和外参校准；没有 per-point time 的输入不能视为有效生产输入。
+- POC 中的算法频率、控制延迟、地图密度、CPU 温度和资源用量都要记录。
