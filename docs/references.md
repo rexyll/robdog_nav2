@@ -100,3 +100,12 @@
 
 26. [Livox MID-360 specifications](https://www.livoxtech.com/mid-360/specs)  
     MID-360 外部数据端口为 100BASE-TX Ethernet，支持 IEEE 1588-2008 PTPv2/GPS 时间同步；内置 ICM40609 IMU。产品规格不能证明该 IMU 与所有驱动时间戳自动同步。
+
+
+## ROS 2 CI references
+
+27. [ros-tooling/setup-ros](https://github.com/ros-tooling/setup-ros)  
+    Official setup-ros action documentation warns that APT update can be flaky on bare-metal GitHub Actions Linux workers and recommends Docker/container-based builds.
+
+28. [ros-tooling/action-ros-ci](https://github.com/ros-tooling/action-ros-ci)  
+    Official ROS 2 workspace build/test action. Its documentation recommends prebuilt setup-ros-docker images, with Ubuntu Jammy for Humble and Ubuntu Noble for Jazzy.
