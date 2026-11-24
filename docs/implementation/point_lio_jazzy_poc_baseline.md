@@ -115,14 +115,24 @@ Intel README 所述 UrbanLoco \`ulhk_4\` 论文基线 RMSE 2.17m 和 20% 回归�
 项目已新增：
 - [scripts/build_point_lio_jazzy.sh](../../scripts/build_point_lio_jazzy.sh)：校验 Point-LIO 锁定的 upstream/Intel patch series；固定 Livox Driver2 v1.2.6 和 SDK2 v1.3.1；SDK2 用 GCC 13 -include cstdint 参数构建安装；调用官方 Driver2 ./build.sh jazzy，在同一 workspace 中构建 Driver2 与 Point-LIO；最后核对两个 ROS package prefix 和 Point-LIO executable。
 - [Point-LIO ROS 2 Jazzy Build](../../.github/workflows/point-lio-jazzy-build.yml)：Ubuntu 24.04 container + ros-tooling/setup-ros@0.7.22 + native PCL/Eigen dependencies，先准备固定源码，再运行上述构建脚本。
-- 独立 Livox Driver2 build workflow 使用固定 repos manifest 将 Driver2 锁定到正确的 v1.2.6 commit；SDK2 v1.3.1 单独 build/install，不把 SDK SHA 错配给 Driver2。
 
-当前运行：
-- [Point-LIO P1 Jazzy build run 45335382556](https://github.com/rexyll/robdog_nav2/actions/runs/45335382556)：最新重跑，已提交对 rosdep 依赖阶段的 APT 索引刷新修复；仍需等待构建步骤结果。
-- 旧 P1 run 45334667791 失败根因：工作流为减小镜像而在 native dependency step 结束时删除 /var/lib/apt/lists，build script 后续执行 rosdep install 前未刷新 APT index，导致 Ubuntu Noble 仓库中的 libaprutil1-dev 无法被 apt 定位。已在 build script 的 rosdep install 前新增 apt-get update（root/sudo 自适应），不修改依赖版本也不跳过 rosdep。
-- [Livox Driver2 build run 45334563869](https://github.com/rexyll/robdog_nav2/actions/runs/45334563869)：进行中，已修正 manifest 将 Driver2 固定到正确的 v1.2.6 commit。
+### 6.1 P1 编译根因与修复
 
-构建脚本会拒绝错误的源码锁、错误 Driver2 commit 或错误 SDK2 commit；不会重置现有 Point-LIO 用户修改。即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
+Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/runs/45335424924) 已成功完成 ROS Jazzy 安装、原生 PCL/Eigen 依赖安装和固定源码/补丁准备；失败发生在 build step 的 Livox SDK2 编译。
+
+日志显示同一个 P1 script 先从 workspace/src/Livox-SDK2 独立构建并安装 SDK2，使用 -include cstdint 成功；随后执行 Driver2 官方 ./build.sh jazzy，该脚本在整个 src/ workspace 中运行 colcon。Colcon 又将 src/Livox-SDK2 自动识别为 livox_sdk2 CMake package 并二次编译，但这次未继承 GCC 13 的 -include cstdint，因此在 SDK2 define.h 对 std::uint8_t/std::uint16_t 的使用处报错，Driver2 随后被 abort。
+
+**修复：**
+- 将 SDK2 源码 clone 位置从 src/Livox-SDK2 移到 vendor/Livox-SDK2，让它不参与 colcon package discovery；
+- 保留 SDK2 独立构建/安装到 /usr/local；
+- 在 colcon 前显式检查 /usr/local/lib/liblivox_lidar_sdk_shared.so 和 /usr/local/include/livox_lidar_api.h 已安装；
+- 同时检查 src/Livox-SDK2 不存在，防止 colcon 又将 SDK2 source 作为 package 编译。
+
+修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。P1 最新 run [45335955336](https://github.com/rexyll/robdog_nav2/actions/runs/45335955336) 正在重跑；run [45335940714](https://github.com/rexyll/robdog_nav2/actions/runs/45335940714) 使用第一版 vendor path 变更。两次均未取得最终 build pass 结论。
+
+Livox 独立 workflow 的 ROS setup/nounset 与 apt index 问题也已连续修复；最新运行 [45335853066](https://github.com/rexyll/robdog_nav2/actions/runs/45335853066) 仍处于 ROS Jazzy 安装，新的 workflow shell 修正触发 run [45335767045](https://github.com/rexyll/robdog_nav2/actions/runs/45335767045)。当前不宣称 Driver2 build pass。
+
+即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
 
 ## 7. 当前状态
 
