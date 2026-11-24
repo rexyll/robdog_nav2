@@ -150,7 +150,8 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 ### 7.1 数据许可和人工准备
 
 - 官方数据许可为 CC BY-NC-SA 4.0，非商业、署名、相同方式共享条件；任何商业使用/再分发必须先确认权利人授权。
-- UrbanLoco 大文件没有稳定可脚本化下载入口，Google Drive 有人工确认步骤；本项目准备脚本不会伪造自动下载成功。
+- 本 POC 仅选定 Intel Point-LIO `ulhk_4` 对应的 UrbanLoco session `HK-Data20190117`，不是同目录里其他几十 GB 的香港序列。UrbanLoco 官方 Hong Kong 页面标注该序列日期为 2019/01/17、总量 6.11 GB；其他序列分别可达 24.0/27.9/41.6/62.3 GB，不可替代。UrbanLoco GitHub README 该条目的日期列误写为 2019/03/16，因此以序列 ID 为准。
+- Dropbox/Baidu 链接是包含全部香港序列的共享目录，而不是单文件直链；应在目录内找到 `HK-Data20190117` 条目。若看不到该条目，不要改下其他大文件，先提供当前目录名称/大小清单确认。Intel Point-LIO 复现文档把下载后的 ROS 1 文件命名/放置为 `datasets/ulhk_4/HK-Data20190117.bag`；若镜像提供压缩包或不同名称，先检查实际格式与内容，不要仅通过改名伪装成 `.bag`。
 - 原始文件放置：\`datasets/ulhk_4/HK-Data20190117.bag\`；脚本转换到 ROS 2 sqlite3 bag：\`datasets/ulhk_4/ulhk_bag/\`。
 - 下载镜像见 [UrbanLoco dataset preparation instructions](../../datasets/README.md)。整个 \`datasets/*\` 已加入 .gitignore，不得提交 raw bag、转换后的 db3、metadata、轨迹和 PCD/map。
 - 已在 Intel 固定参考脚本中核对该序列的消息 topic：LiDAR \`/velodyne_points_0\`、IMU \`/imu/data\`、GT \`/novatel_data/inspvax\`。运行时仍由 \`ros2 bag info\` 检查，若实际 bag 不同必须以数据自身 metadata 为准，不静默替换。
