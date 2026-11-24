@@ -13,42 +13,24 @@ on:
 
 jobs:
   build-and-test:
-    name: ${{ matrix.ros_distro }} on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.ros_distro }} on ${{ matrix.ubuntu }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include:
           - ros_distro: humble
-            os: ubuntu-22.04
+            ubuntu: jammy
+            container_image: rostooling/setup-ros-docker:ubuntu-jammy-latest
           - ros_distro: jazzy
-            os: ubuntu-24.04
+            ubuntu: noble
+            container_image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    container:
+      image: ${{ matrix.container_image }}
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up ROS 2
-        uses: ros-tooling/setup-ros@v0.7
+      - name: Build and test package with the ROS tooling container
+        uses: ros-tooling/action-ros-ci@v0.4
         with:
-          required-ros-distributions: ${{ matrix.ros_distro }}
-
-      - name: Build workspace
-        shell: bash
-        run: |
-          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
-          colcon build --packages-up-to robodog_lite3_bridge --event-handlers console_direct+
-
-      - name: Run tests
-        shell: bash
-        run: |
-          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
-          source install/setup.bash
-          colcon test --packages-select robodog_lite3_bridge --event-handlers console_direct+
-
-      - name: Report test results
-        if: always()
-        shell: bash
-        run: |
-          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
-          colcon test-result --verbose
+          package-name: robodog_lite3_bridge
+          target-ros2-distro: ${{ matrix.ros_distro }}
