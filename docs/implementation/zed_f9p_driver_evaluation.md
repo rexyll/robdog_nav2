@@ -100,7 +100,16 @@ C_ENU = R_NED_to_ENU * C_NED * transpose(R_NED_to_ENU)
 
 ### 项目自有 `robodog_gnss_quality`
 
-继续复用现有纯算法核心中的 UBX flags 解码、精确 iTOW 配对和 quality gate；未来新增 ROS 2 adapter 与bounded epoch join。上游驱动只负责传输和原始 UBX message decode，项目 adapter 负责来源可信、历元匹配、时间连续性、协方差转换及门控。上游 driver 不应直接发布到 Nav2 global localization 而绕过该门控。
+现有纯算法包已经包含 `build_observation_from_ubx_epochs()`，接收四个由 ROS adapter 解包的 epoch records：NAV-PVT、HPPOSLLH、NAV-COV、NAV-STATUS。它严格要求四条 `iTOW` 完全相同、四路 host monotonic receive skew 在显式上限内、PVT/STATUS 的 GNSS validity 与 carrier solution 一致、HPPOSLLH 所有位置有效标志清零，且 NAV-COV 的 `pos_cor_valid=true`。
+
+函数把 HPPOSLLH 高精度整数坐标转换为 LLH，并把 NAV-COV 的 NED covariance 通过完整矩阵变换转换为 row-major ENU（包含 NE/ED/ND 交叉项符号处理），最终生成现有 `GnssObservation`。调用方必须显式提供 `source_timestamp_ns` 与 `source_clock_id`；helper 不从周内 iTOW 或 ROS header stamp 猜测 receiver monotonic time。
+
+相关实现与回归：
+- [UBX epoch decode/join helper](../../src/robodog_gnss_quality/robodog_gnss_quality/ubx_nav_pvt.py)
+- [UBX exact epoch and NED→ENU tests](../../src/robodog_gnss_quality/test/test_ubx_nav_pvt.py)
+- [GNSS quality gate CI](../../.github/workflows/gnss-quality-ci.yml)
+
+这仍然是纯算法入口而不是 ROS subscriber/cache。实际 ROS adapter 仍需实现每 topic bounded cache、重复/迟到消息处理、iTOW→validated receiver time mapping、receiver week/boot generation、steady-clock callback stamping 与 reset handling。上游 driver 只负责传输和原始 UBX message decode；上游 NavSatFix converter 不允许绕过这些严格配对步骤直接进入 Nav2 global localization。
 
 ## 6.1 固定的消息包依赖
 
@@ -115,13 +124,13 @@ C_ENU = R_NED_to_ENU * C_NED * transpose(R_NED_to_ENU)
 
 ## 6. 构建验证和未完成事项
 
-本仓库 CI 使用固定 commit `9d4f5addbc72d092c57dde99b20712258e96e81e`，分别在 Humble/Jammy 与 Jazzy/Noble 容器构建上游 `ublox_dgnss` 元包，并检查 UBXNavPVT/HPPosLLH/COV 消息接口。该 CI 只证明软件源码可在对应 ROS 发行版构建；不证明 USB 设备发现、serial/USB权限、接收机固件、NTRIP 改正、RTK Fixed 输出或 PPS。
+本仓库 CI 使用固定 `ublox_dgnss` commit `9d4f5addbc72d092c57dde99b20712258e96e81e` 与 `rtcm_msgs` commit `8d27ab5f4d4a581e1bb9c87d572994c25197f6d4`，分别在 Humble/Jammy 与 Jazzy/Noble 容器构建并安装。最终 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856) 两个 job 均 success；每种发行版均完成 7 个包（含 rtcm_msgs、UBX interfaces、driver node、meta package）的 colcon build/install，并通过 package prefix 与 UBXNavPVT/HPPosLLH/COV 字段检查。该 CI 只证明源码可在对应 ROS 发行版构建和安装；不证明 USB 设备发现、serial/USB 权限、接收机固件、NTRIP 改正、RTK Fixed 输出或 PPS。
 
 仍待完成：
 
 - 在真实 simpleRTK2B/ZED-F9P 板卡确认 USB VID/PID、CDC-ACM 设备路径、固件版本与串口/USB 配置。
 - 只在设备连接后验证 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS 的实际 topic、频率、丢包与 iTOW 匹配率。
-- 确认 NAV-COV 有效率与协方差 ENU 变换；无效协方差样本按策略拒绝。
+- NAV-COV `pos_cor_valid` 检查与 NED→ENU covariance 纯算法转换已实现并有回归测试；仍需在真实 F9P bag 核验协方差有效率、分布和标定合理性，无效协方差样本按策略拒绝。
 - 实现 ROS adapter 的有界缓存、严格同历元 join、接收 monotonic 时间戳、receiver week/boot generation 和 reset handling。
 - 验证 NTRIP/基站改正链、Fixed/Float/Single、遮挡、多路径与恢复行为。
 - 如需 PPS，再单独核验板卡引脚、电压、电平转换、主机 GPIO/PHC 采集路径和时间误差；RTK Fixed 不等于 PPS/PTP 同步。
