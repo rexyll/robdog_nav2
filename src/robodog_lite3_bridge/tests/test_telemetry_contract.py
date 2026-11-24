@@ -201,5 +201,57 @@ class TestNumericValidation(unittest.TestCase):
             validate_covariance(matrix, 3, "position_covariance")
 
 
+    def test_symmetric_correlated_covariance_valid(self):
+        matrix = [
+            1.0, 0.8, 0.0,
+            0.8, 1.0, 0.0,
+            0.0, 0.0, 0.5,
+        ]
+        self.assertEqual(
+            validate_covariance(matrix, 3, "pose_covariance"),
+            tuple(matrix),
+        )
+
+    def test_asymmetric_covariance_rejected(self):
+        matrix = [
+            1.0, 0.2, 0.0,
+            0.1, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]
+        with self.assertRaisesRegex(ValueError, "symmetric"):
+            validate_covariance(matrix, 3, "pose_covariance")
+
+    def test_indefinite_covariance_rejected_with_nonnegative_diagonal(self):
+        matrix = [
+            1.0, 2.0, 0.0,
+            2.0, 1.0, 0.0,
+            0.0, 0.0, 0.1,
+        ]
+        with self.assertRaisesRegex(ValueError, "positive semidefinite"):
+            validate_covariance(matrix, 3, "pose_covariance")
+
+    def test_rank_deficient_positive_semidefinite_covariance_valid(self):
+        matrix = [
+            1.0, 1.0, 0.0,
+            1.0, 1.0, 0.0,
+            0.0, 0.0, 0.0,
+        ]
+        self.assertEqual(
+            validate_covariance(matrix, 3, "pose_covariance"),
+            tuple(matrix),
+        )
+
+    def test_small_roundoff_negative_eigenvalue_is_tolerated(self):
+        matrix = [
+            1.0, 1.0 + 1e-12, 0.0,
+            1.0 + 1e-12, 1.0, 0.0,
+            0.0, 0.0, 1.0,
+        ]
+        self.assertEqual(
+            validate_covariance(matrix, 3, "pose_covariance"),
+            tuple(matrix),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

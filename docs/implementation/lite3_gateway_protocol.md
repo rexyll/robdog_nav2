@@ -227,3 +227,15 @@ source timestamp、gateway receive time、host ROS time 是三个不同概念，
 7. command plane 保持禁用，直到安全 Gate 全部通过。
 
 本提案不代表云深处已批准该协议，也不代表厂商 SDK 可在任意网络路径下导出这些数据。
+
+
+## 4.2 Full ROS covariance matrix validation
+
+The bridge validator accepts flattened row-major 3x3 and 6x6 covariance arrays. Beyond length, finite-value, and non-negative diagonal checks, it also verifies:
+
+- symmetry within a relative tolerance of 1e-9;
+- positive semidefiniteness using a small-matrix Jacobi eigensolver;
+- a minimum-eigenvalue tolerance of 1e-10 times the maximum absolute matrix entry to avoid rejecting harmless floating-point round-off;
+- the standard sensor_msgs/Imu unknown-estimate sentinel (covariance[0] == -1) only when allow_unknown=True.
+
+The validator does not treat an all-zero covariance as evidence of a trustworthy estimate: zero is mathematically PSD but may still mean that an upstream driver failed to populate uncertainty. Source-specific quality policy must separately decide whether zero/near-zero covariance is admissible. The PSD check is a structural consistency gate, not proof that the reported covariance is statistically calibrated or physically truthful.

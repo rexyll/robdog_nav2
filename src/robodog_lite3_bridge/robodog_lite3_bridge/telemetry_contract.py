@@ -188,6 +188,71 @@ def require_vector_length(
     return require_finite_values(values, field_name)
 
 
+_COVARIANCE_SYMMETRY_REL_TOLERANCE = 1e-9
+_COVARIANCE_EIGEN_REL_TOLERANCE = 1e-14
+_COVARIANCE_PSD_REL_TOLERANCE = 1e-10
+
+
+def _minimum_symmetric_eigenvalue(
+    matrix: Sequence[Sequence[float]],
+    scale: float,
+) -> float:
+    """Return the smallest eigenvalue using a small-matrix Jacobi rotation.
+
+    ROS covariance matrices are only 3x3 or 6x6, so a dependency-free Jacobi
+    diagonalization is sufficient here. The input must already be symmetric.
+    """
+    dimension = len(matrix)
+    work = [list(row) for row in matrix]
+    if scale == 0.0:
+        return 0.0
+
+    convergence_threshold = _COVARIANCE_EIGEN_REL_TOLERANCE * scale
+    max_iterations = 100 * dimension * dimension
+
+    for _ in range(max_iterations):
+        p, q = 0, 1
+        largest_off_diagonal = 0.0
+        for row in range(dimension):
+            for column in range(row + 1, dimension):
+                value = abs(work[row][column])
+                if value > largest_off_diagonal:
+                    largest_off_diagonal = value
+                    p, q = row, column
+
+        if largest_off_diagonal <= convergence_threshold:
+            return min(work[index][index] for index in range(dimension))
+
+        app = work[p][p]
+        aqq = work[q][q]
+        apq = work[p][q]
+        tau = (aqq - app) / (2.0 * apq)
+        tangent = math.copysign(1.0, tau) / (
+            abs(tau) + math.hypot(1.0, tau)
+        )
+        cosine = 1.0 / math.sqrt(1.0 + tangent * tangent)
+        sine = tangent * cosine
+
+        for index in range(dimension):
+            if index == p or index == q:
+                continue
+            aip = work[index][p]
+            aiq = work[index][q]
+            new_aip = cosine * aip - sine * aiq
+            new_aiq = sine * aip + cosine * aiq
+            work[index][p] = new_aip
+            work[p][index] = new_aip
+            work[index][q] = new_aiq
+            work[q][index] = new_aiq
+
+        work[p][p] = app - tangent * apq
+        work[q][q] = aqq + tangent * apq
+        work[p][q] = 0.0
+        work[q][p] = 0.0
+
+    raise ValueError("covariance eigenvalue check did not converge")
+
+
 def validate_covariance(
     values: Sequence[float],
     dimension: int,
@@ -196,10 +261,11 @@ def validate_covariance(
 ) -> Tuple[float, ...]:
     """Validate a flattened 3x3 or 6x6 ROS covariance array.
 
-    This checks array length, finite values, and non-negative diagonal entries.
-    It does not prove the full matrix is positive semidefinite. ROS IMU message
+    Checks array length, finite values, non-negative diagonal entries,
+    symmetry, and positive semidefiniteness (PSD). A small relative negative
+    eigenvalue is tolerated for floating-point round-off. ROS IMU message
     conventions permit the first element to be -1 to indicate an unavailable
-    estimate when allow_unknown=True.
+    estimate when allow_unknown=True; that sentinel bypasses matrix checks.
     """
     if dimension not in (3, 6):
         raise ValueError("covariance dimension must be 3 or 6")
@@ -213,10 +279,37 @@ def validate_covariance(
     if allow_unknown and converted[0] == -1.0:
         return converted
 
-    diagonal_indices = [i * dimension + i for i in range(dimension)]
-    for index in diagonal_indices:
-        if converted[index] < 0.0:
+    matrix = [
+        list(converted[row * dimension:(row + 1) * dimension])
+        for row in range(dimension)
+    ]
+    scale = max((abs(value) for value in converted), default=0.0)
+
+    for index in range(dimension):
+        diagonal = matrix[index][index]
+        if diagonal < 0.0:
             raise ValueError(
                 f"{field_name} diagonal[{index}] must be non-negative"
             )
+
+    symmetry_threshold = _COVARIANCE_SYMMETRY_REL_TOLERANCE * max(scale, 1e-30)
+    for row in range(dimension):
+        for column in range(row + 1, dimension):
+            upper = matrix[row][column]
+            lower = matrix[column][row]
+            if abs(upper - lower) > symmetry_threshold:
+                raise ValueError(
+                    f"{field_name} must be symmetric; "
+                    f"entries[{row},{column}] and [{column},{row}] differ"
+                )
+            average = 0.5 * upper + 0.5 * lower
+            matrix[row][column] = average
+            matrix[column][row] = average
+
+    minimum_eigenvalue = _minimum_symmetric_eigenvalue(matrix, scale)
+    if minimum_eigenvalue < -_COVARIANCE_PSD_REL_TOLERANCE * scale:
+        raise ValueError(
+            f"{field_name} must be positive semidefinite; "
+            f"minimum eigenvalue {minimum_eigenvalue:.6g} is below tolerance"
+        )
     return converted
