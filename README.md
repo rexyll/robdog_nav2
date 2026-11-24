@@ -116,10 +116,15 @@ flowchart TB
 - [双目 RGB 深度与障碍物识别](docs/perception/stereo_obstacle_perception.md)
 - [验证、安全与失效降级](docs/validation/safety_and_validation.md)
 - [硬件/软件接口待确认清单](docs/interfaces/hardware_interface_checklist.md)
+- [ROS 2 Workspace 与 package 规划](docs/implementation/ros2_workspace_and_packages.md)
+- [导航与感知验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [实施任务计划 TaskPlan](TaskPlan.md)
 - [决策记录 ADR-0001](docs/decisions/ADR-0001-sensor-roles-and-localization.md)
 - [前序讨论归档](docs/discussion/2026-11-24-stereo-camera-discussion.md)
 - [参考资料](docs/references.md)
+- [源代码目录说明](src/README.md)
+- [配置目录说明](config/README.md)
+- [Launch 目录说明](launch/README.md)
 
 ## 当前阶段状态
 
