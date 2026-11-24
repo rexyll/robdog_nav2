@@ -40,8 +40,8 @@ jobs:
         run: |
           set -euxo pipefail
           git clone https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2
-          git -C /tmp/Livox-SDK2 checkout c0796f04c143143899c87a773d9f6b7136453c0b
-          cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release
+          git -C /tmp/Livox-SDK2 checkout f5d9375f84efe2b15bc0a052d3e18482ed13adf4
+          cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-include cstdint"
           cmake --build /tmp/Livox-SDK2/build --parallel 2
           cmake --install /tmp/Livox-SDK2/build
           ldconfig
