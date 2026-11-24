@@ -225,6 +225,8 @@ sdk_deploy 文档提示 motion host 当前工作流为 Foxy，且 Foxy 与非 Fo
 
 ## 4. 坐标系、时间同步与定位融合
 
+当 Lite3 当前 SDK 不提供可信腿式 odometry 时，Point-LIO + MID-360 内置 IMU 是首选备用 POC；须保留 Livox CustomMsg 每点时间偏移、验证 LiDAR/IMU 时间同步与外参，并在 Jetson AGX Orin 上实测。Intel 的 Jazzy 移植和 MID-360 配置仅是软件参考，非 Orin 实机通过证明。完整方案见 [odometry fallback strategy](docs/implementation/odometry_fallback_strategy.md)。
+
 ### 4.1 TF 树
 
 ```text
@@ -254,7 +256,7 @@ map
 - 经轴向、单位、source timestamp 和 covariance 核验的厂商 IMU；
 - 若可获得，接触状态/足端速度/滑移置信度。
 
-若 current sdk_deploy 只提供 DRDDS IMU/joints/RobotStatus 而不提供可信 odometry，则先评估 LiDAR odometry/SLAM 或 stereo VIO，不能以 IMU-only 积分构造可信位置。
+若 current sdk_deploy 只提供 DRDDS IMU/joints/RobotStatus 而不提供可信 odometry，则第一备用评估 Point-LIO + MID-360 内置 IMU；FAST-LIO2 为对照，Stereo VIO/FAST-LIVO2 为后续备选。不能以 IMU-only 积分构造可信位置。详细方案见 [odometry fallback strategy](docs/implementation/odometry_fallback_strategy.md) 和 [ADR-0004](docs/decisions/ADR-0004-local-odometry-fallback.md)。
 
 输出：
 - `/odometry/filtered/local`；
