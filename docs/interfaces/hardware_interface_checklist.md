@@ -1,93 +1,119 @@
 # 硬件与软件接口确认清单
 
-该文件用于阶段 A。未确认项必须保留“待确认”，不要用常见型号或示例参数代填。
+该清单与根目录 [TaskPlan.md](../../TaskPlan.md) 一起维护。**TaskPlan.md 是唯一进度台账**；本文件保留具体规格和接口确认结果。
 
-## 1. 机器狗本体
+## 0. 已选型候选总览
 
-| 项目 | 需记录内容 | 状态 |
+| 类别 | 技术预选 | 状态 |
 |---|---|---|
-| 品牌/型号/版本 | 品牌、型号、序列/硬件版本 | 待确认 |
-| 固件与 SDK | 固件、SDK 版本、下载来源、许可 | 待确认 |
-| ROS 驱动 | 仓库 URL、commit/tag、发行版支持 | 待确认 |
-| 计算机 | CPU/GPU/NPU、RAM、系统和架构 | 待确认 |
-| 步态能力 | 前进、后退、侧移、原地转向、转弯限制 | 待确认 |
-| 底层命令 | Twist/TwistStamped/厂商 service/action/SDK | 待确认 |
-| 限制 | 最大速度、加速度、jerk、最大角速度、倾斜/坡度 | 待确认 |
-| Watchdog | 超时阈值、通信断连行为、站立/停止接口 | 待确认 |
-| 状态反馈 | 实际速度、步态状态、足端接触、滑移、故障码 | 待确认 |
+| 四足本体 | DEEP Robotics Lite3 Venture | 已预选，未采购，待厂商确认现行 SKU/接口 |
+| LiDAR | Livox MID-360 | 已预选，待采购和驱动验证 |
+| RGB 相机 | 2 × e-con Systems See3CAM_50CUG Color | 已预选，待确认 GPIO 同步、镜头和 Linux Jetson 兼容 |
+| RTK | ArduSimple simpleRTK2B Budget / u-blox ZED-F9P + ANN-MB | 已预选，待确定 NTRIP / Base |
+| 机载计算 | NVIDIA Jetson AGX Orin Developer Kit（64GB 开发配置） | 已选参考配置，待核算安装、供电和质量 |
+| 软件首轮基线 | Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble | 对齐云深处 Lite3 Venture 官方扩展示例；需实机复现 |
+| 软件长期目标 | ROS 2 Jazzy | 自研包可移植；Humble EOL 前完成迁移 |
 
-## 2. LiDAR
+详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。
 
-| 项目 | 需记录内容 | 状态 |
-|---|---|---|
-| 型号/类型 | 2D/3D、厂商、型号 | 待确认 |
-| 输出 | LaserScan/PointCloud2/原始 packet | 待确认 |
-| 量程/视场 | 最小最大量程、水平/垂直 FOV | 待确认 |
-| 频率 | scan rate、packet rate、点云频率 | 待确认 |
-| 时间 | 硬件时间戳、逐点时间、PPS/PTP 支持 | 待确认 |
-| 安装位姿 | 相对 base_link 的 xyz/rpy | 待确认 |
-| 驱动 | ROS 2 package、版本、QoS | 待确认 |
-| 约束 | 机身俯仰横滚下扫描面变化、自体遮挡 | 待确认 |
+## 1. 机器狗本体：DEEP Robotics Lite3 Venture
 
-## 3. 两台 RGB 相机
-
-| 项目 | 左相机 | 右相机 | 状态 |
+| 项目 | 当前资料/预选 | 需确认内容 | 状态 |
 |---|---|---|---|
-| 型号/序列号 | 待确认 | 待确认 | 待确认 |
-| 分辨率/FPS | 待确认 | 待确认 | 待确认 |
-| 镜头/焦距/视场 | 待确认 | 待确认 | 待确认 |
-| 快门 | 全局/滚动/未知 | 全局/滚动/未知 | 待确认 |
-| 同步 | 触发/同步线/软件 | 触发/同步线/软件 | 待确认 |
-| CameraInfo | 是否发布、标定来源 | 是否发布、标定来源 | 待确认 |
-| 安装位置 | xyz/rpy 相对 base_link | xyz/rpy 相对 base_link | 待确认 |
-| 基线 | 左右光心距离 | — | 待确认 |
-| 驱动 | package、版本、编码格式 | package、版本、编码格式 | 待确认 |
+| 型号 | Lite3 Venture | 当前销售 SKU/版本/配件清单 | 待供应商确认 |
+| 本体公开质量 | 约 12.2 kg | 交付批次与选装件质量 | 待确认 |
+| 标称载荷 | 4.5 kg | 载荷定义、上装重心/动态运动限制 | 待确认 |
+| 外部通信 | 2 × Ethernet | 端口用途、速度、IP/UDP 通讯方式 | 待确认 |
+| 外部供电 | 24V/12V/5V | 每路持续/峰值电流和总功率限制 | **阻塞项** |
+| 固件/SDK | Lite3 SDK / sdk_deploy | 当前支持版本、授权、维护状态 | 待确认 |
+| ROS 驱动 | Lite3_ROS / lite3_transfer | Humble 编译和 Jazzy 迁移状态 | 待实测 |
+| IMU/leg odom | /imu/data、/leg_odom2（官方示例接口） | 频率、时间戳、frame、covariance、IMU 是否已融合 | 待实测 |
+| 运动命令 | /cmd_vel Twist 示例 | 最大速度、加速度、横移语义、死区和模式 | 待确认 |
+| 安全 | 机器人 stop/遥控急停 | API、watchdog、通信断开默认行为 | 待确认 |
+| 安装 | Venture + AGX 安装组件 | CAD、孔位、允许载荷分布和线缆路径 | 待获取 |
 
-必须确认双目视场重叠、刚性基线、时间同步误差和机器狗运动振动对标定的影响。
+## 2. LiDAR：Livox MID-360
 
-## 4. RTK GNSS
-
-| 项目 | 需记录内容 | 状态 |
+| 项目 | 预选资料 | 实施确认 |
 |---|---|---|
-| 接收机/天线 | 型号、天线类型和安装方式 | 待确认 |
-| 天线数 | 单天线/双天线 | 待确认 |
-| 改正来源 | NTRIP、基站、电台或其他 | 待确认 |
-| 输出 | NavSatFix、NMEA、UBX、厂商状态 | 待确认 |
-| 状态 | Fixed/Float/Single、DOP、age、卫星数 | 待确认 |
-| 频率/延迟 | 更新率、时间戳、通信延迟 | 待确认 |
-| 天线杆臂 | 天线参考点到 base_link 原点 xyz | 待确认 |
-| 航向 | 是否提供双天线 heading；IMU 航向方案 | 待确认 |
-| 环境 | 室外开阔度、树荫/建筑/多路径环境 | 待确认 |
+| 输出 | PointCloud2 / Livox CustomMsg（依驱动配置） | 固定使用的消息类型和 topic |
+| 视场 | 水平 360°，垂直 -7° 至 +52° | 安装姿态、遮挡和机身俯仰后的覆盖 |
+| 点率/帧率 | 约 200k points/s、典型 10 Hz | CPU/网络吞吐与实际更新率 |
+| 同步 | PTPv2/GPS | 主机时钟同步方案 |
+| 供电 | 9–27V；Lite3 官方扩展示例展示 Venture 24V XT30 供电 | 电流、线束、保险、接口额定 |
+| 驱动 | Livox SDK2 + livox_ros_driver2 | 锁定 commit，Humble/Jazzy 编译 |
+| 安装位姿 | 待测 | lidar_link 相对 base_link 的 xyz/rpy |
 
-## 5. IMU 与腿式里程计
+## 3. 两台普通 RGB 相机：See3CAM_50CUG Color
 
-| 项目 | 需记录内容 | 状态 |
+| 项目 | 预选 | 待确认 |
 |---|---|---|
-| IMU 型号/位置 | 型号、安装方向、外参 | 待确认 |
-| IMU 输出 | orientation/angular velocity/acceleration、单位和 covariance | 待确认 |
-| 轴向约定 | ENU/NED、右手系、frame_id | 待确认 |
-| 腿式里程计 | topic、frame、pose/twist、covariance | 待确认 |
-| 内部融合 | 是否已把 IMU 融入厂商状态估计 | 待确认 |
-| 足端状态 | contact/slip/foot odometry 是否可获取 | 待确认 |
+| 型号 | 两台同型号 See3CAM_50CUG Color | 完整 SKU、批次和固件 |
+| 传感器 | Sony IMX264，5MP，Global Shutter | 最终分辨率/FPS和图像格式 |
+| 接口 | USB 3.2 Gen1/UVC | Jetson 双相机同时运行带宽、USB控制器拓扑 |
+| 同步 | GPIO Trigger/Strobe | 触发引脚、逻辑电压、电平转换、触发延迟、曝光同步 |
+| 镜头 | 同型号 C-mount 镜头 | 2/3 inch image circle、HFOV 70°–80° 候选 |
+| 默认视场 | 页面列出的配套镜头 HFOV 约 26.1° | 不默认采用；需要按机器人需求重新选镜头 |
+| 基线 | 初始试验值 100–120 mm | 结合近远距离误差和遮挡做最终定型 |
+| 标定 | ROS CameraInfo、stereo calibration | 保存原始样本、内外参、rectification 和质量报告 |
+| ROS 驱动 | UVC camera driver + image_pipeline | 选包并固定版本，验证 Humble/Jazzy |
 
-## 6. 任务与验收
+双目相机不输出天然深度；需要 stereo rectify、disparity、depth、confidence 和 PointCloud2 处理流水线。
 
-| 项目 | 需记录内容 | 状态 |
+## 4. RTK：simpleRTK2B Budget / ZED-F9P
+
+| 项目 | 预选 | 待确认 |
 |---|---|---|
-| 环境 | 室内/室外/混合 | 待确认 |
-| 地形 | 平地、坡度、台阶、草地、碎石、沟坎 | 待确认 |
-| 障碍物 | 行人、车辆、箱体、玻璃、细杆、悬空物 | 待确认 |
-| 速度 | 巡航速度、最高测试速度、旋转速度 | 待确认 |
-| 定位目标 | 位置/航向误差、连续性 | 待确认 |
-| 避障目标 | 检测距离、召回率、停车距离、延迟 | 待确认 |
-| 运行时长 | 单次任务时长和连续运行时长 | 待确认 |
-| 安全条件 | 急停、监护、测试区和风险评估 | 待确认 |
+| GNSS 模块 | u-blox ZED-F9P | 板卡硬件 revision 和固件 |
+| 天线 | ANN-MB 多频天线 | 线长、安装高度、地板/接地板要求 |
+| 数据 | NavSatFix + UBX 原始状态 | ROS 驱动、状态码、协方差 |
+| 更新率 | 最高性能设置可达 10Hz | 实际串口/USB配置和 CPU 流量 |
+| RTK 改正 | NTRIP 或自建 Base | 目标场地覆盖、服务费、网络可用性 |
+| 航向 | 单天线无静止 yaw | 初版采用 Lite3 IMU/odom；后续可双天线升级 |
+| 杆臂 | 天线相对 base_link | 真实安装坐标和测量误差 |
 
-## 7. 阶段 A 评审记录
+## 5. 计算平台与供电
 
-- 评审日期：待填写
-- 参与人员：待填写
-- 已确认项：待填写
-- 仍有阻塞的问题：待填写
-- ROS 2 发行版决策：建议 Jazzy；最终待机器狗驱动兼容性确认
-- 决策人/批准记录：待填写
+| 项目 | 预选 | 待确认 |
+|---|---|---|
+| 计算机 | Jetson AGX Orin Developer Kit | 最终内存版本、载板接口和库存 |
+| 功率 | 模块/开发套件随工作模式变化 | GPU/CPU 满载功率、散热和环境温度 |
+| USB | 两路 USB3 相机 | 是否共享同一 USB controller、总带宽 |
+| Ethernet | MID-360 + Lite3 | 交换机拓扑、IP 网段、UDP 延迟 |
+| RTK | USB/UART | 电气隔离/串口电平/接地 |
+| 供电 | Lite3 外设口或独立供电 | 24V→AGX 所需电压的 DC/DC 额定、保险和浪涌 |
+| 质量预算 | Venture 4.5kg 标称载荷 | 项目外设目标 ≤3.6kg，称量每个子件与线缆 |
+| 结构 | 上装安装板、减振和天线支架 | CAD、质心、机身振动与跌倒冲击 |
+
+## 6. ROS 2 / 软件兼容
+
+| 组件 | 首轮基线 | 长期策略 |
+|---|---|---|
+| Lite3 SDK / bridge | Ubuntu 22.04 + Humble | 隔离在 bridge，迁移 Jazzy |
+| MID-360 driver | 官方 Livox SDK2 / livox_ros_driver2 | Humble/Jazzy 分别构建测试 |
+| Camera driver | UVC camera driver | Humble/Jazzy API兼容 |
+| Stereo | image_pipeline / 自选 stereo matcher | 固定版本与算法模型 |
+| Localization | robot_localization + navsat_transform | 标准 NavSatFix/Odometry 接口 |
+| Navigation | Nav2 | Jazzy 为长期版本目标 |
+| NTRIP | GNSS correction client/service | 与厂家协议和地区服务匹配 |
+
+ROS 2 Humble 计划于 2027 年 5 月结束支持，首轮对齐厂商公开示例，但必须在 TaskPlan 中跟踪 Jazzy 迁移。
+
+## 7. 场景与验收
+
+- 运行环境：室内/室外混合，待明确。
+- 首轮地面：平整硬质地面。
+- 目标障碍：人、箱体、墙、桌椅、货架、细杆、玻璃和低矮物。
+- 测试指标：RTK 精度/降级；local odom 连续性；双目深度误差；障碍物召回率；感知时延；停车距离；系统功耗和续航。
+- 所有指标阈值以根目录 TaskPlan A9 为准。
+- 实机自主运动前必须确认急停/遥控停止和底层 watchdog。
+
+## 8. 阶段 A 确认结果
+
+- 预选本体：Lite3 Venture。
+- 预选 LiDAR：Livox MID-360。
+- 预选双目：2 × See3CAM_50CUG Color。
+- 预选 RTK：simpleRTK2B Budget / ZED-F9P。
+- 预选计算：Jetson AGX Orin Developer Kit。
+- 未采购、未测量、未上机、未完成构建。
+- 后续所有阶段状态统一记录在根目录 TaskPlan.md。
