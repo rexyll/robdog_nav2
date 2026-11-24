@@ -1,7 +1,7 @@
 # Point-LIO ROS 2 Jazzy POC 来源、补丁与验收基线
 
 - 日期：2026-11-24
-- 状态：Point-LIO 固定来源/P0、ROS 2 Jazzy x86_64 P1 构建已通过；UrbanLoco P2 工具与 10 项解析/ENU/SQLite integration tests 已通过；实际 rosbag 回放仍等待人工获取 CC BY-NC-SA 4.0 数据；Orin ARM64 与真实 MID-360/Lite3 实机测试未完成
+- 状态：Point-LIO 固定来源/P0、ROS 2 Jazzy x86_64 P1 构建已通过；用户已提供 standalone HK-Data20190117_0.db3，核心 topic/type 与 318 条 INSPVAX CDR 全量解析审计通过；P2 脚本 CI run 45392931411 success；Point-LIO 完整回放/evo APE-RPE、Orin 实机与 MID-360/Lite3 测试仍未完成
 - 唯一进度台账：[TaskPlan.md](../../TaskPlan.md)
 - 相关基线：[MID-360 Livox driver](livox_mid360_driver_baseline.md)、[odometry fallback strategy](odometry_fallback_strategy.md)
 
@@ -152,7 +152,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - 官方数据许可为 CC BY-NC-SA 4.0，非商业、署名、相同方式共享条件；任何商业使用/再分发必须先确认权利人授权。
 - 本 POC 仅选定 Intel Point-LIO `ulhk_4` 对应的 UrbanLoco session `HK-Data20190117`，不是同目录里其他几十 GB 的香港序列。UrbanLoco 官方 Hong Kong 页面标注该序列日期为 2019/01/17、总量 6.11 GB；其他序列分别可达 24.0/27.9/41.6/62.3 GB，不可替代。UrbanLoco GitHub README 该条目的日期列误写为 2019/03/16，因此以序列 ID 为准。
 - Dropbox/Baidu 链接是包含全部香港序列的共享目录，而不是单文件直链；应在目录内找到 `HK-Data20190117` 条目。若看不到该条目，不要改下其他大文件，先提供当前目录名称/大小清单确认。Intel Point-LIO 复现文档把下载后的 ROS 1 文件命名/放置为 `datasets/ulhk_4/HK-Data20190117.bag`；若镜像提供压缩包或不同名称，先检查实际格式与内容，不要仅通过改名伪装成 `.bag`。
-- 原始文件放置：\`datasets/ulhk_4/HK-Data20190117.bag\`；脚本转换到 ROS 2 sqlite3 bag：\`datasets/ulhk_4/ulhk_bag/\`。
+- 原始 ROS1 文件放置路径仍为 `datasets/ulhk_4/HK-Data20190117.bag`；本次用户直接提供 standalone ROS2 SQLite3 DB3，项目 P2 脚本已支持直接读取该文件，不需要重新转换。
 - 下载镜像见 [UrbanLoco dataset preparation instructions](../../datasets/README.md)。整个 \`datasets/*\` 已加入 .gitignore，不得提交 raw bag、转换后的 db3、metadata、轨迹和 PCD/map。
 - 已在 Intel 固定参考脚本中核对该序列的消息 topic：LiDAR \`/velodyne_points_0\`、IMU \`/imu/data\`、GT \`/novatel_data/inspvax\`。运行时仍由 \`ros2 bag info\` 检查，若实际 bag 不同必须以数据自身 metadata 为准，不静默替换。
 
@@ -167,7 +167,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 
 ### 7.3 项目脚本
 
-1. scripts/prepare_urbanloco_ulhk4.sh：检查手动下载的 ROS1 bag，调用 rosbags-convert 生成 ROS2 sqlite3 bag，并校验三个 topic；每次运行重算 raw bag SHA256、生成 DB3 checksum 清单和 dataset_manifest.txt（采集日期可通过 URBANLOCO_ACQUISITION_DATE 指定）。
+1. `scripts/prepare_urbanloco_ulhk4.sh`：支持原 ROS1 bag 转换或 standalone ROS2 DB3；校验三个核心 topic 和 INSPVAX CDR 全量载荷，记录 raw bag/DB3 SHA256 与 dataset_manifest.txt。
 2. \`scripts/run_urbanloco_ulhk4.sh\`：加载已通过 P1 的 \`point_lio\` 安装空间，启动 \`pointlio_mapping\` 与 TUM recorder，确认 LiDAR subscription 和 odometry pub/sub ready 后，以 1x 播放 bag；完成后清理进程并检查有效轨迹样本数量。
 3. \`scripts/extract_urbanloco_ulhk4_gt.py\`：从 rosbag2 sqlite3 的 INSPVAX CDR payload 提取固定 UrbanLoco session 中的 lat/lon/height 字段，按 bag timestamp 排序、去重并转换为 WGS84 ECEF→local ENU，输出 TUM + JSON provenance report。固定 byte offsets 只对该 session/type layout 有效，换数据版本前必须重新验证。
 4. \`scripts/evaluate_urbanloco_ulhk4.sh\`：运行 \`evo_ape tum GT EST -a\`，将 2.17m（Point-LIO 论文该序列参考值）与 +20% 区间作为历史参考输出；它不是本项目导航验收阈值，不能用来判定 MID-360/Orin/Lite3 通过。
@@ -180,8 +180,8 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 增加 raw bag / DB3 SHA256 provenance、SQLite rosbag INSPVAX GT extraction integration tests 与 replay process-group cleanup 后，P2 语法/CLI/纯函数/SQLite integration 共 10 项测试通过：[run 45340287093](https://github.com/rexyll/robdog_nav2/actions/runs/45340287093)。
 - [x] 将 NovAtel 官方 INSPVAX.msg（固定 commit 0c0e135b...）与 Intel 固定 POC 的 `extract_ulhk_gt.py`（固定 commit decbb06...）列为 CDR offsets 的上游依据；source-link/注释更新后再次运行 [P2 CI 45341097202](https://github.com/rexyll/robdog_nav2/actions/runs/45341097202)，10/10 tests passed。
 - [x] P2 数据目录许可/忽略策略已写入 \`datasets/README.md\` 与 .gitignore。
-- [ ] 人工下载并放置 UrbanLoco \`HK-Data20190117.bag\`，记录来源、许可、文件大小与 SHA256。
-- [ ] 执行 ROS1→ROS2 转换，检查 bag metadata、消息数、时间跨度和预期三个 topic。
+- [~] 用户已提供 standalone `HK-Data20190117_0.db3`，5,830,840,320 bytes；核心话题数量/类型和 318 条 INSPVAX CDR 记录全量审计通过。源下载记录/SHA256 待补入（最新 prepare 脚本已增加 DB3 input hash 输出）。
+- [x] 用户 DB3 已通过 rosbag2 metadata、核心 topic/type、消息数、时长、时间戳重复/倒退和 INSPVAX 318 条 CDR 全量解析检查；摘要见 [数据集审计报告](../testing/urbanloco_ulhk4_dataset_audit.md)。
 - [ ] 完成 Point-LIO 全量 bag playback，保存 TUM estimate、logs、manifest。
 - [ ] 从 INSPVAX 提取 GT，核验 CDR offsets/时间基准，并完成 evo APE/RPE 与结果报告。
 - [ ] 对结果做敏感性检查：起始时段、时间覆盖率、重复/倒退时间戳、有效轨迹比例；不得只依赖单一 RMSE。
@@ -195,7 +195,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 固定源码准备脚本已创建并经 P0 GitHub Actions 实测成功。
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
-- [~] P2 回放/GT/evo 工具静态检查、纯函数和 SQLite INSPVAX GT extraction integration 共 10 项测试已通过（runs 45340287093、45341097202）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
+- [~] P2 standalone DB3 topic/type/INSPVAX 全量 CDR audit 已由用户本地运行通过；脚本 CI run 45391334101 和 DB3 checksum/manifest 修复 CI run 45392931411 success（13/13 项 P2 tests）。Point-LIO full replay、估计轨迹、GT 导出与 evo APE/RPE 待执行。
 - [x] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建预验证通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Livox ROS Driver2、Point-LIO 编译/安装成功，两个 ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 后置检查全部通过。仅证明通用 aarch64 构建链可用，不代替 Jetson AGX Orin/JetPack 7.2.2 实机 build、CUDA/TensorRT、Jetson 内核、GPIO/硬件时间戳或 CPU/RAM/温度/功耗测试。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
