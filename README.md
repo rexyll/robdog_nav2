@@ -129,6 +129,7 @@ flowchart TB
 - [本体 odometry 缺失时的 LIO/VIO 备用方案](docs/implementation/odometry_fallback_strategy.md)
 - [ADR-0004：本体 odometry 备用方案](docs/decisions/ADR-0004-local-odometry-fallback.md)
 - [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
+- [Lite3 跨发行版遥测网关协议提案](docs/implementation/lite3_gateway_protocol.md)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
