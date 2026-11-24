@@ -21,6 +21,7 @@ from convert_m3dgr_dynamic03_to_ros2 import (
 
 
 SOURCE_LIDAR_TYPE = "livox_ros_driver/msg/CustomMsg"
+SOURCE_LIDAR_DRIVER2_TYPE = "livox_ros_driver2/msg/CustomMsg"
 SOURCE_IMU_TYPE = "sensor_msgs/msg/Imu"
 TARGET_LIDAR_TYPE = "livox_ros_driver2/msg/CustomMsg"
 
@@ -34,17 +35,16 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         self.audit_path = self.root / "audit.json"
         self.checksum_path = self.root / "checksums.txt"
 
-    def _create_source_bag(self):
+    def _create_source_bag(self, source_lidar_type=SOURCE_LIDAR_TYPE):
         typestore = get_typestore(Stores.ROS1_NOETIC)
-        typestore.register(
-            get_types_from_msg(CUSTOM_POINT_MSG, "livox_ros_driver/msg/CustomPoint")
-        )
-        typestore.register(get_types_from_msg(CUSTOM_MSG_MSG, SOURCE_LIDAR_TYPE))
+        source_point_type = source_lidar_type.replace("CustomMsg", "CustomPoint")
+        typestore.register(get_types_from_msg(CUSTOM_POINT_MSG, source_point_type))
+        typestore.register(get_types_from_msg(CUSTOM_MSG_MSG, source_lidar_type))
 
         header_type = typestore.types["std_msgs/msg/Header"]
         time_type = typestore.types["builtin_interfaces/msg/Time"]
-        point_type = typestore.types["livox_ros_driver/msg/CustomPoint"]
-        lidar_type = typestore.types[SOURCE_LIDAR_TYPE]
+        point_type = typestore.types[source_point_type]
+        lidar_type = typestore.types[source_lidar_type]
         imu_type = typestore.types[SOURCE_IMU_TYPE]
         quaternion_type = typestore.types["geometry_msgs/msg/Quaternion"]
         vector3_type = typestore.types["geometry_msgs/msg/Vector3"]
@@ -101,7 +101,7 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         with Rosbag1Writer(self.source_bag) as writer:
             lidar_connection = writer.add_connection(
                 LIDAR_TOPIC := "/livox/mid360/lidar",
-                SOURCE_LIDAR_TYPE,
+                source_lidar_type,
                 typestore=typestore,
             )
             imu_connection = writer.add_connection(
@@ -112,7 +112,7 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
             writer.write(
                 lidar_connection,
                 100_000_000_010,
-                typestore.serialize_ros1(lidar_message, SOURCE_LIDAR_TYPE),
+                typestore.serialize_ros1(lidar_message, source_lidar_type),
             )
             writer.write(
                 imu_connection,
@@ -186,6 +186,33 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         self.assertAlmostEqual(imu.angular_velocity.z, 0.3, places=6)
         self.assertAlmostEqual(imu.linear_acceleration.z, 9.81, places=6)
         self.assertEqual(imu.header.frame_id, "mid360_imu")
+
+    def test_accepts_driver2_namespaced_livox_source_type(self):
+        self._create_source_bag(SOURCE_LIDAR_DRIVER2_TYPE)
+        self._write_preflight()
+        audit = json.loads(self.audit_path.read_text())
+        for sample in audit["sample_deserialization"]["/livox/mid360/lidar"]["samples"]:
+            sample["header_timebase_delta_ns"] = 128
+        self.audit_path.write_text(json.dumps(audit), encoding="utf-8")
+
+        manifest = convert_m3dgr_lio_streams(
+            self.source_bag,
+            self.output_bag,
+            self.audit_path,
+            self.checksum_path,
+        )
+
+        self.assertEqual(
+            manifest["mapping"]["/livox/mid360/lidar"]["source_type"],
+            SOURCE_LIDAR_DRIVER2_TYPE,
+        )
+        self.assertEqual(
+            manifest["message_counts"],
+            {"/livox/mid360/lidar": 1, "/livox/mid360/imu": 1},
+        )
+        with AnyReader([self.output_bag]) as reader:
+            types = {connection.topic: connection.msgtype for connection in reader.connections}
+        self.assertEqual(types["/livox/mid360/lidar"], TARGET_LIDAR_TYPE)
 
     def test_refuses_unverified_audit_report(self):
         self._create_source_bag()
