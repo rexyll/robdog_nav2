@@ -87,7 +87,7 @@ vendor gateway 在厂商 Foxy 侧运行；Jazzy bridge 在 AGX Orin。实际 mot
 | 字段 | 语义 | 要求 |
 |---|---|---|
 | protocol_version | 网关协议主/次版本 | 必须 |
-| message_type | IMU / JointState / RobotStatus / BaseOdometry / Heartbeat | 必须 |
+| message_type | IMU / JointState / ContactState / RobotStatus / BaseOdometry / Heartbeat | 必须 |
 | robot_id | 设备/机器人实例标识 | 必须，不能仅依赖 IP |
 | session_id | gateway 每次启动产生的新会话标识 | 必须，识别进程重启 |
 | sequence | 每个消息流单调递增序号 | 必须 |
@@ -126,6 +126,21 @@ source timestamp、gateway receive time、host ROS time 是三个不同概念，
 - 明确 joint mapping version；
 - 关节顺序不得仅依赖数组下标，必须映射到 URDF joint names；
 - 保留原始 vendor index/name 供审计。
+
+### 5.3 ContactState（字段待厂商确认）
+
+候选 payload 语义：
+- 每只足的稳定 foot_id / vendor index 映射；
+- contact valid / sensor health 标志；
+- 接触力向量或法向力标量（具体形式由目标固件接口决定，不在本项目猜测）；
+- 原始单位、符号方向、坐标 frame、采样时间和质量标志；
+- 若厂商提供 slip/contact confidence，作为独立字段，不从力值自行推断。
+
+要求：
+- contact_state envelope 必须带 frame_id；其 frame 与每足局部 frame/机器人公共 frame 的关系必须写入版本化 unit/frame convention；
+- 不能只根据数组顺序猜测左前/右前/左后/右后，必须取得官方映射；
+- 不把接触力作为机身位置/线速度，也不直接发布 nav_msgs/Odometry；
+- 只有采样率、时间戳、轴向和零点校准得到确认后，才允许用于足端接触/滑移诊断。
 
 ### 5.3 RobotStatus
 
