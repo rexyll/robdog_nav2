@@ -1,0 +1,58 @@
+name: Point-LIO UrbanLoco P2 Script Tests
+
+concurrency:
+  group: point-lio-urbanloco-p2-tests
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/urbanloco_gt_helpers.py"
+      - "scripts/extract_urbanloco_ulhk4_gt.py"
+      - "scripts/record_point_lio_odometry_tum.py"
+      - "scripts/prepare_urbanloco_ulhk4.sh"
+      - "scripts/run_urbanloco_ulhk4.sh"
+      - "scripts/evaluate_urbanloco_ulhk4.sh"
+      - "scripts/tests/test_urbanloco_ulhk4.py"
+      - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/urbanloco_gt_helpers.py"
+      - "scripts/extract_urbanloco_ulhk4_gt.py"
+      - "scripts/record_point_lio_odometry_tum.py"
+      - "scripts/prepare_urbanloco_ulhk4.sh"
+      - "scripts/run_urbanloco_ulhk4.sh"
+      - "scripts/evaluate_urbanloco_ulhk4.sh"
+      - "scripts/tests/test_urbanloco_ulhk4.py"
+      - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  p2-script-tests:
+    name: Python 3.12 parser/geodesy tests and shell syntax
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate scripts and pure helpers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile \
+            scripts/urbanloco_gt_helpers.py \
+            scripts/extract_urbanloco_ulhk4_gt.py \
+            scripts/record_point_lio_odometry_tum.py
+          bash -n \
+            scripts/prepare_urbanloco_ulhk4.sh \
+            scripts/run_urbanloco_ulhk4.sh \
+            scripts/evaluate_urbanloco_ulhk4.sh
+          PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_urbanloco_ulhk4.py" \
+            -v
