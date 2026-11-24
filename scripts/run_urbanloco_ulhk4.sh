@@ -16,6 +16,11 @@ ODOM_TOPIC="${POINTLIO_ODOM_TOPIC:-/aft_mapped_to_init}"
 MIN_POSES="${URBANLOCO_MIN_ESTIMATED_POSES:-100}"
 ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-223}"
 
+if [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 && "${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}" != "1" ]]; then
+  echo "ERROR: standalone DB3 provenance is not confirmed; this is not the expected original UrbanLoco ROS1 .bag." >&2
+  echo "Use the documented HK-Data20190117.bag source and convert it, or explicitly confirm the DB3 conversion provenance." >&2
+  exit 10
+fi
 if [[ -d "${BAG_DIR}" && -f "${BAG_DIR}/metadata.yaml" ]]; then
   :
 elif [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 ]]; then
@@ -179,8 +184,10 @@ if (( POSE_COUNT < MIN_POSES )); then
 fi
 
 cat > "${RESULTS_DIR}/run_manifest.txt" <<EOF
-sequence=ulhk_4
-dataset_session=HK-Data20190117
+sequence_candidate=ulhk_4
+dataset_session_candidate=HK-Data20190117
+dataset_source_status=$(if [[ -f "${BAG_DIR}" ]]; then echo user_confirmed_standalone_db3_provenance; else echo ros2_bag_directory_source_requires_manifest_review; fi)
+db3_provenance_confirmed=${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}
 pointlio_workspace=${WS_DIR}
 bag_dir=${BAG_DIR}
 lidar_topic=${LIDAR_TOPIC}
