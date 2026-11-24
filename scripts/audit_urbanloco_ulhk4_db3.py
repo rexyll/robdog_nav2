@@ -134,15 +134,15 @@ def audit_bag(input_path: Path) -> dict[str, Any]:
                 global_min = low if global_min is None else min(global_min, low)
                 global_max = high if global_max is None else max(global_max, high)
 
-    missing = [name for name in CORE_TOPICS if topic_counts[name] == 0]
-    if missing:
-        raise ValueError(f"Required UrbanLoco core topics are missing/empty: {missing}")
     for name, expected_type in CORE_TOPICS.items():
         actual_type = topic_types.get(name)
-        if actual_type != expected_type:
+        if actual_type is not None and actual_type != expected_type:
             raise TypeError(
                 f"{name} type is {actual_type!r}; expected {expected_type!r}"
             )
+    missing = [name for name in CORE_TOPICS if topic_counts[name] == 0]
+    if missing:
+        raise ValueError(f"Required UrbanLoco core topics are missing/empty: {missing}")
     if gt_count < 2:
         raise ValueError(f"Expected at least two INSPVAX samples; found {gt_count}")
 
