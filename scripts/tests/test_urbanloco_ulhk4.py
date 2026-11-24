@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from extract_urbanloco_ulhk4_gt import extract_samples
+from audit_urbanloco_ulhk4_db3 import audit_bag
 from urbanloco_gt_helpers import (
     geodetic_to_enu,
     order_and_deduplicate,
@@ -107,6 +108,32 @@ class TestRosbagSqliteExtraction(unittest.TestCase):
             self.assertEqual(samples[0], (1_000_000_000, 22.3, 114.2, 35.0))
             self.assertEqual(samples[1], (2_000_000_000, 22.30001, 114.2, 35.5))
 
+
+    def test_extracts_from_standalone_db3_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db3 = Path(temp_dir) / "HK-Data20190117_0.db3"
+            with sqlite3.connect(db3) as connection:
+                connection.execute(
+                    "CREATE TABLE topics (id INTEGER PRIMARY KEY, name TEXT, type TEXT)"
+                )
+                connection.execute(
+                    "CREATE TABLE messages (id INTEGER PRIMARY KEY, topic_id INTEGER, timestamp INTEGER, data BLOB)"
+                )
+                connection.execute(
+                    "INSERT INTO topics (id, name, type) VALUES (?, ?, ?)",
+                    (1, "/novatel_data/inspvax", "novatel_oem7_msgs/msg/INSPVAX"),
+                )
+                connection.executemany(
+                    "INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)",
+                    [
+                        (1, 1_000_000_000, self._payload(22.3, 114.2, 35.0)),
+                        (1, 2_000_000_000, self._payload(22.30001, 114.2, 35.5)),
+                    ],
+                )
+            samples, topic_type = extract_samples(db3, "/novatel_data/inspvax")
+            self.assertEqual(topic_type, "novatel_oem7_msgs/msg/INSPVAX")
+            self.assertEqual(len(samples), 2)
+
     def test_rejects_non_inspvax_topic_type(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             bag_dir = Path(temp_dir)
@@ -120,6 +147,67 @@ class TestRosbagSqliteExtraction(unittest.TestCase):
                 )
             with self.assertRaises(TypeError):
                 extract_samples(bag_dir, "/novatel_data/inspvax")
+
+
+
+class TestStandaloneDb3Audit(unittest.TestCase):
+    def test_validates_required_topics_and_all_inspvax_payloads(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db3 = Path(temp_dir) / "HK-Data20190117_0.db3"
+            with sqlite3.connect(db3) as connection:
+                connection.execute(
+                    "CREATE TABLE topics (id INTEGER PRIMARY KEY, name TEXT, type TEXT)"
+                )
+                connection.execute(
+                    "CREATE TABLE messages (id INTEGER PRIMARY KEY, topic_id INTEGER, timestamp INTEGER, data BLOB)"
+                )
+                connection.executemany(
+                    "INSERT INTO topics VALUES (?, ?, ?)",
+                    [
+                        (1, "/velodyne_points_0", "sensor_msgs/msg/PointCloud2"),
+                        (2, "/imu/data", "sensor_msgs/msg/Imu"),
+                        (3, "/novatel_data/inspvax", "novatel_oem7_msgs/msg/INSPVAX"),
+                    ],
+                )
+                payload = bytearray(84)
+                struct.pack_into("<ddd", payload, 60, 22.3, 114.2, 35.0)
+                connection.executemany(
+                    "INSERT INTO messages (topic_id, timestamp, data) VALUES (?, ?, ?)",
+                    [
+                        (1, 1_000_000_000, b"pointcloud"),
+                        (2, 1_000_000_000, b"imu"),
+                        (3, 1_000_000_000, bytes(payload)),
+                        (1, 2_000_000_000, b"pointcloud"),
+                        (2, 2_000_000_000, b"imu"),
+                        (3, 2_000_000_000, bytes(payload)),
+                    ],
+                )
+            report = audit_bag(db3)
+            self.assertEqual(report["input_kind"], "standalone_db3")
+            self.assertEqual(report["required_topics"]["/velodyne_points_0"]["count"], 2)
+            self.assertEqual(report["required_topics"]["/imu/data"]["count"], 2)
+            self.assertEqual(report["inspvax_payload_audit"]["decoded_count"], 2)
+
+    def test_rejects_wrong_required_message_type(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db3 = Path(temp_dir) / "wrong.db3"
+            with sqlite3.connect(db3) as connection:
+                connection.execute(
+                    "CREATE TABLE topics (id INTEGER PRIMARY KEY, name TEXT, type TEXT)"
+                )
+                connection.execute(
+                    "CREATE TABLE messages (id INTEGER PRIMARY KEY, topic_id INTEGER, timestamp INTEGER, data BLOB)"
+                )
+                connection.executemany(
+                    "INSERT INTO topics VALUES (?, ?, ?)",
+                    [
+                        (1, "/velodyne_points_0", "sensor_msgs/msg/PointCloud2"),
+                        (2, "/imu/data", "sensor_msgs/msg/Imu"),
+                        (3, "/novatel_data/inspvax", "sensor_msgs/msg/NavSatFix"),
+                    ],
+                )
+            with self.assertRaises(TypeError):
+                audit_bag(db3)
 
 
 if __name__ == "__main__":
