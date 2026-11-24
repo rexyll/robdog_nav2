@@ -63,7 +63,7 @@
     驱动 README 包含 Ubuntu 24.04 / ROS 2 Jazzy 构建说明；本项目仍需固定 commit 并在目标设备编译验证。
 
 16. [e-con Systems See3CAM IMX264 / See3CAM_50CUG](https://www.e-consystems.com/sony-imx264-camera.asp)  
-    5MP、Global Shutter、USB 3.2 Gen1、Linux/UVC、GPIO trigger/strobe；相机 SKU、触发引脚和镜头规格在采购前需制造商书面确认。
+    官方产品页面列出彩色无镜头 SKU `See3CAM_50CUG_CXXCC_BX_H01R1`；5MP、Global Shutter、USB 3.2 Gen1、Linux/UVC、GPIO Trigger/Strobe、最高 35 fps。外部触发电气规格与双机硬件同步仍需制造商书面确认。
 
 17. [ArduSimple simpleRTK2B Basic Starter Kit](https://www.ardusimple.com/product/simplertk2b-basic-starter-kit-ip65/)  
     ZED-F9P + ANN-MB 多频天线，可接收 NTRIP/基站改正，最高性能配置最高约 10 Hz；RTK Fix 需要有效差分改正。
@@ -73,3 +73,18 @@
 
 19. [ROS 2 Humble to Jazzy 支持期说明](https://docs.autoware.org/main/home/roadmap/timelines/ros-2-distributions/)  
     汇总 ROS 2 Humble 于 2027 年 5 月结束支持、Jazzy 于 2029 年 5 月结束支持的时间线；发行版维护策略以 ROS REP-2000/官方发布信息为准。
+
+
+## 2026-11-24 ROS / Jetson 版本更新核验
+
+20. [ROS 2 Lyrical Luth Released — Open Robotics Discourse](https://discourse.openrobotics.org/t/ros-2-lyrical-luth-released/55021)  
+    ROS 2 Lyrical 于 2026-05-22 发布，是 LTS，支持至 2031-05；Tier 1 平台包括 Ubuntu 26.04 amd64/arm64。因 Jetson Orin 当前 JetPack 系统基线为 Ubuntu 24.04，本项目暂不将 Lyrical 定为 Orin 运行基线。
+
+21. [ROS 2 Release List](https://github.com/ros2/ros2_documentation/blob/rolling/source/Releases.rst)  
+    当前发行版 EOL 日期：Humble 2027-05、Jazzy 2029-05、Lyrical 2031-05。
+
+22. [NVIDIA JetPack 7.2.2 Downloads and Notes](https://developer.nvidia.com/embedded/jetpack/downloads)  
+    JetPack 7.2.2 支持 Jetson Orin Family；Jetson Linux 39.2.2 / L4T Ubuntu 24.04。需按具体 AGX Orin 模块/开发套件确认实际兼容性和驱动。
+
+23. [NVIDIA Jetson Linux Archive](https://developer.nvidia.com/embedded/jetson-linux-archive)  
+    官方 Jetson Linux 39.x 版本表列出 AGX Orin / Orin NX / Orin Nano 支持情况。
