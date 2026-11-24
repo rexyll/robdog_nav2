@@ -19,6 +19,9 @@ on:
       - "datasets/external_sha256.txt"
       - "scripts/verify_public_dataset_checksum.sh"
       - "scripts/tests/test_verify_public_dataset_checksum.sh"
+      - "scripts/audit_m3dgr_ros1_bag.py"
+      - "scripts/tests/test_m3dgr_ros1_bag.py"
+      - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   pull_request:
     paths:
@@ -33,6 +36,9 @@ on:
       - "datasets/external_sha256.txt"
       - "scripts/verify_public_dataset_checksum.sh"
       - "scripts/tests/test_verify_public_dataset_checksum.sh"
+      - "scripts/audit_m3dgr_ros1_bag.py"
+      - "scripts/tests/test_m3dgr_ros1_bag.py"
+      - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   workflow_dispatch:
 
@@ -51,11 +57,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m pip install -r requirements-dataset-tools.txt
           python3 -m py_compile \
             scripts/urbanloco_gt_helpers.py \
             scripts/extract_urbanloco_ulhk4_gt.py \
             scripts/audit_urbanloco_ulhk4_db3.py \
-            scripts/record_point_lio_odometry_tum.py
+            scripts/record_point_lio_odometry_tum.py \
+            scripts/audit_m3dgr_ros1_bag.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
@@ -64,6 +72,10 @@ jobs:
             scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
           bash scripts/tests/test_verify_public_dataset_checksum.sh
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_m3dgr_ros1_bag.py" \
+            -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_urbanloco_ulhk4.py" \
