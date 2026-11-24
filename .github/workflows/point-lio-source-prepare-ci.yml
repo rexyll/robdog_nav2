@@ -1,11 +1,14 @@
 name: Point-LIO Pinned Source Preparation
 
+concurrency:
+  group: point-lio-source-prep-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
     paths:
       - "scripts/prepare_point_lio_intel_ros2.sh"
-      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
       - ".github/workflows/point-lio-source-prepare-ci.yml"
   pull_request:
     paths:
