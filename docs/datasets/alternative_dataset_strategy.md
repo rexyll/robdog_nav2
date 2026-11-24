@@ -208,7 +208,7 @@ python scripts/audit_m3dgr_ros1_bag.py \\
 
 M3DGR 作者的评测说明使用 TUM trajectory 格式输入 `evo_ape`；仓库中公开的 GT 示例（例如 `Grass01_fixed.txt`）为八列：`timestamp tx ty tz qx qy qz qw`。但 Dynamic03 的独立 GT 尚未由用户下载，因此不能预先断言该文件没有额外头部、是否同样为 TUM 或是否完整覆盖 284 秒。
 
-新增 [`scripts/audit_tum_trajectory.py`](../../scripts/audit_tum_trajectory.py)，下载 GT 后先运行：
+新增 [`scripts/audit_tum_trajectory.py`](../../scripts/audit_tum_trajectory.py)，下载 GT 后先运行。审计 JSON 除 timestamp 重复/倒退数量外，还报告 `pose_repetition.adjacent_identical_pose_pairs`、`duplicate_timestamp_same_pose_pairs`、`backwards_timestamp_same_pose_pairs` 和 `timestamp_anomaly_pose_change_pairs`，用于区分时间戳异常是否发生在完全相同位姿之间；该诊断只描述数据，不进行排序或去重：
 
 ```bash
 cd ~/workspace/robdog_nav2
@@ -297,7 +297,7 @@ python scripts/convert_m3dgr_dynamic03_to_ros2.py \\
 - `/livox/mid360/imu`：56,903 条，约 200 Hz，类型 `sensor_msgs/msg/Imu`；抽样 3/3 成功。
 - 两个必需 topic 均无重复或倒退的 bag timestamp。该结果仅证明结构和抽样解码，不证明设备 PTP/PPS、IMU-LiDAR 同步、GT 正确性或 Point-LIO 精度。
 
-独立 GT 已提交到仓库 `temp/Dynamic03.txt`（360,420 bytes，4,269 行）。逐行检查显示全部为 8 列有限 TUM 数值，四元数范数为 1 且所有四元数均为 identity；但文件包含 1,675 个重复 timestamp 和 728 个倒退 timestamp。所有 2,403 个时间戳异常都发生在相邻两行位姿完全相同的情况下，整份文件按文件顺序共有 2,847 个相邻相同位姿对。按每连续三行检查可见 1,423 组三行位姿完全相同，组起始时间单调递增、间隔中位数约 0.2 s；这只能作为异常模式描述，不能证明三行就是冗余副本或授权删除两行。
+独立 GT 已提交到仓库 `temp/Dynamic03.txt`（360,420 bytes，4,269 行）。逐行检查显示全部为 8 列有限 TUM 数值，四元数范数为 1 且所有四元数均为 identity；但文件包含 1,675 个重复 timestamp 和 728 个倒退 timestamp。所有 2,403 个时间戳异常都发生在相邻两行位姿完全相同的情况下，整份文件按文件顺序共有 2,847 个相邻相同位姿对；新版 TUM audit 将在 `pose_repetition` 字段中输出这一关联，便于在本地生成可复现 JSON 报告。按每连续三行检查可见 1,423 组三行位姿完全相同，组起始时间单调递增、间隔中位数约 0.2 s；这只能作为异常模式描述，不能证明三行就是冗余副本或授权删除两行。
 
 M3DGR 官方公开的 `Grass01_fixed.txt` 也包含连续相同位姿记录且四元数保持 identity，但其时间戳仍严格递增；因此不能用该样例为 Dynamic03 的重复/倒退时间戳开脱。官方 README 说明传感器无外部触发、采用软件同步。Dynamic03 GT 时间覆盖约 284.420190 s，落在 bag 起止时间范围内；时间范围接近不证明同一时钟域或同步精度。
 
