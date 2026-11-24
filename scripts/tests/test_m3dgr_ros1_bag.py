@@ -84,7 +84,9 @@ class TestM3DGRBagAuditHelpers(unittest.TestCase):
                 any("unexpected IMU message type" in item for item in report["issues"])
             )
             self.assertEqual(
-                report["sample_deserialization"]["/livox/mid360/lidar"]["decoded"], 3
+                report["sample_deserialization"]["/livox/mid360/lidar"]["decoded"],
+                3,
+                report["sample_deserialization"]["/livox/mid360/lidar"],
             )
 
     def test_rejects_db3_disguised_as_ros1_bag(self):
