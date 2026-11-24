@@ -14,6 +14,7 @@ robdog_nav2/
 ├── src/
 │   ├── robodog_description/
 │   ├── robodog_bringup/
+│   ├── robodog_lite3_bridge/       # Lite3 SDK/UDP state and motion gateway
 │   ├── robodog_localization/
 │   ├── robodog_stereo_perception/
 │   ├── robodog_obstacle_perception/
@@ -39,12 +40,14 @@ robdog_nav2/
 | Package | 职责 | 主要接口 |
 |---|---|---|
 | robodog_description | Xacro/URDF、link/joint、sensor frame、碰撞几何 | robot_description、TF |
-| robodog_bringup | 启动 robot_state_publisher、驱动、基础状态估计和诊断 | launch |
+| robodog_bringup | 启动 robot_state_publisher、传感器、状态估计和诊断 | launch |
+| robodog_lite3_bridge | Lite3 SDK/UDP transfer、腿式 odom/IMU/joint/status 映射 | 标准 ROS 消息 |
+
 | robodog_localization | local/global EKF、navsat_transform 参数、GNSS gate | Odometry、NavSatFix、TF |
 | robodog_stereo_perception | 左右图同步、校正、视差、深度/点云 | Image、CameraInfo、DisparityImage、PointCloud2 |
 | robodog_obstacle_perception | LiDAR/点云过滤、地面分割、障碍物提取和跟踪 | LaserScan、PointCloud2、目标消息 |
 | robodog_nav2_bringup | Nav2 参数、地图、BT、planner/controller/costmap launch | NavigateToPose、cmd_vel |
-| robodog_cmd_adapter | Twist/TwistStamped 与四足厂商接口转换、限幅、watchdog | 命令与底层状态 |
+| robodog_cmd_adapter | Twist/TwistStamped 与 Lite3 cmd_vel 转换、限幅、watchdog | 命令与底层状态 |
 | robodog_diagnostics | 传感器健康、时间同步、GNSS 状态、TF 和命令链路监控 | DiagnosticArray/状态 |
 | robodog_interfaces | 项目确需跨节点共享的专用状态/目标消息 | 自定义 msg/srv/action |
 
@@ -91,4 +94,4 @@ robdog_nav2/
 
 ## 7. 尚不创建实机 package 的原因
 
-当前尚未确认机器狗型号、LiDAR 输出、相机驱动、RTK 消息和底层运动命令接口。过早创建可运行代码会导致虚构 topic、错误 TF 或不兼容 SDK。阶段 A 完成后，按本文件的边界一次性生成可编译 workspace，并通过 CI 验证。
+目前已预选 Lite3 Venture 和传感器，且已依据公开接口建立 [Lite3 bridge 接口契约](lite3_bridge_interface.md)。在厂家确认固件/SDK、真实 frame/频率/协方差、电源和 watchdog 之前，不生成直接驱动未知硬件的可运行节点。下一步先完成 A 阶段接口确认，再以标准消息和 mock 数据创建可在 Humble/Jazzy 编译的 package scaffold。
