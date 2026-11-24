@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.2.6
+- 文档版本：v0.2.7
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -203,11 +203,13 @@ Lite3 vendor motion SDK / gait controller
 
 ### 已完成
 - [x] 仓库初始化，默认分支 main。
+- [x] 补充多传感器时间同步方案：区分双目共触发、LiDAR PTP/GPS、Lite3 SDK 时钟、GNSS PPS 和 host monotonic freshness。
 - [x] 建立 robodog_lite3_bridge 只读软件骨架：隔离 mock odom/IMU/joint topics、DiagnosticArray topic freshness monitor、单元测试和双发行版 CI workflow 文件。
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
+- [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
 - [x] 核对 e-con Systems See3CAM 彩色无镜头 SKU 与官方 Trigger / Global Shutter / USB3 规格。
@@ -217,7 +219,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
 
 ### 未完成 / 阻塞
-- [~] ROS 2 package CI 已触发多轮；最新版本运行记录为 [run 45325875067](https://github.com/rexyll/robdog_nav2/actions/runs/45325875067)，此前各版本记录仍在队列/运行中；尚无 build/test 通过结论，不能标记 CI 完成。
+- [~] ROS 2 package CI 已触发多轮；最新版本运行记录为 [run 45325875067](https://github.com/rexyll/robdog_nav2/actions/runs/45325875067)，Humble/Jazzy 两个 job 目前仍停留在 ROS 环境安装步骤，尚无 build/test 通过结论，不能标记 CI 完成。后续应只关注包含最终 package tree 的最新 run。
 - [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
 - [ ] 未采购设备，未接收实物。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认。
@@ -250,7 +252,8 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.3 | 锁定 See3CAM 彩色无镜头 SKU；补充 ROS Lyrical 与 JetPack 7.2.2 兼容性策略：Jazzy 作为 Orin/Ubuntu 24.04 当前目标，Lyrical 等 Ubuntu 26.04/Jetson 支持成熟后评估 | e-con Systems 官方相机 SKU/规格、Open Robotics Lyrical release、NVIDIA JetPack 7.2.2/Jetson Orin 支持资料 |
 | 2026-11-24 | v0.2.4 | 完成硬件 SKU/ROS 发行版策略在 ADR、接口清单、bridge、参考资料和 README 的同步；更新根 TaskPlan 进度与供应商待确认项 | Part 1: 1c7eea37; ADR-0002: 7d41f8a6; checklist: dfe25143; Lite3 bridge: feef5cf9; references: 1416b088; README: 3ab67049 |
 | 2026-11-24 | v0.2.5 | 建立 Lite3 ROS 2 只读 mock/诊断软件包骨架和 Humble/Jazzy CI；补充多传感器时间同步与外参标定设计；CI 当前待运行结论 | package: 74a05789–bea3fbfd; pytest layout: ba171479–123d32ec; sync doc: a04b50dd; CI run: 45325569459 |
-| 2026-11-24 | v0.2.6 | 隔离 mock 话题到 /mock/lite3 和 mock_* frames，避免污染真实 Lite3 topic/TF；修正双目同步与设备时钟方案；本地 freshness helper 6 项测试通过，ROS 2 CI 待结论 | mock: f9e37b65; launch: b7dbbfe; docs: sync a04b50dd; latest CI: 45325875067 |
+| 2026-11-24 | v0.2.6 | 隔离 mock 话题到 /mock/lite3 和 mock_* frames，避免污染真实 Lite3 topic/TF；修正双目同步与设备时钟方案；本地 freshness helper 6 项测试通过，ROS 2 CI 待结论 | mock: f9e37b65; launch: b7dbbfe; README: b5263ef3; latest CI: 45325875067 |
+| 2026-11-24 | v0.2.7 | 更新 ROS 2 package 规划和 Lite3 bridge 接口契约，明确当前 scaffold 只读、mock 隔离、无真实 SDK/运动命令；根台账增加同步风险与 CI 状态 | workspace: 53997cdf; bridge contract: 44e69826 |
 
 ---
 
