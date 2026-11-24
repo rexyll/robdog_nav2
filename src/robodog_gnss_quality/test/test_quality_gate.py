@@ -14,6 +14,7 @@ from robodog_gnss_quality import (
 def make_observation(**overrides):
     values = dict(
         source_timestamp_ns=1_000_000_000,
+        source_clock_id="zed_f9p_gps_time_epoch_0",
         receive_monotonic_ns=5_000_000_000,
         latitude_deg=37.0,
         longitude_deg=-122.0,
@@ -218,6 +219,34 @@ class TestRtkQualityGate(unittest.TestCase):
         gate.evaluate(first, now_monotonic_ns=5_010_000_000)
         decision = gate.evaluate(second, now_monotonic_ns=5_110_000_000)
         self.assertEqual(decision.reason, RejectionReason.RECOVERING)
+
+
+    def test_receiver_clock_epoch_change_restarts_recovery(self):
+        self.evaluate(index=0)
+        observation = make_observation(
+            source_timestamp_ns=100,
+            source_clock_id="zed_f9p_after_reboot",
+            receive_monotonic_ns=5_100_000_000,
+        )
+        decision = self.gate.evaluate(observation, now_monotonic_ns=5_110_000_000)
+        self.assertEqual(decision.reason, RejectionReason.RECOVERING)
+        self.assertEqual(decision.consecutive_fixed_samples, 1)
+
+    def test_unknown_navsat_status_value_rejected(self):
+        decision = self.evaluate(navsat_status=99)
+        self.assertEqual(decision.reason, RejectionReason.GNSS_FIX_INVALID)
+
+    def test_diagonal_known_covariance_rejects_nonzero_off_diagonal(self):
+        values = (
+            0.01, 0.001, 0.0,
+            0.001, 0.01, 0.0,
+            0.0, 0.0, 0.04,
+        )
+        decision = self.evaluate(
+            covariance_type=CovarianceType.DIAGONAL_KNOWN,
+            position_covariance=values,
+        )
+        self.assertEqual(decision.reason, RejectionReason.COVARIANCE_INVALID)
 
 
 if __name__ == "__main__":

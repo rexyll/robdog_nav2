@@ -62,6 +62,7 @@ class GnssObservation:
     """
 
     source_timestamp_ns: int
+    source_clock_id: str
     receive_monotonic_ns: int
     latitude_deg: float
     longitude_deg: float
@@ -133,6 +134,7 @@ class QualityDecision:
 @dataclass(frozen=True)
 class _AcceptedReference:
     source_timestamp_ns: int
+    source_clock_id: str
     latitude_deg: float
     longitude_deg: float
     altitude_m: float
@@ -179,6 +181,13 @@ def _covariance_uncertainty(
         raise ArithmeticError("position covariance is degenerate")
 
     symmetry_tolerance = config.symmetry_relative_tolerance * max(scale, 1e-30)
+    if covariance_type == CovarianceType.DIAGONAL_KNOWN:
+        for row, column in ((0, 1), (0, 2), (1, 2)):
+            if max(abs(matrix[row][column]), abs(matrix[column][row])) > symmetry_tolerance:
+                raise ValueError("diagonal-known covariance must have zero off-diagonal entries")
+        matrix[0][1] = matrix[1][0] = 0.0
+        matrix[0][2] = matrix[2][0] = 0.0
+        matrix[1][2] = matrix[2][1] = 0.0
     for row, column in ((0, 1), (0, 2), (1, 2)):
         if abs(matrix[row][column] - matrix[column][row]) > symmetry_tolerance:
             raise ValueError("position covariance must be symmetric")
@@ -305,20 +314,29 @@ class RtkQualityGate:
             isinstance(observation.source_timestamp_ns, bool)
             or not isinstance(observation.source_timestamp_ns, int)
             or observation.source_timestamp_ns < 0
+            or not isinstance(observation.source_clock_id, str)
+            or not observation.source_clock_id.strip()
         ):
             return self._reject(RejectionReason.SOURCE_TIME_INVALID)
         if self._last_reference is not None:
-            if observation.source_timestamp_ns <= self._last_reference.source_timestamp_ns:
+            if observation.source_clock_id != self._last_reference.source_clock_id:
+                # A receiver reboot or clock-domain switch starts a new epoch.
+                # Never compare timestamps or jump distance across clock epochs.
+                self.reset()
+            elif observation.source_timestamp_ns <= self._last_reference.source_timestamp_ns:
                 return self._reject(RejectionReason.OUT_OF_ORDER, reset=False)
 
         if (
             not observation.gnss_fix_ok
             or isinstance(observation.navsat_status, bool)
             or not isinstance(observation.navsat_status, int)
-            or observation.navsat_status < 0
+            or observation.navsat_status not in (0, 1, 2)
         ):
             return self._reject(RejectionReason.GNSS_FIX_INVALID)
-        if observation.carrier_solution != CarrierSolution.FIXED:
+        if (
+            not isinstance(observation.carrier_solution, CarrierSolution)
+            or observation.carrier_solution != CarrierSolution.FIXED
+        ):
             return self._reject(RejectionReason.RTK_NOT_FIXED)
 
         if (
@@ -345,10 +363,12 @@ class RtkQualityGate:
         except PermissionError:
             return self._reject(RejectionReason.COVARIANCE_APPROXIMATED)
         except (TypeError, ValueError, ArithmeticError):
+            covariance_values = observation.position_covariance
             if (
-                len(observation.position_covariance) == 9
-                and all(_finite_number(value) for value in observation.position_covariance)
-                and max(abs(float(value)) for value in observation.position_covariance) == 0.0
+                isinstance(covariance_values, (tuple, list))
+                and len(covariance_values) == 9
+                and all(_finite_number(value) for value in covariance_values)
+                and max(abs(float(value)) for value in covariance_values) == 0.0
             ):
                 return self._reject(RejectionReason.COVARIANCE_DEGENERATE)
             return self._reject(RejectionReason.COVARIANCE_INVALID)
@@ -390,6 +410,7 @@ class RtkQualityGate:
 
         self._last_reference = _AcceptedReference(
             source_timestamp_ns=observation.source_timestamp_ns,
+            source_clock_id=observation.source_clock_id,
             latitude_deg=latitude,
             longitude_deg=longitude,
             altitude_m=altitude,

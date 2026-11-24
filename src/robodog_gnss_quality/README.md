@@ -10,7 +10,7 @@ This package implements the deterministic acceptance policy that must run before
 
 Each GnssObservation represents one already epoch-aligned measurement and includes:
 
-- receiver source timestamp (same receiver clock epoch for ordering);
+- receiver source timestamp and explicit source-clock epoch ID (receiver reboot/timebase change resets continuity);
 - host monotonic receive timestamp (freshness only);
 - NavSatFix latitude, longitude, altitude, status and 3x3 ENU position covariance;
 - covariance type;
@@ -25,7 +25,7 @@ The adapter must not infer RTK Fixed from NavSatStatus alone. ROS NavSatStatus r
 2. Require a fresh host receive timestamp and monotonic source epochs.
 3. Validate coordinate ranges and finite values.
 4. Require known covariance (diagonal-known or full-known by default); approximated covariance is disabled unless explicitly enabled.
-5. Validate covariance shape, finiteness, symmetry and positive semidefiniteness; reject zero/degenerate covariance rather than interpreting it as perfect accuracy.
+5. Validate covariance shape, finiteness, symmetry and positive semidefiniteness; reject zero/degenerate covariance rather than interpreting it as perfect accuracy. DIAGONAL_KNOWN requires zero off-diagonal entries.
 6. Enforce configured maximum horizontal and vertical standard deviation.
 7. Reject physically implausible 3D position jumps using a haversine horizontal distance plus altitude delta.
 8. Require a configurable number of consecutive acceptable Fixed epochs before declaring the stream qualified. A Float/invalid/stale sample resets recovery.
