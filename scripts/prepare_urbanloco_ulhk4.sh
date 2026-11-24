@@ -122,8 +122,10 @@ if [[ -f "${BAG_DIR}" ]]; then
     P2_SOURCE_GATE="blocked_standalone_db3_is_not_the_expected_ros1_source"
   fi
 elif [[ -f "${RAW_BAG}" ]]; then
-  DATASET_SOURCE_STATUS="expected_ros1_bag_present; verify exact source entry and provenance"
-  P2_SOURCE_GATE="raw_ros1_source_present_pending_identity_review"
+  DATASET_SOURCE_STATUS="expected_ros1_bag_present; user must verify official source entry"
+  if [[ "${URBANLOCO_ROS1_SOURCE_CONFIRMED:-0}" == "1" ]]; then
+    P2_SOURCE_GATE="ros1_source_provenance_confirmed"
+  fi
 fi
 
 cat > "${DATASET_DIR}/dataset_manifest.txt" <<EOF
@@ -150,7 +152,12 @@ ros2_bag_input_db3_sha256=${DB3_INPUT_SHA256}
 db3_checksum_file=${DB3_SUMS}
 EOF
 
-echo "UrbanLoco u l h k_4 bag is ready: ${BAG_DIR}"
+if [[ "${P2_SOURCE_GATE}" == "blocked_standalone_db3_is_not_the_expected_ros1_source" || "${P2_SOURCE_GATE}" == "blocked_pending_source_provenance" ]]; then
+  echo "DB3/rosbag storage diagnostics completed: ${BAG_DIR}"
+  echo "UrbanLoco original-source acquisition gate remains BLOCKED."
+else
+  echo "UrbanLoco source gate accepted by explicit user confirmation: ${BAG_DIR}"
+fi
 echo "Dataset provenance: ${DATASET_DIR}/dataset_manifest.txt"
 echo "Raw ROS 1 bag SHA256: ${RAW_SHA256}"
 echo "ROS 2 DB3 input size (bytes): ${DB3_INPUT_SIZE_BYTES}"
