@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.1
+- 文档版本：v0.3.2
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -115,6 +115,8 @@ Lite3 vendor motion SDK / gait controller
 - [TaskPlan_Part-01：系统架构与硬件设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
 - [TaskPlan_Part-02：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [ADR-0002：硬件平台选型](docs/decisions/ADR-0002-hardware-platform.md)
+- [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
+- [Lite3 厂商 SDK 集成评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 
 ### 阶段 A — 硬件基线与接口冻结（当前阶段）
@@ -210,6 +212,7 @@ Lite3 vendor motion SDK / gait controller
 - [x] 建立 robodog_lite3_bridge 只读软件骨架：隔离 mock odom/IMU/joint topics、DiagnosticArray topic freshness monitor、单元测试和双发行版 CI workflow 文件；Humble 与 Jazzy 构建和各 6 项测试均通过。
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
+- [x] 完成 Lite3 厂商 ROS 2 路线源码评估与 ADR-0003，明确 Foxy/Jazzy 不共享默认 DDS，且 new sdk_deploy 的 DRDDS status 不等于完整 Odometry。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 完成 Lite3 Legacy Lite3_ROS Foxy 与 current sdk_deploy 路线源码核验，发现两者消息/状态接口不同，并明确不能假设跨 Foxy/Jazzy DDS 互通。
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
@@ -230,11 +233,13 @@ Lite3 vendor motion SDK / gait controller
 - [ ] 未采购设备，未接收实物。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
+- [!] 当前 sdk_deploy 公开 DRDDS topics 与 Legacy Foxy standard topics 不一致；可信 legged odometry/body velocity 是否有正式输出、以及 Foxy motion host 与 Jazzy AGX host 的支持拓扑尚未得到厂商确认。
 - [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
 - [ ] RTK NTRIP 改正服务或基站尚未确定。
 - [ ] 载荷、供电、热设计、质心和续航未实测；已知器件功率/质量预算还不包含转换损耗、交换机和全部线束附件。初步预算仅包含部分设备规格，摄像头/镜头/交换机/支架/电源/线缆的实际质量与功耗仍需测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
+- [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
@@ -245,7 +250,7 @@ Lite3 vendor motion SDK / gait controller
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 检查 Humble/Jazzy CI，修复构建/测试错误；保留实际运行日志和 run link。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、legged odometry 和跨发行版网络拓扑的书面答复；然后再选择只读 gateway 实施方案。
+7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、可信 legged odometry 和跨发行版网络拓扑的书面答复；然后再实现只读 gateway POC。
 
 ---
 
@@ -265,7 +270,8 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2.8 | 将 CI 从易受 APT mirror 影响的裸机 setup-ros 安装切换到官方推荐的 Jammy/Noble 预制容器 + action-ros-ci | workflow: 2a218b84; run: 45326058355 |
 | 2026-11-24 | v0.2.9 | ROS 2 bridge mock 包在 Humble/Jammy 与 Jazzy/Noble 双矩阵均构建成功，每边 6/6 pytest 通过；新增初步上装质量/功耗预算，A4 标记部分完成 | CI run 45326058355; power/mass budget: bcaa2116 |
 | 2026-11-24 | v0.3.0 | 补充 JetPack 7.2.2 在 AGX Orin Developer Kit 上的安装路径细节；完善官方质量/功率证据和电源拓扑；更新双发行版 CI coverage 噪声处理 | ADR-0002: c60a263f; TaskPlan Part 1: 78546093; hardware checklist: 9e29d829; references: 3eed4ad5; workflow: b7dda179 |
-| 2026-11-24 | v0.3.1 | 核验 Lite3 Legacy Foxy 与 current sdk_deploy 两条 ROS 路线，确认消息接口不同、DRDDS state 不是完整 Odometry，且跨 Foxy/Jazzy DDS 不应默认互通；新增 vendor integration assessment/ADR-0003 并更新桥接架构 | assessment: eb1b08b8; ADR-0003: 61e997a7; bridge: b5ca4f50; workspace: 78635dc7; architecture: c7c3ca5e; sensor fusion: eddefafb; references: f98192cd; CI run: 45326457632 |
+| 2026-11-24 | v0.3.1 | 核验 Lite3 Legacy Foxy 与 current sdk_deploy 两条 ROS 路线，确认消息接口不同、DRDDS state 不是完整 Odometry，且跨 Foxy/Jazzy DDS 不应默认互通；新增 vendor integration assessment/ADR-0003 并更新桥接架构 | assessment: 0a0586c3; ADR-0003: 859390da; bridge: b5ca4f50; workspace: 78635dc7; architecture: c7c3ca5e; sensor fusion: eddefafb; references: f98192cd; CI run: 45326457632 |
+| 2026-11-24 | v0.3.2 | 修正根 TaskPlan 和 Part 1 的本体状态估计前提：可信 legged odometry 需由当前 SDK/固件确认；若缺失须评估 LiDAR odometry/SLAM 或 stereo VIO，不能使用 IMU-only 积分冒充 odom | Part 1: pending current commit; root: this commit |
 
 ---
 
