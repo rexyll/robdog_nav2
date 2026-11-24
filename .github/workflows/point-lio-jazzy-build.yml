@@ -1,0 +1,55 @@
+name: Point-LIO ROS 2 Jazzy Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "scripts/build_point_lio_jazzy.sh"
+      - ".github/workflows/point-lio-jazzy-build.yml"
+      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
+  pull_request:
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "scripts/build_point_lio_jazzy.sh"
+      - ".github/workflows/point-lio-jazzy-build.yml"
+      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
+  workflow_dispatch:
+
+jobs:
+  jazzy-x86-build:
+    name: Point-LIO / Livox - Jazzy / Ubuntu 24.04 x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    container:
+      image: ubuntu:noble
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Install ROS 2 Jazzy and build tools
+        uses: ros-tooling/setup-ros@v0.7.22
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Install native PCL/Eigen/SDK build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential cmake git curl libapr1-dev libeigen3-dev libpcl-dev
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+
+      - name: Prepare pinned Point-LIO source
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/prepare_point_lio_intel_ros2.sh "$RUNNER_TEMP/point_lio_poc_ws"
+
+      - name: Build SDK2, Livox ROS Driver2 and Point-LIO
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/build_point_lio_jazzy.sh "$RUNNER_TEMP/point_lio_poc_ws"
