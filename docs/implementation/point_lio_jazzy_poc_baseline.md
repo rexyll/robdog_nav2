@@ -184,8 +184,8 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] P2 第一版脚本/CLI 静态检查和 8 项解析/ENU/排序测试通过：run 45339580363。
 - [x] 增加 raw bag / DB3 SHA256 provenance、SQLite rosbag INSPVAX GT extraction integration tests 与 replay process-group cleanup 后，P2 语法/CLI/纯函数/SQLite integration 共 10 项测试通过：[run 45340287093](https://github.com/rexyll/robdog_nav2/actions/runs/45340287093)。
 - [x] 将 NovAtel 官方 INSPVAX.msg（固定 commit 0c0e135b...）与 Intel 固定 POC 的 `extract_ulhk_gt.py`（固定 commit decbb06...）列为 CDR offsets 的上游依据；source-link/注释更新后再次运行 [P2 CI 45341097202](https://github.com/rexyll/robdog_nav2/actions/runs/45341097202)，10/10 tests passed。
-- [x] P2 数据目录许可/忽略策略已写入 \`datasets/README.md\` 与 .gitignore。
-- [~] 用户提供 standalone `HK-Data20190117_0.db3`；topic/type 与 318 条 INSPVAX CDR 全量诊断通过，但它不是预期 ROS 1 原始 `HK-Data20190117.bag`，来源/转换链未证实，不能满足原始数据获取 Gate。
+- [~] 用户提供的 standalone DB3 核心 topic/type 与 318 条 INSPVAX CDR 诊断已通过；但未证明来源/转换链，不能计为原始 UrbanLoco ROS1 bag 获取完成。
+- [ ] 获取并记录官方 UrbanLoco `HK-Data20190117.bag` ROS1 原始文件（或提交可验证的来源/转换证据和 SHA256），再打开 P2 正式回放 Gate。
 - [~] 用户 standalone DB3 的 rosbag2 storage metadata、核心 topic/type、消息数、时长、时间戳和 INSPVAX CDR 诊断通过；但原始 ROS 1 bag 仍未取得/核实，不满足 P2 source acquisition Gate；摘要见 [DB3 存储文件诊断报告](../testing/urbanloco_ulhk4_dataset_audit.md)。
 - [ ] 完成 Point-LIO 全量 DB3/bag playback，保存 TUM estimate、logs、manifest；P2 runner 会检查 Intel `velodyne_urbanloco.yaml` 中 LiDAR/IMU topic 与输入参数一致，过滤播放仅包含这两路传感器。
 - [ ] 从 INSPVAX 提取 GT，核验 CDR offsets/时间基准，并完成 evo APE/RPE 与结果报告。
@@ -198,7 +198,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 上游子模块 commit、Intel reference commit 和三份 patch blob/commit 均已固定。
 - [x] Point-LIO upstream BSD-3-Clause、Intel patch repository Apache-2.0 的来源边界已记录。
 - [x] 固定源码准备脚本已创建并经 P0 GitHub Actions 实测成功。
-- [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
+- [~] Standalone DB3 storage audit/topic/type/INSPVAX CDR diagnostics passed locally; however, expected original ROS 1 `HK-Data20190117.bag` or a verified conversion chain is still missing. Formal P2 replay/evaluation is blocked. DB3 diagnostic and source-gate CI passed; Point-LIO full replay/GT/evo APE/RPE pending source gate.
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
 - [~] Standalone DB3 storage audit/topic/type/INSPVAX CDR diagnostics passed locally; however, the expected original ROS 1 `HK-Data20190117.bag` or a verified conversion chain is still missing. Formal P2 replay/evaluation is blocked. DB3 diagnostic support CI passed; Point-LIO full replay/GT/evo APE/RPE pending source gate.
 - [x] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建预验证通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Livox ROS Driver2、Point-LIO 编译/安装成功，两个 ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 后置检查全部通过。仅证明通用 aarch64 构建链可用，不代替 Jetson AGX Orin/JetPack 7.2.2 实机 build、CUDA/TensorRT、Jetson 内核、GPIO/硬件时间戳或 CPU/RAM/温度/功耗测试。
