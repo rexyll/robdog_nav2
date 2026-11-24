@@ -134,6 +134,7 @@ flowchart TB
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
+- [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
 - [初始 Lite3 bridge ROS 2 package](src/robodog_lite3_bridge/README.md)
 - [决策记录 ADR-0001](docs/decisions/ADR-0001-sensor-roles-and-localization.md)
 - [前序讨论归档](docs/discussion/2026-11-24-stereo-camera-discussion.md)
