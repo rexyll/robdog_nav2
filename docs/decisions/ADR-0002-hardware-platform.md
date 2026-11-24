@@ -125,7 +125,11 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 5. Lyrical 仅在 Jetson Orin Ubuntu 26.04 官方 BSP 和所有外设驱动可用后再评估；
 6. 不默认让不同 ROS distro 的节点共享一个 DDS domain；跨发行版时用 UDP/标准消息网关或独立网络域。
 
-## 5. 关键技术链路
+## 5. Lite3 ROS SDK 路线 Gate
+
+已核验 Legacy Lite3_ROS（Foxy 标准消息）与 current sdk_deploy（DRDDS 自定义消息）不是同一接口。sdk_deploy 的公开 RobotStatus 不等于完整 nav_msgs/Odometry；可信 legged odom/body velocity 是否可用必须由厂商确认。由于 motion host 当前使用 Foxy，Nav2 Jazzy 不默认与其共享 DDS。采用 vendor-compatible sidecar + 非 DDS gateway 的候选方案，详见 [ADR-0003](ADR-0003-lite3-ros-integration.md) 和 [SDK 路径评估](../implementation/lite3_vendor_sdk_integration_assessment.md)。
+
+## 6. 关键技术链路
 
 ### 定位
 
@@ -151,7 +155,7 @@ DEEP Robotics 的公开开发者文档将 Lite3 Venture 用作扩展感知平台
 
 Collision Monitor 是软件附加防护，必须另有物理急停和底层 watchdog。
 
-## 6. 载荷管理规则
+## 7. 载荷管理规则
 
 Venture 标称载荷 4.5 kg。项目提出 3.6 kg 为所有外置计算/传感器/支架/线缆/电源器件总质量的内部设计目标，以保留约 20% 余量。该目标不是厂商认证值。
 
@@ -165,7 +169,7 @@ Venture 标称载荷 4.5 kg。项目提出 3.6 kg 为所有外置计算/传感�
 
 如果整机外设质量超过 3.6 kg，先优化计算平台/载板、外壳和支架；任何情况下不得突破厂商载荷和重心限制。
 
-## 7. 采购前必须完成的 Gate
+## 8. 采购前必须完成的 Gate
 
 - [ ] DEEP Robotics 书面确认 Venture 电源额定、安装接口、载荷定义、SDK 版本和当前状态 topic。
 - [ ] 取得 AGX 安装支架 CAD 和 Venture 上盖孔位图。
@@ -176,7 +180,7 @@ Venture 标称载荷 4.5 kg。项目提出 3.6 kg 为所有外置计算/传感�
 - [ ] 验证 Humble 首轮镜像可构建并启动 Lite3 SDK bridge。
 - [ ] 确认物理急停/遥控停止和底层 command watchdog。
 
-## 8. 官方资料
+## 9. 官方资料
 
 - [DEEP Robotics Lite3 Product Page](https://www.deeprobotics.us/products/lite-3/)
 - [DEEP Robotics Lite3 Perception Algorithm Development Example](https://developer.deeprobotics.cn/docs/lite3/examples/sdk-dev/perception-algorithm-example/)
