@@ -1,5 +1,6 @@
 import unittest
 
+from audit_livox_rosbag_timing import summarize_offsets
 from livox_time_audit_helpers import (
     nearest_neighbor_deltas_ns,
     percentile,
@@ -75,6 +76,28 @@ class TestValueSummary(unittest.TestCase):
         self.assertEqual(result["min"], 1.0)
         self.assertEqual(result["max"], 4.0)
         self.assertEqual(result["p50"], 2.5)
+
+
+class TestOffsetSummary(unittest.TestCase):
+    def test_offset_summary_reports_ns_and_ms(self):
+        result = summarize_offsets(
+            [0, 1_000_000, 2_000_000, 1_500_000],
+            total_count=20,
+            order_violation_count=1,
+            negative_count=0,
+        )
+        self.assertEqual(result["total_point_count"], 20)
+        self.assertEqual(result["sampled_point_count"], 4)
+        self.assertEqual(result["within_frame_order_violation_count"], 1)
+        self.assertEqual(result["negative_offset_count"], 0)
+        self.assertEqual(result["offset_ns_sample"]["p50"], 1_250_000.0)
+        self.assertEqual(result["offset_ns_sample"]["p50_ms"], 1.25)
+        self.assertEqual(result["offset_ns_sample"]["max_ms"], 2.0)
+
+    def test_empty_offset_sample_is_valid(self):
+        result = summarize_offsets([], total_count=0, order_violation_count=0, negative_count=0)
+        self.assertEqual(result["sampled_point_count"], 0)
+        self.assertIsNone(result["offset_ns_sample"]["p50"])
 
 
 if __name__ == "__main__":
