@@ -7,6 +7,7 @@ from livox_time_audit_helpers import (
     stamp_to_ns,
     summarize_time_series,
     summarize_values,
+    validate_cli_thresholds,
 )
 
 
@@ -21,6 +22,58 @@ class TestPercentile(unittest.TestCase):
     def test_invalid_percentile_rejected(self):
         with self.assertRaises(ValueError):
             percentile([1, 2], 101)
+
+
+class TestCliThresholdValidation(unittest.TestCase):
+    def test_zero_and_unspecified_limits_are_valid(self):
+        validate_cli_thresholds(0, None)
+        validate_cli_thresholds(0, 0.0)
+
+    def test_negative_header_timebase_limit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            validate_cli_thresholds(-1, None)
+
+    def test_negative_nearest_sample_limit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "finite, non-negative"):
+            validate_cli_thresholds(0, -0.1)
+
+    def test_nan_nearest_sample_limit_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "finite, non-negative"):
+            validate_cli_thresholds(0, float("nan"))
+
+    def test_positive_infinity_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "finite, non-negative"):
+            validate_cli_thresholds(0, float("inf"))
+
+    def test_negative_infinity_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "finite, non-negative"):
+            validate_cli_thresholds(0, float("-inf"))
+
+
+class TestCliValidationBeforeBagOpen(unittest.TestCase):
+    def run_cli(self, *options):
+        script = (
+            __import__("pathlib").Path(__file__).resolve().parents[1]
+            / "audit_livox_rosbag_timing.py"
+        )
+        return __import__("subprocess").run(
+            [__import__("sys").executable, str(script), "/nonexistent/bag", *options],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_negative_header_limit_fails_before_bag_access(self):
+        result = self.run_cli("--max-header-timebase-delta-ns", "-1")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("max-header-timebase-delta-ns must be non-negative", result.stderr)
+        self.assertNotIn("Bag path does not exist", result.stderr)
+
+    def test_nan_p95_limit_fails_before_bag_access(self):
+        result = self.run_cli("--max-nearest-lidar-imu-p95-ms", "nan")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be a finite, non-negative number", result.stderr)
+        self.assertNotIn("Bag path does not exist", result.stderr)
 
 
 class TestTimestampConversion(unittest.TestCase):
