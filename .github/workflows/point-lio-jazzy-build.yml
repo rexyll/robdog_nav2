@@ -1,5 +1,9 @@
 name: Point-LIO ROS 2 Jazzy Build
 
+concurrency:
+  group: point-lio-jazzy-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -7,7 +11,6 @@ on:
       - "scripts/prepare_point_lio_intel_ros2.sh"
       - "scripts/build_point_lio_jazzy.sh"
       - ".github/workflows/point-lio-jazzy-build.yml"
-      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
   pull_request:
     paths:
       - "scripts/prepare_point_lio_intel_ros2.sh"
