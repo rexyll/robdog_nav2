@@ -184,15 +184,33 @@ def audit_ros1_bag(
                         else []
                     )
                     declared_count = getattr(message, "point_num", None)
+                    timebase_raw = getattr(message, "timebase", None)
                     sample.update(
                         {
-                            "timebase_raw": getattr(message, "timebase", None),
+                            "timebase_raw": timebase_raw,
+                            "timebase_unit": "ns",
                             "point_num_declared": (
                                 int(declared_count) if declared_count is not None else None
                             ),
                             "points_decoded": len(points) if points is not None else None,
+                            "point_num_matches_decoded_count": (
+                                int(declared_count) == len(points)
+                                if declared_count is not None and points is not None
+                                else None
+                            ),
                             "offset_time_raw_min": min(offsets) if offsets else None,
                             "offset_time_raw_max": max(offsets) if offsets else None,
+                            "offset_time_unit": "ns",
+                            "header_timebase_delta_ns": (
+                                header_stamp_ns - int(timebase_raw)
+                                if header_stamp_ns is not None and timebase_raw is not None
+                                else None
+                            ),
+                            "last_point_time_from_timebase_ns": (
+                                int(timebase_raw) + max(offsets)
+                                if timebase_raw is not None and offsets
+                                else None
+                            ),
                         }
                     )
                     if not hasattr(message, "timebase") or points is None:
@@ -287,8 +305,9 @@ def audit_ros1_bag(
             "This is a read-only structural audit, not an algorithm replay.",
             "Bag timestamps and header/timebase fields are reported separately; "
             "clock synchronization is not inferred.",
-            "Raw Livox offset_time values are reported without assigning a unit "
-            "until the message definition and driver semantics are verified.",
+            "The M3DGR-pinned Livox ROS1 driver source defines offset_time and packet_offset_time in ns; "
+            "timebase is the first-packet timestamp and header.stamp is derived from timebase/1e9. "
+            "This does not establish whether the recorded device clock used PTP/PPS or was synchronized.",
             "A topic/type match does not verify ground-truth correctness or data license.",
         ],
     }
