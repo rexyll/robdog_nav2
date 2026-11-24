@@ -250,15 +250,17 @@ map
 ### 4.2 Local EKF
 
 输入：
-- Lite3 `/leg_odom2` 或经验证的腿式 odom；
-- `/imu/data`；
+- **只有在厂商确认的可信腿式 odometry/body velocity 输出**；Legacy `/leg_odom2` 必须先修正/审计 steady-clock 时间戳、child_frame_id 和 covariance；
+- 经轴向、单位、source timestamp 和 covariance 核验的厂商 IMU；
 - 若可获得，接触状态/足端速度/滑移置信度。
+
+若 current sdk_deploy 只提供 DRDDS IMU/joints/RobotStatus 而不提供可信 odometry，则先评估 LiDAR odometry/SLAM 或 stereo VIO，不能以 IMU-only 积分构造可信位置。
 
 输出：
 - `/odometry/filtered/local`；
 - `odom → base_link`。
 
-先确认厂商腿式 odometry 是否已在内部融合 IMU，避免把强相关数据错误地当成两个独立传感器重复融合。需要实际检查 covariance、坐标系、时间戳和静止/走动/转弯表现。
+先确认厂商是否提供腿式 odometry、该估计是否内部融合 IMU，以及其 covariance 和时钟；避免将强相关数据作为独立传感器重复融合。需要实际检查 covariance、坐标系、时间戳和静止/走动/转弯表现。
 
 ### 4.3 RTK 与 Global EKF
 
@@ -269,7 +271,7 @@ map
 4. Global EKF 融合 local odom 与经门控 GNSS，发布 `map → odom`；
 5. Nav2 global costmap/航点使用 map，local costmap 通常使用 odom。
 
-单天线 GNSS 不提供静止机身航向；第一阶段采用 Lite3 IMU/腿式状态估计的 yaw。若实测航向不满足要求，再评估双天线 heading。
+单天线 GNSS 不提供静止机身航向；第一阶段优先采用经核验的 Lite3 IMU/可用本体状态估计的 yaw；如果厂商 IMU 只提供 Euler 角或时间戳/协方差不满足要求，需评估外置航向源或双天线 GNSS。若实测航向不满足要求，再评估双天线 heading。
 
 ### 4.4 时间同步
 
