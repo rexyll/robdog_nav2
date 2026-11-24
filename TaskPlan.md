@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.3
+- 文档版本：v0.3.4
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -116,6 +116,8 @@ Lite3 vendor motion SDK / gait controller
 - [TaskPlan_Part-02：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [ADR-0002：硬件平台选型](docs/decisions/ADR-0002-hardware-platform.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
+- [ADR-0004：本体 odometry 缺失时的 LIO/VIO 备用方案](docs/decisions/ADR-0004-local-odometry-fallback.md)
+- [Odometry fallback strategy](docs/implementation/odometry_fallback_strategy.md)
 - [Lite3 厂商 SDK 集成评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
@@ -215,6 +217,8 @@ Lite3 vendor motion SDK / gait controller
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 完成 Lite3 厂商 ROS 2 路线源码评估与 ADR-0003，明确 Foxy/Jazzy 不共享默认 DDS，且 new sdk_deploy 的 DRDDS status 不等于完整 Odometry。
+- [x] 建立 odometry fallback strategy 和 ADR-0004，将 Point-LIO 作为缺失厂商 odometry 时的首选备用 POC，并记录 FAST-LIO2/FAST-LIVO2 许可和验证边界。
+- [x] 设计本体 odometry 缺失时的备用路线：Point-LIO + MID-360 内置 IMU 首选 POC，FAST-LIO2 对照，Stereo VIO/FAST-LIVO2 暂缓；尚未在 Orin/MID-360 上实测。
 - [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 完成 Lite3 Legacy Lite3_ROS Foxy 与 current sdk_deploy 路线源码核验，发现两者消息/状态接口不同，并明确不能假设跨 Foxy/Jazzy DDS 互通。
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
@@ -275,6 +279,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.3.1 | 核验 Lite3 Legacy Foxy 与 current sdk_deploy 两条 ROS 路线，确认消息接口不同、DRDDS state 不是完整 Odometry，且跨 Foxy/Jazzy DDS 不应默认互通；新增 vendor integration assessment/ADR-0003 并更新桥接架构 | assessment: 0a0586c3; ADR-0003: 859390da; bridge: b5ca4f50; workspace: 78635dc7; architecture: c7c3ca5e; sensor fusion: eddefafb; references: f98192cd; CI run: 45326457632 |
 | 2026-11-24 | v0.3.2 | 修正根 TaskPlan 和 Part 1 的本体状态估计前提：可信 legged odometry 需由当前 SDK/固件确认；若缺失须评估 LiDAR odometry/SLAM 或 stereo VIO，不能使用 IMU-only 积分冒充 odom | Part 1: 63bc92fb; root: 7f935a36 |
 | 2026-11-24 | v0.3.3 | 建立 Lite3 Venture 供应商技术确认矩阵，将 A13 的 SDK/里程计/ROS distro/安全状态机/电源/载荷/网络时间同步问题整理成逐项证据清单 | vendor confirmation matrix: 68b7d857 |
+| 2026-11-24 | v0.3.4 | 增加本体 odometry 缺失时的 LIO/VIO 备用设计：Point-LIO/MID-360 内置 IMU 首选 POC，FAST-LIO2 对照，Stereo VIO/FAST-LIVO2 后续评估；尚未实机验证 | odometry strategy: 55aa45a5; ADR-0004: e165237e |
 
 ---
 
