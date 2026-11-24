@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.57
+- 文档版本：v0.3.58
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -101,7 +101,7 @@
 - [~] B11. Point-LIO P0/P1 与 P3a ARM64 build 已通过；UrbanLoco `HK-Data20190117_0.db3` 仅完成 rosbag2/topic/318 条 INSPVAX CDR 诊断，来源不明，不能代替指定 ROS1 原始 bag。UrbanLoco P2 replay/evo 仍被 provenance gate 阻塞（CI [45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success），但不再作为整个项目唯一数据入口；并行替代基准转入 B13。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 - [~] B13. 已核查 GrandTour/QuadSLAM/M3DGR 替代基准；Dynamic03 原始 ROS1 bag（3,434,689,371 bytes）官方 SHA256 匹配，且用户真实只读审计已通过（`structural_inputs_present`、issues=0）：210,956 条消息、284.538 s；MID-360 LiDAR 2,846 条/约 10 Hz，实际类型为 `livox_ros_driver2/msg/CustomMsg`；MID-360 IMU 56,903 条/约 200 Hz；两个必需 topic 均无重复/倒退 bag timestamp，LiDAR/IMU 抽样解码通过。独立 GT 已上传 `temp/Dynamic03.txt`，但存在 1,675 个重复 timestamp 和 728 个倒退 timestamp；异常仅出现在相邻位姿相同的行间，不能擅自删行/排序。GT 时钟/坐标/导出语义未确认，APE/RPE 阻塞。详情见 [替代数据集策略 §6](docs/datasets/alternative_dataset_strategy.md)。
-- [~] B14. 已实现 bag/TUM 只读审计和受控 ROS1 bag→ROS2 rosbag2 转换。根据真实 Dynamic03 连接类型，转换器现在同时允许旧 `livox_ros_driver/msg/CustomMsg` 与本 bag 实际的 `livox_ros_driver2/msg/CustomMsg`，目标统一为 Jazzy Driver2 CDR 类型；manifest 记录真实源类型。增加 Driver2 namespace 合成转换回读回归测试；原 bag SHA256 + 同文件 audit JSON 仍为双门禁，只转换 MID-360 LiDAR/IMU、保留 bag timestamp、不覆盖源文件；header/timebase 1 μs 限制仅为旧驱动舍入保护，不代表同步精度。此前 CI [45418493538](https://github.com/rexyll/robdog_nav2/actions/runs/45418493538) 覆盖 converter 4/4；本次新增测试后的最新 CI 待确认。真实 bag 尚未转换/回放。GT 的 TUM parser 能解析列格式，但严格时间顺序 Gate 被 1,675 duplicate + 728 backwards 阻塞；不得排序/去重后直接作为 GT。
+- [~] B14. 已实现 bag/TUM 只读审计和受控 ROS1 bag→ROS2 rosbag2 转换。转换器允许旧 `livox_ros_driver/msg/CustomMsg` 与真实 Dynamic03 的 `livox_ros_driver2/msg/CustomMsg`，manifest 记录实际源类型；原 bag SHA256 + 同文件 audit JSON 双门禁，只转换 MID-360 LiDAR/IMU、保留 bag timestamp、不覆盖源文件。新增 TUM `pose_repetition` 报告字段，区分相邻相同位姿对、重复/倒退 timestamp 发生时位姿是否改变。最新 CI [45424213139](https://github.com/rexyll/robdog_nav2/actions/runs/45424213139) success：bag 5/5、TUM 8/8、转换合成回读 5/5、UrbanLoco 13/13。均为 Python/合成 fixture CI；真实 bag 转换、rosbag2 playback、Point-LIO replay/evo 尚未完成。GT 时间顺序 Gate 仍被 1,675 duplicate + 728 backwards timestamp 阻塞，不得排序/去重后直接作为 GT。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -223,7 +223,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。Dynamic03 原始 bag SHA256 与真实结构 audit 均已通过。拉取本次转换器更新且等待最新 CI success 后，运行 `python scripts/convert_m3dgr_dynamic03_to_ros2.py "$HOME/Downloads/Dynamic03.bag" datasets/m3dgr_dynamic03_audit.json datasets/m3dgr_dynamic03_lio_ros2`，再用 `ros2 bag info` 对照原 audit/manifest 核对消息类型、计数和时间范围；该版本接受实际源类型 `livox_ros_driver2/msg/CustomMsg`。GT 已在仓库 `temp/Dynamic03.txt`：运行 `python scripts/audit_tum_trajectory.py temp/Dynamic03.txt --json-out datasets/m3dgr_dynamic03_gt_audit.json` 应因 1,675 个重复和 728 个倒退 timestamp 返回 `blocked_review_required`（退出码 10）；不要排序、去重或改写原件。先核实 GT 原始来源/导出工具/重复行时间语义，并与 bag 中 GNSS/其他参考轨迹作只读时钟核查；确认时钟与空间 frame 后才运行 evo APE/RPE。GT Gate 关闭前不启动 Point-LIO 精度评测；UrbanLoco P2 继续独立保持 provenance gate。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。Dynamic03 原始 bag SHA256 与真实结构 audit 均已通过。最新转换器/审计脚本 CI 已成功（run 45424213139）；本地先 `git pull --ff-only origin main`，激活 `.venv-dataset-tools`，再运行：`python scripts/convert_m3dgr_dynamic03_to_ros2.py "$HOME/Downloads/Dynamic03.bag" datasets/m3dgr_dynamic03_audit.json datasets/m3dgr_dynamic03_lio_ros2`。之后执行 `ros2 bag info datasets/m3dgr_dynamic03_lio_ros2`，核对 MID-360 LiDAR 类型、IMU 类型、消息数和时间范围与 audit/manifest 一致。GT 已在仓库 `temp/Dynamic03.txt`：运行 `python scripts/audit_tum_trajectory.py temp/Dynamic03.txt --json-out datasets/m3dgr_dynamic03_gt_audit.json` 应输出 1,675 duplicate + 728 backwards、2,847 adjacent identical-pose pairs、timestamp anomaly pose-change pairs=0，并返回 `blocked_review_required`（退出码 10）；不要排序、去重或改写原件。需核实 GT 原始下载完整性、作者 TF→TUM 导出工具和三重记录语义，并与 bag 中 GNSS/其他参考轨迹只读比对；确认 clock 和 frame convention 后才运行 evo APE/RPE。GT Gate 关闭前不进行 Point-LIO 精度评测；UrbanLoco P2 继续独立保持 provenance gate.
 
 ---
 
@@ -235,7 +235,8 @@
 |---|---|---|---|
 | 2026-11-24 | v0.3.55 | 新增 TUM GT 只读审计及 7 项测试；固定 M3DGR Livox ROS1 `offset_time`=ns/timebase/header 语义来源；确认 ROS1 `livox_ros_driver/CustomMsg` 与 Jazzy Point-LIO `livox_ros_driver2/msg/CustomMsg` 类型不同，记入显式类型映射/重序列化门禁；bag 5/5、GT 7/7、UrbanLoco 13/13 CI [45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success | TUM audit 0f42bcc5d1a5be5664696957fd187c1f7045b5d3; tests 0627d2afd732b5849c1e3e660a67550fdfc8bdb5 / 59b84dba906e744b1f049ab918537671ee63af94; Livox audit 23c334be6377bf19ead94f39d636a876cd98c819; docs f3ef67656deb932633957c7b13c825ba4ba381cb / cc107912a11d4bb46379555870012ac54f95dee2; CI 45416922661 |
 | 2026-11-24 | v0.3.56 | 新增 M3DGR Dynamic03 受控 ROS1→ROS2 转换器：官方 SHA256 + matching audit JSON 双门禁；合成转换/回读 4/4；真实 bag/GT 尚待审计 | converter/test/docs/CI commits ... | 
-| 2026-11-24 | v0.3.57 | 真实 Dynamic03 bag audit 通过：MID-360 Driver2 类型、LiDAR/IMU 10/200 Hz；转换器加入 Driver2 source type + 专项回读测试；GT 文件 4,269 行 TUM 语法但存在 1,675 duplicate/728 backwards timestamps，暂阻断 evo；未转换/回放 | converter 97e9211ace2c83dce6ca1cc1f357a307a0669f73; tests b36e365a6ccb9c17c3aad7be07f049ba41a6758b; docs 96fabf895242f75a39c3e3393542d6d7bd41e771; CI pending |
+| 2026-11-24 | v0.3.57 | 真实 Dynamic03 bag audit 通过，发现 MID-360 Driver2 类型；GT 4,269 行 TUM 格式但有 1,675 duplicate/728 backwards，阻断 evo | converter 97e9211ace2c83dce6ca1cc1f357a307a0669f73; tests b36e365a6ccb9c17c3aad7be07f049ba41a6758b; docs 96fabf895242f75a39c3e3393542d6d7bd41e771; CI 45423779787 |
+| 2026-11-24 | v0.3.58 | TUM audit 新增位姿相等性与时间戳异常关联统计；Driver2 converter regression + TUM pose-anomaly regression 均通过，CI [45424213139](https://github.com/rexyll/robdog_nav2/actions/runs/45424213139) success（bag 5/5、TUM 8/8、转换 5/5、UrbanLoco 13/13）。真实 bag 尚未转换/回放，GT 仍需来源/时间语义核验 | TUM audit 9b67ed712d4618f0551315921313bca6d65154ea; tests e6f0a4fdef2fc3aa4bd53a7a448ad7ff58262771; docs 3a66a48e14b35369f76c0f4a0d382096617685a1; CI 45424213139 |
 
 ---
 
