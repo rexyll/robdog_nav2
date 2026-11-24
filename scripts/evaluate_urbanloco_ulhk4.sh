@@ -16,14 +16,14 @@ if [[ ! -s "${EST_FILE}" ]]; then
   echo "Missing estimated trajectory ${EST_FILE}; run scripts/run_urbanloco_ulhk4.sh first." >&2
   exit 2
 fi
-if [[ ! -d "${BAG_DIR}" ]]; then
-  echo "Missing converted rosbag2 ${BAG_DIR}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
+if [[ ! -d "${BAG_DIR}" && ! -f "${BAG_DIR}" ]]; then
+  echo "Missing rosbag2 input ${BAG_DIR}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
   exit 3
 fi
 
 mkdir -p "${RESULTS_DIR}"
 python3 "${SCRIPT_DIR}/extract_urbanloco_ulhk4_gt.py" \
-  --bag-dir "${BAG_DIR}" --topic "${GT_TOPIC}" --out "${GT_FILE}"
+  --bag-path "${BAG_DIR}" --topic "${GT_TOPIC}" --out "${GT_FILE}"
 
 if ! command -v evo_ape >/dev/null 2>&1; then
   python3 -m pip install --user --break-system-packages evo
