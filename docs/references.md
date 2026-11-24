@@ -88,3 +88,15 @@
 
 23. [NVIDIA Jetson Linux Archive](https://developer.nvidia.com/embedded/jetson-linux-archive)  
     官方 Jetson Linux 39.x 版本表列出 AGX Orin / Orin NX / Orin Nano 支持情况。
+
+
+## 2026-11-24 多传感器同步补充资料
+
+24. [DEEP Robotics Lite3 — Perception Algorithm Development Example](https://developer.deeprobotics.cn/docs/lite3/examples/sdk-dev/perception-algorithm-example/)  
+    Lite3 Venture 扩展感知示例使用 MID-360/MID-360s + IMU + RealSense + FAST-LIVO2；说明了特定 Mid-360s/相机组合的时钟偏移校正、软同步方案和同步失败风险。本项目只借鉴“区分时钟域并实测”的原则，不复制该示例对 RealSense 或 Mid-360s 的专有偏移常数。
+
+25. [e-con Systems See3CAM_50CUG product specifications](https://www.e-consystems.com/sony-imx264-camera.asp)  
+    彩色无镜头 SKU、外部 Trigger、Strobe、GPIO 接口和 UVC/USB 产品信息。触发电压、脉宽、边沿与双机同步时序必须以手册/供应商回复为准。
+
+26. [Livox MID-360 specifications](https://www.livoxtech.com/mid-360/specs)  
+    MID-360 外部数据端口为 100BASE-TX Ethernet，支持 IEEE 1588-2008 PTPv2/GPS 时间同步；内置 ICM40609 IMU。产品规格不能证明该 IMU 与所有驱动时间戳自动同步。
