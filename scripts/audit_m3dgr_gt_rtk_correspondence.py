@@ -8,6 +8,7 @@ A low rigid-fit residual is only correspondence evidence, not GT certification.
 from __future__ import annotations
 
 import argparse
+from dataclasses import fields, is_dataclass
 import hashlib
 import json
 import math
@@ -19,6 +20,10 @@ import numpy as np
 
 
 DEFAULT_RTK_TOPIC = "/mavros/global_position/raw/fix"
+RELATED_GNSS_TOPICS = (
+    "/ublox_driver/receiver_lla",
+    "/ublox_driver/receiver_pvt",
+)
 WGS84_A = 6_378_137.0
 WGS84_E2 = 6.69437999014e-3
 
@@ -230,6 +235,134 @@ def rigid_trajectory_correspondence(
     }
 
 
+def message_snapshot(value: Any, *, max_items: int = 32, depth: int = 5) -> Any:
+    """Convert a rosbags message into bounded JSON-safe diagnostic data."""
+    if depth < 0:
+        return "<max-depth>"
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else str(value)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return {"type": type(value).__name__, "length": len(value)}
+    if is_dataclass(value):
+        return {
+            field.name: message_snapshot(getattr(value, field.name), max_items=max_items, depth=depth - 1)
+            for field in fields(value)
+        }
+    if isinstance(value, dict):
+        return {
+            str(key): message_snapshot(item, max_items=max_items, depth=depth - 1)
+            for key, item in list(value.items())[:max_items]
+        }
+    if isinstance(value, (list, tuple, np.ndarray)):
+        items = list(value)
+        return {
+            "length": len(items),
+            "items": [
+                message_snapshot(item, max_items=max_items, depth=depth - 1)
+                for item in items[:max_items]
+            ],
+            "truncated": len(items) > max_items,
+        }
+    if hasattr(value, "__slots__"):
+        names = [name for name in value.__slots__ if isinstance(name, str)]
+        return {
+            name: message_snapshot(getattr(value, name), max_items=max_items, depth=depth - 1)
+            for name in names if hasattr(value, name)
+        }
+    return str(value)
+
+
+def extract_header_ns(message: Any) -> int | None:
+    return stamp_to_ns(message)
+
+
+def summarize_navsatfix_metadata(messages: list[Any]) -> dict[str, Any]:
+    frames: dict[str, int] = {}
+    services: dict[str, int] = {}
+    covariance_diagonal: list[list[float]] = []
+    covariance_off_diagonal_max: list[float] = []
+    covariance_finite_count = 0
+    for message in messages:
+        frame = str(getattr(getattr(message, "header", None), "frame_id", ""))
+        frames[frame] = frames.get(frame, 0) + 1
+        status = getattr(message, "status", None)
+        service = int(getattr(status, "service", 0))
+        services[str(service)] = services.get(str(service), 0) + 1
+        covariance = np.asarray(getattr(message, "position_covariance", []), dtype=np.float64)
+        if covariance.size == 9 and np.all(np.isfinite(covariance)):
+            covariance_finite_count += 1
+            matrix = covariance.reshape(3, 3)
+            covariance_diagonal.append(np.diag(matrix).tolist())
+            covariance_off_diagonal_max.append(float(np.max(np.abs(matrix - np.diag(np.diag(matrix))))))
+    diagonal_array = np.asarray(covariance_diagonal, dtype=np.float64)
+    return {
+        "frame_id_distribution": frames,
+        "service_bitfield_distribution": services,
+        "covariance_finite_matrix_count": covariance_finite_count,
+        "covariance_diagonal_m2": {
+            "east": {"min": float(np.min(diagonal_array[:, 0])), "median": float(np.median(diagonal_array[:, 0])), "max": float(np.max(diagonal_array[:, 0]))},
+            "north": {"min": float(np.min(diagonal_array[:, 1])), "median": float(np.median(diagonal_array[:, 1])), "max": float(np.max(diagonal_array[:, 1]))},
+            "up": {"min": float(np.min(diagonal_array[:, 2])), "median": float(np.median(diagonal_array[:, 2])), "max": float(np.max(diagonal_array[:, 2]))},
+        } if len(diagonal_array) else None,
+        "covariance_max_abs_off_diagonal_m2": {
+            "min": float(np.min(covariance_off_diagonal_max)),
+            "median": float(np.median(covariance_off_diagonal_max)),
+            "max": float(np.max(covariance_off_diagonal_max)),
+        } if covariance_off_diagonal_max else None,
+    }
+
+
+def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str, Any]:
+    """Summarize additional GNSS streams without assuming their receiver identity."""
+    result: dict[str, Any] = {}
+    for topic in topics:
+        connections = [connection for connection in reader.connections if connection.topic == topic]
+        if not connections:
+            result[topic] = {"status": "topic_absent"}
+            continue
+        types = sorted({str(connection.msgtype) for connection in connections})
+        count = 0
+        bag_times: list[int] = []
+        header_times: list[int] = []
+        first_sample: Any = None
+        last_sample: Any = None
+        field_names: list[str] = []
+        for connection, bag_timestamp_ns, rawdata in reader.messages(connections=connections):
+            message = reader.deserialize(rawdata, connection.msgtype)
+            count += 1
+            bag_times.append(int(bag_timestamp_ns))
+            header_ns = extract_header_ns(message)
+            if header_ns is not None:
+                header_times.append(header_ns)
+            if first_sample is None:
+                first_sample = message_snapshot(message)
+                if is_dataclass(message):
+                    field_names = [field.name for field in fields(message)]
+                elif hasattr(message, "__slots__"):
+                    field_names = [name for name in message.__slots__ if isinstance(name, str)]
+            last_sample = message_snapshot(message)
+        result[topic] = {
+            "status": "audited",
+            "message_types": types,
+            "count": count,
+            "bag_record_timestamp_order": timestamp_order_stats(bag_times),
+            "header_timestamp_order": timestamp_order_stats(header_times) if len(header_times) == count else {
+                "status": "not_available_for_all_messages",
+                "messages_with_header_stamp": len(header_times),
+            },
+            "top_level_fields": field_names,
+            "first_message_sample": first_sample,
+            "last_message_sample": last_sample,
+            "limitations": [
+                "Field snapshots are diagnostic samples, not receiver identity or RTK quality certification.",
+                "No cross-topic nearest-time pairing is performed.",
+            ],
+        }
+    return result
+
+
 def audit_gt_rtk_correspondence(
     bag_path: Path,
     tum_path: Path,
@@ -259,6 +392,7 @@ def audit_gt_rtk_correspondence(
     altitudes: list[float] = []
     statuses: list[int] = []
     covariance_types: list[int] = []
+    navsat_messages: list[Any] = []
     types: set[str] = set()
 
     with AnyReader([bag_path]) as reader:
@@ -283,6 +417,7 @@ def audit_gt_rtk_correspondence(
             altitudes.append(float(message.altitude))
             statuses.append(int(message.status.status))
             covariance_types.append(int(message.position_covariance_type))
+            navsat_messages.append(message)
 
     if len(set(len(value) for value in (
         fix_bag_times, fix_header_times, latitudes, longitudes, altitudes, statuses,
@@ -315,6 +450,8 @@ def audit_gt_rtk_correspondence(
         "rtk_covariance_type_distribution": {
             str(value): covariance_types.count(value) for value in sorted(set(covariance_types))
         },
+        "rtk_navsatfix_metadata": summarize_navsatfix_metadata(navsat_messages),
+        "related_gnss_topics": audit_related_gnss_topics(reader, RELATED_GNSS_TOPICS),
         "limitations": [
             "This compares GT and NavSatFix records in their stored sequence order; it does not reorder or deduplicate either stream.",
             "A row-count match or timestamp match is source-association evidence, not proof that the RTK solution is ground truth.",
