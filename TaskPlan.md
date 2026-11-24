@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.44
+- 文档版本：v0.3.45
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,7 +98,7 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256、dataset manifest、SQLite GT extraction integration 与进程组清理已加入；P2 CI 45340287093、45341097202 均 10/10 tests 通过，INSPVAX offsets 与 NovAtel 官方 msg commit 0c0e135b... 及 Intel 固定脚本 commit decbb06... 交叉核验。**待用户手动获取的唯一指定序列是 `HK-Data20190117`（`ulhk_4`）；官方元数据为 6.11 GB，Dropbox/Baidu 是多序列共享目录，不能用其他 24–62 GB 序列替代。** 本地期望 ROS1 文件名为 `datasets/ulhk_4/HK-Data20190117.bag`；若镜像中看不到该条目或文件名称/格式不同，先核对目录清单，不要下载/改名猜测。P3a 通用原生 ARM64 Ubuntu 24.04/Jazzy 已通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Driver2、Point-LIO 两包编译/安装成功，ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 检查通过。该结果只证明 generic aarch64 build，不等同 Jetson AGX Orin/JetPack 7.2.2 实机验收。B11 保持部分完成，直到实际 bag playback/evo 与目标设备验证完成。
+- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256、dataset manifest、SQLite GT extraction integration 与进程组清理已加入；P2 CI 45340287093、45341097202 均 10/10 tests 通过，INSPVAX offsets 与 NovAtel 官方 msg commit 0c0e135b... 及 Intel 固定脚本 commit decbb06... 交叉核验。**用户已提供 `HK-Data20190117_0.db3`（5.4 GiB，321.55 s，41,817 条消息）；话题签名包含 `/velodyne_points_0` PointCloud2（3,178）、`/imu/data` Imu（31,808）、`/novatel_data/inspvax` INSPVAX（318），与 ulhk_4 P2 所需三条核心 topic/type 一致，序列身份仍需 checksum/来源记录确认。** 该文件是 standalone ROS 2 SQLite3 DB3，不是 ROS1 原始 .bag；P2 prepare/replay/GT 脚本已扩展为直接接受 DB3 路径，不需重命名或复制。用户首次全量 play 日志在约 56 s 后停止，短于 321.55 s，完整播放尚未确认；回放脚本仅播放 LiDAR+IMU。P3a 通用原生 ARM64 Ubuntu 24.04/Jazzy 已通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Driver2、Point-LIO 两包编译/安装成功，ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 检查通过。该结果只证明 generic aarch64 build，不等同 Jetson AGX Orin/JetPack 7.2.2 实机验收。B11 保持部分完成，直到实际 bag playback/evo 与目标设备验证完成。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
@@ -221,7 +221,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。下一步需要用户手动获取唯一指定的 UrbanLoco 香港序列 `HK-Data20190117`（`ulhk_4`，官方标注 6.11 GB，CC BY-NC-SA 4.0），而不是同一共享目录中其他 24–62 GB 的序列。Dropbox/Baidu 是多序列共享目录；若目录中看不到准确的 `HK-Data20190117` 条目，请先发目录文件名/大小截图核对，不要下载其他文件。经确认的 ROS1 bag 保存为 `datasets/ulhk_4/HK-Data20190117.bag`，不要提交 Git。下载完成后通知我，再运行 `scripts/prepare_urbanloco_ulhk4.sh`、`scripts/run_urbanloco_ulhk4.sh`、`scripts/evaluate_urbanloco_ulhk4.sh`；之后再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。下一步需要用户手动获取唯一指定的 UrbanLoco 香港序列 `HK-Data20190117`（`ulhk_4`，官方标注 6.11 GB，CC BY-NC-SA 4.0），而不是同一共享目录中其他 24–62 GB 的序列。Dropbox/Baidu 是多序列共享目录；若目录中看不到准确的 `HK-Data20190117` 条目，请先发目录文件名/大小截图核对，不要下载其他文件。用户已下载 standalone DB3：使用 `URBANLOCO_ROS2_BAG=~/Downloads/HK-Data20190117_0.db3 bash scripts/prepare_urbanloco_ulhk4.sh` 进行只读签名/INSPVAX payload 审计并保存 SHA256，然后执行 `scripts/run_urbanloco_ulhk4.sh` 与 `scripts/evaluate_urbanloco_ulhk4.sh`；全量回放/GT/evo 未通过前不得宣称 P2 通过。之后再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
 
 ---
 
@@ -238,6 +238,7 @@
 | 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 | 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
 | 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
+| 2026-11-24 | v0.3.45 | 支持用户已下载的 standalone `HK-Data20190117_0.db3`：prepare/Point-LIO replay/INSPVAX extractor 接受单 DB3 或 rosbag2 目录；新增核心 topic/type 与全量 INSPVAX CDR payload 审计；Point-LIO 回放过滤为 Velodyne+IMU，尚待本地运行与 evo 结果 | 用户提供 ros2 bag info；scripts audit and direct-file regression tests; P2 CI pending |
 | 2026-11-24 | v0.3.44 | 增加 u-blox 四路 UBX 有界 iTOW joiner：乱序/重复/冲突/超时/容量淘汰/迟到回调/显式 generation reset 处理，加入 retired tombstone 和 monotonic watermark；Humble/Jazzy 各 73/73 passed；driver CI Humble/Jazzy build/install/interface success | joiner bfadde73732a1b7fe30f3b78ef29a9d61eb65573 / f2065ca8664acffde50d86b224fe43019c5e363f / 3f95a0f4761f19d486210f0ac8a7bee20a745b9e / 04f47489231cf86c1904cf097d4e3266b4e871ab; tests 23a5ee0965c0ebec249290353ea39b04f6a360d4 / fde1539daa92299999baaaf6ed7a3f35b4928c8f / 746863c6bde8ad8da9bf6103dffc2352f77fa00e / f8b148402bc0103b2648bb819ba53ec211486ee5; docs 30f174fae4eca80b5355f236d282d48c681b67bc / 23809a3895268760a964a2e6df5e2c22dd702244; GNSS CI 45389178931; u-blox driver CI 45388253243 |
 
 ---
