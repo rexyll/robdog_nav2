@@ -69,8 +69,9 @@ jobs:
       - name: Resolve ROS 2 Jazzy dependencies
         shell: bash
         run: |
-          set -euxo pipefail
+          set -eox pipefail
           source /opt/ros/jazzy/setup.bash
+          set -u
           sudo rosdep init 2>/dev/null || true
           rosdep update
           # The native dependency step clears apt lists to keep the runner lean.
