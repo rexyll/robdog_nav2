@@ -1,12 +1,12 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.2.1
+- 文档版本：v0.2.3
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
 - 项目目标：以四足机器人为载体，使用 **LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS**，结合机器狗原生 IMU/腿式里程计，构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性能力。
 - **本体技术预选：DEEP Robotics Lite3 Venture**（未采购，待供应商确认）。
-- **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG Color；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
+- **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前阶段：**阶段 A — 硬件基线与接口冻结**
 - 当前状态：**方案预选完成；采购、实物测量、驱动编译和机器狗实机验证未完成。**
@@ -60,8 +60,10 @@
 ### 1.3 软件发行版策略
 
 - 首轮 bring-up 对齐云深处公开配置：Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble + AGX Orin + MID-360。
-- ROS 2 Humble 预计 2027 年 5 月结束支持；因此自研包从第一天起保持 Humble/Jazzy 可移植，Lite3 SDK 隔离在 bridge/adapter 内。
-- 长期目标 ROS 2 Jazzy；在 Humble EOL 前完成 Ubuntu 24.04 + Jazzy 构建和集成迁移验证。
+- ROS 2 最新 LTS 已于 2026-05 发布 Lyrical Luth，计划支持至 2031-05；其 Tier 1 Ubuntu 平台是 26.04。当前 NVIDIA Jetson AGX Orin 的 JetPack 7.2.2 官方基线是 Ubuntu 24.04，因此暂不把 Lyrical 作为本硬件平台的运行基线。
+- 长期目标 ROS 2 Jazzy（Ubuntu 24.04，支持至 2029-05），更匹配 JetPack 7 的 Orin 系统基线；待后续 Orin 官方支持 Ubuntu 26.04 后，再评估迁移 Lyrical。
+- 首轮兼容性验证保留云深处官方 Ubuntu 22.04 + JetPack 6.1 + Humble 参考栈，但不默认把它定为长期部署系统；同时验证 JetPack 7.2.2 + Ubuntu 24.04 + Jazzy。
+- 自研包从第一天起保持 Humble/Jazzy 可移植，Lite3 SDK 隔离在 bridge/adapter 内；Humble 最迟在 2027-05 EOL 前退出长期运行基线。
 - Livox `livox_ros_driver2` 有 Jazzy 构建说明，但仍需锁定 commit 后编译和实测。
 - 不默认在一个 DDS domain 混用不同 ROS 2 发行版节点；跨发行版时采用 UDP/串口/标准消息网关。
 
@@ -115,23 +117,24 @@ Lite3 vendor motion SDK / gait controller
 
 ### 阶段 A — 硬件基线与接口冻结（当前阶段）
 
-- [x] A1. 完成本体和外置导航传感器技术预选：Lite3 Venture、MID-360、双 See3CAM_50CUG、simpleRTK2B/ZED-F9P、AGX Orin。
+- [x] A1. 完成本体和外置导航传感器技术预选：Lite3 Venture、MID-360、双 See3CAM_50CUG_CXXCC_BX_H01R1、simpleRTK2B/ZED-F9P、AGX Orin。
 - [x] A2. 核对云深处 Lite3 Venture + AGX Orin + MID-360 官方扩展示例与初始软件版本。
 - [ ] A3. 向云深处确认 Venture 当前 SKU、交付件、固件/SDK、安装 CAD、外设接口持续/峰值电流、载荷与重心限制。
 - [ ] A4. 获取整套设备质量、功耗、热设计和网络拓扑；确认外设总质量是否满足 3.6 kg 项目目标。
 - [ ] A5. 获取 MID-360 当前版本、SDK、驱动 commit、供电线束和 Ethernet 配置。
-- [ ] A6. 向 e-con Systems 确认 See3CAM_50CUG Color exact SKU、GPIO trigger 电气规格、同步模式、Jetson/Linux UVC 和 70°–80° 镜头。
+- [~] A6. 已锁定候选彩色无镜头 SKU `See3CAM_50CUG_CXXCC_BX_H01R1`；制造商页面确认 5MP/Global Shutter/USB3/UVC/GPIO Trigger & Strobe。触发电压/极性/硬触发时序、双相机同步模式、Jetson 双路 UVC 带宽和 70°–80° 镜头仍待书面确认。
 - [ ] A7. 确认 simpleRTK2B 的天线、USB/UART、目标地区 NTRIP 改正服务或自建基站。
 - [~] A8. 已依据公开 Lite3_ROS / sdk_deploy 文档核验基础 topic/message 和 Twist 分量语义，并建立 [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)；目标固件的频率、时间戳、协方差、横移可执行性、速度限制、watchdog 和急停仍需厂商确认/实机验证。
 - [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
 - [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
-- [ ] A11. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
+- [~] A11. 已核实 ROS 发行版与 Jetson 组合：首轮复现厂商 Humble 栈，同时评估 JetPack 7.2.2/Ubuntu 24.04/Jazzy；ROS Lyrical（Ubuntu 26.04）暂不纳入当前 Orin 正式基线。完成实际兼容性矩阵后冻结版本；采购前风险评审作为后续 A12。
+- [ ] A12. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
 
 **阶段 A 准入：** 厂商接口、电源、质量、安装和软件兼容均有资料或测量支持；形成 BOM、CAD、网络/电源拓扑和验收阈值。
 
 ### 阶段 B — 驱动、时间同步和标定
 
-- [ ] B1. 构建 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 首轮镜像。
+- [ ] B1. 并行构建兼容性基线：复现 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble 厂商参考环境；在 AGX Orin 上验证 JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy 目标环境。
 - [ ] B2. 编译 Lite3 SDK/ROS 2 transfer，只读读取 odom/IMU/joint/status。
 - [ ] B3. 建立 Lite3 bridge/adapter，先只读诊断，再验证限幅和 watchdog，不立即开放自主运动。
 - [ ] B4. 编译 MID-360 Livox SDK2 和 `livox_ros_driver2`。
@@ -185,10 +188,10 @@ Lite3 vendor motion SDK / gait controller
 
 ### 阶段 G — Jazzy 迁移、端到端验收与部署
 
-- [ ] G1. 自研包在 Ubuntu 24.04 + ROS 2 Jazzy 构建。
+- [ ] G1. 自研包在 Ubuntu 24.04 + JetPack 7.x + ROS 2 Jazzy 构建，并保留厂商 Humble bridge 的兼容性验证。
 - [ ] G2. 分别验证 Lite3 bridge、Livox、camera、robot_localization、Nav2 Jazzy 兼容性。
 - [ ] G3. 不兼容厂商组件以 UDP/标准消息 bridge 隔离，不默认混用不同 distro DDS。
-- [ ] G4. 在 Humble 2027-05 EOL 前完成 Jazzy 迁移和 CI。
+- [ ] G4. 在 Humble 2027-05 EOL 前退出长期运行基线；持续评估 ROS 2 Lyrical（Ubuntu 26.04 / May 2031 LTS），待 Jetson Orin 官方 BSP 和整套驱动可用时再启动迁移。
 - [ ] G5. 完成仿真、rosbag、HIL、封闭场地和受控户外验收。
 - [ ] G6. 输出安装、标定、启动、监控、故障恢复和维护手册。
 - [ ] G7. 冻结软件/固件/驱动/地图/模型/标定版本并发布可复现版本。
@@ -211,14 +214,14 @@ Lite3 vendor motion SDK / gait controller
 ### 未完成 / 阻塞
 - [ ] 未采购设备，未接收实物。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认。
-- [ ] 双目 exact SKU/GPIO trigger/镜头/Jetson 双机同步尚待供应商确认。
+- [ ] 双目已选无镜头彩色 SKU，GPIO 触发电平/时序、镜头和 Jetson 双机同步尚待供应商确认。
 - [ ] RTK NTRIP 改正服务或基站尚未确定。
 - [ ] 载荷、供电、热设计、质心和续航未实测。
 - [ ] ROS 驱动未在目标计算机编译；尚无传感器 rosbag 和 Nav2 实机结果。
 
 ### 下一步（按顺序执行）
 1. 整理 Lite3 Venture + AGX Orin + MID-360 扩展接口/安装/电气确认问题，向厂商取得书面答复。
-2. 向相机供应商确认两台 See3CAM_50CUG 的 GPIO 触发参数和匹配广角镜头。
+2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 建立质量/功耗/散热预算和初步安装 CAD，检查 3.6 kg 项目外设目标。
 5. 继续完成 A3–A11 供应商确认和质量/电源/时间同步预算；公开 Lite3 接口已整理，目标固件与安全保护待验证。
@@ -234,6 +237,7 @@ Lite3 vendor motion SDK / gait controller
 | 2026-11-24 | v0.2 | 预选 Lite3 Venture、MID-360、双 See3CAM_50CUG、ZED-F9P RTK、AGX Orin；建立硬件 ADR/接口清单 | ADR-0002 和接口清单提交 |
 | 2026-11-24 | v0.2.1 | TaskPlan 超过 30 KB，按规则拆为架构硬件分册和测试风险分册；保留本根文件唯一进度状态 | root: 7532fc78; Part 1: 8cfc024c; Part 2: 7caa7e7d |
 | 2026-11-24 | v0.2.2 | 依据官方 Lite3 ROS 2 transfer/SDK 公开接口建立 bridge contract；补充参考资料和 package 规划；A8/A9 更新为部分完成 | bridge: 83544a98; refs: 5384dd90; architecture: 8d4de365; package plan: 8fb71753; README: 5c444c50 |
+| 2026-11-24 | v0.2.3 | 锁定 See3CAM 彩色无镜头 SKU；补充 ROS Lyrical 与 JetPack 7.2.2 兼容性策略：Jazzy 作为 Orin/Ubuntu 24.04 当前目标，Lyrical 等 Ubuntu 26.04/Jetson 支持成熟后评估 | e-con Systems 官方相机 SKU/规格、Open Robotics Lyrical release、NVIDIA JetPack 7.2.2/Jetson Orin 支持资料 |
 
 ---
 
