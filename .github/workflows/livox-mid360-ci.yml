@@ -17,40 +17,79 @@ on:
 jobs:
   jazzy-x86-build:
     name: ROS 2 Jazzy / Ubuntu 24.04 x86_64
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    container:
-      image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
-      - name: Checkout project (includes pinned vcstool manifest)
+      - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install native SDK build dependencies
-        shell: bash
-        run: |
-          set -euxo pipefail
-          apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential cmake git libapr1-dev libeigen3-dev libpcl-dev
-          apt-get clean
-          rm -rf /var/lib/apt/lists/*
-
-      - name: Build pinned Livox SDK2
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git clone https://github.com/Livox-SDK/Livox-SDK2.git /tmp/Livox-SDK2
-          git -C /tmp/Livox-SDK2 checkout f5d9375f84efe2b15bc0a052d3e18482ed13adf4
-          cmake -S /tmp/Livox-SDK2 -B /tmp/Livox-SDK2/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS="-include cstdint"
-          cmake --build /tmp/Livox-SDK2/build --parallel 2
-          cmake --install /tmp/Livox-SDK2/build
-          ldconfig
-
-      - name: Build pinned livox_ros_driver2 with ROS tooling
-        uses: ros-tooling/action-ros-ci@v0.4
+      - name: Install ROS 2 Jazzy and build tools
+        uses: ros-tooling/setup-ros@0.7.22
         with:
-          package-name: livox_ros_driver2
-          target-ros2-distro: jazzy
-          vcs-repo-file-url: https://raw.githubusercontent.com/rexyll/robdog_nav2/8544a44b2242fcbdba871abbecb84ef170d54826/.github/ros2/livox-mid360.repos
-          skip-tests: true
-          coverage-result: false
+          required-ros-distributions: jazzy
+
+      - name: Install native dependencies and explicit ament build package
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake git libapr1-dev libeigen3-dev libpcl-dev \
+            ros-jazzy-ament-cmake-auto
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+
+      - name: Build pinned Livox SDK2 v1.3.1
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git clone https://github.com/Livox-SDK/Livox-SDK2.git "$RUNNER_TEMP/Livox-SDK2"
+          git -C "$RUNNER_TEMP/Livox-SDK2" checkout --detach f5d9375f84efe2b15bc0a052d3e18482ed13adf4
+          cmake -S "$RUNNER_TEMP/Livox-SDK2" -B "$RUNNER_TEMP/Livox-SDK2/build" \
+            -DCMAKE_BUILD_TYPE=Release \
+            '-DCMAKE_CXX_FLAGS=-include cstdint'
+          cmake --build "$RUNNER_TEMP/Livox-SDK2/build" --parallel 2
+          sudo cmake --install "$RUNNER_TEMP/Livox-SDK2/build"
+          sudo ldconfig
+
+      - name: Checkout exact Livox ROS Driver2 v1.2.6 and select ROS 2 manifest
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p "$RUNNER_TEMP/livox_ws/src"
+          git clone https://github.com/Livox-SDK/livox_ros_driver2.git \
+            "$RUNNER_TEMP/livox_ws/src/livox_ros_driver2"
+          git -C "$RUNNER_TEMP/livox_ws/src/livox_ros_driver2" \
+            checkout --detach 13eb05e4e6dd7a765b934d0c5fd6236676a57b49
+          cp "$RUNNER_TEMP/livox_ws/src/livox_ros_driver2/package_ROS2.xml" \
+            "$RUNNER_TEMP/livox_ws/src/livox_ros_driver2/package.xml"
+          test "$(grep -c '<buildtool_depend>ament_cmake_auto</buildtool_depend>' \
+            "$RUNNER_TEMP/livox_ws/src/livox_ros_driver2/package.xml")" -eq 1
+
+      - name: Resolve ROS 2 Jazzy dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source /opt/ros/jazzy/setup.bash
+          sudo rosdep init 2>/dev/null || true
+          rosdep update
+          rosdep install \
+            --from-paths "$RUNNER_TEMP/livox_ws/src" \
+            --ignore-src \
+            --rosdistro jazzy \
+            -r -y
+
+      - name: Build pinned Livox ROS Driver2
+        shell: bash
+        run: |
+          set -euxo pipefail
+          source /opt/ros/jazzy/setup.bash
+          cd "$RUNNER_TEMP/livox_ws"
+          colcon build \
+            --packages-up-to livox_ros_driver2 \
+            --event-handlers console_cohesion+ \
+            --symlink-install \
+            --cmake-args -DROS_EDITION=ROS2 -DDISTRO_ROS=jazzy
+          source install/setup.bash
+          ros2 pkg prefix livox_ros_driver2
+          ros2 pkg executables livox_ros_driver2
