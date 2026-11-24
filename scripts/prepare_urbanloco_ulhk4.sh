@@ -69,9 +69,48 @@ for topic in "${LIDAR_TOPIC}" "${IMU_TOPIC}" "${GT_TOPIC}"; do
   fi
 done
 
-if ! compgen -G "${BAG_DIR}/*.db3" >/dev/null; then
+DB3_FILES=("${BAG_DIR}"/*.db3)
+if [[ ! -f "${DB3_FILES[0]}" ]]; then
   echo "ERROR: P2 ground-truth extraction currently requires sqlite3 rosbag storage (*.db3)." >&2
   exit 5
 fi
 
+# Record provenance and checksums outside the bag directory. For large files,
+# calculate the raw bag digest once and reuse it on subsequent preparation runs.
+RAW_SHA256="not_available"
+RAW_SIZE_BYTES="not_available"
+if [[ -f "${RAW_BAG}" ]]; then
+  RAW_SIZE_BYTES="$(stat -c '%s' "${RAW_BAG}")"
+  if [[ ! -f "${DATASET_DIR}/raw_bag.sha256" ]]; then
+    sha256sum "${RAW_BAG}" > "${DATASET_DIR}/raw_bag.sha256"
+  fi
+  RAW_SHA256="$(awk '{print $1}' "${DATASET_DIR}/raw_bag.sha256")"
+fi
+
+DB3_SUMS="${DATASET_DIR}/ros2_bag_db3.sha256"
+: > "${DB3_SUMS}"
+for db3 in "${DB3_FILES[@]}"; do
+  [[ -f "${db3}" ]] && sha256sum "${db3}" >> "${DB3_SUMS}"
+done
+
+cat > "${DATASET_DIR}/dataset_manifest.txt" <<EOF
+sequence=ulhk_4
+session=HK-Data20190117
+source=UrbanLoco Hong Kong dataset; manual download/mirror documented in datasets/README.md
+license=CC BY-NC-SA 4.0
+acquisition_date=${URBANLOCO_ACQUISITION_DATE:-unknown}
+prepared_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+raw_bag=${RAW_BAG}
+raw_bag_size_bytes=${RAW_SIZE_BYTES}
+raw_bag_sha256=${RAW_SHA256}
+ros2_bag_dir=${BAG_DIR}
+lidar_topic=${LIDAR_TOPIC}
+imu_topic=${IMU_TOPIC}
+ground_truth_topic=${GT_TOPIC}
+ros2_bag_format=sqlite3
+db3_checksum_file=${DB3_SUMS}
+EOF
+
 echo "UrbanLoco u l h k_4 bag is ready: ${BAG_DIR}"
+echo "Dataset provenance: ${DATASET_DIR}/dataset_manifest.txt"
+echo "Raw bag SHA256: ${RAW_SHA256}"
