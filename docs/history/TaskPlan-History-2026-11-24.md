@@ -25,6 +25,9 @@
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
+| 2026-11-24 | v0.3.15 | 建立导航/避障验收指标和测量方法框架，A10 部分完成；新增 Livox Jazzy x86_64 build workflow，仍需等待结果并完成 Orin ARM64 验证 | acceptance metrics 30a81088; Livox CI run 45332455019 |
+| 2026-11-24 | v0.3.16 | 将 Lite3 足端接触力纳入只读 telemetry envelope；contact_state 必须带 frame_id，新增 2 项测试；Humble/Jazzy 37 项 CI 双发行版通过 | contract 3341cc7b; tests fb463763; protocol 440ee4a4; CI 45332714322 |
+| 2026-11-24 | v0.3.17 | 修复 Livox CI 缺少 ROS Jazzy 环境初始化的问题，改用 action-ros-ci 与 pin manifest；SDK2 锁定到 v1.3.1 并加入 GCC 13 cstdint 兼容参数，driver build 重测中 | workflow 21e3f186; manifest f4cf74ea; baseline ca297a9b; run 45333666724 |
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
