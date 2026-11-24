@@ -20,6 +20,7 @@ setup(
     description="Read-only Lite3 ROS 2 topic contract monitor and synthetic test publisher.",
     license="UNSPECIFIED",
     tests_require=["pytest"],
+    extras_require={"test": ["pytest"]},
     entry_points={
         "console_scripts": [
             "lite3_state_mock = robodog_lite3_bridge.mock_state_publisher:main",
