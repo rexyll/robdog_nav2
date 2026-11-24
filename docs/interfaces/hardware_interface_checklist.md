@@ -15,7 +15,7 @@
 | Orin 长期目标 | JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy | 需实测 Lite3 bridge/各驱动兼容性 |
 | 未来评估 | ROS 2 Lyrical / Ubuntu 26.04 | 待 Jetson Orin 官方 BSP 与所有驱动支持后评估 |
 
-详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。
+详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。Lite3 两套 ROS 路线及其差异见 [vendor integration assessment](../implementation/lite3_vendor_sdk_integration_assessment.md) 和 [ADR-0003](../decisions/ADR-0003-lite3-ros-integration.md)。
 供电与质量计算见 [机载供电与载荷预算](../implementation/power_mass_budget.md)。当前已知设备质量小计约 1.330 kg，已知设备负载功率估算约 22.8–69.4 W；上述值不含相机/镜头的质量、交换机、电源转换损耗、支架和线束。
 
 ## 1. 机器狗本体：DEEP Robotics Lite3 Venture
@@ -28,10 +28,10 @@
 | 外部通信 | 2 × Ethernet | 端口用途、速度、IP/UDP 通讯方式 | 待确认 |
 | 外部供电 | 24V/12V/5V | 每路持续/峰值电流和总功率限制 | **阻塞项** |
 | 固件/SDK | Lite3 SDK / sdk_deploy | 当前支持版本、授权、维护状态 | 待确认 |
-| ROS 驱动 | Lite3_ROS / lite3_transfer | Humble 编译和 Jazzy 迁移状态 | 待实测 |
-| IMU/leg odom | /imu/data、/leg_odom2（官方示例接口） | 频率、时间戳、frame、covariance、IMU 是否已融合 | 待实测 |
-| 运动命令 | /cmd_vel Twist 示例 | 最大速度、加速度、横移语义、死区和模式 | 待确认 |
-| 安全 | 机器人 stop/遥控急停 | API、watchdog、通信断开默认行为 | 待确认 |
+| ROS 路线 | Legacy Lite3_ROS Foxy 与 current sdk_deploy DRDDS/Foxy | 厂商推荐路径、motion-host/AGX-host 角色、非 DDS gateway | 待厂商确认 |
+| IMU / Joint / Odometry | Legacy /imu/data、/leg_odom2；current sdk_deploy /IMU_DATA、/JOINTS_DATA、RobotStatus | 可信腿式 odometry 是否存在；频率、source timestamp、frame、covariance、IMU 是否已融合 | **阻塞项** |
+| 运动命令 | Legacy /cmd_vel；current /rl_deploy/cmd_vel（仅 rl_control 状态） | 状态机、限幅、超时、急停、watchdog 和 Nav2 gateway | **阻塞项** |
+| 安全 | /EMERGENCY_STOP 服务/物理急停/遥控停止 | 厂商安全流程、底层 watchdog、通信断开动作；服务不能替代物理急停 | **阻塞项** |
 | 安装 | Venture + AGX 安装组件 | CAD、孔位、允许载荷分布和线缆路径 | 待获取 |
 
 ## 2. LiDAR：Livox MID-360
