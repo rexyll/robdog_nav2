@@ -21,6 +21,8 @@ on:
       - "scripts/tests/test_verify_public_dataset_checksum.sh"
       - "scripts/audit_m3dgr_ros1_bag.py"
       - "scripts/tests/test_m3dgr_ros1_bag.py"
+      - "scripts/audit_m3dgr_gt_rtk_correspondence.py"
+      - "scripts/tests/test_m3dgr_gt_rtk_correspondence.py"
       - "scripts/audit_tum_trajectory.py"
       - "scripts/tests/test_tum_trajectory_audit.py"
       - "scripts/create_tum_pose_run_candidate.py"
@@ -44,6 +46,8 @@ on:
       - "scripts/tests/test_verify_public_dataset_checksum.sh"
       - "scripts/audit_m3dgr_ros1_bag.py"
       - "scripts/tests/test_m3dgr_ros1_bag.py"
+      - "scripts/audit_m3dgr_gt_rtk_correspondence.py"
+      - "scripts/tests/test_m3dgr_gt_rtk_correspondence.py"
       - "scripts/audit_tum_trajectory.py"
       - "scripts/tests/test_tum_trajectory_audit.py"
       - "scripts/create_tum_pose_run_candidate.py"
@@ -76,6 +80,7 @@ jobs:
             scripts/audit_urbanloco_ulhk4_db3.py \
             scripts/record_point_lio_odometry_tum.py \
             scripts/audit_m3dgr_ros1_bag.py \
+            scripts/audit_m3dgr_gt_rtk_correspondence.py \
             scripts/audit_tum_trajectory.py \
             scripts/create_tum_pose_run_candidate.py \
             scripts/convert_m3dgr_dynamic03_to_ros2.py
@@ -90,6 +95,10 @@ jobs:
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_m3dgr_ros1_bag.py" \
+            -v
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_m3dgr_gt_rtk_correspondence.py" \
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
