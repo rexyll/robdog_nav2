@@ -137,6 +137,8 @@ flowchart TB
 - [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
 - [Lite3 公开 SDK 字段与安全审计](docs/implementation/lite3_public_sdk_field_audit.md)
 - [MID-360 Livox 驱动锁定基线](docs/implementation/livox_mid360_driver_baseline.md)
+- [Point-LIO Jazzy POC 来源与验收基线](docs/implementation/point_lio_jazzy_poc_baseline.md)
+- [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [导航与避障验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)
 - [TaskPlan 历史归档（2026-11-24）](docs/history/TaskPlan-History-2026-11-24.md)
 - [初始 Lite3 bridge ROS 2 package](src/robodog_lite3_bridge/README.md)
