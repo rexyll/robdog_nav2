@@ -171,3 +171,10 @@ sdk_deploy 的 cross-host README 说明：
 - [sdk_deploy lite3_transfer](https://github.com/DeepRoboticsLab/sdk_deploy/tree/main/src/lite3_transfer)
 - [legacy Lite3_ROS Jetson2Motion source](https://github.com/DeepRoboticsLab/Lite3_ROS/blob/ros2-foxy/src/transfer/src/Jetson2Motion.cpp)
 - [sdk_deploy Lite3 MotionSDK license](https://github.com/DeepRoboticsLab/sdk_deploy/blob/main/src/lite3_transfer/third_party/Lite3_MotionSDK/LICENSE)
+
+
+## 10. 2026-11-24 公开 SDK 字段与安全审计补充
+
+已单独核验公开 Motion SDK / RL SDK / RobotStatus 数据字段、单位差异、transfer 启动控制权和软件急停边界。公开 RobotStatus 只有 base_rpy/base_angular_velocity，没有 base position/linear velocity/covariance；不能单独转换为完整 nav_msgs/Odometry。公开 Motion SDK 可读关节、IMU 与足端接触力，但仍须对目标固件核对具体单位和时间源。
+
+另一个重要限制是 lite3_transfer 启动及 SDK_MODE 可能获取 SDK 控制权，故实机 bring-up 前必须获得只读启动 SOP、遥控器接管方式和物理急停说明。详见 [Lite3 public SDK field audit](lite3_public_sdk_field_audit.md) 与 [供应商确认矩阵 V-28–V-32](../interfaces/lite3_vendor_confirmation_matrix.md)。
