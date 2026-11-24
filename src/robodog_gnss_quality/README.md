@@ -59,7 +59,33 @@ The package now includes a receiver-message helper for the UBX-NAV-PVT flags byt
 
 The helper pairs a position record and NAV-PVT quality record only when their receiver iTOW values match exactly and their host monotonic receive times are within an explicitly supplied skew limit. It rejects mismatched epochs; it never pairs by "nearest arrival" or ROS header timestamps alone.
 
-The position record must preserve a receiver source timestamp and a source_clock_id identifying the GPS week/receiver clock epoch. iTOW is a week-relative counter and must not be treated as a globally monotonic timestamp. The chosen ROS driver must be checked to confirm it exposes the required UBX fields and a reliable way to associate the matching NavSatFix epoch. That driver selection and full ROS adapter remain open.
+The position record must preserve a receiver source timestamp and a source_clock_id identifying the GPS week/receiver clock epoch. iTOW is a week-relative counter and must not be treated as a globally monotonic timestamp. The selected driver is pinned and its raw UBX messages expose the required fields; the ROS subscription/cache adapter and receiver-time mapper remain open.
+
+## Raw UBX four-message assembly (selected u-blox driver)
+
+For the pinned `aussierobots/ublox_dgnss` 0.7.6 candidate, the project now provides `build_observation_from_ubx_epochs()`. It consumes decoded fields from four independent messages:
+
+| UBX message | Fields used by the pure core |
+|---|---|
+| `UBX-NAV-PVT` | `iTOW`, `gnss_fix_ok`, `carr_soln.status` |
+| `UBX-NAV-HPPOSLLH` | `iTOW`, high precision LLH components, all position invalid flags |
+| `UBX-NAV-COV` | `iTOW`, `pos_cor_valid`, upper-triangle NED position covariance |
+| `UBX-NAV-STATUS` | `iTOW`, `gps_fix_ok`, `carr_soln_valid`, `carr_soln.status` |
+
+All four iTOW values must match exactly. The maximum-to-minimum host monotonic receive-time spread across the four callbacks must be within a caller-supplied limit. PVT and STATUS fix/carrier fields must agree; a Fixed solution additionally requires STATUS `carr_soln_valid=true`. Invalid HPPOSLLH components and NAV-COV `pos_cor_valid=false` are rejected. There is no nearest-time pairing.
+
+NAV-COV is NED. The helper converts the complete symmetric 3×3 covariance to ENU using `C_ENU = R * C_NED * R^T`; it transforms cross terms as well as the diagonal terms. It returns a `GnssObservation` with covariance type KNOWN for the existing quality gate to re-check finite values, symmetry, PSD, degeneracy and uncertainty thresholds.
+
+The pure helper deliberately does not implement the ROS subscriptions or bounded caches. The future ROS adapter must:
+1. stamp each callback with one host `steady_clock`/monotonic source (not ROS header stamp);
+2. maintain bounded per-message caches keyed by receiver generation + iTOW, reject duplicate conflicts and evict stale/incomplete epochs;
+3. establish a receiver-time mapping to globally ordered `source_timestamp_ns` from validated GPS week/time and an explicit boot-generation state;
+4. clear incomplete caches and restart quality-gate recovery on receiver reset, GPS week transition, or time discontinuity;
+5. keep GNSS epoch time separate from host receive-time freshness.
+
+The 20-second/5-millisecond-style timing limits used in unit fixtures are test values only, not hardware-derived operating thresholds. Production maximum skew, cache depth, source clock mapper accuracy and GNSS output rate remain to be measured on the actual ZED-F9P installation.
+
+This helper is pure algorithm code. It is not a serial/USB parser, ROS subscription node, receiver-time mapper, NavSatFix publisher, PPS driver, NTRIP client, or EKF integration.
 
 
 ## Raw u-blox UBX exact-epoch assembly
