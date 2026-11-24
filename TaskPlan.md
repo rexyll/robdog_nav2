@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.18
+- 文档版本：v0.3.19
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -91,14 +91,14 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
-- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 v1.3.1 commit f5d9375f84efe2b15bc0a052d3e18482ed13adf4；SDK2 在旧 run 45332455019 已成功编译，driver 阶段失败根因是工作流裸 source /opt/ros/jazzy/setup.bash，而镜像尚无 ROS install。工作流已改为 action-ros-ci 自动准备 ROS/rosdep/colcon，并锁定 SDK release；最新重测 run 45333666724。Orin aarch64 与真实 MID-360 仍待验证。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
+- [~] B4. 已锁定 Livox ROS Driver2 v1.2.6 与 SDK2 v1.3.1 commit f5d9375f84efe2b15bc0a052d3e18482ed13adf4；SDK2 v1.3.1 编译通过，但 driver CI 前两轮分别暴露 ROS setup/容器路径问题，已改为 action-ros-ci + immutable HTTPS manifest，最新 run 45334135171 正在复测。Orin aarch64 与真实 MID-360 仍待验证。使用 CustomMsg 保留每点时间供 Point-LIO，禁止先转换为 PointXYZI。详见 [MID-360 驱动基线](docs/implementation/livox_mid360_driver_baseline.md)。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. 已将 Point-LIO Jazzy POC 来源锁定：HKU upstream gitlink base 97b0042e397ec71c327966abebff9b4b7e2c154a；Intel reference repo decbb06fc1b746b229957b66b92ab972e1f05609；固定三份 port/format/fix patches；Point-LIO BSD-3-Clause、Intel patch repo Apache-2.0。准备脚本和 P0 source-prep CI 已提交（run 45334159646 待结论）；Point-LIO 尚未 build/replay，Orin/MID-360 实测未完成。Livox v1.2.6 + SDK2 v1.3.1 版本与 GCC13 cstdint 参数另见 [Point-LIO POC baseline](docs/implementation/point_lio_jazzy_poc_baseline.md)。
+- [~] B11. 已将 Point-LIO Jazzy POC 来源锁定：HKU upstream gitlink base 97b0042e397ec71c327966abebff9b4b7e2c154a；Intel reference repo decbb06fc1b746b229957b66b92ab972e1f05609；固定三份 port/format/fix patches；Point-LIO BSD-3-Clause、Intel patch repo Apache-2.0。准备脚本与 P0 source-prep CI 已通过（run 45334159646），确认三份补丁成功应用且 worktree clean；Point-LIO build/replay、Orin/MID-360 实测仍未完成。见 [Point-LIO POC baseline](docs/implementation/point_lio_jazzy_poc_baseline.md)。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -172,6 +172,7 @@
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
 - [x] 完成网关协议 v0.1 语义草案及 envelope/sequence/消息类型/frame/数值/covariance 检查；新增 contact_state 必须携带 frame_id 的验证和 2 个单元测试，Humble/Jazzy 双发行版 37 项测试均通过（run 45332714322、45332706824、45332702335）。
+- [x] Point-LIO P0 来源准备 CI 通过：checkout 上游 gitlink SHA 97b0042...，按顺序应用 Intel 3 份固定补丁，校验 patch commit subjects、lock marker 和 clean worktree（run 45334159646）。只证明源码准备可复现，不代表 build/replay 或硬件验收。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
@@ -185,7 +186,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [ ] Point-LIO 尚未在本项目 Jazzy x86_64 构建或以 UrbanLoco 完成 bag replay；Intel UrbanLoco 使用旧 Velodyne 数据，不证明 MID-360 per-point time 或 Jetson Orin 性能。Point-LIO P0 source-prep CI run 45334159646 待结论，之后仍需 P1 build/P2 replay/P3 Orin/P4 sensor/P5 quadruped gates。
+- [ ] Point-LIO 尚未在本项目 Jazzy x86_64 构建或以 UrbanLoco 完成 bag replay；Intel UrbanLoco 使用旧 Velodyne 数据，不证明 MID-360 per-point time 或 Jetson Orin 性能。P0 source-prep CI run 45334159646 已通过；之后仍需 P1 build/P2 replay/P3 Orin/P4 sensor/P5 quadruped gates。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -224,6 +225,7 @@
 | 2026-11-24 | v0.3.16 | 将 Lite3 足端接触力纳入只读 telemetry envelope；contact_state 必须带 frame_id，新增 2 项测试；Humble/Jazzy 37 项 CI 双发行版通过 | contract 3341cc7b; tests fb463763; protocol 440ee4a4; CI 45332714322 |
 | 2026-11-24 | v0.3.17 | 修复 Livox CI 缺少 ROS Jazzy 环境初始化的问题，改用 action-ros-ci 与 pin manifest；SDK2 锁定到 v1.3.1 并加入 GCC 13 cstdint 兼容参数，driver build 重测中 | workflow 21e3f186; manifest f4cf74ea; baseline ca297a9b; run 45333666724 |
 | 2026-11-24 | v0.3.18 | 固定 Intel Jazzy Point-LIO 上游 gitlink SHA、三份 patch、Apache/BSD 许可证边界；新增受控源码准备脚本与 P0 CI；修正 Livox workflow 的容器内 manifest 路径 | baseline bf561d3d; prep script 4ae7a0c2; P0 workflow 74d61710; Livox workflow af0cb0bb |
+| 2026-11-24 | v0.3.19 | Point-LIO P0 source-prep CI 通过：三个固定补丁成功应用，源码 tree clean；Livox workflow 改为 immutable HTTPS manifest 并重新运行，待 driver build 结果 | P0 run 45334159646; script 4ae7a0c2; Livox run 45334135171 |
 
 ---
 
