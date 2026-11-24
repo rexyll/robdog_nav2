@@ -2,7 +2,7 @@
 
 > 使用 **LiDAR + RTK GNSS + 两台普通 RGB 2D 相机（被动双目）**，基于 ROS 2 / Nav2 构建四足机器狗的定位、导航、动态障碍物检测和实时避障系统。
 
-本仓库是一个新项目，采用文档先行、接口先行、分阶段验证的方式推进。当前先建立系统设计和可验证的实施计划；在机器狗型号、传感器型号、底层运动控制接口和实际 ROS 2 发行版确认之前，不把假设写成已验证的硬件事实，也不伪造可直接上机的标定值或参数。
+本仓库已完成首轮硬件技术预选：DEEP Robotics Lite3 Venture、Livox MID-360、两台 e-con Systems See3CAM_50CUG Color、ArduSimple ZED-F9P RTK 和 Jetson AGX Orin。尚未采购或实物验证，具体接口、供电、安装和标定仍以根目录 TaskPlan.md 的准入清单为准。
 
 ## 项目目标
 
@@ -20,17 +20,17 @@
 ## 已确定的初始路线
 
 - **主要导航框架：** ROS 2 Nav2。
-- **主要几何避障传感器：** LiDAR。具体是 2D 还是 3D、扫描平面/垂直视场、点云或 LaserScan 输出，待硬件确认。
-- **全局定位：** RTK GNSS。需结合 IMU 航向和连续本体里程计，RTK 单天线位置本身不能可靠提供静止时航向。
-- **视觉：** 两台普通 RGB 2D 相机组成被动双目系统，提供视差/深度点云以及目标语义识别；它不是天然等同于工业 RGB-D 相机。
+- **主要几何避障传感器：** Livox MID-360 3D LiDAR，输出 PointCloud2。
+- **全局定位：** ArduSimple ZED-F9P RTK GNSS；需结合 Lite3 IMU 和腿式里程计，单天线位置本身不能可靠提供静止时航向。
+- **视觉：** 两台 See3CAM_50CUG Color 普通 RGB 相机组成被动双目系统，提供视差/深度点云以及目标语义识别；它不是天然等同于工业 RGB-D 相机。
 - **定位融合：** 以 `robot_localization` 双 EKF + `navsat_transform_node` 作为首选参考架构，具体状态变量、协方差和数据源须基于底层实际输出标定。
 - **障碍物融合：** LiDAR 与双目点云保留独立观测源，分别做时间戳、TF、范围、高度、置信度和自体过滤，再接入 Nav2 costmap；不在未经验证的情况下简单拼接成一个点云。
 - **局部避障：** Nav2 local costmap + controller + Collision Monitor；机器狗底层控制器必须提供限速、急停/停止、命令超时保护。
 - **地形可通行性：** Nav2 2D costmap 不足以描述所有坡度、台阶、沟坎、悬崖和落足风险。此类能力需要地形分析/可通行性层及必要的自定义 costmap 插件或底层落足规划配合。
 
-## 当前 ROS 2 基线建议
+## 当前 ROS 2 软件基线
 
-建议先以 **Ubuntu 24.04 + ROS 2 Jazzy** 建立软件基线：Jazzy 是 LTS，官方发布资料说明支持至 2029 年 5 月，并将 Ubuntu 24.04 amd64/arm64 列为 Tier 1 平台。若机器狗厂商 SDK、驱动或计算机系统要求 Humble、其他发行版或定制镜像，则先做兼容性评估，再锁定版本。发行版尚未由真实硬件验证，当前属于项目基线建议而非最终锁定。
+首轮硬件 bring-up 暂定 **Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble**，以复现云深处 Lite3 Venture + AGX Orin + MID-360 官方感知扩展示例。由于 Humble 将于 2027 年 5 月结束支持，项目长期目标是 ROS 2 Jazzy；自研包必须隔离厂商 SDK 并保持可迁移，详见根目录 TaskPlan.md。
 
 ## 系统数据流（概念图）
 
@@ -115,7 +115,8 @@ flowchart TB
 - [坐标系、定位与 TF 设计](docs/localization/frames_and_localization.md)
 - [双目 RGB 深度与障碍物识别](docs/perception/stereo_obstacle_perception.md)
 - [验证、安全与失效降级](docs/validation/safety_and_validation.md)
-- [硬件/软件接口待确认清单](docs/interfaces/hardware_interface_checklist.md)
+- [硬件/软件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
+- [硬件平台选型 ADR-0002](docs/decisions/ADR-0002-hardware-platform.md)
 - [ROS 2 Workspace 与 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [导航与感知验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [实施任务计划 TaskPlan](TaskPlan.md)
@@ -128,7 +129,7 @@ flowchart TB
 
 ## 当前阶段状态
 
-<badge>阶段 A：需求与硬件基线核实</badge> 尚未完成。当前已建立架构与任务计划文档；尚未完成具体传感器驱动、标定、融合参数、Nav2 YAML、控制适配器和真实机器狗测试。详见 [TaskPlan.md](TaskPlan.md)。
+**阶段 A：硬件基线与接口冻结** 正在进行。硬件已有技术预选，但尚未采购，尚未完成供应商确认、质量/电源预算、驱动编译、标定、融合和真实机器狗测试。根目录 [TaskPlan.md](TaskPlan.md) 是唯一进度台账。
 
 ## 重要外部参考
 
