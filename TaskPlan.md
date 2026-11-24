@@ -122,8 +122,8 @@ Lite3 vendor motion SDK / gait controller
 - [ ] A5. 获取 MID-360 当前版本、SDK、驱动 commit、供电线束和 Ethernet 配置。
 - [ ] A6. 向 e-con Systems 确认 See3CAM_50CUG Color exact SKU、GPIO trigger 电气规格、同步模式、Jetson/Linux UVC 和 70°–80° 镜头。
 - [ ] A7. 确认 simpleRTK2B 的天线、USB/UART、目标地区 NTRIP 改正服务或自建基站。
-- [ ] A8. 确认 Lite3 IMU/leg odom/joint_states/cmd_vel 当前接口、频率、时间戳、协方差、横移语义、速度限制和 watchdog。
-- [ ] A9. 冻结整机 Topic/TF/时间同步/运动学契约和 USB/Ethernet/电源布局。
+- [~] A8. 已依据公开 Lite3_ROS / sdk_deploy 文档核验基础 topic/message 和 Twist 分量语义，并建立 [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)；目标固件的频率、时间戳、协方差、横移可执行性、速度限制、watchdog 和急停仍需厂商确认/实机验证。
+- [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
 - [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
 - [ ] A11. 完成采购前风险评审；无供电/载荷/接口重大风险后批准采购与进入阶段 B。
 
@@ -201,10 +201,12 @@ Lite3 vendor motion SDK / gait controller
 - [x] 仓库初始化，默认分支 main。
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
+- [x] 建立 Lite3 SDK/UDP bridge 与 Nav2 速度命令安全适配器接口契约。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
 - [x] 创建 ADR-0002 硬件选型记录和更新硬件接口清单。
 - [x] TaskPlan 拆分为根目录进度台账 + 两份设计分册。
+- [x] 建立 Lite3 bridge 接口契约，明确腿式里程计、IMU、关节状态和速度命令的公开 ROS 消息接口。
 
 ### 未完成 / 阻塞
 - [ ] 未采购设备，未接收实物。
@@ -219,7 +221,8 @@ Lite3 vendor motion SDK / gait controller
 2. 向相机供应商确认两台 See3CAM_50CUG 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 建立质量/功耗/散热预算和初步安装 CAD，检查 3.6 kg 项目外设目标。
-5. 更新本文件 A3–A11 进度；A 阶段准入后再推进 B 阶段。
+5. 继续完成 A3–A11 供应商确认和质量/电源/时间同步预算；公开 Lite3 接口已整理，目标固件与安全保护待验证。
+6. 阶段 A 准入通过后，先实现 Lite3 bridge 的只读诊断与 mock 测试，再开放任何运动命令。
 
 ---
 
@@ -229,7 +232,8 @@ Lite3 vendor motion SDK / gait controller
 |---|---|---|---|
 | 2026-11-24 | v0.1 | 新仓库初始化、建立系统架构和 A–G 初版任务计划 | 仓库首次初始化提交 |
 | 2026-11-24 | v0.2 | 预选 Lite3 Venture、MID-360、双 See3CAM_50CUG、ZED-F9P RTK、AGX Orin；建立硬件 ADR/接口清单 | ADR-0002 和接口清单提交 |
-| 2026-11-24 | v0.2.1 | TaskPlan 超过 30 KB，按规则拆为架构硬件分册和测试风险分册；保留本根文件唯一进度状态 | 本次 TaskPlan 维护提交 |
+| 2026-11-24 | v0.2.1 | TaskPlan 超过 30 KB，按规则拆为架构硬件分册和测试风险分册；保留本根文件唯一进度状态 | root: 7532fc78; Part 1: 8cfc024c; Part 2: 7caa7e7d |
+| 2026-11-24 | v0.2.2 | 依据官方 Lite3 ROS 2 transfer/SDK 公开接口建立 bridge contract；补充参考资料和 package 规划；A8/A9 更新为部分完成 | bridge: 83544a98; refs: 5384dd90; architecture: 8d4de365; package plan: 8fb71753; README: 5c444c50 |
 
 ---
 
@@ -241,6 +245,7 @@ Lite3 vendor motion SDK / gait controller
 - [ADR-0002 — 硬件平台选型](docs/decisions/ADR-0002-hardware-platform.md)
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 - [ROS 2 package 规划](docs/implementation/ros2_workspace_and_packages.md)
+- [Lite3 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [系统架构](docs/architecture/system_architecture.md)
 - [传感器融合](docs/architecture/sensor_fusion.md)
