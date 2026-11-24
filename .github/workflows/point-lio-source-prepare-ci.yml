@@ -1,0 +1,51 @@
+name: Point-LIO Pinned Source Preparation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
+      - ".github/workflows/point-lio-source-prepare-ci.yml"
+  pull_request:
+    paths:
+      - "scripts/prepare_point_lio_intel_ros2.sh"
+      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
+      - ".github/workflows/point-lio-source-prepare-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  prepare-pinned-source:
+    name: Verify pinned upstream and Intel patch series
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Prepare exact Point-LIO source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORKSPACE="$RUNNER_TEMP/point_lio_poc_ws"
+          POINTLIO_DIR="$WORKSPACE/src/point_lio"
+          BASE_COMMIT="97b0042e397ec71c327966abebff9b4b7e2c154a"
+
+          bash scripts/prepare_point_lio_intel_ros2.sh "$WORKSPACE"
+
+          test "$(git -C "$POINTLIO_DIR" rev-list --count "$BASE_COMMIT"..HEAD)" -eq 3
+          test -f "$POINTLIO_DIR/.git/robodog-intel-patches.lock"
+          grep -Fxq "intel_repo=decbb06fc1b746b229957b66b92ab972e1f05609" \
+            "$POINTLIO_DIR/.git/robodog-intel-patches.lock"
+          test -z "$(git -C "$POINTLIO_DIR" status --porcelain)"
+
+          git -C "$POINTLIO_DIR" log -3 --format='%s' > "$RUNNER_TEMP/point_lio_patch_subjects.txt"
+          grep -Fxq "Port Point-LIO to ROS2 and add benchmarking instrumentation" \
+            "$RUNNER_TEMP/point_lio_patch_subjects.txt"
+          grep -Fxq "Reformat sources to match the project's real clang-format style" \
+            "$RUNNER_TEMP/point_lio_patch_subjects.txt"
+          grep -Fxq "Fix early loop exit and a distance-threshold typo" \
+            "$RUNNER_TEMP/point_lio_patch_subjects.txt"
+
+          echo "Point-LIO base commit and all three pinned patches verified."
+          git -C "$POINTLIO_DIR" log -4 --oneline
