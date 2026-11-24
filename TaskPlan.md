@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.42
+- 文档版本：v0.3.43
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -93,7 +93,7 @@
 - [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id；ROS 3x3/6x6 covariance 已增加矩阵对称性与 PSD 结构校验，新增 5 项边界测试，Humble/Jammy 与 Jazzy/Noble CI run 45377526595 均通过。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
 - [x] B4. 已在 Ubuntu 24.04 + ROS 2 Jazzy x86_64 完成 Livox SDK2 v1.3.1 与 livox_ros_driver2 v1.2.6 的构建/安装；CI run 45337301420 成功。仅为 x86_64 编译证据，Orin aarch64、真实 MID-360 设备发现/数据采集、PTP 和 60 分钟稳定性仍未验收。CustomMsg/timebase/offset_time ns 语义已源码核验。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
-- [~] B6. 已完成 ZED-F9P ROS 2 驱动候选审查，首选并固定 `aussierobots/ublox_dgnss` 0.7.6 commit `9d4f5addbc72d092c57dde99b20712258e96e81e`（Apache-2.0）；上游原始 UBXNavPVT/HPPosLLH/COV/STATUS 消息保留 iTOW。`rtcm_msgs` 1.1.6 作为源码依赖固定 commit `8d27ab5f4d4a581e1bb9c87d572994c25197f6d4`（BSD-3-Clause）。Humble/Jammy 与 Jazzy/Noble 两环境在 CI run 45386892781 均完成 7 个包的 colcon build/install；最终接口检查仅因 `ros2 interface show | grep -q` 触发 BrokenPipeError 失败，已修复为先捕获完整输出再检查字段，验证重跑 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856) 当前进行中。尚未连接真实 ZED-F9P、配置固件/UBX 消息、验证 USB/NTRIP 或向定位链输出 qualified NavSatFix。
+- [~] B6. 已完成 ZED-F9P ROS 2 驱动候选审查并固定 `aussierobots/ublox_dgnss` 0.7.6 commit `9d4f5addbc72d092c57dde99b20712258e96e81e`（Apache-2.0）；`rtcm_msgs` 1.1.6 源码依赖固定 commit `8d27ab5f4d4a581e1bb9c87d572994c25197f6d4`（BSD-3-Clause）。Humble/Jammy 和 Jazzy/Noble 两套 CI [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856) 均完整 success：7 个包 colcon build/install 完成，UBXNavPVT/HPPosLLH/COV 所需 iTOW 和质量字段检查通过。评估文档记录 header stamp=主机 USB 收包时间、不可直接信任上游 NavSatFix converter 的跨 topic 状态/协方差匹配。**真实 ZED-F9P USB/固件/UBX输出、NTRIP/RTK Fixed/PPS 和 qualified NavSatFix ROS adapter 尚未接入，B6 仍为部分完成。**
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
@@ -108,7 +108,7 @@
 - [ ] C3. 比较 vendor legged odom（若有）与 Point-LIO 的位置/航向误差、漂移、更新频率、延迟和资源开销；选定唯一主要 local odom 来源。
 - [ ] C4. 将通过验收的 local odom 表达为 `odom→base_link`；仅在有额外独立观测且 covariance 合理时再配置 local EKF，避免重复融合同一 IMU/LIO 信息。
 - [ ] C5. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、GNSS 天线杆臂）。
-- [~] C6. 已新增纯算法 GNSS Fixed 质量门控，并新增 UBX-NAV-PVT flags 解码与 iTOW 严格配对 helper；GNSS CI run 45379297789 在 Humble/Jammy 与 Jazzy/Noble 各 42/42 passed。已静态审查并固定 `ublox_dgnss` 0.7.6：PVT、HPPOSLLH、NAV-COV、NAV-STATUS 均暴露 iTOW，且 PVT 含 GNSSFixOK/carrSoln、NAV-COV 含 pos_cor_valid 与 NED covariance。源码确认上游 ROS header stamp 来自主机 USB 收包时刻，不能当 receiver acquisition time 或 monotonic freshness；上游 `ublox_nav_sat_fix_hp_node` 不核对 position/status/covariance 同历元 iTOW，不得直接接入 quality gate。项目 adapter 必须 raw UBX bounded exact-iTOW join、steady-clock arrival freshness、receiver GPS week/boot generation 管理，并将 NED covariance 通过 `C_ENU=R*C_NED*R^T` 正确变换。驱动 7 包已在 Humble/Jazzy 两环境构建完成（run 45386892781），但最终接口断言因 `grep -q` 提前关闭 ros2 CLI stdout 而 BrokenPipeError；已修复并在 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856) 复测，当前尚未得到最终结果。**ROS adapter、同历元 NavSatFix 输出、navsat_transform/global EKF、NTRIP/PPS 和真实接收机测量仍未完成，C6 保持部分完成。**
+- [~] C6. 已实现 `robodog_gnss_quality` RTK Fixed 质量门控、UBX-NAV-PVT flags 解析，以及针对首选 `ublox_dgnss` 原始消息的四路纯算法组装函数 `build_observation_from_ubx_epochs()`：要求 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS 的 iTOW 完全相等、四路 host monotonic arrival skew 不超显式上限、PVT/STATUS 质量字段一致、HPPOSLLH invalid flags 全清、NAV-COV `pos_cor_valid=true`；将完整 NED covariance 变换到 ENU（含交叉项符号）后生成 `GnssObservation`。新增 14 项组装/协方差边界测试；GNSS CI [run 45388146723](https://github.com/rexyll/robdog_nav2/actions/runs/45388146723) 在 Humble/Jammy 与 Jazzy/Noble 均 56/56 passed。候选驱动跨发行版 7 包 build/install/接口验证也已通过 [run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856)。**仍缺 ROS adapter 的 bounded per-topic cache、receiver week/boot generation 与 source-time mapping、steady-clock callback capture、实际接收机数据、qualified NavSatFix 发布、navsat_transform/global EKF 接线；C6 保持部分完成。**
 - [ ] C7. 测试 Fixed/Float/Single、遮挡、多路径、断改正和恢复。
 - [ ] C8. 测试静止、直行、转弯、横移（若支持）、步态切换和机身振动。
 - [ ] C9. 完成 GNSS 降级、超时、跳变剔除和恢复策略。
@@ -191,6 +191,8 @@
 - [x] Livox SDK2 v1.3.1 + livox_ros_driver2 v1.2.6 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337301420](https://github.com/rexyll/robdog_nav2/actions/runs/45337301420)。
 - [x] 固定 Point-LIO Intel Jazzy port 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320)；colcon 2 packages finished，`pointlio_mapping` executable 被找到。
 - [x] MID-360 rosbag 时间审计工具已增加 CLI 质量阈值参数防护（负数、NaN、±Inf 拒绝；0/未设置接受），并加入“校验先于 rosbag 打开”的端到端测试；最终 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) 的 Python 3.12 编译、CLI help 与 21/21 项测试通过。真实 MID-360 bag/时钟同步仍未验证。
+- [x] 完成 ZED-F9P ROS 2 驱动候选评估与固定：`aussierobots/ublox_dgnss` 0.7.6 (`9d4f5add...`, Apache-2.0) 和源码依赖 `rtcm_msgs` 1.1.6 (`8d27ab5f...`, BSD-3-Clause)。Humble/Jammy 与 Jazzy/Noble 两 CI job 均通过：7 packages finished、安装完成并通过 UBXNavPVT/HPPosLLH/COV iTOW/quality field 验证：[run 45387577856](https://github.com/rexyll/robdog_nav2/actions/runs/45387577856)。仅为跨发行版软件构建/接口证据，不代表实机 USB、NTRIP、RTK Fixed 或 PPS 验收。
+- [x] 扩展 GNSS 纯算法 core 以适配固定 u-blox 原始 UBX topic：新增 PVT/HPPOSLLH/NAV-COV/NAV-STATUS 四路精确 iTOW join、接收单调时差 gate、质量字段一致性、位置有效标志检查和完整 NED→ENU covariance 矩阵转换；新增 14 项测试，最终 GNSS CI [run 45388146723](https://github.com/rexyll/robdog_nav2/actions/runs/45388146723) 在 Humble/Jammy 与 Jazzy/Noble 各 56/56 passed。该函数仍是纯算法，不含实际 ROS topic subscriber、bounded cache、receiver time mapper 或 NavSatFix publisher。
 ### 未完成 / 阻塞
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
@@ -200,7 +202,7 @@
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
 - [ ] 双目精确 SKU 已明确，但 GPIO 触发电压/极性/时序、镜头、双机硬件同步和 Jetson 双路 USB3 带宽尚待供应商确认。
-- [ ] RTK NTRIP 改正服务或基站尚未确定；ZED-F9P ROS 驱动候选已选定并通过 Humble/Jazzy 源码 build/install，但最终 UBX interface post-build check 的修复重跑尚未完成。真实接收机 USB/固件配置、严格同历元 qualified NavSatFix adapter、PPS/timebase 和 Fixed/Float 状态仍待实测。
+- [ ] RTK NTRIP 改正服务或基站尚未确定；ZED-F9P ROS 驱动候选及跨 Humble/Jazzy 软件构建已通过，但真实板卡 USB/固件配置、UBX topic/频率/丢包/iTOW 匹配、qualified NavSatFix ROS adapter、PPS/timebase 和 Fixed/Float 现场状态仍待实测。
 - [ ] 载荷、供电、热设计、质心和续航未实测；质量预算还缺相机本体、交换机、触发板、DC/DC、支架和线束，功率预算还缺转换损耗与峰值测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
@@ -234,6 +236,7 @@
 | 2026-11-24 | v0.3.40 | 扩展 GNSS 核心：解码 UBX-NAV-PVT GNSSFixOK/carrSoln 并按 iTOW 严格配对 NavSatFix，补充时钟 epoch 与接收时差 Gate；Humble/Jazzy 各 42/42 测试通过 | code c36cdbcaea5b127df960cd7b0c261cbdf512f478; GNSS CI 45379297789 |
 | 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 | 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
+| 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
 
 ---
 
