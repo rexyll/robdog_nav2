@@ -12,6 +12,7 @@ from audit_m3dgr_gt_rtk_correspondence import (
     audit_gt_rtk_correspondence,
     geodetic_to_enu,
     rigid_trajectory_correspondence,
+    message_snapshot,
 )
 
 
@@ -124,6 +125,32 @@ class TestM3DGRGTRTKCorrespondence(unittest.TestCase):
         self.assertEqual(
             report["ordinal_position_comparison"]["status"], "unavailable"
         )
+
+    def test_navsatfix_report_includes_frame_service_and_covariance_metadata(self):
+        points = [
+            (10, 37.0, -122.0, 100.0),
+            (11, 37.00001, -122.00001, 100.1),
+            (12, 37.00002, -122.00002, 100.2),
+        ]
+        self._make_bag(points)
+        rows = [
+            "10.0 0 0 0 0 0 0 1",
+            "11.0 1 1 0 0 0 0 1",
+            "12.0 2 2 0 0 0 0 1",
+        ]
+        self.gt_path.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
+        report = audit_gt_rtk_correspondence(self.bag_path, self.gt_path)
+        metadata = report["rtk_navsatfix_metadata"]
+        self.assertEqual(metadata["frame_id_distribution"], {"gps": 3})
+        self.assertEqual(metadata["service_bitfield_distribution"], {"1": 3})
+        self.assertEqual(metadata["covariance_finite_matrix_count"], 3)
+        self.assertEqual(report["related_gnss_topics"]["/ublox_driver/receiver_lla"]["status"], "topic_absent")
+
+    def test_message_snapshot_bounds_arrays(self):
+        snapshot = message_snapshot({"values": list(range(40))}, max_items=8)
+        self.assertEqual(snapshot["values"]["length"], 40)
+        self.assertTrue(snapshot["values"]["truncated"])
+        self.assertEqual(len(snapshot["values"]["items"]), 8)
 
     def test_rigid_fit_reports_diagnostic_residual_without_scale(self):
         source = np.asarray(
