@@ -31,3 +31,7 @@ bags/*
 !bags/README.md
 models/*
 !models/README.md
+
+# External evaluation datasets (never commit downloaded bags or generated artifacts)
+datasets/*
+!datasets/README.md
