@@ -1,7 +1,7 @@
 # RobDog Nav2 TaskPlan 变更历史归档（2026-11-24）
 
 - 归档日期：2026-11-24
-- 范围：TaskPlan v0.1 至 v0.3.4 的历史变更记录
+- 范围：TaskPlan v0.1 至 v0.3.35 的历史变更记录
 - 当前唯一进度真源仍为根目录 [TaskPlan.md](../../TaskPlan.md)。本文件仅保存历史变更，不维护当前任务状态。
 
 | 日期 | 版本 | 变更 | 提交/证据 |
@@ -48,3 +48,4 @@
 | 2026-11-24 | v0.3.32 | P2 SQLite rosbag INSPVAX integration tests 与全套 10/10 测试通过；数据 SHA256 provenance 和回放进程组清理已实现；P3a native ARM64 build 仍运行中 | P2 CI 45340287093; prep 40921631/86493c97; replay 29937a81; tests a9b2a1b2; P3a 45339955465 |
 | 2026-11-24 | v0.3.33 | ARM64 run 45339955465 已实际完成 SDK2/Driver2/Point-LIO 两包编译；job 仅因 post-build file 命令缺失失败，现改成纯 shell 文件/可执行检查并重跑 | ARM64 workflow d7bc7b37; first run 45339955465; retry 45340700005 |
 | 2026-11-24 | v0.3.34 | 固定 INSPVAX CDR offsets 已与 NovAtel 官方 msg（commit 0c0e135b）及 Intel 固定 extractor（commit decbb06）交叉核验；来源注释后 P2 CI 45341097202 再次 10/10 通过；P3a ARM64 post-check 修复重跑中 | POC doc ad7dafc4; helper c93798cb; P2 run 45341097202; ARM64 retry 45340700005 |
+| 2026-11-24 | v0.3.35 | 修复 ARM64 workflow 后置 shell 的 ROS 环境初始化后，原生 Ubuntu 24.04/Jazzy aarch64 build 最终通过；SDK2、Driver2、Point-LIO 两包构建安装及 ROS package/executable 后置检查全部成功 | ARM64 run 45341347087; POC doc commit 68f8450d31f83f658b068a81164e92808f48b40a |
