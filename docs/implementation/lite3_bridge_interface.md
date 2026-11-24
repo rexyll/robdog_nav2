@@ -43,7 +43,16 @@ SDK deploy 公开说明提到状态消息可在约 10 Hz 更新、有效控制�
 
 topic 重命名和 frame_id 最终在真实驱动 launch 中固定，不允许只为了方便而伪造 frame_id。
 
-## 4. 软件包职责边界
+## 4. 当前已实现的软件骨架（2026-11-24）
+
+仓库中已建立 robodog_lite3_bridge ament_python package：
+- lite3_state_mock 发布 /mock/lite3/leg_odom2、/mock/lite3/imu/data、/mock/lite3/joint_states；使用 mock_odom/mock_base_link/mock_imu_link，不会覆盖真实硬件 topic/TF。
+- lite3_topic_contract_monitor 只读订阅配置的话题，发布 DiagnosticArray 新鲜度诊断。
+- mock 消息具有大协方差/未知 IMU orientation/空 JointState arrays，只用于 topic/type/launch 测试。
+- 当前 package 不连接 Lite3 SDK/UDP，不发布 /cmd_vel，不能用于真实定位或运动控制。
+- GitHub Actions 计划对 Humble/Ubuntu 22.04 与 Jazzy/Ubuntu 24.04 构建测试；结果以根 TaskPlan 记录的 workflow run 为准。
+
+## 5. 软件包职责边界
 
 建议拆成两个层：
 
@@ -66,7 +75,7 @@ topic 重命名和 frame_id 最终在真实驱动 launch 中固定，不允许�
 - 记录 Nav2 期望速度和机器人实际速度，诊断执行误差；
 - 不允许任何旁路节点直接向厂商 `/cmd_vel` 发布运动命令。
 
-## 5. 速度命令安全链
+## 6. 速度命令安全链
 
 ```text
 Nav2 Controller
@@ -101,7 +110,7 @@ Motion host / gait controller
 - 清除故障/重新使能必须是显式动作，不应由 Nav2 自动 recovery 隐式完成；
 - 命令超时阈值、速度/加速度限制由实测、底层 SDK 限制和安全风险评估确定，当前不写入未经验证的固定数值。
 
-## 6. 状态估计输入的验证事项
+## 7. 状态估计输入的验证事项
 
 收到 `/leg_odom2` 和 `/imu/data` 后先记录原始数据，不应立即认为两个数据统计独立。
 
@@ -116,7 +125,7 @@ Motion host / gait controller
 
 只有完成上述检查，才选择 EKF 的融合变量。若厂商提供的腿式 odometry 已经是 IMU 融合状态，不将同一惯性信息重复当成独立传感器融合。
 
-## 7. 当前 ROS 2 发行版策略
+## 8. 当前 ROS 2 发行版策略
 
 - Lite3 Venture 官方感知扩展示例使用 Ubuntu 22.04 + ROS 2 Humble + JetPack 6.1。
 - Lite3_ROS 公共仓库的旧版 ROS 2 示例有 Foxy 版本信息；SDK deploy 新仓库提供 Lite3 ROS 2 transfer。
@@ -125,7 +134,7 @@ Motion host / gait controller
 - 自研 bridge/adapters 需在 CI 检查 Humble/Jazzy；若 Orin BSP 支持 Ubuntu 26.04 且外设驱动成熟，再评估 Lyrical。实际兼容性以锁定 commit 的构建结果为准。
 - 不同 ROS distro 不应默认在同一 DDS domain 直接互通。需要跨 distro 时通过 UDP/串口/标准消息网关传输。
 
-## 8. 实施验收
+## 9. 实施验收
 
 1. **只读模式：** 启动 bridge，确认 odom/IMU/joint/status 连续，记录频率/时间戳/丢包。
 2. **坐标模式：** 检查所有 frame，生成 TF 图，确认唯一发布者。
@@ -135,7 +144,7 @@ Motion host / gait controller
 6. **低速执行：** 台架/抬起状态只用于通信与步态状态确认；任何地面移动从极低速度开始，逐级记录停车距离。
 7. **Nav2 闭环：** 在 Collision Monitor 正常、数据新鲜、机器人处于允许模式时才开放自动运动。
 
-## 9. 参考源码与文档
+## 10. 参考源码与文档
 
 - [DeepRoboticsLab/Lite3_ROS](https://github.com/DeepRoboticsLab/Lite3_ROS)
 - [DeepRoboticsLab/sdk_deploy](https://github.com/DeepRoboticsLab/sdk_deploy)
