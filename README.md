@@ -21,7 +21,7 @@
 
 - **主要导航框架：** ROS 2 Nav2。
 - **主要几何避障传感器：** Livox MID-360 3D LiDAR，输出 PointCloud2。
-- **全局定位：** ArduSimple ZED-F9P RTK GNSS；需结合 Lite3 IMU 和腿式里程计，单天线位置本身不能可靠提供静止时航向。
+- **全局定位：** ArduSimple ZED-F9P RTK GNSS；需结合 Lite3 IMU 和厂商确认的本体 odometry。当前新旧 Lite3 SDK 的状态接口不同，可信 legged odometry 尚待供应商确认；单天线 GNSS 本身不能可靠提供静止时机身航向。
 - **视觉：** 两台 See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头） 普通 RGB 相机组成被动双目系统，提供视差/深度点云以及目标语义识别；它不是天然等同于工业 RGB-D 相机。
 - **定位融合：** 以 `robot_localization` 双 EKF + `navsat_transform_node` 作为首选参考架构，具体状态变量、协方差和数据源须基于底层实际输出标定。
 - **障碍物融合：** LiDAR 与双目点云保留独立观测源，分别做时间戳、TF、范围、高度、置信度和自体过滤，再接入 Nav2 costmap；不在未经验证的情况下简单拼接成一个点云。
@@ -123,6 +123,8 @@ flowchart TB
 - [TaskPlan Part 1：架构与硬件设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
 - [TaskPlan Part 2：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [Lite3 本体 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
+- [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
+- [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
 - [初始 Lite3 bridge ROS 2 package](src/robodog_lite3_bridge/README.md)
