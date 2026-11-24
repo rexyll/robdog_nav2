@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/livox-mid360-ci.yml"
+      - ".github/ros2/livox-mid360.repos"
       - "docs/implementation/livox_mid360_driver_baseline.md"
   pull_request:
     paths:
       - ".github/workflows/livox-mid360-ci.yml"
+      - ".github/ros2/livox-mid360.repos"
       - "docs/implementation/livox_mid360_driver_baseline.md"
   workflow_dispatch:
 
@@ -16,13 +18,17 @@ jobs:
   jazzy-x86-build:
     name: ROS 2 Jazzy / Ubuntu 24.04 x86_64
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     container:
       image: rostooling/setup-ros-docker:ubuntu-noble-latest
     steps:
-      - name: Install native build dependencies
+      - name: Checkout project (includes pinned vcstool manifest)
+        uses: actions/checkout@v4
+
+      - name: Install native SDK build dependencies
         shell: bash
         run: |
+          set -euxo pipefail
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             build-essential cmake git libapr1-dev libeigen3-dev libpcl-dev
@@ -40,17 +46,11 @@ jobs:
           cmake --install /tmp/Livox-SDK2/build
           ldconfig
 
-      - name: Build pinned livox_ros_driver2 for Jazzy
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/ros_ws/src"
-          git clone https://github.com/Livox-SDK/livox_ros_driver2.git \
-            "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2"
-          git -C "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2" \
-            checkout 13eb05e4e6dd7a765b934d0c5fd6236676a57b49
-          source /opt/ros/jazzy/setup.bash
-          cd "$GITHUB_WORKSPACE/ros_ws/src/livox_ros_driver2"
-          ./build.sh jazzy
-          source "$GITHUB_WORKSPACE/ros_ws/install/setup.bash"
-          ros2 pkg prefix livox_ros_driver2
+      - name: Build pinned livox_ros_driver2 with ROS tooling
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: livox_ros_driver2
+          target-ros2-distro: jazzy
+          vcs-repo-file-url: file://\${{ github.workspace }}/.github/ros2/livox-mid360.repos
+          skip-tests: true
+          coverage-result: false
