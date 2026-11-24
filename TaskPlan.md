@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.54
+- 文档版本：v0.3.55
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -100,8 +100,8 @@
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
 - [~] B11. Point-LIO P0/P1 与 P3a ARM64 build 已通过；UrbanLoco `HK-Data20190117_0.db3` 仅完成 rosbag2/topic/318 条 INSPVAX CDR 诊断，来源不明，不能代替指定 ROS1 原始 bag。UrbanLoco P2 replay/evo 仍被 provenance gate 阻塞（CI [45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success），但不再作为整个项目唯一数据入口；并行替代基准转入 B13。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
-- [~] B13. 已核查 GrandTour/QuadSLAM/M3DGR 替代基准；用户已下载 M3DGR `Dynamic03.bag` 并完成官方 SHA256 匹配（3,434,689,371 bytes，上游清单 hash 一致），**原始 bag 文件完整性 Gate 通过**。匹配的 Dynamic03 独立 GT 尚待用户下载；ROS1 结构/topic/type/CustomMsg/IMU/timebase 审计已工具化，但尚未对用户文件执行；任何回放和 APE/RPE 仍待结构/GT/时间基准核验。详情见 [替代数据集策略 §6](docs/datasets/alternative_dataset_strategy.md)。
-- [~] B14. 新增 `scripts/audit_m3dgr_ros1_bag.py`（`rosbags==0.11.5` read-only ROS1 audit），采集 connections/topic/type/count/timestamps/message sizes，并抽样解码 MID-360 CustomMsg/IMU 的 header/timebase/point_num/offset_time；加入 5 项单测。与已有外部 SHA256 verifier 测试、UrbanLoco 13 项测试统一 CI [run 45415094273](https://github.com/rexyll/robdog_nav2/actions/runs/45415094273) success。工具不转换/重写原始 bag；实际 Dynamic03 审计、ROS1→ROS2 适配/转换、GT 审核仍未完成。
+- [~] B13. 已核查 GrandTour/QuadSLAM/M3DGR 替代基准；用户 Dynamic03 原始 ROS1 bag（3,434,689,371 bytes）已与 M3DGR 官方 SHA256 完全匹配，原始文件完整性 Gate 通过。匹配的 Dynamic03 独立 GT 尚未下载；实际 bag 结构/topic/type/CustomMsg/IMU/timebase 审计仍等用户运行。M3DGR 官方参考 GT 示例为 TUM 八列，但 Dynamic03 GT 本体格式尚未验证；新增 `scripts/audit_tum_trajectory.py` 做只读语法/时间/四元数/空间范围审计，不能证明时钟或坐标对齐。回放/evo 仍待 bag/GT 审查。详情见 [替代数据集策略 §6](docs/datasets/alternative_dataset_strategy.md)。
+- [~] B14. 新增 `scripts/audit_m3dgr_ros1_bag.py`（`rosbags==0.11.5`，ROS1 bag 只读结构/CustomMsg/IMU 抽样审计）及 `scripts/audit_tum_trajectory.py`（TUM GT 格式/时间戳/四元数/边界审计）；分别加入 5/7 项单测。已按 M3DGR 固定 commit `5fc892c84defef42feb2418f7d38897bef40f490` 核实 Livox `offset_time`/packet offset 为 ns、timebase 为首包时间、header.stamp=timebase/1e9；不代表 PTP/PPS 同步已成立。固定 Intel ROS2 Point-LIO patch 使用 `livox_ros_driver2/msg/CustomMsg`，M3DGR ROS1 驱动使用 `livox_ros_driver/CustomMsg`，转换须显式类型映射/重序列化，禁止盲用通用转换。CI [run 45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success：bag 5/5、GT 7/7、UrbanLoco 13/13。实际 bag/GT 未审计、ROS1→ROS2 adapter/converter 尚未实现。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -223,7 +223,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。M3DGR `Dynamic03.bag` 已通过官方 SHA256（本地 3,434,689,371 bytes）；下一步先下载匹配的 Dynamic03 GT，然后在本地运行 `python3 -m venv .venv-dataset-tools && source .venv-dataset-tools/bin/activate && python -m pip install -r requirements-dataset-tools.txt`，再执行 `python scripts/audit_m3dgr_ros1_bag.py "$HOME/Downloads/Dynamic03.bag" --json-out datasets/m3dgr_dynamic03_audit.json`。检查报告中的 topic/type、CustomMsg timebase/point_num/offset_time、IMU header 时间与 bag 时间；在报告通过且 GT 格式/时钟/坐标核验前，不转换、不运行 Point-LIO/evo。UrbanLoco P2 继续独立保持 provenance gate。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。M3DGR `Dynamic03.bag` 已通过官方 SHA256（本地 3,434,689,371 bytes）。用户下一步仍需下载匹配的 Dynamic03 GT。先运行 `python3 -m venv .venv-dataset-tools && source .venv-dataset-tools/bin/activate && python -m pip install -r requirements-dataset-tools.txt`，再执行 `python scripts/audit_m3dgr_ros1_bag.py "$HOME/Downloads/Dynamic03.bag" --json-out datasets/m3dgr_dynamic03_audit.json`；GT 到位后运行 `python scripts/audit_tum_trajectory.py "$HOME/Downloads/Dynamic03_GT.txt" --json-out datasets/m3dgr_dynamic03_gt_audit.json`（按实际文件名替换）。先审查 topic/type、CustomMsg timebase/point_num/offset_time、IMU header 与 bag 时间，以及 GT 时间戳/坐标字段。因 ROS1 `livox_ros_driver/CustomMsg` 与本项目 Point-LIO 的 ROS2 `livox_ros_driver2/msg/CustomMsg` 包名不同，必须先实现并测试显式映射/重序列化。bag/GT/时钟/坐标未核验前，不转换、不运行 Point-LIO/evo。UrbanLoco P2 继续独立保持 provenance gate.
 
 ---
 
@@ -237,6 +237,7 @@
 | 2026-11-24 | v0.3.52 | 不再将 UrbanLoco 单包作为整体项目数据门禁；新增 GrandTour（ANYmal+MID-360）、QuadSLAM（Go2 步态）和 M3DGR（MID-360/GNSS）替代数据集策略，明确许可/格式/校验限制；归档 v0.3.37–v0.3.50 历史 | alternative_dataset_strategy.md 6341cc8ec12fb20d94f65459ae4e29aa6039c834; official dataset pages/repositories checked 2026-11-24 |
 | 2026-11-24 | v0.3.53 | 固定 M3DGR Dynamic03/Outdoor01 官方 SHA256；新增本地外部数据集校验器及正向/不匹配/缺失清单测试；修复 workflow bash -n 续行错误后 CI [45400469052](https://github.com/rexyll/robdog_nav2/actions/runs/45400469052) success | manifest 469964558729e552676d8c30184e4031d1ddf300; verifier bac0631aadd04929d1d73653c63bb4dbbd86087a; tests 07fd5b1307a2cdc32c711c9cc36ec776c0d18cc2; workflow 9f7e7ce06b06aa3f893b2a6a280c7ca69f621d30; CI 45400469052 |
 | 2026-11-24 | v0.3.54 | 用户完成 M3DGR Dynamic03 官方 SHA256 校验；新增只读 ROS1 bag audit（topic/type/time/count/custom sample）和 5 项测试，CI [45415094273](https://github.com/rexyll/robdog_nav2/actions/runs/45415094273) success；记录 Dynamic03 单独 GT 下载入口与正确 MID-360 IMU config | audit 2d40cf4f332c1932cce309933bfb4f4010291236 / d925715eba07a6533b07a7e09bf60a0074634c2e / 244d00dca66e474bfe6545b2a4db1086ee2c9019; tests 539cb9b3e817d19bbc11ba3c59199ecc114ba8b4 / 564a0970a8dc9fb721c0ed62890c9bd4343f8f8d / b61468e150a0292aab88d4735ab391009c212e2b; docs 2f49b845ec58b792772adb2d6614fdd467b27363 / e606796da37827d8fc84ea647024a032ba6fa629; CI 45415094273 |
+| 2026-11-24 | v0.3.55 | 新增 TUM GT 只读审计及 7 项测试；固定 M3DGR Livox ROS1 `offset_time`=ns/timebase/header 语义来源；确认 ROS1 `livox_ros_driver/CustomMsg` 与 Jazzy Point-LIO `livox_ros_driver2/msg/CustomMsg` 类型不同，记入显式类型映射/重序列化门禁；bag 5/5、GT 7/7、UrbanLoco 13/13 CI [45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success | TUM audit 0f42bcc5d1a5be5664696957fd187c1f7045b5d3; tests 0627d2afd732b5849c1e3e660a67550fdfc8bdb5 / 59b84dba906e744b1f049ab918537671ee63af94; Livox audit 23c334be6377bf19ead94f39d636a876cd98c819; docs f3ef67656deb932633957c7b13c825ba4ba381cb / cc107912a11d4bb46379555870012ac54f95dee2; CI 45416922661 |
 
 ---
 
@@ -281,6 +282,8 @@
 - [M3DGR Dynamic03 ROS1 bag 只读审计工具](scripts/audit_m3dgr_ros1_bag.py)
 - [数据集审计工具依赖](requirements-dataset-tools.txt)
 - [M3DGR ROS1 bag 审计测试](scripts/tests/test_m3dgr_ros1_bag.py)
+- [M3DGR TUM GT 只读审计工具](scripts/audit_tum_trajectory.py)
+- [M3DGR TUM GT 审计测试](scripts/tests/test_tum_trajectory_audit.py)
 - [外部公开数据集替代路线（GrandTour / QuadSLAM / M3DGR）](docs/datasets/alternative_dataset_strategy.md)
 - [UrbanLoco GT 提取脚本](scripts/extract_urbanloco_ulhk4_gt.py)
 - [UrbanLoco P2 回放脚本](scripts/run_urbanloco_ulhk4.sh)
