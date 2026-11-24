@@ -73,6 +73,9 @@ jobs:
           source /opt/ros/jazzy/setup.bash
           sudo rosdep init 2>/dev/null || true
           rosdep update
+          # The native dependency step clears apt lists to keep the runner lean.
+          # Refresh them before rosdep invokes apt-get for package dependencies.
+          sudo apt-get update
           rosdep install \
             --from-paths "$RUNNER_TEMP/livox_ws/src" \
             --ignore-src \
