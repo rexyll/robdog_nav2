@@ -139,7 +139,7 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 - 同一固定源码准备脚本和 build_point_lio_jazzy.sh 构建 SDK2/Driver2/Point-LIO；
 - 构建后检查 SDK2 shared library、ROS package prefixes 和 pointlio_mapping executable。
 
-ARM64 run [45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465) 的实际日志确认原生编译成功：SDK2 shared/static targets built、Driver2 Finished、Point-LIO Finished、Summary: 2 packages finished，ROS package prefix 和 pointlio_mapping 检查均完成；仅最后调用 file 命令失败（容器未安装 file，exit 127），不是编译错误。workflow 已改为使用 test -s 检查 SDK shared library、find 定位 pointlio_mapping 并 test -x 检查可执行权限。修正版 [run 45340700005](https://github.com/rexyll/robdog_nav2/actions/runs/45340700005) 已排队，待最终 job success 作为 P3a 通过证据。
+ARM64 run [45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465) 的实际日志确认原生编译成功：SDK2 shared/static targets built、Driver2 Finished、Point-LIO Finished、Summary: 2 packages finished，package prefix 和 pointlio_mapping 检查均完成；首次后置检查仅因容器缺少 file 命令失败。第二轮 [run 45340700005](https://github.com/rexyll/robdog_nav2/actions/runs/45340700005) 再次完成 SDK2/Driver2/Point-LIO 构建和安装，并通过 test -s library、find executable、test -x 检查；但 workflow 的独立后置 shell 未重新 source ROS/Jazzy install 环境，最后执行 ros2 pkg prefix 时报 ros2: command not found。现已在后置 shell 显式 source /opt/ros/jazzy/setup.bash 和 workspace install/setup.bash，最新修正版 [run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) 已启动；待 job success 才记录 generic ARM64 P3a 通过。
 
 GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该 gate 即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
 
@@ -195,7 +195,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
 - [~] P2 回放/GT/evo 脚本与 8 项纯函数 CI 已通过（run 45339580363）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
-- [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建已在 run 45339955465 完成 SDK2/Driver2/Point-LIO 编译，但 post-build file 工具检查失败；修正版 run 45340700005 待最终结论。这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
+- [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建 run 45339955465 和 45340700005 均完成 SDK2/Driver2/Point-LIO 编译与安装；两次分别被 file 工具缺失、独立 post-build shell 未 source ROS 环境阻断。最新修正版 run 45341347087 已在后置 shell 显式 source ROS/workspace 环境，待最终结论。这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
 
