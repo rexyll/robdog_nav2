@@ -1,0 +1,54 @@
+name: ROS 2 package CI
+
+on:
+  push:
+    paths:
+      - "src/**"
+      - ".github/workflows/ros2-package-ci.yml"
+  pull_request:
+    paths:
+      - "src/**"
+      - ".github/workflows/ros2-package-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.ros_distro }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ros_distro: humble
+            os: ubuntu-22.04
+          - ros_distro: jazzy
+            os: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: ${{ matrix.ros_distro }}
+
+      - name: Build workspace
+        shell: bash
+        run: |
+          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
+          colcon build --packages-up-to robodog_lite3_bridge --event-handlers console_direct+
+
+      - name: Run tests
+        shell: bash
+        run: |
+          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
+          source install/setup.bash
+          colcon test --packages-select robodog_lite3_bridge --event-handlers console_direct+
+
+      - name: Report test results
+        if: always()
+        shell: bash
+        run: |
+          source "/opt/ros/${{ matrix.ros_distro }}/setup.bash"
+          colcon test-result --verbose
