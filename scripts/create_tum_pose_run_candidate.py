@@ -188,7 +188,7 @@ def create_pose_run_candidate(
         "source_size_bytes": source_path.stat().st_size,
         "source_sha256": source_sha,
         "output_file": "trajectory.tum",
-        "output_sha256": candidate_sha,
+        "output_sha256": None,
         "method": {
             "pose_run_definition": "maximal consecutive run with exact equality of tx ty tz qx qy qz qw",
             "ordering": "sort timestamps only within each constant-pose run; preserve run order",
