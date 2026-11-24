@@ -1,0 +1,41 @@
+name: Livox Bag Timing Audit Unit Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/livox_time_audit_helpers.py"
+      - "scripts/audit_livox_rosbag_timing.py"
+      - "scripts/tests/test_livox_time_audit.py"
+      - ".github/workflows/livox-time-audit-tests.yml"
+  pull_request:
+    paths:
+      - "scripts/livox_time_audit_helpers.py"
+      - "scripts/audit_livox_rosbag_timing.py"
+      - "scripts/tests/test_livox_time_audit.py"
+      - ".github/workflows/livox-time-audit-tests.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: livox-time-audit-tests
+  cancel-in-progress: true
+
+jobs:
+  pure-python-tests:
+    name: Python 3.12 timestamp helper tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run pure timestamp helper unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_livox_time_audit.py" \
+            -v
