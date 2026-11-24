@@ -35,3 +35,6 @@ models/*
 # External evaluation datasets (never commit downloaded bags or generated artifacts)
 datasets/*
 !datasets/README.md
+
+# Local dataset audit environment
+.venv-dataset-tools/
