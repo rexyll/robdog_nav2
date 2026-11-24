@@ -85,7 +85,20 @@ Intel 公共 UrbanLoco 示例使用 2019 Velodyne 记录，该数据缺少每点
 
 Intel README 所述 UrbanLoco \`ulhk_4\` 论文基线 RMSE 2.17m 和 20% 回归容差只用于该公开数据集回归，不能转为本项目机器狗导航准入门槛。Intel 参考性能平台为 Intel 平台，而不是 Jetson AGX Orin。
 
-## 6. 当前状态
+## 6. P1 构建脚本与工作流
+
+项目已新增：
+- [scripts/build_point_lio_jazzy.sh](../../scripts/build_point_lio_jazzy.sh)：校验 Point-LIO 锁定的 upstream/Intel patch series；固定 Livox Driver2 v1.2.6 和 SDK2 v1.3.1；SDK2 用 GCC 13 -include cstdint 参数构建安装；调用官方 Driver2 ./build.sh jazzy，在同一 workspace 中构建 Driver2 与 Point-LIO；最后核对两个 ROS package prefix 和 Point-LIO executable。
+- [Point-LIO ROS 2 Jazzy Build](../../.github/workflows/point-lio-jazzy-build.yml)：Ubuntu 24.04 container + ros-tooling/setup-ros@0.7.22 + native PCL/Eigen dependencies，先准备固定源码，再运行上述构建脚本。
+- 独立 Livox Driver2 build workflow 使用固定 repos manifest 将 Driver2 锁定到正确的 v1.2.6 commit；SDK2 v1.3.1 单独 build/install，不把 SDK SHA 错配给 Driver2。
+
+当前运行：
+- [Point-LIO P1 Jazzy build run 45334593305](https://github.com/rexyll/robdog_nav2/actions/runs/45334593305)：进行中，尚未进入源码 build。
+- [Livox Driver2 build run 45334563869](https://github.com/rexyll/robdog_nav2/actions/runs/45334563869)：进行中，已修正 manifest 将 Driver2 固定到正确的 v1.2.6 commit。
+
+构建脚本会拒绝错误的源码锁、错误 Driver2 commit 或错误 SDK2 commit；不会重置现有 Point-LIO 用户修改。即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
+
+## 7. 当前状态
 
 - [x] 上游子模块 commit、Intel reference commit 和三份 patch blob/commit 均已固定。
 - [x] Point-LIO upstream BSD-3-Clause、Intel patch repository Apache-2.0 的来源边界已记录。
