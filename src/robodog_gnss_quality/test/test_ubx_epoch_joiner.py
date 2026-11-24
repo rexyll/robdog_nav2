@@ -281,6 +281,94 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     make_joiner(**kwargs)
 
+    def test_capacity_evicted_epoch_cannot_be_resurrected(self):
+        joiner = make_joiner(max_pending_epochs=1)
+        joiner.add_pvt(
+            make_pvt(1000, 100),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        )
+        joiner.add_pvt(
+            make_pvt(1001, 110),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=2_000_000,
+        )
+        self.assertEqual(joiner.pending_count, 1)
+        self.assertEqual(joiner.evicted_capacity, 1)
+
+        self.assertIsNone(joiner.add_position(
+            make_position(1000, 111),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertIsNone(joiner.add_covariance(
+            make_covariance(1000, 112),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertIsNone(joiner.add_status(
+            make_status(1000, 113),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertEqual(joiner.pending_count, 1)
+        self.assertEqual(joiner.retired_count, 1)
+
+    def test_stale_epoch_cannot_be_resurrected_after_expiry(self):
+        joiner = make_joiner(max_pending_age_ns=40)
+        joiner.add_pvt(
+            make_pvt(1000, 100),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        )
+        self.assertEqual(joiner.expire_stale(141), 1)
+        self.assertIsNone(joiner.add_position(
+            make_position(1000, 142),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertIsNone(joiner.add_covariance(
+            make_covariance(1000, 143),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertIsNone(joiner.add_status(
+            make_status(1000, 144),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        ))
+        self.assertEqual(joiner.pending_count, 0)
+        self.assertEqual(joiner.evicted_stale, 1)
+
+    def test_explicit_expiry_advances_clock_and_rejects_late_callback(self):
+        joiner = make_joiner(
+            max_pair_receive_skew_ns=10,
+            max_pending_age_ns=1000,
+        )
+        joiner.add_pvt(
+            make_pvt(1000, 100),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        )
+        self.assertEqual(joiner.expire_stale(200), 0)
+        with self.assertRaisesRegex(EpochPairingError, "outside the monotonic receive-time window"):
+            joiner.add_status(
+                make_status(1000, 189),
+                source_clock_id=GENERATION,
+                source_timestamp_ns=1_000_000,
+            )
+        self.assertEqual(joiner.pending_count, 0)
+        self.assertEqual(joiner.retired_count, 1)
+
+    def test_i_tow_outside_gps_week_is_rejected(self):
+        joiner = make_joiner()
+        with self.assertRaisesRegex(EpochPairingError, "GPS week"):
+            joiner.add_pvt(
+                make_pvt(604_800_000, 100),
+                source_clock_id=GENERATION,
+                source_timestamp_ns=1_000_000,
+            )
+
     def test_reset_requires_generation_to_be_reestablished(self):
         joiner = make_joiner()
         joiner.begin_generation(GENERATION)
