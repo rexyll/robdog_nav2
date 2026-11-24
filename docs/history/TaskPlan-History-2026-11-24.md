@@ -31,4 +31,6 @@
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
-
+| 2026-11-24 | v0.3.18 | 固定 Intel Jazzy Point-LIO 上游 gitlink SHA、三份 patch、Apache/BSD 许可证边界；新增受控源码准备脚本与 P0 CI；修正 Livox workflow 的容器内 manifest 路径 | baseline bf561d3d; prep script 4ae7a0c2; P0 workflow 74d61710; Livox workflow af0cb0bb |
+| 2026-11-24 | v0.3.19 | Point-LIO P0 source-prep CI 通过：三个固定补丁成功应用，源码 tree clean；Livox workflow 改为 immutable HTTPS manifest 并重新运行，待 driver build 结果 | P0 run 45334159646; script 4ae7a0c2; Livox run 45334135171 |
+| 2026-11-24 | v0.3.20 | 新增 Point-LIO P1 Jazzy x86_64 build script/workflow；setup-ros release tag 修正到 0.7.22；Livox manifest 修正 Driver2 v1.2.6 与 SDK2 v1.3.1 的 SHA 混用 | build script 6421e955; workflow 45ebd32e; manifest 8544a44b; Livox workflow 233d68ac |
