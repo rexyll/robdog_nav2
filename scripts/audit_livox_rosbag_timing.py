@@ -225,6 +225,14 @@ def main() -> int:
     args = parser.parse_args()
 
     try:
+        validate_cli_thresholds(
+            args.max_header_timebase_delta_ns,
+            args.max_nearest_lidar_imu_p95_ms,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+
+    try:
         report = audit_rosbag(
             args.bag_uri,
             storage_id=args.storage_id,
