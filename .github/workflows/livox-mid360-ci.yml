@@ -86,8 +86,9 @@ jobs:
       - name: Build pinned Livox ROS Driver2
         shell: bash
         run: |
-          set -euxo pipefail
+          set -eox pipefail
           source /opt/ros/jazzy/setup.bash
+          set -u
           cd "$RUNNER_TEMP/livox_ws"
           colcon build \
             --packages-up-to livox_ros_driver2 \
