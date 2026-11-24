@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.28
+- 文档版本：v0.3.29
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -91,15 +91,15 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
-- [x] B4. 已在 Ubuntu 24.04 + ROS 2 Jazzy x86_64 完成 Livox SDK2 v1.3.1 与 livox_ros_driver2 v1.2.6 的构建和安装；CI run 45337301420 成功。尚未完成 Jetson Orin aarch64 build、真实 MID-360 发现/数据采集和长时稳定性验证。CustomMsg/timebase/offset_time 时间语义已源码核验。
+- [x] B4. 已在 Ubuntu 24.04 + ROS 2 Jazzy x86_64 完成 Livox SDK2 v1.3.1 与 livox_ros_driver2 v1.2.6 的构建/安装；CI run 45337301420 成功。仅为 x86_64 编译证据，Orin aarch64、真实 MID-360 设备发现/数据采集、PTP 和 60 分钟稳定性仍未验收。CustomMsg/timebase/offset_time ns 语义已源码核验。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO Jazzy POC 来源及三份 Intel patches 已固定，P0 source-prep CI 45336709339 通过；P1 x86_64 build CI 45337200320 已成功构建/安装 SDK2、Driver2、Point-LIO，colcon summary 为 2 packages finished，且 ros2 package/executable 检查发现 pointlio_mapping。仍需 P2 UrbanLoco rosbag replay/evo 评测、P3 Orin aarch64 build、P4 MID-360 实机时间链和 P5 Lite3 受控步态验证。
-- [~] B12. 新增 MID-360 rosbag 时间审计 CLI：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；纯 helper 11 项单测在 run 45338022891 通过。最新 workflow 正增加 CLI py_compile/--help 校验；真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不等于 PTP 同步精度。
+- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339 通过；P1 x86_64 build 45337200320 成功构建/安装 SDK2、Driver2、Point-LIO（2 packages finished；pointlio_mapping executable 检查通过）。P2 UrbanLoco 的 bag 准备、TUM 轨迹记录、INSPVAX GT/ENU 提取和 evo APE 脚本已提交，脚本语法/CLI 与 8 项纯函数测试 CI 45339580363 通过；实际 bag 尚未获取/回放。后续仍需 P3 Orin aarch64、P4 MID-360 实机时间链和 P5 Lite3 受控步态验证。
+- [~] B12. 新增 MID-360 rosbag 时间审计 CLI：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；修复 CLI 实际运行路径缺失 math import，并新增 offset ns/ms 单测；Python compile、CLI --help 与 13 项单元测试 CI 45339029477 通过。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不等于 PTP 同步精度。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -190,7 +190,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [ ] Point-LIO 已完成 Jazzy x86_64 build，但尚未完成 UrbanLoco bag replay、独立 GT 的 APE/RPE/evo 评测；也未完成 Orin ARM64、真实 MID-360/IMU 时间链和 Lite3 运动实机验证。Intel UrbanLoco Velodyne 数据不证明 MID-360 CustomMsg per-point time 或 Jetson Orin 性能。
+- [ ] Point-LIO 已完成 Jazzy x86_64 build；P2 工具验证通过，但等待人工获取 UrbanLoco HK-Data20190117 bag 后才可执行完整 replay/GT/APE/RPE。Orin ARM64、真实 MID-360/IMU 时间链和 Lite3 运动实机验证均未完成。Intel UrbanLoco Velodyne 数据不证明 MID-360 CustomMsg per-point time 或 Jetson Orin 性能。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -212,7 +212,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 完成 Point-LIO P2 UrbanLoco bag replay/evo 指标，随后推进 Orin ARM64、真实 MID-360 rosbag 时间审计及 Lite3 受控运动验证；未获取真实 bag 前，不声明 PTP/IMU 时间同步通过。
+7. 人工下载 UrbanLoco HK-Data20190117（CC BY-NC-SA 4.0，仓库不存 bag），运行 scripts/prepare_urbanloco_ulhk4.sh、scripts/run_urbanloco_ulhk4.sh、scripts/evaluate_urbanloco_ulhk4.sh，完成 P2 replay/evo；随后做 Orin ARM64、真实 MID-360 rosbag 时间审计和 Lite3 受控运动验证。未获取真实 MID-360 bag 前，不声明 PTP/IMU 时间同步通过。
 
 ---
 
@@ -222,10 +222,8 @@
 
 | 日期 | 版本 | 变更 | 提交/证据 |
 |---|---|---|---|
-| 2026-11-24 | v0.3.25 | 修正 Livox/Point-LIO workflow 的 push 与 PR docs-only 过滤；source-prep workflow 也加串行互斥并移除文档触发；最新 builds 45336480583/45336485165 在 ROS setup，P0 最新 45336457667 通过 | Livox 41a89a1f; Point-LIO caa9ef95; P0 0b97c53e |
-| 2026-11-24 | v0.3.26 | P1 实际日志证明 workspace/vendor 仍会被默认 colcon 扫描并二次构建 SDK2；已将 SDK2 source 移出 workspace 到 \${WORKSPACE}_external，并加入 colcon list gate；P0 45336709339 通过 | build script 36621e22; POC doc 31f04c15; P0 run 45336709339 |
-| 2026-11-24 | v0.3.27 | Livox 与 Point-LIO CI 改用官方预装 ros:jazzy-ros-base-noble 镜像，安装构建依赖而不重复在线安装 Jazzy；Livox 容器内删除 sudo，Point-LIO rosdep init 纳入构建脚本；新 runs 45337301420/45337200320 | Livox workflow 28a23828; Point-LIO workflow d43be53a; build script c34975e5 |
 | 2026-11-24 | v0.3.28 | Livox SDK2+Driver2、Point-LIO 均完成 Jazzy x86_64 构建/安装；新增 rosbag 时间审计 CLI 和 11 项 helper tests，真实 MID-360 bag/Orin ARM64/UrbanLoco replay 仍待做 | Livox run 45337301420; Point-LIO run 45337200320; audit unit run 45338022891; CLI helper 3 scripts |
+| 2026-11-24 | v0.3.29 | 新增 UrbanLoco u l h k_4 P2 本地 bag preparation/replay/TUM/INSPVAX GT/evo 脚本、数据许可和忽略策略；P2 工具 CI 8/8 tests pass，实际 bag 仍需人工下载；Livox 时间审计 CLI 修复 math import 并扩到 13/13 tests pass | P2 scripts 6730ab23/cc1a92df/0616b779/f4c33705/a8d54d57/f165c896/ab4ae63a; P2 CI 45339580363; timing CLI/tests 3db514be/592b640a; timing CI 45339029477 |
 
 ---
 
@@ -252,6 +250,11 @@
 - [Point-LIO Jazzy POC 来源与验收基线](docs/implementation/point_lio_jazzy_poc_baseline.md)
 - [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [Point-LIO Jazzy 构建脚本](scripts/build_point_lio_jazzy.sh)
+- [UrbanLoco P2 数据准备说明](datasets/README.md)
+- [UrbanLoco GT 提取脚本](scripts/extract_urbanloco_ulhk4_gt.py)
+- [UrbanLoco P2 回放脚本](scripts/run_urbanloco_ulhk4.sh)
+- [UrbanLoco P2 evo 评测脚本](scripts/evaluate_urbanloco_ulhk4.sh)
+- [UrbanLoco P2 测试工作流](.github/workflows/point-lio-urbanloco-p2-tests.yml)
 - [导航与避障验收指标框架](docs/testing/acceptance_metrics_and_scenarios.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
