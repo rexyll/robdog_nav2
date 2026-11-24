@@ -124,6 +124,7 @@ flowchart TB
 - [TaskPlan Part 2：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [Lite3 本体 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
+- [传感器融合与 LIO 备用架构](docs/architecture/sensor_fusion.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [本体 odometry 缺失时的 LIO/VIO 备用方案](docs/implementation/odometry_fallback_strategy.md)
 - [ADR-0004：本体 odometry 备用方案](docs/decisions/ADR-0004-local-odometry-fallback.md)
