@@ -15,7 +15,7 @@
 | Orin 长期目标 | JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy | 需实测 Lite3 bridge/各驱动兼容性 |
 | 未来评估 | ROS 2 Lyrical / Ubuntu 26.04 | 待 Jetson Orin 官方 BSP 与所有驱动支持后评估 |
 
-详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。Lite3 两套 ROS 路线及其差异见 [vendor integration assessment](../implementation/lite3_vendor_sdk_integration_assessment.md) 和 [ADR-0003](../decisions/ADR-0003-lite3-ros-integration.md)。
+详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。Lite3 两套 ROS 路线及其差异见 [vendor integration assessment](../implementation/lite3_vendor_sdk_integration_assessment.md) 和 [ADR-0003](../decisions/ADR-0003-lite3-ros-integration.md)。采购/接入前向厂商确认的问题见 [Lite3 Venture 供应商技术确认矩阵](lite3_vendor_confirmation_matrix.md)。
 供电与质量计算见 [机载供电与载荷预算](../implementation/power_mass_budget.md)。当前已知设备质量小计约 1.330 kg，已知设备负载功率估算约 22.8–69.4 W；上述值不含相机/镜头的质量、交换机、电源转换损耗、支架和线束。
 
 ## 1. 机器狗本体：DEEP Robotics Lite3 Venture
