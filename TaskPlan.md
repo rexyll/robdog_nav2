@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.21
+- 文档版本：v0.3.22
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -91,14 +91,14 @@
 - [ ] B1. 建立厂商兼容性矩阵：Legacy Lite3_ROS Foxy、Current sdk_deploy/Foxy motion-host、AGX Orin JetPack 6.1/Humble 参考环境，以及 JetPack 7.2.2/Ubuntu 24.04/Jazzy 项目环境；禁止默认使用跨发行版 DDS。
 - [ ] B2. 依据 A13 厂商答复选择 SDK 路线；先只读读取厂商 IMU/joint/status 和所有可用 odometry；禁止启动运动状态或发布关节命令。
 - [~] B3. 已实现 transport-agnostic envelope/sequence 基础校验，并新增只读 contact_state 消息类型；IMU/contact_state/base_odometry 等空间消息必须带 frame_id。仍未实现编码器、UDP/TCP socket、vendor mapping 或 real gateway。
-- [~] B4. SDK2 v1.3.1 在 run 45334563869 中编译成功；Driver2 v1.2.6（13eb05e...）随后的 build 暴露 ROS1 默认 package.xml 导致漏装 ament_cmake_auto。新工作流 run 45334977157 已改为先替换 package_ROS2.xml、显式安装 ros-jazzy-ament-cmake-auto，再 rosdep + colcon，当前运行中。Orin/MID-360 未实测；Point-LIO 保留 CustomMsg per-point time。
+- [~] B4. SDK2 v1.3.1 在 run 45334563869 中编译成功；Driver2 v1.2.6（13eb05e...）新 workflow 先复制 package_ROS2.xml、显式安装 ament_cmake_auto，再 rosdep + colcon，最新 run 45335285873 仍在 ROS setup。已核实 CustomMsg.timebase/header.stamp 为 ns、offset_time 为相对 ns，Point-LIO custom 分支 /1e6 转 ms；timestamp_unit 不适用于 CustomMsg 分支。真实 PTP/IMU 同步和 Orin/MID-360 实测待做。
 - [ ] B5. 接入左右 UVC 相机和 GPIO 硬件触发，验证双路 USB3 带宽。
 - [ ] B6. 接入 ZED-F9P，完成 NavSatFix/UBX 状态和 NTRIP/基站。
 - [ ] B7. 建立 URDF/TF，完成相机内外参、双目基线、LiDAR/GNSS 外参。
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO POC 已锁定 HKU base 97b0042... + Intel repo decbb06... + 3 patches；P0 source-prep CI 45334159646、45334667786 均通过。P1 Jazzy x86_64 run 45334667791 已完成 ROS 安装，当前安装 PCL/Eigen 等原生依赖；尚未进入 Point-LIO 编译。见 [Point-LIO POC baseline](docs/implementation/point_lio_jazzy_poc_baseline.md)。
+- [~] B11. Point-LIO POC 来源与三补丁已固定，P0 CI 45334159646、45334667786、45335282490 通过。P1 run 45334667791 完成 ROS/原生依赖/源码准备，但 rosdep 因 workflow 清除 apt lists 后未刷新索引，无法定位 Noble 中实际存在的 libaprutil1-dev；build script 已在 rosdep install 前新增 apt-get update。修复后 P1 run 45335382556 正在重跑，尚未取得编译结果。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -186,7 +186,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [ ] Point-LIO 尚未在本项目 Jazzy x86_64 构建或以 UrbanLoco 完成 bag replay；P0 源码准备已通过，P1 workflow 45334667791 已通过 ROS setup、当前 native deps。Intel UrbanLoco 旧 Velodyne 数据不证明 MID-360 per-point time 或 Jetson Orin 性能。
+- [ ] Point-LIO 尚未在本项目 Jazzy x86_64 构建或以 UrbanLoco 完成 bag replay；P0 源码准备已通过；P1 45334667791 因 apt index 刷新缺失而在 rosdep 阶段失败，修复版 45335382556 待结果。Intel UrbanLoco 旧 Velodyne 数据不证明 MID-360 per-point time 或 Jetson Orin 性能。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -206,9 +206,9 @@
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 验证 Livox 显式 ROS 2 manifest 构建 [run 45334977157](https://github.com/rexyll/robdog_nav2/actions/runs/45334977157)：确认 ament_cmake_auto 已从 ROS 2 manifest 安装并进入 Driver2 colcon build。
+5. 验证 Livox 显式 ROS 2 manifest 构建 [run 45335285873](https://github.com/rexyll/robdog_nav2/actions/runs/45335285873)：先完成 ROS/ament 初始化、SDK2 build，再检查 Driver2 colcon build。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 验证 Point-LIO P1 workflow [run 45334667791](https://github.com/rexyll/robdog_nav2/actions/runs/45334667791)：ROS Jazzy 已安装，当前 native dependencies 安装中；build pass 后再完成 UrbanLoco bag replay/evo 指标。Orin ARM64 与 MID-360 live timing 另设 gate。
+7. 验证 Point-LIO P1 修复后重跑 [run 45335382556](https://github.com/rexyll/robdog_nav2/actions/runs/45335382556)：确认 apt-get update 后 rosdep dependencies 安装通过，再观察 Livox/Point-LIO 编译。build pass 后再完成 UrbanLoco bag replay/evo；Orin ARM64 与 MID-360 live timing 另设 gate。
 
 ---
 
@@ -225,6 +225,7 @@
 | 2026-11-24 | v0.3.19 | Point-LIO P0 source-prep CI 通过：三个固定补丁成功应用，源码 tree clean；Livox workflow 改为 immutable HTTPS manifest 并重新运行，待 driver build 结果 | P0 run 45334159646; script 4ae7a0c2; Livox run 45334135171 |
 | 2026-11-24 | v0.3.20 | 新增 Point-LIO P1 Jazzy x86_64 build script/workflow；setup-ros release tag 修正到 0.7.22；Livox manifest 修正 Driver2 v1.2.6 与 SDK2 v1.3.1 的 SHA 混用 | build script 6421e955; workflow 45ebd32e; manifest 8544a44b; Livox workflow 233d68ac |
 | 2026-11-24 | v0.3.21 | Livox Driver2 build 根因确认为 ROS1 默认 package.xml 漏装 ament_cmake_auto；新增显式 ROS2 manifest + apt/rosdep/colcon workflow。Point-LIO P1 ROS Jazzy 安装已通过，native deps 安装中 | Livox workflow cfafbed4; run 45334977157; P1 run 45334667791 |
+| 2026-11-24 | v0.3.22 | 核实 Livox CustomMsg timebase/header.stamp/offset_time 的纳秒语义及 Point-LIO 转毫秒路径；Point-LIO P1 首轮失败根因是清除 apt lists 后 rosdep 未刷新索引，build script 已修复并重跑 | timing audit docs 57bec447/d24e5145; build script ded8a01d; P1 run 45335382556 |
 
 ---
 
