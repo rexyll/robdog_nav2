@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.48
+- 文档版本：v0.3.49
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,7 +98,7 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256、dataset manifest、SQLite GT extraction integration 与进程组清理已加入；P2 CI 45340287093、45341097202 均 10/10 tests 通过，INSPVAX offsets 与 NovAtel 官方 msg commit 0c0e135b... 及 Intel 固定脚本 commit decbb06... 交叉核验。**用户已提供 `HK-Data20190117_0.db3`（5.4 GiB，321.55 s，41,817 条消息）；话题签名包含 `/velodyne_points_0` PointCloud2（3,178）、`/imu/data` Imu（31,808）、`/novatel_data/inspvax` INSPVAX（318），与 ulhk_4 P2 所需三条核心 topic/type 一致，序列身份仍需 checksum/来源记录确认。** 该文件是 standalone ROS 2 SQLite3 DB3；用户本地审计通过，5,830,840,320 bytes/321.550 s，LiDAR 3,178 @9.991 Hz、IMU 31,808 @99.999 Hz、INSPVAX 318 @0.9996 Hz，三路 timestamp duplicate/backward 均为 0，INSPVAX 318/318 全部 CDR 经纬高解码通过。首次交互 play 约 56 s 即停止，不算全量回放；P2 runner 只播放 LiDAR+IMU。DB3 SHA256 已由清单写入，最新 prepare 脚本修正了单文件 DB3 checksum/manifest 字段，需复跑以输出独立 DB3 input SHA。P3a 通用原生 ARM64 Ubuntu 24.04/Jazzy 已通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Driver2、Point-LIO 两包编译/安装成功，ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 检查通过。该结果只证明 generic aarch64 build，不等同 Jetson AGX Orin/JetPack 7.2.2 实机验收。B11 保持部分完成，直到实际 bag playback/evo 与目标设备验证完成。
+- [~] B11. Point-LIO 固定源码/补丁 P0 与 Jazzy x86_64 P1、通用 ARM64 P3a 均已通过。UrbanLoco standalone `HK-Data20190117_0.db3` 已由用户本地审计：5.4 GiB/321.55 s；Velodyne 3,178 @9.991 Hz、IMU 31,808 @99.999 Hz、INSPVAX 318 @0.9996 Hz；三流无重复/倒退时间戳，INSPVAX 318/318 CDR 全量解码通过（[审计报告](docs/testing/urbanloco_ulhk4_dataset_audit.md)）。P2 脚本 CI 45391334101、DB3 checksum CI 45392931411、topic-config guard CI 45393185789 均 success；DB3 hash/来源记录待复跑更新，完整 Point-LIO replay、GT/evo APE/RPE 仍待执行。UrbanLoco Velodyne 不验证 MID-360 per-point time，也不等于 Orin/Lite3 实机验收。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
@@ -198,7 +198,7 @@
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
 - [ ] 未采购设备，未接收实物。
-- [~] Point-LIO 已完成 Jazzy x86_64 build；用户已提供 standalone HK-Data20190117_0.db3，项目已加入直接 DB3 topic/type/INSPVAX CDR 审计与 LiDAR+IMU 过滤回放支持；P2 脚本 CI [run 45391334101](https://github.com/rexyll/robdog_nav2/actions/runs/45391334101) success（13/13 项）；DB3 checksum/manifest 修复 CI [run 45392931411](https://github.com/rexyll/robdog_nav2/actions/runs/45392931411) success。用户本地核心话题和 INSPVAX CDR 全量审计已通过；完整 Point-LIO replay/GT/APE/RPE 仍待执行。P3a generic ARM64 run 45341347087 success；Jetson Orin/JetPack 实机、MID-360/IMU/PTP 时间链和 Lite3 步态验收未完成。UrbanLoco Velodyne 数据不证明 MID-360 CustomMsg per-point time。
+- [~] P2 DB3 核心话题/INSPVAX CDR 本地审计通过；13 项脚本测试及 DB3 checksum/topic-config guard CI 均通过（45391334101、45392931411、45393185789）。完整 Point-LIO 回放、GT/evo APE-RPE 待本地执行；Orin、MID-360、Lite3 验收未完成。
 - [ ] 质量预算中仍有相机/镜头、网络交换机、触发板、DC/DC、支架和线束未称重；3.6 kg 内部载荷目标尚未验证。
 - [ ] 尚未获得 Lite3 Venture 电源额定、载荷/重心和安装 CAD 的书面确认；因此不能批准从机器人 24V 辅助口直接给 AGX Orin 供电。
 - [!] 当前公开 RobotStatus 不含 base xyz/linear velocity/covariance；尚不能排除厂商存在未公开 estimator channel，需书面确认正式腿式 odometry/body velocity。Foxy/Jazzy 仍须隔离。
@@ -238,6 +238,7 @@
 | 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 | 2026-11-24 | v0.3.42 | 评估并固定 ZED-F9P ROS 2 驱动候选与 rtcm_msgs 源码依赖；Humble/Jazzy 7 包 build/install 已成功，最终 interface check 的 BrokenPipeError 已修复，复测 run 45387577856 pending；记录 USB header stamp/iTOW 与 NAV-COV NED 语义边界 | driver/docs 2b54c19ac98262fa9211c85dbf85d4867422f7c2; workflow fixes b26ddbae932bd6a08261238da9192908e237a971 / 51e7c66d9ead32e670407b99d02f365f25c27adb / 12f84fa1f25dba510981ac895f762d192b9a60d0; driver 9d4f5addbc72d092c57dde99b20712258e96e81e; rtcm_msgs 8d27ab5f4d4a581e1bb9c87d572994c25197f6d4; CI 45386892781 / 45387577856 |
 | 2026-11-24 | v0.3.43 | ZED-F9P 驱动 `ublox_dgnss` 0.7.6 + `rtcm_msgs` Humble/Jazzy 7 包 build/install 和 UBX interface 检查全部通过；新增四路 UBX 原始消息严格 iTOW join 与完整 NED→ENU covariance 组装 core，Humble/Jazzy 各 56/56 测试通过 | driver CI 45387577856; UBX core code 6e1a5579f6c2474870d721a30db4d2cd25b8f028 / tests 1d80241df4169cf0c14ff38633bb3cf21188d528 / math import fix 70524556a80e94103c7e95abb91b6fa4f44159be; docs ac6608b8373f6180ed2e9009c6b0eb229949ed63 / 65c71fdfa9d470f7f0d0a5d3439cf1dd21c15e38; GNSS CI 45388146723 |
+| 2026-11-24 | v0.3.49 | P2 回放脚本新增 Point-LIO YAML topic mismatch fail-fast guard；CI 45393185789 success。同步压缩根台账的 P2 重复描述，完整 DB3 审计数据保存在独立报告 | code 81e034943dfe0dd3188c7bc204bb826fc7567454; P2 CI 45393185789 |
 | 2026-11-24 | v0.3.48 | 用户本地 standalone DB3 审计通过：321.55s，LiDAR 3,178 @9.991Hz、IMU 31,808 @99.999Hz、INSPVAX 318 @0.9996Hz；三路时间戳无重复/倒退、INSPVAX 318/318 CDR 解码通过。DB3 input SHA256 字段修复 CI 45392931411 success；全量 Point-LIO replay/evo 待执行 | 用户本地 bag_audit.json；DB3 hash script fix eeccabcced5c16bce343df2cfa5669e60836c0cf; CI 45392931411 |
 | 2026-11-24 | v0.3.47 | standalone DB3 接入 CI [run 45391334101](https://github.com/rexyll/robdog_nav2/actions/runs/45391334101) success：Python 编译、shell syntax、CLI 和 13/13 项 P2 测试均通过；本地 DB3 payload audit/Point-LIO 完整回放/evo 仍未执行 | code main a1c0fa31740569a00c6f9dfdfeac261bdef79208; P2 CI 45391334101 |
 | 2026-11-24 | v0.3.46 | 修复 standalone DB3 回放脚本遗漏的 IMU_TOPIC 默认值；同步记录 P2 数据已获取、最新脚本 CI run 45391334101 等待完成 | main code a1c0fa31740569a00c6f9dfdfeac261bdef79208; P2 CI pending |
