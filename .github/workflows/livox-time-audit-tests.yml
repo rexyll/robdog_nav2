@@ -35,6 +35,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python3 -m py_compile \
+            scripts/livox_time_audit_helpers.py \
+            scripts/audit_livox_rosbag_timing.py
+          PYTHONPATH=scripts python3 scripts/audit_livox_rosbag_timing.py --help >/dev/null
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_livox_time_audit.py" \
