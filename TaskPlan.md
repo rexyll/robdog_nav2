@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.34
+- 文档版本：v0.3.35
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -98,7 +98,7 @@
 - [ ] B8. 测量 PTP/GPS/相机触发/UDP 的同步误差、时延和抖动。
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
-- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过（SDK2/Driver2/Point-LIO 两个 colcon packages finished；pointlio_mapping 检查通过）。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256 provenance、dataset manifest、SQLite GT extraction integration、replay process-group cleanup 已加入；P2 CI 45340287093 和 45341097202 均 10/10 tests 通过，并已把 INSPVAX offsets 对齐到 NovAtel 官方消息定义（commit 0c0e135b...）和 Intel 固定脚本（commit decbb06...）。实际 bag 仍待人工下载。P3a ARM64 run 45339955465 的 SDK2/Driver2/Point-LIO 编译/安装已完成，但 job 因缺少 file utility 在 post-check 退出；修正版 run 45340700005 正在重跑，采用 test/find/executable 检查，尚不等于 Jetson Orin/JetPack 7.2.2 实机验收。
+- [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256、dataset manifest、SQLite GT extraction integration 与进程组清理已加入；P2 CI 45340287093、45341097202 均 10/10 tests 通过，INSPVAX offsets 与 NovAtel 官方 msg commit 0c0e135b... 及 Intel 固定脚本 commit decbb06... 交叉核验。实际 bag 仍待人工下载。P3a ARM64 run 45339955465 编译/安装已完成但后置 `file` 缺失；run 45340700005 也完成 2 packages build、安装和 executable 检查，但下一层 shell 未 source ROS/workspace 导致 ros2 command not found。已在 workflow 后置步骤显式 source /opt/ros/jazzy 与 install/setup.bash；修正版 run 45341347087 进行中。generic ARM64 不等于 Jetson Orin/JetPack 7.2.2 实机验收。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；修复运行期 math import 缺失并新增 offset ns/ms tests；Python compile、CLI --help、13 项 helper tests CI 45339029477 通过。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
@@ -212,7 +212,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 检查 P3a ARM64 build [run 45340700005](https://github.com/rexyll/robdog_nav2/actions/runs/45340700005) 最终后置检查；若成功，记录 generic aarch64 evidence。人工下载 UrbanLoco HK-Data20190117（CC BY-NC-SA 4.0，仓库不存 bag）后运行 prepare_urbanloco_ulhk4.sh、run_urbanloco_ulhk4.sh、evaluate_urbanloco_ulhk4.sh 完成真实 P2 replay/evo；后续再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
+7. 检查 P3a 修正版 ARM64 build [run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087)，确认后置步骤已 source ROS Jazzy 和 workspace install 环境。若通过，记录 generic aarch64 evidence。人工下载 UrbanLoco HK-Data20190117（CC BY-NC-SA 4.0，仓库不存 bag）后运行 prepare_urbanloco_ulhk4.sh、run_urbanloco_ulhk4.sh、evaluate_urbanloco_ulhk4.sh 完成真实 P2 replay/evo；后续再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
 
 ---
 
@@ -222,7 +222,7 @@
 
 | 日期 | 版本 | 变更 | 提交/证据 |
 |---|---|---|---|
-| 2026-11-24 | v0.3.34 | 固定 INSPVAX CDR offsets 已与 NovAtel 官方 msg（commit 0c0e135b）及 Intel 固定 extractor（commit decbb06）交叉核验；来源注释后 P2 CI 45341097202 再次 10/10 通过；P3a ARM64 post-check 修复重跑中 | POC doc ad7dafc4; helper c93798cb; P2 run 45341097202; ARM64 retry 45340700005 |
+| 2026-11-24 | v0.3.35 | ARM64 run 45340700005 中 SDK2/Driver2/Point-LIO 编译与安装成功，最后因独立 shell 未 source ROS 环境而 ros2 command not found；workflow 已在后置 shell 显式 source ROS Jazzy/workspace，修正版 run 45341347087 进行中 | ARM64 workflow 8da0199e; failure run 45340700005; retry 45341347087; POC doc 1d7df155 |
 
 ---
 
