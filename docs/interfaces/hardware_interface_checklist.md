@@ -16,6 +16,7 @@
 | 未来评估 | ROS 2 Lyrical / Ubuntu 26.04 | 待 Jetson Orin 官方 BSP 与所有驱动支持后评估 |
 
 详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。
+供电与质量计算见 [机载供电与载荷预算](../implementation/power_mass_budget.md)。
 
 ## 1. 机器狗本体：DEEP Robotics Lite3 Venture
 
