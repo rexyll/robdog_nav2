@@ -18,6 +18,8 @@ import os
 import shutil
 import sys
 import tempfile
+
+import numpy as np
 from importlib.metadata import version as package_version
 from pathlib import Path
 from typing import Any
@@ -181,7 +183,7 @@ def convert_custom_msg(source_message: Any, typestore: Any) -> Any:
             f"Livox point_num={source_message.point_num} but decoded points={len(points)}."
         )
 
-    rsvd = [int(value) for value in source_message.rsvd]
+    rsvd = np.asarray([int(value) for value in source_message.rsvd], dtype=np.uint8)
     if len(rsvd) != 3:
         raise ValueError(f"Livox rsvd field must contain 3 bytes, got {len(rsvd)}.")
 
@@ -213,7 +215,7 @@ def convert_imu(source_message: Any, typestore: Any) -> Any:
             z=float(orientation.z),
             w=float(orientation.w),
         ),
-        orientation_covariance=[float(value) for value in source_message.orientation_covariance],
+        orientation_covariance=np.asarray(source_message.orientation_covariance, dtype=np.float64),
         angular_velocity=vector3_type(
             x=float(angular_velocity.x),
             y=float(angular_velocity.y),
@@ -221,7 +223,7 @@ def convert_imu(source_message: Any, typestore: Any) -> Any:
         ),
         angular_velocity_covariance=[
             float(value) for value in source_message.angular_velocity_covariance
-        ],
+        ], dtype=np.float64),
         linear_acceleration=vector3_type(
             x=float(linear_acceleration.x),
             y=float(linear_acceleration.y),
