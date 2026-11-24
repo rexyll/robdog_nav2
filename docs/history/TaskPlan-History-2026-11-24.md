@@ -25,4 +25,7 @@
 | 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 | 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
 | 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
+| 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
+| 2026-11-24 | v0.3.13 | 将两只 CIL530 候选镜头合计 334g 计入质量预算，候选总计调整为 1.664kg；其余未称重项和厂商载荷 Gate 保持未完成 | power_mass_budget.md commit 2ec892ebc6b44b789a47d792e7d555a7f7c302d9 |
+| 2026-11-24 | v0.3.14 | 审计 Lite3 公共 SDK 状态字段/启动控制权/软件急停边界；补充 V-28–V-32 厂商问题；锁定 MID-360 Jazzy driver 与 SDK2 候选 commit，B4 build 保持待验证 | lite3 audit f9f8cec2; vendor matrix 90d7ab86; Livox baseline f5803ad7 |
 
