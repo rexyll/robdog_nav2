@@ -142,7 +142,6 @@ flowchart TB
 - [MID-360 rosbag 时间审计单测](scripts/tests/test_livox_time_audit.py)
 - [Livox 时间审计 CI](.github/workflows/livox-time-audit-tests.yml)
 - [Point-LIO Jazzy POC 来源与验收基线](docs/implementation/point_lio_jazzy_poc_baseline.md)
-- [Point-LIO UrbanLoco P2 POC baseline](docs/implementation/point_lio_jazzy_poc_baseline.md)
 - [UrbanLoco dataset download/license guide](datasets/README.md)
 - [UrbanLoco P2 preparation script](scripts/prepare_urbanloco_ulhk4.sh)
 - [UrbanLoco P2 replay script](scripts/run_urbanloco_ulhk4.sh)
