@@ -14,6 +14,7 @@ robdog_nav2/
 ├── src/
 │   ├── robodog_description/
 │   ├── robodog_bringup/
+│   ├── robodog_lite3_bridge/       # 初始只读 mock/诊断骨架；真实 SDK 连接尚未实现
 │   ├── robodog_lite3_bridge/       # Lite3 SDK/UDP state and motion gateway
 │   ├── robodog_localization/
 │   ├── robodog_stereo_perception/
