@@ -4,7 +4,7 @@
 This is deliberately not a general rosbag converter. It requires:
 1. an original ROS1 bag matching the upstream M3DGR Dynamic03 SHA256;
 2. a successful read-only audit JSON for that exact bag;
-3. the expected M3DGR legacy Livox ROS1 message type.
+3. a supported Livox CustomMsg source type with a verified field layout.
 
 The source file is never modified. The output is created transactionally in a
 new rosbag2 directory and contains only the two LIO input topics.
@@ -30,6 +30,8 @@ IMU_TOPIC = "/livox/mid360/imu"
 SOURCE_LIDAR_TYPES = {
     "livox_ros_driver/msg/CustomMsg",
     "livox_ros_driver/CustomMsg",
+    "livox_ros_driver2/msg/CustomMsg",
+    "livox_ros_driver2/CustomMsg",
 }
 SOURCE_IMU_TYPES = {
     "sensor_msgs/msg/Imu",
@@ -166,7 +168,7 @@ def _make_target_header(source_header: Any, typestore: Any) -> Any:
 
 
 def convert_custom_msg(source_message: Any, typestore: Any) -> Any:
-    """Map old livox_ros_driver/CustomMsg to livox_ros_driver2/CustomMsg."""
+    """Rebuild a supported Livox CustomMsg into the pinned Jazzy Driver2 type."""
     target_point_type = typestore.types["livox_ros_driver2/msg/CustomPoint"]
     target_msg_type = typestore.types[TARGET_LIDAR_TYPE]
 
@@ -358,7 +360,9 @@ def convert_m3dgr_lio_streams(
             "rosbag2_version": 8,
             "mapping": {
                 LIDAR_TOPIC: {
-                    "source_type": "livox_ros_driver/msg/CustomMsg",
+                    "source_type": sorted(
+                        audit_report["topics"][LIDAR_TOPIC]["message_types"]
+                    )[0],
                     "target_type": TARGET_LIDAR_TYPE,
                     "field_mapping": "header,timebase,point_num,lidar_id,rsvd,points[] copied field-by-field",
                     "timebase_unit": "ns",
