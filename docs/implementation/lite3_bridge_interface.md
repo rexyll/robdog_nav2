@@ -120,8 +120,9 @@ Motion host / gait controller
 
 - Lite3 Venture 官方感知扩展示例使用 Ubuntu 22.04 + ROS 2 Humble + JetPack 6.1。
 - Lite3_ROS 公共仓库的旧版 ROS 2 示例有 Foxy 版本信息；SDK deploy 新仓库提供 Lite3 ROS 2 transfer。
-- 项目首轮以 Humble 复现官方硬件示例；将厂商 SDK 放入隔离的 bridge，避免 Nav2 直接依赖厂商实现。
-- 自研 bridge/adapters 需在 CI 同时检查 Humble/Jazzy 构建；实际兼容性以锁定 commit 的构建结果为准。
+- 首轮以 Humble 复现官方硬件示例；同时评估 JetPack 7.2.2 + Ubuntu 24.04 + Jazzy 在 AGX Orin 上的实际构建/运行情况。
+- JetPack 7.2.2 当前面向 Jetson Orin Family，系统基线为 Ubuntu 24.04；ROS 2 Lyrical 需要 Ubuntu 26.04，当前不作为 Orin 默认基线。
+- 自研 bridge/adapters 需在 CI 检查 Humble/Jazzy；若 Orin BSP 支持 Ubuntu 26.04 且外设驱动成熟，再评估 Lyrical。实际兼容性以锁定 commit 的构建结果为准。
 - 不同 ROS distro 不应默认在同一 DDS domain 直接互通。需要跨 distro 时通过 UDP/串口/标准消息网关传输。
 
 ## 8. 实施验收
