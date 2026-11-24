@@ -221,7 +221,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。下一步需要用户手动获取唯一指定的 UrbanLoco 香港序列 `HK-Data20190117`（`ulhk_4`，官方标注 6.11 GB，CC BY-NC-SA 4.0），而不是同一共享目录中其他 24–62 GB 的序列。Dropbox/Baidu 是多序列共享目录；若目录中看不到准确的 `HK-Data20190117` 条目，请先发目录文件名/大小截图核对，不要下载其他文件。用户已下载 standalone DB3：使用 `URBANLOCO_ROS2_BAG=~/Downloads/HK-Data20190117_0.db3 bash scripts/prepare_urbanloco_ulhk4.sh` 进行只读签名/INSPVAX payload 审计并保存 SHA256，然后执行 `scripts/run_urbanloco_ulhk4.sh` 与 `scripts/evaluate_urbanloco_ulhk4.sh`；全量回放/GT/evo 未通过前不得宣称 P2 通过。之后再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。UrbanLoco `HK-Data20190117` 数据已由用户下载为 standalone DB3；下一步核验文件 SHA256/下载来源与许可，再进行全量 Point-LIO 回放和 evo APE/RPE。用户已下载 standalone DB3：使用 `URBANLOCO_ROS2_BAG=~/Downloads/HK-Data20190117_0.db3 bash scripts/prepare_urbanloco_ulhk4.sh` 进行只读签名/INSPVAX payload 审计并保存 SHA256，然后执行 `scripts/run_urbanloco_ulhk4.sh` 与 `scripts/evaluate_urbanloco_ulhk4.sh`；全量回放/GT/evo 未通过前不得宣称 P2 通过。之后再做 JetPack 7.2.2 Orin 实机、MID-360 rosbag 时间审计与 Lite3 受控运动。
 
 ---
 
