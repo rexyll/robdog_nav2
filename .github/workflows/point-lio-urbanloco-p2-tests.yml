@@ -67,7 +67,7 @@ jobs:
             scripts/extract_urbanloco_ulhk4_gt.py \
             scripts/audit_urbanloco_ulhk4_db3.py \
             scripts/record_point_lio_odometry_tum.py \
-            scripts/audit_m3dgr_ros1_bag.py
+            scripts/audit_m3dgr_ros1_bag.py \
             scripts/audit_tum_trajectory.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
