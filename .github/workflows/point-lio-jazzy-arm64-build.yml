@@ -60,6 +60,12 @@ jobs:
           bash scripts/build_point_lio_jazzy.sh "$RUNNER_TEMP/point_lio_poc_ws"
           test "$(uname -m)" = "aarch64"
           test -s /usr/local/lib/liblivox_lidar_sdk_shared.so
+          # GitHub Actions runs every step in a fresh shell. The build script's
+          # sourced ROS/workspace environments do not propagate back here.
+          set +u
+          source /opt/ros/jazzy/setup.bash
+          source "$RUNNER_TEMP/point_lio_poc_ws/install/setup.bash"
+          set -u
           ros2 pkg prefix livox_ros_driver2
           POINTLIO_PREFIX="$(ros2 pkg prefix point_lio)"
           test -n "$POINTLIO_PREFIX"
