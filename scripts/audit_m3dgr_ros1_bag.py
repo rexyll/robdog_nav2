@@ -85,6 +85,12 @@ def audit_ros1_bag(
             f"Expected a ROS 1 .bag file, got {bag_path.name!r}; "
             "do not rename a ROS 2 .db3 file to .bag."
         )
+    with bag_path.open("rb") as handle:
+        magic = handle.read(13)
+    if magic != b"#ROSBAG V2.0\\n":
+        raise ValueError(
+            "File does not have ROS 1 bag v2.0 magic; do not treat a ROS 2 DB3 as ROS1."
+        )
 
     connection_details: list[dict[str, Any]] = []
     topic_stats: dict[str, dict[str, Any]] = {}
