@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.39
+- 文档版本：v0.3.40
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -108,7 +108,7 @@
 - [ ] C3. 比较 vendor legged odom（若有）与 Point-LIO 的位置/航向误差、漂移、更新频率、延迟和资源开销；选定唯一主要 local odom 来源。
 - [ ] C4. 将通过验收的 local odom 表达为 `odom→base_link`；仅在有额外独立观测且 covariance 合理时再配置 local EKF，避免重复融合同一 IMU/LIO 信息。
 - [ ] C5. 配置 navsat_transform（ENU/UTM、datum、yaw offset、磁偏角、GNSS 天线杆臂）。
-- [~] C6. 已新增独立纯算法包 `robodog_gnss_quality`：要求 GNSS fix valid + 显式载波解 RTK Fixed；检查 host monotonic freshness、receiver source clock epoch/乱序、经纬度范围、NavSatFix 协方差类型/对称性/PSD/水平与垂直标准差、位置跳变，并要求连续 Fixed 样本恢复。Humble/Jammy 与 Jazzy/Noble CI run 45378893084 各 30/30 passed。**尚未实现接收机 ROS adapter、NAV-PVT 与 NavSatFix 同历元配对、NavSatFix 输出门控、navsat_transform/global EKF 接线和真实 ZED-F9P 测量，因此 C6 仍为部分完成。**
+- [~] C6. 已新增独立纯算法包 `robodog_gnss_quality`：要求 GNSS fix valid + 显式载波解 RTK Fixed；检查 host monotonic freshness、receiver source clock epoch/乱序、经纬度范围、NavSatFix 协方差类型/对称性/PSD/水平与垂直标准差、位置跳变，并要求连续 Fixed 样本恢复。另新增 UBX-NAV-PVT flags 解码（GNSSFixOK 与 carrSoln）及 NavSatFix/NAV-PVT 严格 iTOW 相等和 receive-monotonic skew 配对 helper。最终 GNSS CI run 45379297789 在 Humble/Jammy 与 Jazzy/Noble 各 42/42 passed。**尚未选择/核实 ZED-F9P ROS driver、实现 ROS adapter/topic、验证 driver 是否保留 NavSatFix 同历元 iTOW、发布 qualified NavSatFix、接入 navsat_transform/global EKF 或进行真实接收机测量，因此 C6 仍为部分完成。**
 - [ ] C7. 测试 Fixed/Float/Single、遮挡、多路径、断改正和恢复。
 - [ ] C8. 测试静止、直行、转弯、横移（若支持）、步态切换和机身振动。
 - [ ] C9. 完成 GNSS 降级、超时、跳变剔除和恢复策略。
@@ -184,6 +184,7 @@
 - [x] TaskPlan 拆分为根目录进度台账 + 两份设计分册。
 - [x] 更新 Lite3 bridge 接口契约，区分 Legacy standard ROS topics 与 current DRDDS / rl_deploy interfaces；记录 vendor odometry availability 为待确认。
 - [x] 新增 `robodog_gnss_quality` 独立 ament_python 包与 Humble/Jazzy CI：显式 FIXED carrier-solution gate、receiver GNSS-fix flag、NavSatStatus 合法值、源时钟 epoch reset、host freshness、位置范围、NavSatFix covariance 类型/PSD/不确定度、haversine 3D jump gate 与连续 Fixed 恢复滞回；最终 30/30 tests 在 Humble/Jammy 和 Jazzy/Noble 均通过（GNSS CI run 45378893084）。仅完成纯算法核心，不含 ROS driver adapter、epoch pairing、NavSatFix 发布或 EKF 集成。
+- [x] 扩展 `robodog_gnss_quality`：新增 UBX-NAV-PVT flags 解码，按 GNSSFixOK 与 carrSoln 0/1/2/3 映射 NO_SOLUTION/FLOAT/FIXED/UNKNOWN；新增 NavSatFix 位置记录与 NAV-PVT 的 iTOW 严格配对和接收时间偏差 Gate，拒绝历元不匹配而不做 nearest-time 猜配；补充 receiver clock epoch/周内 iTOW 边界说明。最终 CI run 45379297789：Humble/Jammy 与 Jazzy/Noble 各 42/42 passed。仍未实现具体 ROS driver adapter 或真实串口/接收机运行。
 - [x] 将此前生成的 R3–R5 通用算法原型作为实验参考归档保存至 docs/experimental/assistant_r5_reference/；仅保存选定纯 Python 核心/测试/报告，不并入正式 src/。原型报告的 102/102 是离线单测/配置/源码契约检查，不是 ROS 构建、pluginlib、Nav2 运行或实机验证；集成边界见归档 README。归档提交 73c7996ac8d06e3a71a2288a0e6be50504018303。
 
 - [x] Livox SDK2 v1.3.1 + livox_ros_driver2 v1.2.6 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337301420](https://github.com/rexyll/robdog_nav2/actions/runs/45337301420)。
@@ -229,6 +230,7 @@
 | 2026-11-24 | v0.3.37 | 核对 UrbanLoco 目标序列与真实数据大小：`ulhk_4` = `HK-Data20190117`，官方页面 6.11 GB；修正共享目录说明、数据日期字段差异及禁止用其他大序列替代的人工下载 Gate | UrbanLoco README/official page; Intel Point-LIO reproduction guide; datasets README 48a86015; POC doc 37484ad5 |
 | 2026-11-24 | v0.3.38 | Lite3 遥测协方差增加对称/PSD 结构校验与 5 项边界测试；Humble/Jammy、Jazzy/Noble 双 CI success；归档 R3–R5 实验参考原型但不并入正式源代码 | code df302eb6b767bc8dd521ac7fd121b6cf38fef645; CI 45377526595; archive 73c7996ac8d06e3a71a2288a0e6be50504018303 |
 | 2026-11-24 | v0.3.39 | 新增 robodog_gnss_quality RTK Fixed 纯算法门控包、30 项跨 Humble/Jazzy 测试和独立 CI；C6 标记部分完成，驱动适配/历元配对/EKF/实测仍待实施 | code d612a8199c5ebb485b5a0fff69700f37ca2c1f49; GNSS CI 45378893084; existing package CI 45378893095 |
+| 2026-11-24 | v0.3.40 | 扩展 GNSS 核心：解码 UBX-NAV-PVT GNSSFixOK/carrSoln 并按 iTOW 严格配对 NavSatFix，补充时钟 epoch 与接收时差 Gate；Humble/Jazzy 各 42/42 测试通过 | code c36cdbcaea5b127df960cd7b0c261cbdf512f478; GNSS CI 45379297789 |
 
 ---
 
@@ -248,6 +250,8 @@
 - [GNSS RTK quality gate package](src/robodog_gnss_quality/README.md)
 - [GNSS RTK quality gate core](src/robodog_gnss_quality/robodog_gnss_quality/quality_gate.py)
 - [GNSS RTK quality gate tests](src/robodog_gnss_quality/test/test_quality_gate.py)
+- [UBX-NAV-PVT 解码与 GNSS 历元配对](src/robodog_gnss_quality/robodog_gnss_quality/ubx_nav_pvt.py)
+- [UBX-NAV-PVT 配对测试](src/robodog_gnss_quality/test/test_ubx_nav_pvt.py)
 - [GNSS quality gate CI](.github/workflows/gnss-quality-ci.yml)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
