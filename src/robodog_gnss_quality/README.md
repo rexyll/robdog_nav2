@@ -131,7 +131,9 @@ The pinned driver's ROS `header.stamp` is populated from the host USB receive pa
 - Feed each decoded record through `add_pvt()`, `add_position()`, `add_covariance()`, or `add_status()`. Each call also supplies that epoch's validated `source_timestamp_ns`.
 - Records are held in an LRU-bounded cache keyed by iTOW. The same iTOW must carry the same source-time mapping across all four message types.
 - Identical duplicate payloads are ignored; conflicting duplicates discard that incomplete epoch and raise a pairing error.
-- Incomplete epochs are evicted by the configured capacity and by host-monotonic pending age. A complete epoch is emitted only once and only if its mapped receiver timestamp is newer than the last emitted epoch.
+- Incomplete epochs are evicted by the configured capacity and by host-monotonic pending age. Evicted, stale, late, conflicting or invalid iTOW values are kept in a bounded retired/tombstone table, so remaining fragments cannot resurrect an incomplete sample.
+- Identical duplicate payloads are ignored; conflicting duplicates retire the entire epoch. A completed epoch is emitted only once and only if its mapped receiver timestamp is newer than the last emitted epoch.
+- The joiner maintains a host monotonic receive-time watermark. Both incoming messages and explicit `expire_stale(now)` calls advance it; callbacks older than the watermark by more than the maximum pair-skew window are rejected.
 - An unexpected source-clock ID is rejected. After `reset()`, `begin_generation()` must be called explicitly before another message is accepted. Late callbacks from an old generation cannot silently switch the active cache.
 - The cache itself does not discover GPS week or receiver reboot. The ROS adapter remains responsible for a trustworthy generation detector, source-time mapper, bounded queue sizing, and a single monotonic clock for all callbacks.
 
