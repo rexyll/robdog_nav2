@@ -4,6 +4,8 @@ import hashlib
 import json
 import tempfile
 import unittest
+
+import numpy as np
 from pathlib import Path
 
 from rosbags.highlevel import AnyReader
@@ -77,7 +79,7 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
             timebase=100_000_000_010,
             point_num=2,
             lidar_id=4,
-            rsvd=[0, 0, 0],
+            rsvd=np.asarray([0, 0, 0], dtype=np.uint8),
             points=points,
         )
 
@@ -89,11 +91,11 @@ class TestM3DGRRos2Conversion(unittest.TestCase):
         imu_message = imu_type(
             header=header_imu,
             orientation=quaternion_type(x=0.0, y=0.0, z=0.0, w=1.0),
-            orientation_covariance=[0.0] * 9,
+            orientation_covariance=np.zeros(9, dtype=np.float64),
             angular_velocity=vector3_type(x=0.1, y=0.2, z=0.3),
-            angular_velocity_covariance=[0.01] * 9,
+            angular_velocity_covariance=np.full(9, 0.01, dtype=np.float64),
             linear_acceleration=vector3_type(x=1.0, y=2.0, z=9.81),
-            linear_acceleration_covariance=[0.02] * 9,
+            linear_acceleration_covariance=np.full(9, 0.02, dtype=np.float64),
         )
 
         with Rosbag1Writer(self.source_bag) as writer:
