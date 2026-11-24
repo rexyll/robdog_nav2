@@ -8,6 +8,23 @@ from typing import Any, Sequence
 NSEC_PER_SEC = 1_000_000_000
 
 
+def validate_cli_thresholds(
+    max_header_timebase_delta_ns: int,
+    max_nearest_lidar_imu_p95_ms: float | None,
+) -> None:
+    """Reject invalid CLI limits before opening or scanning a bag."""
+    if max_header_timebase_delta_ns < 0:
+        raise ValueError("max-header-timebase-delta-ns must be non-negative")
+    if max_nearest_lidar_imu_p95_ms is not None:
+        if (
+            not math.isfinite(max_nearest_lidar_imu_p95_ms)
+            or max_nearest_lidar_imu_p95_ms < 0
+        ):
+            raise ValueError(
+                "max-nearest-lidar-imu-p95-ms must be a finite, non-negative number"
+            )
+
+
 def percentile(values: Sequence[float], p: float) -> float | None:
     if not 0.0 <= p <= 100.0:
         raise ValueError("percentile must be within [0, 100]")
