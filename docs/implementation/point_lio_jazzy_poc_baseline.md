@@ -128,9 +128,9 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 - 在 colcon 前显式检查 /usr/local/lib/liblivox_lidar_sdk_shared.so 和 /usr/local/include/livox_lidar_api.h 已安装；
 - 同时检查 src/Livox-SDK2 不存在，防止 colcon 又将 SDK2 source 作为 package 编译。
 
-修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。最新同分支串行 P1 run [45336157026](https://github.com/rexyll/robdog_nav2/actions/runs/45336157026) 已触发并在安装 ROS Jazzy；之前 run [45335955336](https://github.com/rexyll/robdog_nav2/actions/runs/45335955336) 仍记录第一轮 vendor path 修复证据。尚未取得最终 build pass。
+修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。最新 Point-LIO serial P1 run [45336485165](https://github.com/rexyll/robdog_nav2/actions/runs/45336485165) 已启动，当前在 ROS Jazzy 安装阶段；P0 source preparation run [45336457667](https://github.com/rexyll/robdog_nav2/actions/runs/45336457667) 再次成功。尚未取得最终 build pass。
 
-Livox 独立 workflow 已加入同分支 concurrency，最新 serial run [45336152921](https://github.com/rexyll/robdog_nav2/actions/runs/45336152921) 正在安装 ROS Jazzy。source ROS 环境的步骤不再开启 nounset，且 rosdep 前刷新 APT index。当前不宣称 Driver2 build pass。
+两条 build workflow 均已增加同分支 concurrency/cancel-in-progress，并将文档路径从 push/PR 过滤中移除，以免 docs-only 修改触发全量编译。Livox 最新 serial run [45336480583](https://github.com/rexyll/robdog_nav2/actions/runs/45336480583) 正在 ROS Jazzy 安装阶段；ROS source 已避开 nounset，rosdep 前刷新 APT index。当前不宣称 Driver2 build pass。
 
 即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
 
