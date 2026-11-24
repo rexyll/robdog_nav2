@@ -42,7 +42,7 @@ flowchart TB
     C2["右 RGB 相机"]
     GNSS["RTK GNSS → NavSatFix"]
     IMU["IMU → Imu"]
-    LEG["腿式里程计 / 机身状态估计"]
+    LEG["厂商确认的本体 odometry（若有）/经验证的 local odom"]
   end
 
   subgraph Perception["传感器处理"]
@@ -123,6 +123,8 @@ flowchart TB
 - [TaskPlan Part 1：架构与硬件设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
 - [TaskPlan Part 2：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [Lite3 本体 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
+- [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
+- [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
