@@ -157,3 +157,21 @@
 
 42. [sdk_deploy lite3_sdk_service deployment guide](https://github.com/DeepRoboticsLab/sdk_deploy/blob/20279073bc43522aa06b0abf611bb2daaa53d87d/src/lite3_sdk_service/README.md)  
     Describes the motion host's current Ubuntu 20.04/Foxy workflow, service commands and warning about cross-distribution ROS 2 communication and DDS discovery traffic.
+
+
+## 2026-11-24 本体 odometry / LIO fallback 资料
+
+43. [Intel Robotics AI Suite 2026.3 — LiDAR and Visual Odometry Pipelines](https://developer.robotics.intel.com/2026.3/development-stack/components/navigation/lio-livo-pipelines/index.html)  
+    官方文档说明三种 ROS 2 LIO/LIVO 引擎在 Humble/Jazzy 的集成情况，并将 Point-LIO 归类为适用于高动态 humanoid/quadruped 的高带宽 LIO；FAST-LIVO2 profile 展示 MID-360 + RealSense D415/D435i，但不是本项目 See3CAM 双目配置。
+
+44. [Intel Robotics AI Suite 2026.3 — Point-LIO Jazzy integration](https://developer.robotics.intel.com/2026.3/development-stack/software_references/humanoid/sample_pipelines/point_lio_demo/index.html)  
+    提供 ROS 2 Jazzy / Ubuntu 24.04 的 Point-LIO ament port、Livox ROS Driver 2 build flow 和 MID-360 YAML profile；公开端到端数据集验证用 Velodyne + Intel Core Ultra 平台，不证明 Jetson Orin + MID-360 已通过。Point-LIO upstream license 为 BSD-3-Clause。
+
+45. [Intel Robotics AI Suite 2026.3 — FAST-LIO2 Jazzy integration](https://developer.robotics.intel.com/2026.3/development-stack/software_references/humanoid/sample_pipelines/fast_lio2_demo/index.html)  
+    提供 Jazzy/Ubuntu 24.04 + Livox ROS Driver 2 构建参考；上游 FAST_LIO LICENSE 为 GPLv2，虽然 package.xml 有 BSD 声明，合规时以 LICENSE 实际文本为准。
+
+46. [Point-LIO upstream](https://github.com/hku-mars/Point-LIO)  
+    上游说明逐点 EKF 更新、高带宽输出和对强振动/IMU 饱和的鲁棒性；同时强调 LiDAR 与 IMU 必须同步，并正确填写 IMU 饱和范围、单位和外参。
+
+47. [Livox MID-360 Ethernet Protocol](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html)  
+    MID-360 时间戳模式包括设备启动时钟、PTP/gPTP、GPS；内置 IMU 可配置输出频率与加速度/角速度量程，点云数据含逐点采样时间和包/帧计数。
