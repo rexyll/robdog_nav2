@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.40
+- 文档版本：v0.3.41
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -99,7 +99,7 @@
 - [ ] B9. 录制完整 rosbag2，建立回放和 diagnostics。
 - [ ] B10. 所有 topic、frame_id、QoS、频率、数据年龄和 TF 检查通过。
 - [~] B11. Point-LIO 固定 upstream/三份 Intel patches 已完成，P0 45336709339、P1 x86_64 build 45337200320 通过。P2 UrbanLoco prepare/replay/TUM/INSPVAX GT/ENU/evo 工具已提交，raw/DB3 SHA256、dataset manifest、SQLite GT extraction integration 与进程组清理已加入；P2 CI 45340287093、45341097202 均 10/10 tests 通过，INSPVAX offsets 与 NovAtel 官方 msg commit 0c0e135b... 及 Intel 固定脚本 commit decbb06... 交叉核验。**待用户手动获取的唯一指定序列是 `HK-Data20190117`（`ulhk_4`）；官方元数据为 6.11 GB，Dropbox/Baidu 是多序列共享目录，不能用其他 24–62 GB 序列替代。** 本地期望 ROS1 文件名为 `datasets/ulhk_4/HK-Data20190117.bag`；若镜像中看不到该条目或文件名称/格式不同，先核对目录清单，不要下载/改名猜测。P3a 通用原生 ARM64 Ubuntu 24.04/Jazzy 已通过：[run 45341347087](https://github.com/rexyll/robdog_nav2/actions/runs/45341347087) success；SDK2、Driver2、Point-LIO 两包编译/安装成功，ROS package prefix、`pointlio_mapping` 与 `ros2 pkg executables` 检查通过。该结果只证明 generic aarch64 build，不等同 Jetson AGX Orin/JetPack 7.2.2 实机验收。B11 保持部分完成，直到实际 bag playback/evo 与目标设备验证完成。
-- [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；修复运行期 math import 缺失并新增 offset ns/ms tests；Python compile、CLI --help、13 项 helper tests CI 45339029477 通过。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
+- [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -189,7 +189,7 @@
 
 - [x] Livox SDK2 v1.3.1 + livox_ros_driver2 v1.2.6 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337301420](https://github.com/rexyll/robdog_nav2/actions/runs/45337301420)。
 - [x] 固定 Point-LIO Intel Jazzy port 在 Jazzy/Noble x86_64 编译与安装通过：[run 45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320)；colcon 2 packages finished，`pointlio_mapping` executable 被找到。
-- [x] MID-360 rosbag 时间审计纯 Python helper 11 项测试通过：[run 45338022891](https://github.com/rexyll/robdog_nav2/actions/runs/45338022891)；CLI/readme/help CI 检查已加入下一轮。
+- [x] MID-360 rosbag 时间审计工具已增加 CLI 质量阈值参数防护（负数、NaN、±Inf 拒绝；0/未设置接受），并加入“校验先于 rosbag 打开”的端到端测试；最终 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) 的 Python 3.12 编译、CLI help 与 21/21 项测试通过。真实 MID-360 bag/时钟同步仍未验证。
 ### 未完成 / 阻塞
 - [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [x] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不替代 ROS 2 package CI 或真实硬件验证。
@@ -231,6 +231,7 @@
 | 2026-11-24 | v0.3.38 | Lite3 遥测协方差增加对称/PSD 结构校验与 5 项边界测试；Humble/Jammy、Jazzy/Noble 双 CI success；归档 R3–R5 实验参考原型但不并入正式源代码 | code df302eb6b767bc8dd521ac7fd121b6cf38fef645; CI 45377526595; archive 73c7996ac8d06e3a71a2288a0e6be50504018303 |
 | 2026-11-24 | v0.3.39 | 新增 robodog_gnss_quality RTK Fixed 纯算法门控包、30 项跨 Humble/Jazzy 测试和独立 CI；C6 标记部分完成，驱动适配/历元配对/EKF/实测仍待实施 | code d612a8199c5ebb485b5a0fff69700f37ca2c1f49; GNSS CI 45378893084; existing package CI 45378893095 |
 | 2026-11-24 | v0.3.40 | 扩展 GNSS 核心：解码 UBX-NAV-PVT GNSSFixOK/carrSoln 并按 iTOW 严格配对 NavSatFix，补充时钟 epoch 与接收时差 Gate；Humble/Jazzy 各 42/42 测试通过 | code c36cdbcaea5b127df960cd7b0c261cbdf512f478; GNSS CI 45379297789 |
+| 2026-11-24 | v0.3.41 | 加固 MID-360 rosbag 时间审计 CLI 阈值配置：拒绝负数、NaN 与 ±Inf，校验在 bag access 前执行；新增参数边界和 CLI 集成测试，Python 3.12 CI 21/21 passed | code b2e44f7d5eb23f886f569e49a506fee22f742522 / e3403fd8746c808e4b956f8da0b64256b242af62 / afe8207d3f0310326e0736d1cec17e9e46b0072f / 4b2e089f7206a639b8dadf7f150200d58bff1a6c; CI 45384314282 |
 
 ---
 
