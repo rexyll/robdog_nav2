@@ -12,6 +12,11 @@ EST_FILE="${RESULTS_DIR}/ulhk_4_est_tum.txt"
 GT_FILE="${RESULTS_DIR}/ulhk_4_gt_tum.txt"
 EVO_FILE="${RESULTS_DIR}/ulhk_4_evo_ape.zip"
 
+if [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 && "${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}" != "1" ]]; then
+  echo "ERROR: refusing formal P2 evaluation from an unverified standalone DB3." >&2
+  echo "Confirm/document its conversion from the expected UrbanLoco ROS1 HK-Data20190117.bag first." >&2
+  exit 10
+fi
 if [[ ! -s "${EST_FILE}" ]]; then
   echo "Missing estimated trajectory ${EST_FILE}; run scripts/run_urbanloco_ulhk4.sh first." >&2
   exit 2
