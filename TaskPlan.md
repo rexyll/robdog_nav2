@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.6
+- 文档版本：v0.3.7
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -24,90 +24,35 @@
 7. 本文件超过约 30 KB 时按主题拆成 `TaskPlan_Part-*.md`。**拆分后仍必须把所有进度状态保留在本根文件**；分册只放详细设计，不放需要维护的重复进度清单。
 8. 未知传感器参数、供电电流、质量、时延、速度、协方差和准确度一律标“待确认/待测”，不猜测、不照抄示例参数。
 
-## 1. 项目目标与首选硬件
+## 1. 项目目标、硬件基线与系统决策
 
-### 1.1 首选本体
+### 1.1 目标
+使用四足机器狗 + 3D LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS，结合机器人 IMU/经验证的本体状态估计，基于 ROS 2 / Nav2 实现室内外导航、局部实时避障、动态障碍感知和后续四足地形可通行性。
 
-**DEEP Robotics 绝影 Lite3 Venture。**
+### 1.2 技术预选 BOM（未采购、待供应商确认）
+- **本体：** DEEP Robotics Lite3 Venture；公开标称载荷 4.5 kg，具备外部 Ethernet 和 24V/12V/5V 扩展供电，但各路持续/峰值电流、安装 CAD、质心限制均待书面确认。
+- **LiDAR：** Livox MID-360，3D、Ethernet/PointCloud2，主要几何避障传感器。
+- **双目：** 2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1 Color（无镜头），配两只同型号匹配广角 C-mount 镜头和共同硬件 trigger。
+- **RTK：** ArduSimple simpleRTK2B Budget / u-blox ZED-F9P + ANN-MB 天线；需要 NTRIP 或自建基站。
+- **计算：** NVIDIA Jetson AGX Orin Developer Kit（64GB 开发配置）；另需工业 Ethernet switch、相机触发分配、电源/DC-DC/保险和定制安装板。
+- **载荷预算：** 内部目标外设总质量 ≤3.6 kg（不是厂商认证上装值）。当前已知设备质量小计约 1.33 kg，已知设备端功率估算约 22.8–69.4 W；未称重/测功附件、转换损耗和启动峰值仍需核算。禁止未经厂商确认直接用 Lite3 24V 给 AGX 供电。
+- 详细规格/风险/供电图见 [TaskPlan Part 1](TaskPlan_Part-01_ArchitectureAndHardware.md)、[ADR-0002](docs/decisions/ADR-0002-hardware-platform.md) 和 [power/mass budget](docs/implementation/power_mass_budget.md)。
 
-选择原因：
-- 云深处官方 Lite3 Venture 扩展感知示例使用 AGX Jetson Orin + Livox Mid-360，给出了机械安装、24V XT30 供电和 Ethernet 接线方式；
-- Venture 公开标称 4.5 kg 载荷，具备 2× Ethernet 与 24V/12V/5V 外部电源接口；
-- 公开 SDK 有 IMU、关节状态、状态机和高层速度控制路径；但 Legacy Lite3_ROS 与当前 sdk_deploy 输出接口不同，当前 sdk_deploy 的完整腿式 odometry 是否可用尚待厂商确认；
-- 不需要本项目从零开发四足关节驱动和步态底层。
+### 1.3 软件版本策略
+- 首轮按云深处公开方案复现 Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble。
+- Orin 长期目标为 Ubuntu 24.04 + ROS 2 Jazzy；AGX Orin Developer Kit 使用 JetPack 7.2.1 base ISO 后按 NVIDIA 指引升级至 7.2.2。
+- ROS 2 Lyrical（Ubuntu 26.04）待 Orin BSP/驱动支持成熟后再评估。
+- 自研包保持 Humble/Jazzy 可移植；Lite3 厂商 SDK 与 Nav2 标准消息层隔离，不默认让 Foxy 与 Jazzy DDS 节点共享 domain。
 
-公开参数约 12.2 kg 本体、4.5 kg 载荷、610×370×445 mm；公开空载续航约 1.5–2 小时。所有参数需按目标 SKU 和交付批次复核，外设搭载后的续航必须实测。
-
-### 1.2 首选外置设备 BOM
-
-| 子系统 | 预选型号 | 数量 | 接口/用途 |
-|---|---|---:|---|
-| 四足本体 | DEEP Robotics Lite3 Venture | 1 | 腿式运动、IMU/关节状态、厂商运动控制；可信 legged odometry 输出待确认 |
-| 3D LiDAR | Livox MID-360 | 1 | Ethernet / PointCloud2，主几何避障 |
-| RGB 左右相机 | e-con Systems See3CAM_50CUG Color | 2 | USB3/UVC、Global Shutter；组成被动双目 |
-| 镜头 | 匹配的 C-mount 镜头，初始目标 HFOV 70°–80° | 2 | 同型号/焦距/成像圈；供应商确认 |
-| 双目触发 | 同步触发分配器和线束 | 1 套 | 同步两相机曝光；电平/引脚需确认 |
-| RTK | ArduSimple simpleRTK2B Budget / ZED-F9P + ANN-MB | 1 套 | NavSatFix/UBX，室外全局定位 |
-| 机载计算 | NVIDIA Jetson AGX Orin Developer Kit | 1 | ROS 2、Nav2、立体视觉、点云 |
-| Ethernet | 工业级千兆交换机（至少 5 口） | 1 | 连接 Lite3、MID-360、AGX |
-| 电源 | 经核算 DC/DC、电源分配与保险 | 1 套 | 给 AGX 和传感器供电 |
-| 机械安装 | Venture 安装板、减振和天线支架 | 1 套 | 固定设备、控制质心和线缆 |
-
-**载荷预算：** Venture 标称 4.5 kg。项目内部目标为所有外设、计算机、支架、线束和电源件合计不超过 **3.6 kg**（保留约 20% 余量；这是项目工程目标，不是厂商认证值）。若超过目标，重新选计算平台/载板或布局；不能突破厂商载荷/质心限制。
-
-**电源约束：** Lite3 有外设 24V/12V/5V 接口，但各路持续/峰值电流和总功率待厂商书面确认。不能把 24V 直接接入 AGX Orin 开发套件 DC 输入；需要符合额定电压/功率的 DC/DC 和保护。
-
-### 1.3 软件发行版策略
-
-- 首轮 bring-up 对齐云深处公开配置：Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble + AGX Orin + MID-360。
-- ROS 2 最新 LTS 已于 2026-05 发布 Lyrical Luth，计划支持至 2031-05；其 Tier 1 Ubuntu 平台是 26.04。当前 NVIDIA Jetson AGX Orin 的 JetPack 7.2.2 官方基线是 Ubuntu 24.04，因此暂不把 Lyrical 作为本硬件平台的运行基线。
-- 长期目标 ROS 2 Jazzy（Ubuntu 24.04，支持至 2029-05），更匹配 JetPack 7 的 Orin 系统基线；待后续 Orin 官方支持 Ubuntu 26.04 后，再评估迁移 Lyrical。
-- 首轮兼容性验证保留云深处官方 Ubuntu 22.04 + JetPack 6.1 + Humble 参考栈，但不默认把它定为长期部署系统；同时验证 JetPack 7.2.2 + Ubuntu 24.04 + Jazzy。
-- 自研包从第一天起保持 Humble/Jazzy 可移植，Lite3 SDK 隔离在 bridge/adapter 内；Humble 最迟在 2027-05 EOL 前退出长期运行基线。
-- Livox `livox_ros_driver2` 有 Jazzy 构建说明，但仍需锁定 commit 后编译和实测。
-- 不默认在一个 DDS domain 混用不同 ROS 2 发行版节点；跨发行版时采用 UDP/串口/标准消息网关。
-
-### 1.4 完整系统数据流
-
-```text
-厂商确认的 legged odom + IMU ──> Local EKF ──> odom -> base_link
-                                  └──> navsat_transform <── RTK NavSatFix
-                                                   |
-                                             GNSS quality gate
-                                                   |
-                                               Global EKF
-                                                   └──> map -> odom
-
-MID-360 ──> PointCloud2 ──> filtering/self-filter/deskew ───┐
-                                                            ├─> Nav2 local costmap
-2 × RGB ──> sync/rectify/disparity/depth/cloud ─────────────┘
-     └──> object detection/tracking (semantic enhancement)
-
-Nav2 Global Costmap + Planner + BT
-                 |
-Nav2 Local Costmap + Controller
-                 |
-Velocity Smoother
-                 |
-Collision Monitor
-                 |
-Lite3 command adapter / watchdog
-                 |
-Lite3 vendor motion SDK / gait controller
-```
-
-### 1.5 关键分工原则
-
-- LiDAR 是主几何避障源，双目 PointCloud2 是补充观测源；两种 source 保留独立配置和诊断。
-- RTK 用于室外全局位置与航点，不用于近场碰撞检测；单天线 GNSS 静止时不提供机身 yaw。
-- local EKF 维持连续 `odom→base_link`；global EKF 与 navsat_transform 利用 RTK 提供 `map→odom` 修正。
-- RGB 目标检测提供类别/跟踪信息，不代替几何深度。
-- Nav2 2D costmap 不是四足足端落点规划；复杂地形需独立 traversability/terrain 能力。
-- Collision Monitor 是软件层附加保护，不是安全认证急停设备；必须有物理急停、遥控停止和底层 watchdog。
+### 1.4 系统分工与定位边界
+- **定位：** 厂商可信腿式 odometry 若存在并通过时间/坐标/covariance 验证，优先作为 local odom；否则第一备用评估 Point-LIO + MID-360 内置 IMU。FAST-LIO2 为对照，Stereo VIO/FAST-LIVO2 后续评估。禁止用 IMU-only 积分伪造位置。
+- **全局：** RTK 经 navsat_transform 和 quality gate 提供 map 位置约束；单天线 GNSS 静止时不能提供机身 yaw。
+- **障碍物：** MID-360 为主几何源；双目深度云为补充观测；RGB 语义负责类别/跟踪，不替代几何测距。两路 observation source 保持独立。
+- **Nav2：** Global/Local Costmap、Planner、Controller、BT、Velocity Smoother、Collision Monitor，再经 Lite3 安全 command adapter 和厂商步态控制器。
+- **四足限制：** 2D costmap 不能替代落足点规划、坡度/台阶/沟坎/悬崖的 traversability。Collision Monitor 是软件防护，不是安全认证急停。
+- **重要 Lite3 Gate：** 新版 sdk_deploy 的 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不等于 nav_msgs/Odometry。正式 legged odometry、motion-host/AGX-host 分工及跨 Foxy/Jazzy 数据路径仍待厂商确认。见 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)、[vendor SDK assessment](docs/implementation/lite3_vendor_sdk_integration_assessment.md) 和 [supplier matrix](docs/interfaces/lite3_vendor_confirmation_matrix.md)。
 
 ---
-
-**Lite3 定位输入 Gate：** 新版 sdk_deploy 的 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不能自动等价成 nav_msgs/Odometry；若供应商不能提供可信 legged odom，则必须评估独立 LiDAR odometry/SLAM 或 stereo VIO，不能仅用 IMU 积分构造可信 local odom。见 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)。
 
 ## 2. 阶段任务清单（所有状态只在本节维护）
 
