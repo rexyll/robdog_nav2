@@ -9,9 +9,11 @@ if [[ "$#" -gt 0 ]]; then
 fi
 POINTLIO_DIR="$WORKSPACE/src/point_lio"
 DRIVER_DIR="$WORKSPACE/src/livox_ros_driver2"
-# Keep the standalone SDK source outside src/: colcon would otherwise
-# rediscover it as a CMake package and rebuild it without the GCC 13 flag.
-SDK_DIR="$WORKSPACE/vendor/Livox-SDK2"
+# Keep the standalone SDK source outside the entire colcon workspace:
+# Driver2's build.sh invokes colcon from the workspace root, whose default
+# package discovery also traverses sibling directories such as workspace/vendor.
+SDK_SOURCE_ROOT="${WORKSPACE}_external"
+SDK_DIR="$SDK_SOURCE_ROOT/Livox-SDK2"
 
 POINTLIO_BASE="97b0042e397ec71c327966abebff9b4b7e2c154a"
 DRIVER_COMMIT="13eb05e4e6dd7a765b934d0c5fd6236676a57b49"
@@ -39,7 +41,7 @@ set +u
 source /opt/ros/jazzy/setup.bash
 set -u
 
-mkdir -p "$WORKSPACE/src" "$WORKSPACE/vendor"
+mkdir -p "$WORKSPACE/src" "$SDK_SOURCE_ROOT"
 
 if [[ ! -e "$DRIVER_DIR" ]]; then
   git clone https://github.com/Livox-SDK/livox_ros_driver2.git "$DRIVER_DIR"
@@ -84,6 +86,13 @@ fi
 test -f /usr/local/lib/liblivox_lidar_sdk_shared.so
 test -f /usr/local/include/livox_lidar_api.h
 test ! -e "$WORKSPACE/src/Livox-SDK2"
+test ! -e "$WORKSPACE/vendor/Livox-SDK2"
+case "$SDK_DIR" in
+  "$WORKSPACE"/*)
+    echo "ERROR: SDK2 source must stay outside the entire colcon workspace." >&2
+    exit 9
+    ;;
+esac
 
 echo "==> Configure ROS 2 driver package manifest and resolve dependencies"
 cp "$DRIVER_DIR/package_ROS2.xml" "$DRIVER_DIR/package.xml"
@@ -96,6 +105,16 @@ else
   sudo apt-get update
 fi
 rosdep install --from-paths "$WORKSPACE/src" --ignore-src --rosdistro jazzy -r -y
+
+echo "==> Verify colcon package discovery excludes Livox SDK2 source"
+PACKAGE_NAMES="$(cd "$WORKSPACE" && colcon list | awk '{print $1}')"
+printf '%s\n' "$PACKAGE_NAMES"
+printf '%s\n' "$PACKAGE_NAMES" | grep -Fxq "livox_ros_driver2"
+printf '%s\n' "$PACKAGE_NAMES" | grep -Fxq "point_lio"
+if printf '%s\n' "$PACKAGE_NAMES" | grep -Fxq "livox_sdk2"; then
+  echo "ERROR: colcon still discovers livox_sdk2 source inside workspace." >&2
+  exit 10
+fi
 
 echo "==> Build Livox ROS Driver2 and Point-LIO using its Jazzy build entrypoint"
 (
