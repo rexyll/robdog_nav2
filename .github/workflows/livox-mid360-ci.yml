@@ -51,6 +51,6 @@ jobs:
         with:
           package-name: livox_ros_driver2
           target-ros2-distro: jazzy
-          vcs-repo-file-url: file://\${{ github.workspace }}/.github/ros2/livox-mid360.repos
+          vcs-repo-file-url: file://${{ github.workspace }}/.github/ros2/livox-mid360.repos
           skip-tests: true
           coverage-result: false
