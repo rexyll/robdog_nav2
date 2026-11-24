@@ -59,7 +59,7 @@ jobs:
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
-            scripts/evaluate_urbanloco_ulhk4.sh
+            scripts/evaluate_urbanloco_ulhk4.sh \
             scripts/verify_public_dataset_checksum.sh \
             scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
