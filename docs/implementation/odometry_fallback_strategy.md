@@ -168,3 +168,8 @@ MID-360 产品资料列出内置 IMU；Livox ROS Driver 2 源码中存在 IMU �
 - [Livox ROS Driver 2](https://github.com/Livox-SDK/livox_ros_driver2)
 - [Livox MID-360 Ethernet protocol and timestamp modes](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html)
 - [Point-LIO ROS 2 MID-360 example fork](https://github.com/Thetrafficlights/Point-LIO-ros2)
+
+
+## 8. 2026-11-24 Livox MID-360 driver pin update
+
+为固定 Jazzy 首轮构建，项目预选官方 livox_ros_driver2 1.2.6 commit 13eb05e4e6dd7a765b934d0c5fd6236676a57b49，并预选 Livox-SDK2 commit c0796f04c143143899c87a773d9f6b7136453c0b。该组合尚未完成构建验证，不能标记为 Jetson 兼容。Point-LIO 输入优先保留 CustomMsg 的 timebase/offset_time；禁止在 LIO 输入前退化为 PointXYZI。完整构建/验证计划见 [Livox MID-360 driver baseline](livox_mid360_driver_baseline.md)。
