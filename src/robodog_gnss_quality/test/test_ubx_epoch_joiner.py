@@ -123,14 +123,23 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         )
         self.assertEqual(joiner.pending_count, 2)
 
-        joiner.add_status(
+        joiner.add_covariance(
+            make_covariance(1000), source_clock_id=GENERATION, source_timestamp_ns=1_000_000
+        )
+        result_a = joiner.add_status(
             make_status(1000), source_clock_id=GENERATION, source_timestamp_ns=1_000_000
         )
-        result = joiner.add_position(
+        self.assertIsNotNone(result_a)
+        self.assertEqual(result_a.source_timestamp_ns, 1_000_000)
+
+        joiner.add_pvt(
+            make_pvt(1001), source_clock_id=GENERATION, source_timestamp_ns=2_000_000
+        )
+        result_b = joiner.add_position(
             make_position(1001), source_clock_id=GENERATION, source_timestamp_ns=2_000_000
         )
-        self.assertIsNotNone(result)
-        self.assertEqual(result.source_timestamp_ns, 2_000_000)
+        self.assertIsNotNone(result_b)
+        self.assertEqual(result_b.source_timestamp_ns, 2_000_000)
         self.assertEqual(joiner.pending_count, 0)
 
     def test_pending_cache_is_capacity_bounded(self):
