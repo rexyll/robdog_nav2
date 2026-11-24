@@ -7,6 +7,7 @@ the MID-360 LiDAR and IMU topics. It never rewrites or converts the source bag.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
 import sys
 from collections import defaultdict
@@ -44,6 +45,21 @@ def summarize_frequency(count: int, start_ns: int | None, end_ns: int | None) ->
     return (count - 1) / ((end_ns - start_ns) / 1_000_000_000.0)
 
 
+@contextmanager
+def _open_ros1_reader(bag_path: Path, reader_class: Any, reader_error_class: Any):
+    reader = reader_class([bag_path])
+    try:
+        reader.open()
+    except reader_error_class as exc:
+        raise ValueError(
+            "Input is not a readable ROS 1 bag v2.0 file; a ROS 2 DB3 is not a substitute."
+        ) from exc
+    try:
+        yield reader
+    finally:
+        reader.close()
+
+
 def _connection_details(connection: Any) -> dict[str, Any]:
     msgdef = getattr(connection, "msgdef", None)
     if msgdef is None:
@@ -70,7 +86,7 @@ def audit_ros1_bag(
 ) -> dict[str, Any]:
     """Read bag metadata, message timestamps and a few sensor payload samples."""
     try:
-        from rosbags.highlevel import AnyReader
+        from rosbags.highlevel import AnyReader, AnyReaderError
     except ImportError as exc:  # pragma: no cover - exercised by CLI environment
         raise RuntimeError(
             "Missing dependency 'rosbags'. Install with: "
@@ -85,13 +101,6 @@ def audit_ros1_bag(
             f"Expected a ROS 1 .bag file, got {bag_path.name!r}; "
             "do not rename a ROS 2 .db3 file to .bag."
         )
-    with bag_path.open("rb") as handle:
-        magic = handle.read(13)
-    if magic != b"#ROSBAG V2.0\\n":
-        raise ValueError(
-            "File does not have ROS 1 bag v2.0 magic; do not treat a ROS 2 DB3 as ROS1."
-        )
-
     connection_details: list[dict[str, Any]] = []
     topic_stats: dict[str, dict[str, Any]] = {}
     sample_state: dict[str, dict[str, Any]] = {
@@ -99,7 +108,7 @@ def audit_ros1_bag(
         imu_topic: {"decoded": 0, "samples": [], "errors": []},
     }
 
-    with AnyReader([bag_path]) as reader:
+    with _open_ros1_reader(bag_path, AnyReader, AnyReaderError) as reader:
         for connection in reader.connections:
             connection_details.append(_connection_details(connection))
             topic = str(connection.topic)
