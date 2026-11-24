@@ -24,3 +24,7 @@ software version and conversion metadata in each evaluation report.
 
 Do not commit the raw .bag, converted .db3 files, rosbag2 metadata, trajectories,
 or generated maps/PCD files.
+
+## 替代公开数据集
+
+UrbanLoco `ulhk_4` 的原始来源门禁仍保留；它不再是整个项目的唯一数据入口。GrandTour、Quadruped-SLAM 和 M3DGR 的优先级、适用边界、下载序列、许可和校验要求见 [外部公开数据集替代路线](../docs/datasets/alternative_dataset_strategy.md)。
