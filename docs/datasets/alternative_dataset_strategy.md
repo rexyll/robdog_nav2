@@ -370,3 +370,19 @@ python scripts/audit_m3dgr_gt_rtk_correspondence.py \
 - 不要将 /mavros/global_position/raw/fix 未经检查就命名为权威 RTK GT；必须检查 status/covariance 与逐行时间/位置关联。
 - 不要用此脚本的 SE(3) 拟合结果去调整轨迹或用于 EVO 对齐。
 - 即使时间/位置与 RTK 强匹配，仍需确认接收机身份、RTK Fixed/Float 状态、改正数来源、天线参考点/杆臂以及时间同步误差，才可把它作为 GT 做 APE/RPE。
+
+
+### 6.12 Dynamic03 GNSS 原始字段与多 topic 审计扩展（2026-11-25）
+
+用户本地逐行来源关联报告（原始 bag SHA256 `a54b687a...bcc78`、原始 TUM SHA256 `eaf67de2...ef80a`）显示：
+- GT 与 `/mavros/global_position/raw/fix` 均为 4,269 条，按原始顺序逐条比较时，全部 4,269 个 GT timestamp 与 NavSatFix header stamp 的绝对差小于 1 ms；最大差约 0.000712 ms。
+- 单一不带尺度的诊断 SE(3) 变换后 3D RMSE 约 0.0000444 m，P95 约 0.0000704 m。这是极强的来源关联证据，不是定位精度或 GT 权威性证明。
+- ROS `sensor_msgs/NavSatStatus` 定义中 `status=0` 是 `STATUS_FIX`（unaugmented fix），`STATUS_NO_FIX=-1`；因此报告的 4,269 条 `status=0` 表示普通未增强 fix，不能解读为无定位，也不能证明 RTK Fixed。NavSatFix `position_covariance_type=1` 是 `COVARIANCE_TYPE_APPROXIMATED`，不是接收机已知完整协方差。参考 ROS 官方消息定义：[NavSatFix.msg](https://github.com/ros2/common_interfaces/blob/rolling/sensor_msgs/msg/NavSatFix.msg)。
+- 该 topic 的 receiver 身份、`frame_id`、`service`、covariance 实际数值、改正龄期和天线参考仍未核实。bag 同时含 `/ublox_driver/receiver_lla`（约 10Hz）和 `/ublox_driver/receiver_pvt`（约 10Hz），必须读取实际 message type/fields 后再判定其与 15Hz raw-fix topic 的设备映射，不能仅按频率推断。
+
+已扩展 `scripts/audit_m3dgr_gt_rtk_correspondence.py`：
+- 输出 NavSatFix `frame_id` / `service` 分布、ENU covariance 对角项 min/median/max、非对角项幅值和有限矩阵计数。
+- 对 `/ublox_driver/receiver_lla` 与 `/ublox_driver/receiver_pvt` 输出真实消息类型、消息数、bag/header 时间戳顺序、顶层字段名及首尾消息的有界字段快照；topic 缺失时显式标记 `topic_absent`。
+- 不进行跨 topic nearest-time 配对，不推断接收机身份，不更改输入 bag/GT。字段快照只用于识别下一步应检查的 UBX 状态字段。
+
+**GT Gate 仍阻塞：** 来源关联强，但 RTK 固定解状态、改正源、协方差语义、天线杆臂、时钟语义和 GT 坐标系尚未认证；原始 GT 时间戳仍非严格递增。禁止使用 2,594 行 pose-run candidate 替换原始 4,269 行来源证据，禁止 evo APE/RPE 或 Point-LIO 结果对齐调参。
