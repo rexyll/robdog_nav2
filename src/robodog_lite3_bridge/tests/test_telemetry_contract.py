@@ -1,0 +1,130 @@
+import unittest
+
+from robodog_lite3_bridge.telemetry_contract import (
+    EnvelopeValidationError,
+    SequenceDisposition,
+    StreamEnvelope,
+    StreamSequenceTracker,
+    require_finite_values,
+    require_vector_length,
+    validate_envelope,
+)
+
+
+def valid_envelope(**overrides):
+    values = dict(
+        protocol_major=1,
+        protocol_minor=0,
+        message_type="imu",
+        robot_id="lite3-test-unit",
+        session_id="session-001",
+        sequence=10,
+        source_timestamp_ns=123456789,
+        source_clock_id="vendor_steady",
+        gateway_monotonic_ns=987654321,
+        frame_id="imu_link",
+        unit_convention="REP103_SI_v1",
+        payload_length=128,
+    )
+    values.update(overrides)
+    return StreamEnvelope(**values)
+
+
+class TestEnvelopeValidation(unittest.TestCase):
+    def test_valid_envelope(self):
+        validate_envelope(valid_envelope())
+
+    def test_unknown_protocol_major_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(protocol_major=2))
+
+    def test_missing_robot_id_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(robot_id=" "))
+
+    def test_missing_session_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(session_id=""))
+
+    def test_source_timestamp_requires_clock_id(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(source_clock_id=None))
+
+    def test_missing_source_time_is_explicit(self):
+        validate_envelope(
+            valid_envelope(source_timestamp_ns=None, source_clock_id="no_source_time")
+        )
+
+    def test_negative_payload_length_rejected(self):
+        with self.assertRaises(EnvelopeValidationError):
+            validate_envelope(valid_envelope(payload_length=-1))
+
+    def test_missing_frame_is_allowed_for_non_spatial_status(self):
+        validate_envelope(valid_envelope(frame_id=None, message_type="status"))
+
+
+class TestSequenceTracker(unittest.TestCase):
+    def setUp(self):
+        self.tracker = StreamSequenceTracker()
+
+    def test_first_packet(self):
+        result = self.tracker.observe("s1", 100)
+        self.assertEqual(result.disposition, SequenceDisposition.FIRST)
+
+    def test_in_order_packet(self):
+        self.tracker.observe("s1", 100)
+        result = self.tracker.observe("s1", 101)
+        self.assertEqual(result.disposition, SequenceDisposition.IN_ORDER)
+
+    def test_gap_is_reported_and_tracker_advances(self):
+        self.tracker.observe("s1", 100)
+        result = self.tracker.observe("s1", 104)
+        self.assertEqual(result.disposition, SequenceDisposition.GAP)
+        self.assertEqual(result.missing_count, 3)
+        self.assertEqual(self.tracker.last_sequence, 104)
+
+    def test_duplicate_is_reported_without_advancing(self):
+        self.tracker.observe("s1", 100)
+        result = self.tracker.observe("s1", 100)
+        self.assertEqual(result.disposition, SequenceDisposition.DUPLICATE)
+        self.assertEqual(self.tracker.last_sequence, 100)
+
+    def test_out_of_order_is_reported_without_advancing(self):
+        self.tracker.observe("s1", 100)
+        result = self.tracker.observe("s1", 99)
+        self.assertEqual(result.disposition, SequenceDisposition.OUT_OF_ORDER)
+        self.assertEqual(self.tracker.last_sequence, 100)
+
+    def test_new_session_resets_sequence(self):
+        self.tracker.observe("s1", 100)
+        result = self.tracker.observe("s2", 0)
+        self.assertEqual(result.disposition, SequenceDisposition.SESSION_RESET)
+        self.assertEqual(self.tracker.session_id, "s2")
+        self.assertEqual(self.tracker.last_sequence, 0)
+
+
+class TestNumericValidation(unittest.TestCase):
+    def test_finite_values(self):
+        self.assertEqual(require_finite_values([1.0, -2.0], "vector"), (1.0, -2.0))
+
+    def test_nan_rejected(self):
+        with self.assertRaises(ValueError):
+            require_finite_values([0.0, float("nan")], "vector")
+
+    def test_infinity_rejected(self):
+        with self.assertRaises(ValueError):
+            require_finite_values([float("inf")], "vector")
+
+    def test_vector_length_and_values(self):
+        self.assertEqual(
+            require_vector_length([1.0, 2.0, 3.0], 3, "rpy"),
+            (1.0, 2.0, 3.0),
+        )
+
+    def test_wrong_vector_length_rejected(self):
+        with self.assertRaises(ValueError):
+            require_vector_length([1.0, 2.0], 3, "rpy")
+
+
+if __name__ == "__main__":
+    unittest.main()
