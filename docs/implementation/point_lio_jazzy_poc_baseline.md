@@ -1,7 +1,7 @@
 # Point-LIO ROS 2 Jazzy POC 来源、补丁与验收基线
 
 - 日期：2026-11-24
-- 状态：上游与补丁来源已固定；准备脚本已提交；尚未完成本项目 Point-LIO 编译、UrbanLoco 回放或 Orin 实机测试
+- 状态：Point-LIO 固定来源/P0、ROS 2 Jazzy x86_64 P1 构建已通过；UrbanLoco P2 工具与 8 项纯函数测试已通过；实际 rosbag 回放仍等待人工获取 CC BY-NC-SA 4.0 数据；Orin ARM64 与真实 MID-360/Lite3 实机测试未完成
 - 唯一进度台账：[TaskPlan.md](../../TaskPlan.md)
 - 相关基线：[MID-360 Livox driver](livox_mid360_driver_baseline.md)、[odometry fallback strategy](odometry_fallback_strategy.md)
 
@@ -123,27 +123,58 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 日志显示同一个 P1 script 先从 workspace/src/Livox-SDK2 独立构建并安装 SDK2，使用 -include cstdint 成功；随后执行 Driver2 官方 ./build.sh jazzy，该脚本在整个 src/ workspace 中运行 colcon。Colcon 又将 src/Livox-SDK2 自动识别为 livox_sdk2 CMake package 并二次编译，但这次未继承 GCC 13 的 -include cstdint，因此在 SDK2 define.h 对 std::uint8_t/std::uint16_t 的使用处报错，Driver2 随后被 abort。
 
 **修复：**
-- 将 SDK2 源码 clone 位置从 src/Livox-SDK2 移到 vendor/Livox-SDK2，让它不参与 colcon package discovery；
-- 保留 SDK2 独立构建/安装到 /usr/local；
-- 在 colcon 前显式检查 /usr/local/lib/liblivox_lidar_sdk_shared.so 和 /usr/local/include/livox_lidar_api.h 已安装；
-- 同时检查 src/Livox-SDK2 不存在，防止 colcon 又将 SDK2 source 作为 package 编译。
+- 最终将 SDK2 源码 clone 到 `${WORKSPACE}_external/Livox-SDK2`，即整个 colcon workspace 根目录之外；仅放在 workspace/vendor 仍会被默认 colcon package discovery 递归发现；
+- 保留 SDK2 独立构建并安装到 /usr/local；
+- 在 colcon 前检查 /usr/local/lib/liblivox_lidar_sdk_shared.so 与 /usr/local/include/livox_lidar_api.h；
+- 执行 `colcon list` 并显式要求仅发现 `livox_ros_driver2`、`point_lio` 目标包，若仍发现 `livox_sdk2` 则拒绝继续。
 
-修复脚本 commits：e9601959（vendor source path）、26fa6597（安装产物和 src 排除检查）。Point-LIO P1 Jazzy x86_64 build 已通过：[run 45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320)。运行顺序完成了固定源码准备、独立 SDK2 v1.3.1 build/install、Driver2 v1.2.6、Point-LIO 两个 colcon packages build/install，以及 ros2 package prefix/executable 验证；日志显示 Finished livox_ros_driver2、Finished point_lio、Summary: 2 packages finished，并发现 pointlio_mapping executable。P0 source preparation run 45336709339 也成功。尚未完成 UrbanLoco bag replay、Orin aarch64 build 或真实 MID-360 bag/时间同步验收。
+修复脚本 commits：e9601959（最初的 vendor source path）、26fa6597（安装产物检查）、c34975e5（最终将 SDK2 source 移到 workspace 外部并加入 colcon list gate）。Point-LIO P1 Jazzy x86_64 build 已通过：[run 45337200320](https://github.com/rexyll/robdog_nav2/actions/runs/45337200320)。运行顺序完成固定来源准备、SDK2 v1.3.1 独立 build/install、Driver2 v1.2.6、Point-LIO 两个 colcon packages build/install，以及 ROS package prefix/executable 验证；日志显示 Finished livox_ros_driver2、Finished point_lio、Summary: 2 packages finished，并发现 pointlio_mapping executable。P0 source preparation run 45336709339 也成功。Livox 独立构建 [run 45337301420](https://github.com/rexyll/robdog_nav2/actions/runs/45337301420) 同样成功，Driver2 prefix/executable 检查通过。
 
-两条 build workflow 均已增加同分支 concurrency/cancel-in-progress，并将文档路径从 push/PR 过滤中移除，以免 docs-only 修改触发全量编译。Livox 最新 serial run [45336480583](https://github.com/rexyll/robdog_nav2/actions/runs/45336480583) 正在 ROS Jazzy 安装阶段；ROS source 已避开 nounset，rosdep 前刷新 APT index。当前不宣称 Driver2 build pass。
+两条 build workflow 均已增加同分支 concurrency/cancel-in-progress，并将 docs-only push/PR 从触发路径移除，以避免无效重复编译。P1 pass 仅证明 Ubuntu 24.04/Jazzy x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
 
-即使 P1 通过，也只证明 x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
+## 7. P2 UrbanLoco u l h k_4 离线回放工具
 
-## 7. 当前状态
+P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序列 \`ulhk_4\` / \`HK-Data20190117\` 进行**Velodyne 历史数据集兼容性回归**，把 Point-LIO odometry 与 NovAtel SPAN-CPT INSPVAX ground truth 统一为 TUM 轨迹，使用 evo APE 进行 Umeyama SE(3) 对齐。该数据集不是 MID-360 数据，也不验证 Livox per-point time。
+
+### 7.1 数据许可和人工准备
+
+- 官方数据许可为 CC BY-NC-SA 4.0，非商业、署名、相同方式共享条件；任何商业使用/再分发必须先确认权利人授权。
+- UrbanLoco 大文件没有稳定可脚本化下载入口，Google Drive 有人工确认步骤；本项目准备脚本不会伪造自动下载成功。
+- 原始文件放置：\`datasets/ulhk_4/HK-Data20190117.bag\`；脚本转换到 ROS 2 sqlite3 bag：\`datasets/ulhk_4/ulhk_bag/\`。
+- 下载镜像见 [UrbanLoco dataset preparation instructions](../../datasets/README.md)。整个 \`datasets/*\` 已加入 .gitignore，不得提交 raw bag、转换后的 db3、metadata、轨迹和 PCD/map。
+- 已在 Intel 固定参考脚本中核对该序列的消息 topic：LiDAR \`/velodyne_points_0\`、IMU \`/imu/data\`、GT \`/novatel_data/inspvax\`。运行时仍由 \`ros2 bag info\` 检查，若实际 bag 不同必须以数据自身 metadata 为准，不静默替换。
+
+### 7.2 项目脚本
+
+1. \`scripts/prepare_urbanloco_ulhk4.sh\`：检查手动下载的 ROS1 bag，调用 \`rosbags-convert\` 生成 ROS2 sqlite3 bag，并校验三个 topic。
+2. \`scripts/run_urbanloco_ulhk4.sh\`：加载已通过 P1 的 \`point_lio\` 安装空间，启动 \`pointlio_mapping\` 与 TUM recorder，确认 LiDAR subscription 和 odometry pub/sub ready 后，以 1x 播放 bag；完成后清理进程并检查有效轨迹样本数量。
+3. \`scripts/extract_urbanloco_ulhk4_gt.py\`：从 rosbag2 sqlite3 的 INSPVAX CDR payload 提取固定 UrbanLoco session 中的 lat/lon/height 字段，按 bag timestamp 排序、去重并转换为 WGS84 ECEF→local ENU，输出 TUM + JSON provenance report。固定 byte offsets 只对该 session/type layout 有效，换数据版本前必须重新验证。
+4. \`scripts/evaluate_urbanloco_ulhk4.sh\`：运行 \`evo_ape tum GT EST -a\`，将 2.17m（Point-LIO 论文该序列参考值）与 +20% 区间作为历史参考输出；它不是本项目导航验收阈值，不能用来判定 MID-360/Orin/Lite3 通过。
+5. \`scripts/tests/test_urbanloco_ulhk4.py\`：对 CDR payload 范围检查、地理字段有效性、ENU 方向/高度和 bag timestamp 排序去重做纯 Python 回归。
+6. \`.github/workflows/point-lio-urbanloco-p2-tests.yml\`：CI 运行 py_compile、bash -n、CLI help 和测试，无需下载或提交 UrbanLoco 数据。
+
+### 7.3 当前证据与下一步
+
+- [x] P2 脚本/CLI 静态检查和纯函数测试通过：[run 45339580363](https://github.com/rexyll/robdog_nav2/actions/runs/45339580363)，8/8 tests passed。
+- [x] P2 数据目录许可/忽略策略已写入 \`datasets/README.md\` 与 .gitignore。
+- [ ] 人工下载并放置 UrbanLoco \`HK-Data20190117.bag\`，记录来源、许可、文件大小与 SHA256。
+- [ ] 执行 ROS1→ROS2 转换，检查 bag metadata、消息数、时间跨度和预期三个 topic。
+- [ ] 完成 Point-LIO 全量 bag playback，保存 TUM estimate、logs、manifest。
+- [ ] 从 INSPVAX 提取 GT，核验 CDR offsets/时间基准，并完成 evo APE/RPE 与结果报告。
+- [ ] 对结果做敏感性检查：起始时段、时间覆盖率、重复/倒退时间戳、有效轨迹比例；不得只依赖单一 RMSE。
+
+**边界：** UrbanLoco 是 Velodyne 历史数据，因此即使 P2 全部通过，也只说明该公开数据集上的算法回归有效，不代表 MID-360 CustomMsg 每点时间、PTP/IMU 同步、Jetson Orin 性能或四足运动场景通过。
+
+## 8. 当前状态
 
 - [x] 上游子模块 commit、Intel reference commit 和三份 patch blob/commit 均已固定。
 - [x] Point-LIO upstream BSD-3-Clause、Intel patch repository Apache-2.0 的来源边界已记录。
 - [x] 固定源码准备脚本已创建并经 P0 GitHub Actions 实测成功。
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
-- [ ] 在 Jazzy x86_64 构建 Point-LIO。
-- [ ] 用公开 UrbanLoco bag 完成可复现离线回放和独立真值评估。
+- [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
+- [~] P2 回放/GT/evo 脚本与 8 项纯函数 CI 已通过（run 45339580363）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
 - [ ] 在 Orin aarch64 构建并测量 CPU/RAM/热。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
 
-**阶段判断：** 该方案已达到可复现源代码准备基线，但尚未达到项目软件构建通过，更未达到四足实机定位验收。
+**阶段判断：** 已达到固定来源、可复现 x86_64 软件构建和 P2 工具验证基线；未达到实际 UrbanLoco bag 回放、Orin ARM64、MID-360 时间链或 Lite3 四足实机定位验收。
