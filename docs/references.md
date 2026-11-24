@@ -109,3 +109,30 @@
 
 28. [ros-tooling/action-ros-ci](https://github.com/ros-tooling/action-ros-ci)  
     Official ROS 2 workspace build/test action. Its documentation recommends prebuilt setup-ros-docker images, with Ubuntu Jammy for Humble and Ubuntu Noble for Jazzy.
+
+
+## 2026-11-24 机载质量与电气预算资料
+
+29. [NVIDIA Jetson AGX Orin Developer Kit User Guide — Power and USB](https://docs.nvidia.com/jetson/agx-orin-devkit/user-guide/howto.html)  
+    官方用户指南说明开发套件可由 DC jack 或 USB-C PD 供电；USB-C PD sink profiles 包括 20V/4.5A、15V/3A、14.8V/3A、9V/3A、5V/3A。
+
+30. [NVIDIA Jetson AGX Orin Developer Kit Quick Start / BSP](https://docs.nvidia.com/jetson/agx-orin-devkit/user-guide/quick_start.html)  
+    AGX Orin Developer Kit 当前用户指南采用 JetPack 7.2.1 / L4T r39.2.1 ISO 作为 DevKit 更新入口。
+
+31. [NVIDIA JetPack SDK Downloads and Notes — JetPack 7.2.2](https://developer.nvidia.com/embedded/jetpack/downloads)  
+    JetPack 7.2.2 / Jetson Linux 39.2.2 支持 Jetson Orin Family，使用 L4T Ubuntu 24.04；NVIDIA 指引先下载 7.2.1 image，再 apt update / dist-upgrade。
+
+32. [NVIDIA Jetson AGX Orin Developer Kit Reviewer’s Guide](https://developer.nvidia.com/sites/default/files/akamai/Jetson_AGX_Orin_Developer_Kit_RG_0.pdf)  
+    Developer Kit 模块功率范围列为 15–60W，开发套件提供多路 USB 3.x、RJ45、40-pin 扩展接口；最终供电按实际载板/输入方式核对。
+
+33. [NVIDIA Developer Forum — AGX Orin Developer Kit weight](https://forums.developer.nvidia.com/t/jetson-agx-orin-hw-faq/249100)  
+    NVIDIA 论坛硬件 FAQ 回答 Developer Kit 重量为约 872.5g；本项目仅把它作为预算估算，采购到货后必须实物称重。
+
+34. [e-con Systems See3CAM_50CUG electrical/mechanical specifications](https://www.e-consystems.com/sony-imx264-camera.asp)  
+    官方产品规格给出单台典型功耗范围 0.44–1.225W、无镜头外壳尺寸 40×40×45.23mm；未在公开页面确认质量，需采购前询问/到货称重。
+
+35. [ArduSimple simpleRTK2B receiver specifications](https://www.ardusimple.com/simplertk2b-receivers/)  
+    simpleRTK2B Budget 板卡质量约 19.5g，典型电流约 80mA @ 5V；ANN-MB 天线质量约 173g、LNA 典型电流约 15mA @ 3V。
+
+36. [Livox MID-360 specifications](https://www.livoxtech.com/cn/mid-360/specs)  
+    官方列出平均功耗 6.5W、9–27V DC、质量 265g、PTPv2/GPS 同步和 100BASE-TX Ethernet。
