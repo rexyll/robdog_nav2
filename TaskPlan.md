@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.9
+- 文档版本：v0.3.10
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -172,7 +172,7 @@
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
-- [x] 完成网关协议 v0.1 语义草案，并实现不依赖编码格式的 envelope/sequence/数值检查；Humble/Jazzy 双 CI 均通过 25/25。
+- [x] 完成网关协议 v0.1 语义草案，并实现不依赖编码格式的 envelope/sequence/数值检查；此前 25/25 双 CI 通过。新增 message/frame/covariance 校验与 10 项 pytest，目前合计 35 项，最新 CI 待验证。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
@@ -195,7 +195,7 @@
 - [ ] 载荷、供电、热设计、质心和续航未实测；已知器件功率/质量预算还不包含转换损耗、交换机和全部线束附件。初步预算仅包含部分设备规格，摄像头/镜头/交换机/支架/电源/线缆的实际质量与功耗仍需测量。
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
-- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；当前通过的 25 项仅覆盖 freshness、envelope、sequence、数值校验，不代表实际网络链路/厂商 SDK 验证。
+- [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；35 项纯逻辑测试仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
