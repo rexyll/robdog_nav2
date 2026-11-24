@@ -51,6 +51,11 @@ if [[ -n "$(git -C "$POINTLIO_DIR" status --porcelain)" ]]; then
   exit 5
 fi
 
+# git am needs a committer identity. Keep this scoped to the disposable
+# Point-LIO clone; never alter the user's global Git configuration.
+git -C "$POINTLIO_DIR" config user.name "RobDog Nav2 Patch Preparation"
+git -C "$POINTLIO_DIR" config user.email "robodog-nav2-patch-prep@users.noreply.github.com"
+
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
