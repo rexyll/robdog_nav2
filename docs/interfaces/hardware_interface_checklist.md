@@ -16,7 +16,7 @@
 | 未来评估 | ROS 2 Lyrical / Ubuntu 26.04 | 待 Jetson Orin 官方 BSP 与所有驱动支持后评估 |
 
 详细选型依据见 [ADR-0002](../decisions/ADR-0002-hardware-platform.md)。
-供电与质量计算见 [机载供电与载荷预算](../implementation/power_mass_budget.md)。
+供电与质量计算见 [机载供电与载荷预算](../implementation/power_mass_budget.md)。当前已知设备质量小计约 1.330 kg，已知设备负载功率估算约 22.8–69.4 W；上述值不含相机/镜头的质量、交换机、电源转换损耗、支架和线束。
 
 ## 1. 机器狗本体：DEEP Robotics Lite3 Venture
 
