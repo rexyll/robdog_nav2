@@ -12,11 +12,21 @@ EST_FILE="${RESULTS_DIR}/ulhk_4_est_tum.txt"
 GT_FILE="${RESULTS_DIR}/ulhk_4_gt_tum.txt"
 EVO_FILE="${RESULTS_DIR}/ulhk_4_evo_ape.zip"
 
-if [[ -f "${BAG_DIR}" && "${BAG_DIR}" == *.db3 && "${URBANLOCO_DB3_PROVENANCE_CONFIRMED:-0}" != "1" ]]; then
-  echo "ERROR: refusing formal P2 evaluation from an unverified standalone DB3." >&2
-  echo "Confirm/document its conversion from the expected UrbanLoco ROS1 HK-Data20190117.bag first." >&2
+MANIFEST_FILE="${DATASET_DIR}/dataset_manifest.txt"
+if [[ ! -f "${MANIFEST_FILE}" ]]; then
+  echo "ERROR: missing provenance manifest ${MANIFEST_FILE}; run scripts/prepare_urbanloco_ulhk4.sh first." >&2
   exit 10
 fi
+P2_SOURCE_GATE="$(awk -F= '$1 == "p2_source_gate" {print $2; exit}' "${MANIFEST_FILE}")"
+case "${P2_SOURCE_GATE}" in
+  ros1_source_provenance_confirmed|user_confirmed_db3_provenance)
+    ;;
+  *)
+    echo "ERROR: formal P2 is blocked by dataset provenance gate: ${P2_SOURCE_GATE:-missing}" >&2
+    echo "Verify the official ROS1 source or DB3 conversion chain, then rerun prepare with its explicit confirmation variable." >&2
+    exit 10
+    ;;
+esac
 if [[ ! -s "${EST_FILE}" ]]; then
   echo "Missing estimated trajectory ${EST_FILE}; run scripts/run_urbanloco_ulhk4.sh first." >&2
   exit 2
