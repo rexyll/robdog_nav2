@@ -1,3 +1,5 @@
+> **当前硬件基线（技术预选，未采购）：** DEEP Robotics Lite3 Venture + Livox MID-360 + 2 × See3CAM_50CUG Color（被动双目）+ ArduSimple ZED-F9P RTK + Jetson AGX Orin。首轮软件参考 Ubuntu 22.04 / JetPack 6.1 / ROS 2 Humble，长期迁移 Jazzy。项目进度只以根目录 [TaskPlan.md](../../TaskPlan.md) 为准。
+
 # 系统总体架构
 
 ## 1. 设计目标
