@@ -2,17 +2,25 @@
 
 ## 1. 总体原则：融合分层、保留来源
 
-LiDAR、双目 RGB、RTK GNSS、IMU 和腿式里程计的数据不能直接做同一种数学融合。
+LiDAR、双目 RGB、RTK GNSS、IMU 和腿式里程计的数据不能直接做同一种数学融合。Lite3 的当前 sdk_deploy 不应假定等同于 Legacy Lite3_ROS 的 /leg_odom2；可信本体 odometry 是阶段 A 必须向厂商确认的数据契约。
 
 | 融合层 | 数据 | 目标 | 主要机制 |
 |---|---|---|---|
-| 本体状态估计 | IMU + 腿式 odometry + 足端状态 | 平滑姿态、速度和局部位置 | robot_localization EKF 或厂商估计器 |
+| 本体状态估计 | IMU + 经验证的腿式 odometry/接触状态；如无则评估 LiDAR/stereo odometry | 平滑姿态、速度和局部位置 | robot_localization EKF 或经验证的状态估计器；无可信局部 odom 时不能闭环 |
 | 全局定位 | local odom + RTK GNSS | map 坐标位置约束 | navsat_transform + global EKF |
 | 几何障碍感知 | LiDAR + stereo PointCloud2 | 局部空间占据 | Nav2 ObstacleLayer/VoxelLayer 多观测源 |
 | 语义融合 | RGB 检测结果 + 深度/点云 | 目标类别、距离、轨迹 | 目标检测、深度关联与多目标跟踪 |
 | 地形融合 | 3D 点云 + IMU 姿态 | 地面坡度、台阶、粗糙度、负障碍 | 地面分割、elevation/traversability grid |
 
-## 2. LiDAR 接入
+## 2. Lite3 状态输入前置条件
+
+- Legacy Lite3_ROS 的 /leg_odom2 是 Foxy 标准消息路径，但源码中 steady-clock stamp、child_frame_id 和 covariance 需要审查。
+- Current sdk_deploy 输出 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus；公开 RobotStatus 不等于完整机身 Odometry。
+- Foxy 与 Jazzy DDS 不能假设兼容；厂商侧和 Nav2 侧应隔离，通过版本无关的非 DDS gateway 传递数据。
+- 在厂家确认完整 legged odometry 之前，local EKF 不得把 IMU-only 的位置积分当成可信 odom。候选补充来源是经验证的 LiDAR odometry/SLAM 或 stereo visual odometry。
+- 厂商路径、接口、commit 和安全注意事项见 [Lite3 SDK 集成评估](../implementation/lite3_vendor_sdk_integration_assessment.md)。
+
+## 3. LiDAR 接入
 
 ### 2.1 消息形式
 
@@ -39,7 +47,7 @@ LiDAR、双目 RGB、RTK GNSS、IMU 和腿式里程计的数据不能直接做�
 - `marking` 用于标记障碍；`clearing` 只有在射线清除语义和传感器视场验证后才开启。
 - 对 2D LiDAR 高度盲区、悬空障碍和地面负障碍要单独评估。
 
-## 3. 双目普通 RGB 相机
+## 4. 双目普通 RGB 相机
 
 ### 3.1 硬件与标定前提
 
@@ -121,7 +129,7 @@ Z = \frac{fB}{d}
 - 若 PointCloud2 作为 obstacle source，需验证传感器原点、射线 clearing、范围和遮挡逻辑；不能把“没有点”误解为“空间空闲”。
 - 语义检测与跟踪应发布独立目标消息/marker 或自定义接口；语义类别不直接决定 free space。
 
-## 4. RTK GNSS 接入
+## 5. RTK GNSS 接入
 
 ### 4.1 输入
 
@@ -165,7 +173,7 @@ Z = \frac{fB}{d}
 - RTK 天线与 `base_link` 原点存在杆臂偏移；在 URDF/TF 和 navsat 参数中一致处理。
 - 磁偏角、IMU yaw offset、ENU/NED 约定和天线朝向必须显式记录。
 
-## 5. IMU 与腿式里程计
+## 6. IMU 与腿式里程计
 
 腿式机器人机身状态估计通常受到足端接触、足滑、腾空、地面软硬、机身冲击和步态影响。需要确认厂商 odometry 内部是否已经融合 IMU，以防重复计入同一测量信息。
 
@@ -174,7 +182,7 @@ Z = \frac{fB}{d}
 - 腿式 odometry：明确 pose/twist 是 world/body frame、covariance 是否真实、运动中足滑如何处理。
 - 若能输出 contact state、foot velocity、slip confidence，应保留并供状态估计/地形模块使用。
 
-## 6. 推荐 Topic 契约（暂定名称）
+## 7. 推荐 Topic 契约（暂定名称）
 
 实际名称以硬件驱动和机器人命名空间为准。
 
@@ -195,7 +203,7 @@ Z = \frac{fB}{d}
 | `/odometry/filtered/global` | Odometry | global EKF 输出 |
 | `/stereo/objects` | 自定义/vision_msgs | 语义目标/跟踪（阶段后续） |
 
-## 7. 时间同步和 QoS
+## 8. 时间同步和 QoS
 
 - 首选 GNSS PPS/PTP/硬件触发等可验证的共同时间基准。
 - 双目左右图像同步误差必须按运动速度和精度预算量化。
@@ -204,7 +212,7 @@ Z = \frac{fB}{d}
 - 所有处理节点要检查数据年龄；任何过期数据不能继续被当成实时观测。
 - rosbag 记录原始数据和处理后数据，便于离线重放对比。
 
-## 8. 明确的实现顺序
+## 9. 明确的实现顺序
 
 1. 先验证驱动、原始消息与 TF。
 2. 做 URDF/外参和时间同步。
