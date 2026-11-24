@@ -1,151 +1,94 @@
 # Lite3 本体 ROS 2 接口契约与安全命令桥
 
-- 状态：接口设计草案，基于公开 Lite3 ROS 2 transfer/SDK 文档；具体固件和本机行为待验证。
-- 进度真源：[根目录 TaskPlan.md](../../TaskPlan.md)
-- 相关 ADR：[ADR-0002 硬件平台选型](../decisions/ADR-0002-hardware-platform.md)
+- 状态：基于公开源码完成集成路线核验；真实固件和最终 motion-host 拓扑待云深处书面确认。
+- 进度台账：[根目录 TaskPlan.md](../../TaskPlan.md)
+- 厂商路径评估：[Lite3 vendor integration assessment](lite3_vendor_sdk_integration_assessment.md)
+- 硬件 ADR：[ADR-0002](../decisions/ADR-0002-hardware-platform.md)
+- 集成 ADR：[ADR-0003](../decisions/ADR-0003-lite3-ros-integration.md)
 
-## 1. 目的
+## 1. 重要修正：厂商有两套不同 ROS 路径
 
-为 Nav2 提供标准 ROS 2 里程计、IMU 和速度接口，同时把厂商 SDK/UDP 协议限制在一个隔离的 bridge 层。Nav2 不直接访问 UDP、SDK 数据结构或关节控制接口。
+不能将 Legacy Lite3_ROS 与 Current sdk_deploy 当成同一个 ROS driver。旧版 transfer 发布标准 ROS 消息；新 SDK deploy 使用 DRDDS 自定义消息和独立 SDK state machine。详细证据见 vendor integration assessment。
 
-## 2. 已公开的 Lite3 ROS 2 topic 契约
+## 2. Legacy Lite3_ROS（Foxy）接口
 
-云深处公开的 `Lite3_ROS` transfer 示例列出以下话题：
+公开分支 ros2-foxy 的 transfer/Jetson2Motion 示例发布：
 
-| Topic | 消息类型 | 方向 | 公开语义 |
-|---|---|---|---|
-| `/leg_odom` | `geometry_msgs/msg/PoseWithCovarianceStamped` | Lite3 → ROS | 腿式里程计位姿 |
-| `/leg_odom2` | `nav_msgs/msg/Odometry` | Lite3 → ROS | 腿式里程计位姿和速度 |
-| `/imu/data` | `sensor_msgs/msg/Imu` | Lite3 → ROS | IMU |
-| `/joint_states` | `sensor_msgs/msg/JointState` | Lite3 → ROS | 关节状态 |
-| `/cmd_vel` | `geometry_msgs/msg/Twist` | ROS → Lite3 | 速度命令 |
-
-公开示例中的 Twist 分量：
-- `linear.x`：纵向速度，正值前进；
-- `linear.y`：横向速度，正值向左；
-- `angular.z`：偏航角速度，正值左转；
-- `linear.z`、`angular.x`、`angular.y`：示例注明无效。
-
-SDK deploy 公开说明提到状态消息可在约 10 Hz 更新、有效控制命令可达约 50 Hz。**这些是公开示例的说明，不可作为任意固件/模式下的保证频率。** 本项目必须在目标 Lite3 版本上检查 topic、频率、timestamp、frame_id、covariance 和控制语义。
-
-## 3. 项目内部接口命名（建议）
-
-不要直接将厂商原始 topic 暴露为 Nav2 的永久接口。通过 remap/namespace 隔离，内部统一成：
-
-| 项目内部 topic | ROS 类型 | 数据来源 |
+| Topic | 消息类型 | 说明 |
 |---|---|---|
-| `/robot/legged/odom` | `nav_msgs/msg/Odometry` | Lite3 `/leg_odom2` |
-| `/robot/imu/data` | `sensor_msgs/msg/Imu` | Lite3 `/imu/data` |
-| `/robot/joint_states` | `sensor_msgs/msg/JointState` | Lite3 `/joint_states` |
-| `/robot/status` | 厂商状态或项目状态消息 | SDK/transfer |
-| `/cmd_vel_nav2` | 发行版配置决定 Twist / TwistStamped | Nav2 输出 |
-| `/cmd_vel_lite3` | `geometry_msgs/msg/Twist` | 安全 adapter 的最终输出 |
+| /leg_odom | geometry_msgs/msg/PoseWithCovarianceStamped | 旧版腿式位姿输出 |
+| /leg_odom2 | nav_msgs/msg/Odometry | 旧版位姿/速度输出 |
+| /imu/data | sensor_msgs/msg/Imu | IMU |
+| /joint_states | sensor_msgs/msg/JointState | 关节状态 |
+| /cmd_vel | geometry_msgs/msg/Twist | 旧版命令入口 |
 
-topic 重命名和 frame_id 最终在真实驱动 launch 中固定，不允许只为了方便而伪造 frame_id。
+限制：源码使用 RCL_STEADY_TIME 生成 header.stamp；不得未经映射直接作为 ROS system/GNSS/source time。公开 /leg_odom2 片段未见 child_frame_id 与 covariance 显式赋值。必须逐项验证 frame、单位、符号、协方差、时间戳和 IMU/odom 数据相关性。
 
-## 4. 当前已实现的软件骨架（2026-11-24）
+## 3. Current sdk_deploy 接口
 
-仓库中已建立 robodog_lite3_bridge ament_python package：
-- lite3_state_mock 发布 /mock/lite3/leg_odom2、/mock/lite3/imu/data、/mock/lite3/joint_states；使用 mock_odom/mock_base_link/mock_imu_link，不会覆盖真实硬件 topic/TF。
-- lite3_topic_contract_monitor 只读订阅配置的话题，发布 DiagnosticArray 新鲜度诊断。
-- mock 消息具有大协方差/未知 IMU orientation/空 JointState arrays，只用于 topic/type/launch 测试。
-- 当前 package 不连接 Lite3 SDK/UDP，不发布 /cmd_vel，不能用于真实定位或运动控制。
-- GitHub Actions 计划对 Humble/Ubuntu 22.04 与 Jazzy/Ubuntu 24.04 构建测试；结果以根 TaskPlan 记录的 workflow run 为准。
+新 SDK 的 lite3_transfer 对外接口为：
 
-## 5. 软件包职责边界
+| Topic/Service | 类型 | 说明 |
+|---|---|---|
+| /IMU_DATA | drdds/msg/ImuData | DRDDS IMU 数据 |
+| /JOINTS_DATA | drdds/msg/JointsData | DRDDS 关节数据 |
+| /JOINTS_CMD | drdds/msg/JointsDataCmd | 低层关节命令；不是 Nav2 cmd_vel |
+| /SDK_MODE | drdds/srv/StdSrvInt32 | SDK mode / 发布频率管理 |
+| /EMERGENCY_STOP | drdds/srv/StdSrvInt32 | 厂商 SDK 急停调用链 |
+| /EMERGENCY_STOP_SIGNAL | drdds/msg/StdMsgInt32 | 通知状态机的停止信号 |
 
-建议拆成两个层：
+DRDDS ImuData 包含 roll/pitch/yaw、角速度和线加速度；JointsData 包含 16 个 JointData 项。RobotStatus 公开定义为 10Hz，含 JointState、base_rpy、base_angular_velocity、command state、timeout 计数和 telemetry_fresh。但这些 topic 并不等价于 nav_msgs/Odometry。
 
-### 4.1 `robodog_lite3_bridge`
+如果没有可信腿式里程计/机身位置速度通道，不能只用关节状态或 IMU 积分伪造连续 odom。必须从厂商确认完整的状态估计输出，或设计经真值验证的状态估计。
 
-- 调用官方 SDK/transfer 或官方 UDP 协议；
-- 接收 Lite3 机身状态、IMU、关节状态、leg odometry；
-- 做数据类型映射、单位检查、frame/time 标注和诊断；
-- 不做 Nav2 规划，不做目标检测，不直接发关节动作；
-- 保留厂商原始状态用于故障追查；
-- 固定官方代码 URL、license、commit/tag 和 SDK/固件版本。
+## 4. rl_deploy 速度接口
 
-### 4.2 `robodog_cmd_adapter`
+新版高层策略部署示例提供 /rl_deploy/cmd_vel、/rl_deploy/command_state、/rl_deploy/effective_cmd_vel 和 /rl_deploy/status。command_state 包括 stand、rl_control、lie_down、damping；/rl_deploy/cmd_vel 只有在 rl_control 状态下有效。
 
-- 订阅 Nav2 输出（经过 Velocity Smoother 和 Collision Monitor）；
-- 检查机器人运动模式/自动控制使能、健康状态、急停状态、命令时间戳和数据年龄；
-- 按真实底层可执行运动模型对 x/y/yaw 限幅；
-- 增加线速度/角速度变化率限制；
-- 对命令超时、网络断开、状态异常、保护触发输出停止命令并锁存故障；
-- 记录 Nav2 期望速度和机器人实际速度，诊断执行误差；
-- 不允许任何旁路节点直接向厂商 `/cmd_vel` 发布运动命令。
+厂商文档中 0.7m/s 前进、0.5m/s 侧移、0.7rad/s yaw 和约 0.25s 命令超时是示例默认行为，不是项目批准的导航速度或独立安全 watchdog。
 
-## 6. 速度命令安全链
+**不得直接将 Nav2 cmd_vel remap 到 /rl_deploy/cmd_vel。** 必须先确认策略状态切换、命令限制、E-stop、watchdog 和停止路径；错误切换可能导致机器人突然移动。
 
-```text
-Nav2 Controller
-      |
-      v
-/cmd_vel_nav2
-      |
-Velocity Smoother
-      |
-Collision Monitor
-      |
-robodog_cmd_adapter
-      |  - mode/enable check
-      |  - speed/accel limit
-      |  - freshness/watchdog
-      |  - e-stop/status gate
-      v
-/cmd_vel_lite3
-      |
-Lite3 SDK / UDP transfer
-      |
-Motion host / gait controller
-```
+## 5. Foxy / Jazzy 跨发行版约束
 
-### 5.1 必须实现的保护
+sdk_deploy cross-host 文档指出 Lite3 motion host 当前流程是 Ubuntu 20.04 / ROS 2 Foxy，并明确警告 Foxy 主机与非 Foxy host 的 ROS 2 通信可能不正常；还记录 Fast DDS 发现参与者混杂可能引起 CDR 反序列化错误。
 
-- 命令只从一个受控入口进入；
-- 过期命令不能继续维持上一次非零速度；
-- 未进入允许的运动模式时，非零速度被拒绝；
-- 无法读取机器人状态或通信链路断开时，adapter 进入故障状态；
-- 触发物理急停、远程停止或底层保护时，adapter 不得自动恢复行走；
-- 清除故障/重新使能必须是显式动作，不应由 Nav2 自动 recovery 隐式完成；
-- 命令超时阈值、速度/加速度限制由实测、底层 SDK 限制和安全风险评估确定，当前不写入未经验证的固定数值。
+本项目不假定 Foxy 与 Jazzy DDS 原生互通，不将其放在同一默认 DDS domain。当前候选架构是 vendor-compatible process/host 与 Nav2 Jazzy 隔离，通过经验证的非 DDS UDP/TCP gateway 输出标准 ROS 消息。此拓扑仍需云深处书面确认和实物验证。
 
-## 7. 状态估计输入的验证事项
+## 6. 项目标准输出契约（仅在通过验证后发布）
 
-收到 `/leg_odom2` 和 `/imu/data` 后先记录原始数据，不应立即认为两个数据统计独立。
+| 项目 Topic | 类型 | 发布准入 |
+|---|---|---|
+| /robot/imu/data | sensor_msgs/msg/Imu | 单位、轴向、frame、source timestamp、covariance 核验 |
+| /robot/joint_states | sensor_msgs/msg/JointState | joint names、顺序、单位、正方向与 URDF 核验 |
+| /robot/odometry | nav_msgs/msg/Odometry | 取得可信腿式里程计/机身速度来源，或完成经验证的估计 |
+| /robot/status | DiagnosticArray / 项目状态 | SDK mode、E-stop、telemetry freshness、command timeout |
+| /cmd_vel_vendor | 厂商批准的私有接口 | command state、限幅、watchdog、E-stop 验证之后才启用 |
 
-必须核实：
-1. `/leg_odom2` 是否已融合 IMU；
-2. pose/twist 所属坐标系、frame_id 和 child_frame_id；
-3. 时间戳来自运动主机采样时刻还是 ROS 接收时刻；
-4. covariance 是否真实有效，是否只是零矩阵/占位符；
-5. 关节/足端接触状态是否可用于检测滑移；
-6. 运动模式切换时速度、姿态和里程计是否连续；
-7. 原地转向、横移和足滑时里程计表现。
+不为填满接口而发布虚假的 odometry、零 covariance 或将 host receive time 冒充 source timestamp。
 
-只有完成上述检查，才选择 EKF 的融合变量。若厂商提供的腿式 odometry 已经是 IMU 融合状态，不将同一惯性信息重复当成独立传感器融合。
+## 7. 当前仓库已经实现
 
-## 8. 当前 ROS 2 发行版策略
+robodog_lite3_bridge 当前只有 mock 和只读监测：
+- mock topic 位于 /mock/lite3/*，frame 使用 mock_*，不覆盖真实机器人 topic/TF；
+- 发布 synthetic odom/IMU/joint 类型供接口测试；
+- 只读 freshness monitor 发布 DiagnosticArray；
+- 不连接 vendor SDK/DRDDS/UDP，不发布 /cmd_vel；
+- GitHub Actions 在 Humble/Jammy 和 Jazzy/Noble 均已构建通过，每侧 6/6 pytest。
 
-- Lite3 Venture 官方感知扩展示例使用 Ubuntu 22.04 + ROS 2 Humble + JetPack 6.1。
-- Lite3_ROS 公共仓库的旧版 ROS 2 示例有 Foxy 版本信息；SDK deploy 新仓库提供 Lite3 ROS 2 transfer。
-- 首轮以 Humble 复现官方硬件示例；同时评估 JetPack 7.2.2 + Ubuntu 24.04 + Jazzy 在 AGX Orin 上的实际构建/运行情况。
-- JetPack 7.2.2 当前面向 Jetson Orin Family，系统基线为 Ubuntu 24.04；ROS 2 Lyrical 需要 Ubuntu 26.04，当前不作为 Orin 默认基线。
-- 自研 bridge/adapters 需在 CI 检查 Humble/Jazzy；若 Orin BSP 支持 Ubuntu 26.04 且外设驱动成熟，再评估 Lyrical。实际兼容性以锁定 commit 的构建结果为准。
-- 不同 ROS distro 不应默认在同一 DDS domain 直接互通。需要跨 distro 时通过 UDP/串口/标准消息网关传输。
+这些测试只验证项目自有 mock/诊断代码，不代表真实 Lite3 SDK、传感器或运动控制已经验证。
 
-## 9. 实施验收
+## 8. 安全和许可证约束
 
-1. **只读模式：** 启动 bridge，确认 odom/IMU/joint/status 连续，记录频率/时间戳/丢包。
-2. **坐标模式：** 检查所有 frame，生成 TF 图，确认唯一发布者。
-3. **消息语义：** 比较静止、前进、横移、原地旋转时 topic 值和机器人真实方向。
-4. **状态异常：** 断开 Ethernet/SDK、停止 topic、发送 NaN/超限命令，确认 adapter 拒绝非零运动并报告诊断。
-5. **Watchdog：** 只有在现场急停、人工监护和封闭空间条件就绪时，逐级测试命令超时到停止的实际延迟。
-6. **低速执行：** 台架/抬起状态只用于通信与步态状态确认；任何地面移动从极低速度开始，逐级记录停车距离。
-7. **Nav2 闭环：** 在 Collision Monitor 正常、数据新鲜、机器人处于允许模式时才开放自动运动。
+- 在厂商确认 SDK mode/command_state、E-stop、底层 watchdog 和安全手册前，禁止开放 Nav2 自动运动。
+- vendor E-stop service/策略超时不等于独立物理急停；实机测试必须具备硬件急停和现场监护。
+- sdk_deploy 外层声明 BSD-3-Clause，嵌套 MotionSDK 等依赖需要逐项审计。未完成 SBOM/license/redistribution review 前，不复制 SDK .so 或第三方源代码到公共仓库。
 
-## 10. 参考源码与文档
+## 9. 实施 Gate
 
-- [DeepRoboticsLab/Lite3_ROS](https://github.com/DeepRoboticsLab/Lite3_ROS)
-- [DeepRoboticsLab/sdk_deploy](https://github.com/DeepRoboticsLab/sdk_deploy)
-- [Lite3 官方感知算法开发示例](https://developer.deeprobotics.cn/docs/lite3/examples/sdk-dev/perception-algorithm-example/)
+- [ ] 厂商确认 Lite3 Venture 当前固件、SDK、motion host 和 AGX host 拓扑；
+- [ ] 厂商确认正式腿式 odometry/body velocity 数据源及其频率、时间戳、frame、covariance；
+- [ ] 证明 Foxy/Jazzy 之间的网关不依赖 DDS 跨版本互通；
+- [ ] 完成 DRDDS IMU/joint/status 到标准 ROS 消息的映射审计；
+- [ ] 完成 SDK mode、command_state、E-stop、watchdog 的安全审查与台架测试；
+- [ ] 完成逐项 third-party license/SBOM 审计。
