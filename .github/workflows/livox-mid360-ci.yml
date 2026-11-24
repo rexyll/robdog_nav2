@@ -1,12 +1,15 @@
 name: Livox MID-360 Jazzy Build
 
+concurrency:
+  group: livox-mid360-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
     paths:
       - ".github/workflows/livox-mid360-ci.yml"
       - ".github/ros2/livox-mid360.repos"
-      - "docs/implementation/livox_mid360_driver_baseline.md"
   pull_request:
     paths:
       - ".github/workflows/livox-mid360-ci.yml"
