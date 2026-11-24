@@ -56,6 +56,19 @@ class TestTumTrajectoryAudit(unittest.TestCase):
         self.assertFalse(report["timestamp"]["strictly_increasing"])
         self.assertEqual(report["status"], "blocked_review_required")
 
+    def test_reports_whether_timestamp_anomaly_occurs_at_same_pose(self):
+        report = self._write(
+            "1 0 0 0 0 0 0 1\n"
+            "1 0 0 0 0 0 0 1\n"
+            "0.9 0 0 0 0 0 0 1\n"
+            "0.8 1 0 0 0 0 0 1\n"
+            "0.8 1 0 0 0 0 0 1\n"
+        )
+        self.assertEqual(report["pose_repetition"]["adjacent_identical_pose_pairs"], 3)
+        self.assertEqual(report["pose_repetition"]["duplicate_timestamp_same_pose_pairs"], 2)
+        self.assertEqual(report["pose_repetition"]["backwards_timestamp_same_pose_pairs"], 1)
+        self.assertEqual(report["pose_repetition"]["timestamp_anomaly_pose_change_pairs"], 1)
+
     def test_rejects_non_normalized_quaternion(self):
         report = self._write(
             "1 0 0 0 0 0 0 2\n"
