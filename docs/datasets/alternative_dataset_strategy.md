@@ -111,3 +111,78 @@ M3DGR 和 QuadSLAM 当前公开示例为 ROS1 bag。目标开发环境是 Ubuntu
 - GrandTour dataset / setup / Hugging Face：[dataset](https://grandtour.leggedrobotics.com/dataset)、[sensor setup](https://grandtour.leggedrobotics.com/setup)、[Hugging Face](https://huggingface.co/datasets/leggedrobotics/grand_tour_dataset)
 - QuadSLAM：[GitHub README](https://github.com/EN3D-Lab/Quadruped-SLAM-dataset)
 - M3DGR：[GitHub README](https://github.com/sjtuyinjie/M3DGR)、[checksums](https://github.com/sjtuyinjie/M3DGR/blob/main/checksums.txt)
+
+## 6. M3DGR Dynamic03 首次获取记录（2026-11-24）
+
+### 6.1 已完成：原始 bag 上游完整性验证
+
+用户在 Ubuntu 24.04 本地执行 `scripts/verify_public_dataset_checksum.sh`，得到：
+
+- 文件：`~/Downloads/Dynamic03.bag`
+- 大小：3,434,689,371 bytes（约 3.20 GB）
+- 官方 SHA256：`A54B687A924EE4E9B30673F85D88AC73615A10FCE4A7AB40F6099C24283BCC78`
+- 本地 SHA256：`a54b687a924ee4e9b30673f85d88ac73615a10fce4a7ab40f6099c24283bcc78`
+- 结果：大小写归一后完全匹配；**上游文件完整性 Gate 通过**。
+
+这只证明本地文件与 M3DGR 官方 checksums 清单登记的 Dynamic03 字节内容一致；尚未证明 ROS1 bag 可完整读取、话题/类型/自定义消息可解码、时间基准正确或 GT 配对正确。
+
+### 6.2 必须补充下载：Dynamic03 独立 GT 文件
+
+M3DGR 官方 README 的 Dynamic03 行同时提供 rosbag 与独立 GT 两组下载地址。请下载与 `Dynamic03` 同名/同序列的 GT，不要使用 Dynamic04 或其他序列的 GT：
+
+- GT OneDrive：[Dynamic03 GT](https://1drv.ms/t/c/2b4bfc0edf421186/EYYRQt8O_EsggCsWEAAAAAAB-G7sz7ob3JbPDr8K1eYEDg?e=8GwPON)
+- GT 阿里云盘：[Dynamic03 GT](https://www.alipan.com/s/2GQnM2gePFr)
+- 原始 bag 下载入口（仅供复查）：[Dynamic03 rosbag OneDrive](https://1drv.ms/u/c/2b4bfc0edf421186/EYYRQt8O_EsggCsDEAAAAAABSFVtB101b-_ZORJTrA3yaw?e=K62Aoy) / [阿里云盘](https://www.alipan.com/s/ee1svBzXqBz)
+
+GT 文件当前尚未下载和解析。取得后先记录文件名、字节数、SHA256、文本行数/字段列数、时间戳范围、重复/倒退和坐标分量，不要直接运行 evo。
+
+### 6.3 Dynamic03 传感器 topic 与 Point-LIO 配置来源
+
+M3DGR 官方 README 列明 MID-360 topic：
+
+- LiDAR：`/livox/mid360/lidar`
+- 内置 IMU：`/livox/mid360/imu`
+- 数据集还包含 Avia、D435i 相机/IMU、GNSS 和 wheel odometry topic；首轮 MID-360 LIO 只选用 MID-360 LiDAR + 它自己的内置 IMU。
+
+上游 M3DGR Point-LIO baseline 发布了两份容易混淆的 MID-360 配置：
+
+- `mid360.yaml` + `mapping_mid360.launch`：LiDAR topic 为 `/livox/mid360/lidar`，IMU topic 为 `/livox/mid360/imu`，使用 MID-360 自带 IMU。
+- `m3dgr_mid360.yaml` + `mapping_m3dgr_mid360.launch`：IMU topic 改为 `/camera/imu`，属于相机 IMU 路径；**本项目当前首轮 MID-360 内置 IMU 验证不要误用这份配置**。
+
+固定上游参考：
+- [M3DGR Point-LIO README](https://github.com/sjtuyinjie/M3DGR/blob/main/baseline_systems/Point_LIO_M3DGR/README.md)
+- [MID-360 原生 IMU 配置 mid360.yaml](https://github.com/sjtuyinjie/M3DGR/blob/main/baseline_systems/Point_LIO_M3DGR/src/point_lio/config/mid360.yaml)
+- [M3DGR 专用 camera-IMU 配置 m3dgr_mid360.yaml](https://github.com/sjtuyinjie/M3DGR/blob/main/baseline_systems/Point_LIO_M3DGR/src/point_lio/config/m3dgr_mid360.yaml)
+- [M3DGR 传感器标定](https://github.com/sjtuyinjie/M3DGR/blob/main/calibration.md)
+
+M3DGR 标定文件给出的 MID-360 LiDAR→内置 IMU 平移为 `[-0.011, -0.02329, 0.04412] m`，旋转为 identity。该标定是 M3DGR 原采集平台参数，**仅用于解释数据集配置，禁止移植到 Lite3 / 自购 MID-360 的最终 URDF/TF**。最终硬件外参必须实测。
+
+M3DGR Point-LIO baseline 是 ROS1/catkin 代码。本项目采用固定的 ROS2 Jazzy Point-LIO port；仅把上游配置/消息语义作为适配参考，不要直接复制 ROS1 launch 或把 M3DGR 的 ROS1 baseline 当成我们的 Jazzy 构建通过证据。
+
+### 6.4 只读结构审计工具
+
+新增 `scripts/audit_m3dgr_ros1_bag.py`，使用纯 Python `rosbags==0.11.5` 的 `AnyReader` 读取 ROS1 bag。它会：
+
+- 列出 connection 的 topic、ROS2-normalized msgtype、digest 和消息定义长度（若 reader 能提供）；
+- 统计每个 topic 的消息数、bag timestamp 范围、平均频率、重复/倒退时间戳、raw message size；
+- 只抽样解码少量 MID-360 `CustomMsg` 和 IMU，不全量反序列化点云；
+- 对 MID-360 LiDAR 记录 header stamp、frame_id、timebase 原始值、声明 point_num、实际 points 数量以及 offset_time 原始 min/max；
+- 对 IMU 记录 header stamp 和 bag timestamp，供之后进行时钟差核查；
+- 输出 JSON，发现必需 topic/type 缺失或样本解码失败时 fail closed。
+
+脚本不会转换或重写 bag，不推断时钟同步精度，也不会在尚未确认 message definition / driver semantics 前把 `offset_time` 数值硬解释为某个单位。
+
+本地 Ubuntu 24.04 / Jazzy 执行：
+
+```bash
+cd ~/workspace/robdog_nav2
+python3 -m venv .venv-dataset-tools
+source .venv-dataset-tools/bin/activate
+python -m pip install -r requirements-dataset-tools.txt
+python scripts/audit_m3dgr_ros1_bag.py \\
+  "$HOME/Downloads/Dynamic03.bag" \\
+  --json-out datasets/m3dgr_dynamic03_audit.json
+```
+
+输出报告建议保存在被 `.gitignore` 忽略的数据目录；不要提交原始 bag 或生成的大型报告。将终端输出中的 topic/type/样本摘要及 JSON 报告关键段提供给项目审查后，再决定是否转换。
+
