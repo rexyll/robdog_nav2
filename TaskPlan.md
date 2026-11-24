@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.52
+- 文档版本：v0.3.53
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -101,7 +101,7 @@
 - [~] B11. Point-LIO P0/P1 与 P3a ARM64 build 已通过；UrbanLoco `HK-Data20190117_0.db3` 仅完成 rosbag2/topic/318 条 INSPVAX CDR 诊断，来源不明，不能代替指定 ROS1 原始 bag。UrbanLoco P2 replay/evo 仍被 provenance gate 阻塞（CI [45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success），但不再作为整个项目唯一数据入口；并行替代基准转入 B13。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 - [~] B13. 已核查三套替代公开基准并建立分工：[GrandTour](https://grand-tour.leggedrobotics.com/)（ANYmal + MID-360 + 双 RTK + 本体状态，首选综合四足基准）、[Quadruped-SLAM](https://github.com/EN3D-Lab/Quadruped-SLAM-dataset)（Go2 步态/足端状态/Leica GT）、[M3DGR](https://github.com/sjtuyinjie/M3DGR)（MID-360/GNSS/动态场景）。详细下载、topic、license 和限制见 [替代数据集策略](docs/datasets/alternative_dataset_strategy.md)。当前仅完成资料审查，下载/校验/转换/回放/evo 均未完成。
-- [ ] B14. 建立通用外部数据集接入与验收工具：ROS1 bag / ROS2 bag / ZARR 元数据、上游和本地 SHA256、custom message definitions、topic/type/count、时间跨度、GT 坐标/时钟和转换 provenance manifest；在实际替代 bag 到位后按 M3DGR、QuadSLAM、GrandTour 分别补充适配器。
+- [~] B14. 已新增 `datasets/external_sha256.txt` 与 `scripts/verify_public_dataset_checksum.sh`，固定 M3DGR `Dynamic03.bag` / `Outdoor01.bag` 官方 SHA256；正向、哈希不匹配、缺失清单 3 类 fixture 测试接入 P2 workflow，CI [run 45400469052](https://github.com/rexyll/robdog_nav2/actions/runs/45400469052) success。该工具只验证原始下载文件字节哈希，不验证 ROS 语义、许可、来源转换链或 GT 正确性；通用 ROS1/ROS2/ZARR/topic/时钟/GT manifest 与各数据集 adapter 仍未实现。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
@@ -223,7 +223,7 @@
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
 5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。UrbanLoco P2 保持来源闸门，不再等待其数据后才继续项目；按 B13 先获取 GrandTour 单 mission 访问/格式信息、M3DGR `Dynamic03.bag` 和 QuadSLAM `Road00.bag`，逐项完成上游许可/校验和、topic/type、custom message、时间戳/GT 与 ROS1→ROS2 转换验证。替代数据未完成回放前，不得宣称 Point-LIO 精度验收通过。
+7. **P3a 通用 ARM64 build 已通过**（run 45341347087）。UrbanLoco P2 保持来源闸门，不再等待其数据后才继续项目；优先由用户下载 M3DGR `Dynamic03.bag` 及匹配 GT 并运行 `bash scripts/verify_public_dataset_checksum.sh m3dgr/Dynamic03.bag <本地文件路径>`；同时确认 GrandTour 单 mission ROS bag/ZARR 访问方式。之后再取 QuadSLAM `Road00.bag`。逐项完成许可、校验和、topic/type、custom message、时间戳/GT 与 ROS1→ROS2 转换验证；替代数据未完成回放前，不得宣称 Point-LIO 精度验收通过。
 
 ---
 
@@ -235,6 +235,7 @@
 |---|---|---|---|
 | 2026-11-24 | v0.3.51 | 加强 P2 来源闸门：manifest 只有在 `URBANLOCO_ROS1_SOURCE_CONFIRMED=1` 或 `URBANLOCO_DB3_PROVENANCE_CONFIRMED=1` 明确确认后才能允许正式 replay/evaluate；未确认的 DB3/目录只允许诊断。CI [run 45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success | prepare b442371468bda4aeef381420d6837a99acc55cc9 / 0bf7586ff0b62d61616b678bbaeba0821149ebc2; run 62bd2d6111bd6f18c92a8f0e8605520d5dffcdde / 1773427d294aff90239db4a3460d2ac2b3108e4f; evaluate 2948a2d631c818c1f06678eca7e0dcc2899ef0b8 / cfe7c79fa1072c5d95dcd539927e88011476cd38; CI 45394849538 |
 | 2026-11-24 | v0.3.52 | 不再将 UrbanLoco 单包作为整体项目数据门禁；新增 GrandTour（ANYmal+MID-360）、QuadSLAM（Go2 步态）和 M3DGR（MID-360/GNSS）替代数据集策略，明确许可/格式/校验限制；归档 v0.3.37–v0.3.50 历史 | alternative_dataset_strategy.md 6341cc8ec12fb20d94f65459ae4e29aa6039c834; official dataset pages/repositories checked 2026-11-24 |
+| 2026-11-24 | v0.3.53 | 固定 M3DGR Dynamic03/Outdoor01 官方 SHA256；新增本地外部数据集校验器及正向/不匹配/缺失清单测试；修复 workflow bash -n 续行错误后 CI [45400469052](https://github.com/rexyll/robdog_nav2/actions/runs/45400469052) success | manifest 469964558729e552676d8c30184e4031d1ddf300; verifier bac0631aadd04929d1d73653c63bb4dbbd86087a; tests 07fd5b1307a2cdc32c711c9cc36ec776c0d18cc2; workflow 9f7e7ce06b06aa3f893b2a6a280c7ca69f621d30; CI 45400469052 |
 
 ---
 
@@ -273,6 +274,9 @@
 - [Point-LIO 固定源准备脚本](scripts/prepare_point_lio_intel_ros2.sh)
 - [Point-LIO Jazzy 构建脚本](scripts/build_point_lio_jazzy.sh)
 - [UrbanLoco P2 数据准备说明](datasets/README.md)
+- [外部公开数据集 SHA256 清单](datasets/external_sha256.txt)
+- [外部数据集文件 SHA256 验证脚本](scripts/verify_public_dataset_checksum.sh)
+- [外部数据集 SHA256 验证测试](scripts/tests/test_verify_public_dataset_checksum.sh)
 - [外部公开数据集替代路线（GrandTour / QuadSLAM / M3DGR）](docs/datasets/alternative_dataset_strategy.md)
 - [UrbanLoco GT 提取脚本](scripts/extract_urbanloco_ulhk4_gt.py)
 - [UrbanLoco P2 回放脚本](scripts/run_urbanloco_ulhk4.sh)
