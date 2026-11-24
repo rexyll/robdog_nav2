@@ -9,6 +9,8 @@ from robodog_gnss_quality.ubx_nav_pvt import (
     UbxNavHpPosLlhEpoch,
     UbxNavCovEpoch,
     UbxNavStatusEpoch,
+    UbxEpochJoinCache,
+    EpochPairingError,
     build_observation_from_ubx_epochs,
     decode_nav_pvt_flags,
     ned_covariance_to_enu,
@@ -326,6 +328,154 @@ class TestRawUbxEpochJoin(unittest.TestCase):
         )
         self.assertFalse(observation.gnss_fix_ok)
         self.assertEqual(observation.navsat_status, -1)
+
+
+
+
+class TestBoundedUbxEpochJoinCache(unittest.TestCase):
+    def make_cache(self, **overrides):
+        values = dict(
+            max_pending_epochs=4,
+            max_pair_receive_skew_ns=5_000_000,
+        )
+        values.update(overrides)
+        return UbxEpochJoinCache(**values)
+
+    def test_asynchronous_out_of_order_topics_emit_only_when_complete(self):
+        cache = self.make_cache()
+        self.assertIsNone(cache.add_status(make_nav_status()))
+        self.assertIsNone(cache.add_covariance(make_nav_cov()))
+        self.assertIsNone(cache.add_pvt(make_raw_pvt()))
+        self.assertEqual(cache.pending_epoch_count, 1)
+
+        bundle = cache.add_position(make_hpposllh())
+        self.assertIsNotNone(bundle)
+        self.assertEqual(bundle.pvt.i_tow_ms, 345_000)
+        self.assertEqual(bundle.position.i_tow_ms, 345_000)
+        self.assertEqual(bundle.covariance.i_tow_ms, 345_000)
+        self.assertEqual(bundle.status.i_tow_ms, 345_000)
+        self.assertEqual(cache.pending_epoch_count, 0)
+
+    def test_identical_duplicate_message_is_ignored(self):
+        cache = self.make_cache()
+        pvt = make_raw_pvt()
+        self.assertIsNone(cache.add_pvt(pvt))
+        self.assertIsNone(cache.add_pvt(pvt))
+        self.assertEqual(cache.pending_epoch_count, 1)
+
+    def test_conflicting_duplicate_discards_epoch_and_raises(self):
+        cache = self.make_cache()
+        self.assertIsNone(cache.add_pvt(make_raw_pvt()))
+        with self.assertRaisesRegex(EpochPairingError, "conflicting duplicate"):
+            cache.add_pvt(make_raw_pvt(gnss_fix_ok=False))
+        self.assertEqual(cache.pending_epoch_count, 0)
+        # A retired iTOW cannot be rebuilt from a later partial sequence.
+        self.assertIsNone(cache.add_position(make_hpposllh()))
+        self.assertIsNone(cache.add_covariance(make_nav_cov()))
+        self.assertIsNone(cache.add_status(make_nav_status()))
+
+    def test_emitted_epoch_cannot_be_emitted_twice(self):
+        cache = self.make_cache()
+        cache.add_pvt(make_raw_pvt())
+        cache.add_position(make_hpposllh())
+        cache.add_covariance(make_nav_cov())
+        bundle = cache.add_status(make_nav_status())
+        self.assertIsNotNone(bundle)
+        self.assertIsNone(cache.add_pvt(make_raw_pvt()))
+        self.assertIsNone(cache.add_position(make_hpposllh()))
+        self.assertEqual(cache.pending_epoch_count, 0)
+
+    def test_oldest_partial_epoch_evicted_when_capacity_exceeded(self):
+        cache = self.make_cache(max_pending_epochs=1, max_pair_receive_skew_ns=100_000_000)
+        self.assertIsNone(cache.add_pvt(make_raw_pvt(i_tow_ms=100_000)))
+        self.assertIsNone(cache.add_pvt(make_raw_pvt(
+            i_tow_ms=101_000,
+            receive_monotonic_ns=10_001_000_000,
+        )))
+        self.assertEqual(cache.pending_epoch_count, 1)
+        # The evicted epoch is retired and cannot be re-created by late topics.
+        self.assertIsNone(cache.add_position(make_hpposllh(
+            i_tow_ms=100_000,
+            receive_monotonic_ns=10_002_000_000,
+        )))
+        self.assertIsNone(cache.add_covariance(make_nav_cov(
+            i_tow_ms=100_000,
+            receive_monotonic_ns=10_002_100_000,
+        )))
+        self.assertIsNone(cache.add_status(make_nav_status(
+            i_tow_ms=100_000,
+            receive_monotonic_ns=10_002_200_000,
+        )))
+        self.assertEqual(cache.pending_epoch_count, 1)
+
+    def test_incomplete_epoch_expires_after_receive_skew_window(self):
+        cache = self.make_cache(max_pair_receive_skew_ns=5_000_000)
+        cache.add_pvt(make_raw_pvt(receive_monotonic_ns=10_000_000_000))
+        # This arrival advances host time beyond the permitted join window.
+        self.assertIsNone(cache.add_position(make_hpposllh(
+            receive_monotonic_ns=10_006_000_000
+        )))
+        self.assertEqual(cache.pending_epoch_count, 0)
+        self.assertIsNone(cache.add_covariance(make_nav_cov()))
+        self.assertIsNone(cache.add_status(make_nav_status()))
+
+    def test_stale_message_arrival_is_rejected(self):
+        cache = self.make_cache(max_pair_receive_skew_ns=5_000_000)
+        cache.add_pvt(make_raw_pvt(i_tow_ms=100_000, receive_monotonic_ns=20_000_000_000))
+        with self.assertRaisesRegex(EpochPairingError, "outside the cache receive-time window"):
+            cache.add_position(make_hpposllh(
+                i_tow_ms=101_000,
+                receive_monotonic_ns=19_990_000_000,
+            ))
+        self.assertEqual(cache.pending_epoch_count, 1)
+
+    def test_reset_clears_pending_and_retired_keys_for_new_generation(self):
+        cache = self.make_cache()
+        cache.add_pvt(make_raw_pvt())
+        cache.add_position(make_hpposllh())
+        cache.add_covariance(make_nav_cov())
+        cache.add_status(make_nav_status())
+        self.assertEqual(cache.pending_epoch_count, 0)
+        cache.reset()
+        cache.add_pvt(make_raw_pvt())
+        cache.add_position(make_hpposllh())
+        cache.add_covariance(make_nav_cov())
+        bundle = cache.add_status(make_nav_status())
+        self.assertIsNotNone(bundle)
+
+    def test_wrong_record_type_is_rejected(self):
+        cache = self.make_cache()
+        with self.assertRaisesRegex(EpochPairingError, "requires UbxNavPvtEpoch"):
+            cache.add_pvt(make_quality())
+
+    def test_invalid_cache_limits_rejected(self):
+        for kwargs in (
+            {"max_pending_epochs": 0, "max_pair_receive_skew_ns": 1},
+            {"max_pending_epochs": True, "max_pair_receive_skew_ns": 1},
+            {"max_pending_epochs": 1, "max_pair_receive_skew_ns": 0},
+            {"max_pending_epochs": 1, "max_pair_receive_skew_ns": True},
+        ):
+            with self.subTest(kwargs=kwargs):
+                with self.assertRaises(ValueError):
+                    self.make_cache(**kwargs)
+
+    def test_bundle_builds_observation_with_external_time_mapping(self):
+        cache = self.make_cache()
+        cache.add_status(make_nav_status())
+        cache.add_covariance(make_nav_cov())
+        cache.add_position(make_hpposllh())
+        bundle = cache.add_pvt(make_raw_pvt())
+        self.assertIsNotNone(bundle)
+        observation = bundle.build_observation(
+            source_timestamp_ns=987_654_321_000,
+            source_clock_id="validated-week-and-boot-generation",
+            max_pair_receive_skew_ns=5_000_000,
+        )
+        self.assertEqual(observation.source_timestamp_ns, 987_654_321_000)
+        self.assertEqual(
+            observation.source_clock_id,
+            "validated-week-and-boot-generation",
+        )
 
 
 
