@@ -136,3 +136,24 @@
 
 36. [Livox MID-360 specifications](https://www.livoxtech.com/cn/mid-360/specs)  
     官方列出平均功耗 6.5W、9–27V DC、质量 265g、PTPv2/GPS 同步和 100BASE-TX Ethernet。
+
+
+## 2026-11-24 Lite3 ROS SDK source audit
+
+37. [DeepRoboticsLab/sdk_deploy — pinned main commit](https://github.com/DeepRoboticsLab/sdk_deploy/tree/20279073bc43522aa06b0abf611bb2daaa53d87d)  
+    Current Lite3 Venture SDK deployment path. lite3_transfer uses DRDDS messages and has SDK/E-stop services. Cross-host documentation warns Foxy and non-Foxy ROS 2 distributions may not communicate correctly over DDS.
+
+38. [sdk_deploy Lite3 SDK deployment guide](https://github.com/DeepRoboticsLab/sdk_deploy/blob/20279073bc43522aa06b0abf611bb2daaa53d87d/src/Lite3_sdk_deploy/README.md)  
+    Describes rl_deploy, command_state, /rl_deploy/cmd_vel, effective_cmd_vel, and cross-host AGX Orin/JetPack 6.1 example. The published speed and timeout values are examples and must not be treated as this project's approved limits.
+
+39. [sdk_deploy lite3_transfer UDP interface](https://github.com/DeepRoboticsLab/sdk_deploy/blob/20279073bc43522aa06b0abf611bb2daaa53d/src/lite3_transfer/interface/robot/udp_interface.hpp)  
+    Source declares /IMU_DATA, /JOINTS_DATA, /JOINTS_CMD, /SDK_MODE, /EMERGENCY_STOP and /EMERGENCY_STOP_SIGNAL. These are DRDDS custom messages/services, not standard Nav2 odometry interfaces.
+
+40. [sdk_deploy DRDDS message definitions](https://github.com/DeepRoboticsLab/sdk_deploy/tree/20279073bc43522aa06b0abf611bb2daaa53d/src/drdds/msg)  
+    ImuDataValue includes Euler angles, angular velocity and linear acceleration; RobotStatus includes joints, base RPY, base angular velocity, command state and telemetry freshness. Public RobotStatus definition does not itself provide a complete nav_msgs/Odometry record.
+
+41. [Legacy Lite3_ROS Jetson2Motion source](https://github.com/DeepRoboticsLab/Lite3_ROS/blob/e4ab5dc1c7f3ff46274162a1ef302253936578aa/src/transfer/src/Jetson2Motion.cpp)  
+    The legacy Foxy UDP transfer publishes standard ROS messages including /leg_odom2 and /imu/data. It uses steady-clock timestamps in the inspected code path; child_frame_id/covariance require audit before localization use.
+
+42. [sdk_deploy lite3_sdk_service deployment guide](https://github.com/DeepRoboticsLab/sdk_deploy/blob/20279073bc43522aa06b0abf611bb2daaa53d87d/src/lite3_sdk_service/README.md)  
+    Describes the motion host's current Ubuntu 20.04/Foxy workflow, service commands and warning about cross-distribution ROS 2 communication and DDS discovery traffic.
