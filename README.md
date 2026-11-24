@@ -123,6 +123,8 @@ flowchart TB
 - [TaskPlan Part 1：架构与硬件设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
 - [TaskPlan Part 2：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
 - [Lite3 本体 bridge 接口契约](docs/implementation/lite3_bridge_interface.md)
+- [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
+- [初始 Lite3 bridge ROS 2 package](src/robodog_lite3_bridge/README.md)
 - [决策记录 ADR-0001](docs/decisions/ADR-0001-sensor-roles-and-localization.md)
 - [前序讨论归档](docs/discussion/2026-11-24-stereo-camera-discussion.md)
 - [参考资料](docs/references.md)
