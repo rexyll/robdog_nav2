@@ -16,7 +16,7 @@ robdog_nav2/
 │   ├── robodog_bringup/
 │   ├── robodog_lite3_bridge/       # 项目自有标准消息适配层；当前只有 mock/诊断骨架
 │   ├── robodog_lite3_vendor_gateway/ # 未来 Foxy/DRDDS 侧非 DDS 网关；需厂商确认后再创建
-│   ├── robodog_localization/
+│   ├── robodog_lio_bringup/          # Point-LIO/FAST-LIO2 fallback for local odometry POC\n│   ├── robodog_localization/
 │   ├── robodog_stereo_perception/
 │   ├── robodog_obstacle_perception/
 │   ├── robodog_nav2_bringup/
@@ -45,7 +45,7 @@ robdog_nav2/
 | robodog_lite3_bridge | 项目自有标准消息适配层；消费经过验证的非 DDS vendor gateway 消息，并输出标准 IMU/joint/odom/status；当前只有 mock/诊断实现 | 标准 ROS 消息 |
 | robodog_lite3_vendor_gateway | 未来独立的 vendor-Foxy/DRDDS 侧 gateway，将厂商专用数据封装成版本无关协议；仅在供应商确认主机拓扑后创建 | 非 DDS UDP/TCP application protocol |
 
-| robodog_localization | local/global EKF、navsat_transform 参数、GNSS gate | Odometry、NavSatFix、TF |
+| robodog_lio_bringup | 启动/配置 Point-LIO 或 FAST-LIO2 POC，统一输出局部 odom；最终算法需在 Jetson Orin + MID-360 实测选型 | PointCloud2/CustomMsg、Imu、Odometry、TF |\n| robodog_localization | local/global EKF、navsat_transform 参数、GNSS gate | Odometry、NavSatFix、TF |
 | robodog_stereo_perception | 左右图同步、校正、视差、深度/点云 | Image、CameraInfo、DisparityImage、PointCloud2 |
 | robodog_obstacle_perception | LiDAR/点云过滤、地面分割、障碍物提取和跟踪 | LaserScan、PointCloud2、目标消息 |
 | robodog_nav2_bringup | Nav2 参数、地图、BT、planner/controller/costmap launch | NavigateToPose、cmd_vel |
