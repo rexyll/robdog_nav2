@@ -2,7 +2,7 @@
 
 > 使用 **LiDAR + RTK GNSS + 两台普通 RGB 2D 相机（被动双目）**，基于 ROS 2 / Nav2 构建四足机器狗的定位、导航、动态障碍物检测和实时避障系统。
 
-本仓库已完成首轮硬件技术预选：DEEP Robotics Lite3 Venture、Livox MID-360、两台 e-con Systems See3CAM_50CUG Color、ArduSimple ZED-F9P RTK 和 Jetson AGX Orin。尚未采购或实物验证，具体接口、供电、安装和标定仍以根目录 TaskPlan.md 的准入清单为准。
+本仓库已完成首轮硬件技术预选：DEEP Robotics Lite3 Venture、Livox MID-360、两台 e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）、ArduSimple ZED-F9P RTK 和 Jetson AGX Orin。尚未采购或实物验证，具体接口、供电、安装和标定仍以根目录 TaskPlan.md 的准入清单为准。
 
 ## 项目目标
 
@@ -22,7 +22,7 @@
 - **主要导航框架：** ROS 2 Nav2。
 - **主要几何避障传感器：** Livox MID-360 3D LiDAR，输出 PointCloud2。
 - **全局定位：** ArduSimple ZED-F9P RTK GNSS；需结合 Lite3 IMU 和腿式里程计，单天线位置本身不能可靠提供静止时航向。
-- **视觉：** 两台 See3CAM_50CUG Color 普通 RGB 相机组成被动双目系统，提供视差/深度点云以及目标语义识别；它不是天然等同于工业 RGB-D 相机。
+- **视觉：** 两台 See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头） 普通 RGB 相机组成被动双目系统，提供视差/深度点云以及目标语义识别；它不是天然等同于工业 RGB-D 相机。
 - **定位融合：** 以 `robot_localization` 双 EKF + `navsat_transform_node` 作为首选参考架构，具体状态变量、协方差和数据源须基于底层实际输出标定。
 - **障碍物融合：** LiDAR 与双目点云保留独立观测源，分别做时间戳、TF、范围、高度、置信度和自体过滤，再接入 Nav2 costmap；不在未经验证的情况下简单拼接成一个点云。
 - **局部避障：** Nav2 local costmap + controller + Collision Monitor；机器狗底层控制器必须提供限速、急停/停止、命令超时保护。
@@ -30,7 +30,7 @@
 
 ## 当前 ROS 2 软件基线
 
-首轮硬件 bring-up 暂定 **Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble**，以复现云深处 Lite3 Venture + AGX Orin + MID-360 官方感知扩展示例。由于 Humble 将于 2027 年 5 月结束支持，项目长期目标是 ROS 2 Jazzy；自研包必须隔离厂商 SDK 并保持可迁移，详见根目录 TaskPlan.md。
+软件版本策略分两层：首轮复现云深处官方参考栈 **Ubuntu 22.04 + JetPack 6.1 + ROS 2 Humble**；同时在 AGX Orin 上验证 **JetPack 7.2.2 + Ubuntu 24.04 + ROS 2 Jazzy**，将 Jazzy 作为当前 Orin 长期目标。ROS 2 Lyrical 已于 2026 年 5 月发布、支持至 2031 年 5 月，但其 Tier 1 Ubuntu 平台是 26.04，而当前 JetPack 7.2.2 的 Orin 基线为 Ubuntu 24.04，因此暂不作为本项目部署基线。详见根目录 TaskPlan.md。
 
 ## 系统数据流（概念图）
 
@@ -142,3 +142,5 @@ flowchart TB
 - [robot_localization：navsat_transform_node](https://github.com/cra-ros-pkg/robot_localization/blob/rolling-devel/doc/navsat_transform_node.rst)
 - [Nav2：TF Setup](https://docs.nav2.org/setup_guides/transformation/setup_transforms.html)
 - [ROS 2 Jazzy release](https://www.openrobotics.org/blog/2024/5/ros-jazzy-jalisco-released)
+- [ROS 2 Lyrical Luth release](https://discourse.openrobotics.org/t/ros-2-lyrical-luth-released/55021)
+- [NVIDIA JetPack 7.2.2](https://developer.nvidia.com/embedded/jetpack/downloads)
