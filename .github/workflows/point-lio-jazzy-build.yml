@@ -16,7 +16,6 @@ on:
       - "scripts/prepare_point_lio_intel_ros2.sh"
       - "scripts/build_point_lio_jazzy.sh"
       - ".github/workflows/point-lio-jazzy-build.yml"
-      - "docs/implementation/point_lio_jazzy_poc_baseline.md"
   workflow_dispatch:
 
 jobs:
