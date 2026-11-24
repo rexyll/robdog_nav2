@@ -132,6 +132,15 @@ Point-LIO P1 run [45335424924](https://github.com/rexyll/robdog_nav2/actions/run
 
 两条 build workflow 均已增加同分支 concurrency/cancel-in-progress，并将 docs-only push/PR 从触发路径移除，以避免无效重复编译。P1 pass 仅证明 Ubuntu 24.04/Jazzy x86_64 编译/安装，不证明 Orin ARM64 或实时传感器性能。
 
+### 6.2 P3a：原生 ARM64 Ubuntu/Jazzy 构建预验证
+
+新增 [Point-LIO ROS 2 Jazzy ARM64 Build workflow](../../.github/workflows/point-lio-jazzy-arm64-build.yml)，使用原生 ubuntu-24.04-arm runner 和多架构 ros:jazzy-ros-base-noble ARM64 容器：
+- workflow 会断言 uname -m=aarch64 与 dpkg --print-architecture=arm64；
+- 同一固定源码准备脚本和 build_point_lio_jazzy.sh 构建 SDK2/Driver2/Point-LIO；
+- 构建后检查 SDK2 shared library、ROS package prefixes 和 pointlio_mapping executable。
+
+当前运行：[ARM64 build run 45339955465](https://github.com/rexyll/robdog_nav2/actions/runs/45339955465)，已排队。GitHub 文档说明公开仓库可使用 ubuntu-24.04-arm 原生 ARM64 runner（4 vCPU/16 GB）；ROS Jazzy Noble base image 提供 linux/arm64 multi-platform variant。该运行即使通过，也只证明通用 Ubuntu 24.04/Jazzy aarch64 构建，不等价于 Jetson AGX Orin / JetPack 7.2.2 构建，更不测 CUDA/TensorRT、Jetson 内核、GPIO/网卡硬件时间戳或实际热/功耗。正式 P3 仍需在目标 Orin 设备上复测并采集 CPU/RAM/温度/功耗。
+
 ## 7. P2 UrbanLoco u l h k_4 离线回放工具
 
 P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序列 \`ulhk_4\` / \`HK-Data20190117\` 进行**Velodyne 历史数据集兼容性回归**，把 Point-LIO odometry 与 NovAtel SPAN-CPT INSPVAX ground truth 统一为 TUM 轨迹，使用 evo APE 进行 Umeyama SE(3) 对齐。该数据集不是 MID-360 数据，也不验证 Livox per-point time。
@@ -173,7 +182,7 @@ P2 目标：使用 Point-LIO 固定 ROS 2 Jazzy port，对 UrbanLoco 香港序�
 - [x] 运行准备脚本并确认三个补丁均成功应用（GitHub Actions P0 run 45334159646；base SHA 97b0042...；three patches applied; worktree clean）。
 - [x] 在 Jazzy x86_64 构建 Point-LIO（run 45337200320，2 个 ROS packages finished）。
 - [~] P2 回放/GT/evo 脚本与 8 项纯函数 CI 已通过（run 45339580363）；等待人工获取 UrbanLoco 数据后进行实际 bag 回放和独立真值评估。
-- [ ] 在 Orin aarch64 构建并测量 CPU/RAM/热。
+- [~] 通用原生 ARM64 Ubuntu 24.04/Jazzy 构建预验证已新增（run 45339955465 待结果）；这不代替 Orin JetPack 7.2.2 实机 build 与 CPU/RAM/热测量。
 - [ ] 连接真实 MID-360，确认 CustomMsg 每点时间、IMU/PTP 时间一致性。
 - [ ] 安装至 Lite3 后进行受控运动 POC 和真值评测。
 
