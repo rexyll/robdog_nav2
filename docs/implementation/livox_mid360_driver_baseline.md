@@ -69,6 +69,8 @@ Driver2 有两种与本项目相关的输出格式：
 
 因此：保持 `xfer_format=1`、CustomMsg 和 offset_time 原值完整；不要把 offset_time 先转成秒/毫秒再交给 Point-LIO，也不要通过 timestamp_unit 去补偿该路径。真实设备时钟/PTP 与点内偏移仍必须以 bag 验证。
 
+Driver2 的 IMU 路径也在 `InitImuMsg()` 中使用 `ImuData.time_stamp` 作为时间戳，并在 ROS 2 分支通过 `rclcpp::Time(timestamp)` 填入 IMU header。和 LiDAR `base_time` 一样，源码中以 ns 传递；实际 MID-360 PTP/GPS 时钟状态与主机 offset/drift 仍需实测。
+
 源码： [Driver2 lddc.cpp](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/src/lddc.cpp) · [CustomMsg](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomMsg.msg) · [CustomPoint](https://github.com/Livox-SDK/livox_ros_driver2/blob/13eb05e4e6dd7a765b934d0c5fd6236676a57b49/msg/CustomPoint.msg)
 
 ## 4. 网络/时间配置验收
