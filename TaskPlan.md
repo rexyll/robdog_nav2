@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.11
+- 文档版本：v0.3.12
 - 更新日期：2026-11-24
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -74,9 +74,9 @@
 - [x] A2. 核对云深处 Lite3 Venture + AGX Orin + MID-360 官方扩展示例与初始软件版本。
 - [ ] A3. 向云深处确认 Venture 当前 SKU、交付件、固件/SDK、安装 CAD、外设接口持续/峰值电流、载荷与重心限制。
 - [~] A4. 已建立初步供电/质量预算：已知器件质量小计约 1.330 kg，已知设备负载功率约 22.8–69.4 W；两台相机、镜头、交换机、支架/线束、DC/DC 尚未称重/测功。Lite3 每路电源连续/峰值电流仍待厂商书面确认。
-- [ ] A5. 获取 MID-360 当前版本、SDK、驱动 commit、供电线束和 Ethernet 配置。
-- [~] A6. 已锁定候选彩色无镜头 SKU `See3CAM_50CUG_CXXCC_BX_H01R1`；制造商页面确认 5MP/Global Shutter/USB3/UVC/GPIO Trigger & Strobe。触发电压/极性/硬触发时序、双相机同步模式、Jetson 双路 UVC 带宽和 70°–80° 镜头仍待书面确认。
-- [ ] A7. 确认 simpleRTK2B 的天线、USB/UART、目标地区 NTRIP 改正服务或自建基站。
+- [~] A5. 已核对 MID-360 公开规格：200k points/s（first return）、典型 10Hz、360° × -7°~52°、100BASE-TX、PTPv2/GPS 同步、9–27V、平均 6.5W、265g、IP67；实际硬件 revision、SDK/驱动 commit、线束与网络参数仍待确认。
+- [~] A6. 已锁定 See3CAM 彩色无镜头 SKU；新增 6mm C-Mount 镜头候选 CIL530、120mm 双目基线和 5MP@20fps 初始测试配置。镜头暗角/MTF、GPIO 电气时序、双机曝光同步与 Jetson USB 带宽待样品验证。
+- [~] A7. 已核对 simpleRTK2B Budget / ZED-F9P 当前 SKU 与最高 10Hz RTK 输出；板卡不含天线，目标场地及 NTRIP/自建基站尚未确定。
 - [~] A8. 已区分 Legacy Lite3_ROS Foxy（标准 /leg_odom2、/imu/data 等）与 Current sdk_deploy（DRDDS /IMU_DATA、/JOINTS_DATA、RobotStatus 和 /rl_deploy/cmd_vel 等）。两者不等价；新版公开 RobotStatus 不是完整 nav_msgs/Odometry。详细评估见 [vendor SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md) 与 [ADR-0003](docs/decisions/ADR-0003-lite3-ros-integration.md)。
 - [~] A9. 已形成候选 Topic/TF 与命令安全链设计；真实 frame_id、时间同步误差、运动学和 USB/Ethernet/电源布局待硬件资料确认后冻结。
 - [ ] A10. 定义第一阶段量化验收指标：定位、检测、时延、停车距离、路径误差、续航和失效行为。
@@ -172,7 +172,7 @@
 - [x] 建立多传感器时间同步和标定方案，区分双目曝光同步、设备时钟对齐、运动补偿和 ROS 时间戳。
 - [x] 建立机载供电与载荷预算：已知设备质量小计约 1.330 kg，已知负载约 22.8–69.4 W；所有未知项保留待称重/待测。
 - [x] 将 mock 数据限定在 /mock/lite3 topic 与 mock_* TF frame，避免污染真实机器人数据流。
-- [x] 完成网关协议 v0.1 语义草案，并实现不依赖编码格式的 envelope/sequence/消息类型/frame/数值/covariance 基本检查；新增测试后全包合计 35 项。此前 25/25 双 CI 已通过，最新 35 项版本的 Humble/Jazzy CI 待结果确认。
+- [x] 完成网关协议 v0.1 语义草案及 envelope/sequence/消息类型/frame/数值/covariance 检查；Humble/Jazzy 最新 CI 均 35/35 通过（run 45328982630）。
 - [x] 建立供电/载荷初步预算，依据厂商公开功率/质量列出已知小计和未确认项目。
 - [x] 完成本体和传感器技术预选。
 - [x] 核对云深处 Lite3 Venture + AGX Orin + MID-360 的官方参考配置。
@@ -183,7 +183,7 @@
 - [x] 更新 Lite3 bridge 接口契约，区分 Legacy standard ROS topics 与 current DRDDS / rl_deploy interfaces；记录 vendor odometry availability 为待确认。
 
 ### 未完成 / 阻塞
-- [x] ROS 2 package CI 最新复跑已通过：[run 45326457632](https://github.com/rexyll/robdog_nav2/actions/runs/45326457632)。Humble/Jammy 与 Jazzy/Noble 两个 job 均 success；每个环境 colcon build 成功，pytest 6 passed、0 errors、0 failures、0 skipped。该测试只覆盖 mock/新鲜度逻辑，不覆盖厂商 SDK。
+- [x] ROS 2 package CI 最新复跑：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，Humble/Jammy 与 Jazzy/Noble 均 build 成功、35 passed，0 errors/failures/skipped；仅覆盖 mock/契约逻辑，不覆盖真实 SDK/传感器。
 - [ ] 已在本地 Python 环境对纯 freshness helper 的 6 个单元用例运行 unittest，6/6 通过；这不等于 ROS 2 package 在 Humble/Jazzy 构建通过。
 - [ ] 未采购设备，未接收实物。
 - [ ] Point-LIO/FAST-LIO2 尚未在本项目 Jetson AGX Orin + MID-360 上构建和验证；Intel 文档中的 Jazzy port/Velodyne 数据集测试不能替代目标硬件验收。
@@ -196,7 +196,7 @@
 - [ ] 厂商 Lite3 SDK、MID-360 驱动、双目相机驱动和 RTK 驱动尚未在 Jetson 真实硬件上编译；尚无传感器 rosbag 和 Nav2 实机结果。
 - [ ] Lite3 mock topic 骨架不是实际 SDK bridge，不可接入 robot_localization 或运动控制；真实 SDK/UDP 数据适配仍待目标固件验证。
 - [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；35 项纯逻辑测试仍不代表实际网络链路/厂商 SDK 验证。Covariance 检查只验证长度、有限值和对角线非负性，不证明完整矩阵 PSD。
-- [ ] 新增消息类型/frame/covariance 检查后的最终 CI run 尚未取得可确认结论；不能把此前 25 项通过扩大解释为 35 项版本已通过。
+- [x] 新增消息类型/frame/covariance 检查后的最终 CI 已通过；失败 run 45328900700 根因为 `status` 未加入 message_type 白名单，修复后 45328937159 与 45328982630 双发行版均通过。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
 - [!] Current sdk_deploy 的公开 DRDDS /IMU_DATA、/JOINTS_DATA 和 RobotStatus 不是标准 nav_msgs/Odometry；正式腿式 odometry/body velocity 出口、ROS Foxy/Jazzy 隔离方式需云深处确认。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
@@ -206,7 +206,7 @@
 2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
 3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
 4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 新增遥测校验已通过 Humble/Jazzy CI：[run 45328657069](https://github.com/rexyll/robdog_nav2/actions/runs/45328657069)，每边 25 passed、0 errors/failures/skipped。下一步按 vendor matrix 完成厂商确认；获得协议后才实现 UDP/TCP codec。
+5. 遥测契约最新 Humble/Jazzy CI：[run 45328982630](https://github.com/rexyll/robdog_nav2/actions/runs/45328982630)，每边 35 passed、0 errors/failures/skipped。获得真实 vendor wire protocol 后才实现 UDP/TCP codec。
 6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
 7. 首先拿到云深处关于当前 sdk_deploy、motion host / AGX host、可信 legged odometry 和跨发行版网络拓扑的书面答复；然后再实现只读 gateway POC。
 
@@ -232,6 +232,7 @@
 | 2026-11-24 | v0.3.2 | 修正根 TaskPlan 和 Part 1 的本体状态估计前提：可信 legged odometry 需由当前 SDK/固件确认；若缺失须评估 LiDAR odometry/SLAM 或 stereo VIO，不能使用 IMU-only 积分冒充 odom | Part 1: 63bc92fb; root: 7f935a36 |
 | 2026-11-24 | v0.3.3 | 建立 Lite3 Venture 供应商技术确认矩阵，将 A13 的 SDK/里程计/ROS distro/安全状态机/电源/载荷/网络时间同步问题整理成逐项证据清单 | vendor confirmation matrix: 68b7d857 |
 | 2026-11-24 | v0.3.4 | 增加本体 odometry 缺失时的 LIO/VIO 备用设计：Point-LIO/MID-360 内置 IMU 首选 POC，FAST-LIO2 对照，Stereo VIO/FAST-LIVO2 后续评估；尚未实机验证 | odometry strategy: 55aa45a5; ADR-0004: e165237e |
+| 2026-11-24 | v0.3.12 | 更新 MID-360、双目镜头/同步/USB 带宽、RTK 接入基线；核实 35/35 双发行版 CI 成功 | CI 45328982630；详见 stereo optics / RTK baseline |
 
 ---
 
@@ -251,6 +252,7 @@
 - [Lite3 厂商 SDK 集成路径评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [ADR-0003：Lite3 ROS 集成路径](docs/decisions/ADR-0003-lite3-ros-integration.md)
 - [机载供电与载荷预算](docs/implementation/power_mass_budget.md)
+- [双目光学、同步与 RTK 接入基线](docs/implementation/stereo_optics_and_rtk_baseline.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
