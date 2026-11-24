@@ -59,9 +59,12 @@ jobs:
           set -euo pipefail
           bash scripts/build_point_lio_jazzy.sh "$RUNNER_TEMP/point_lio_poc_ws"
           test "$(uname -m)" = "aarch64"
-          file /usr/local/lib/liblivox_lidar_sdk_shared.so
+          test -s /usr/local/lib/liblivox_lidar_sdk_shared.so
           ros2 pkg prefix livox_ros_driver2
           POINTLIO_PREFIX="$(ros2 pkg prefix point_lio)"
           test -n "$POINTLIO_PREFIX"
-          find "$POINTLIO_PREFIX" -type f -name pointlio_mapping -print -quit | grep -q .
+          POINTLIO_EXEC="$(find "$POINTLIO_PREFIX" -type f -name pointlio_mapping -print -quit)"
+          test -n "$POINTLIO_EXEC"
+          test -x "$POINTLIO_EXEC"
+          echo "Native ARM64 Point-LIO executable: $POINTLIO_EXEC"
           ros2 pkg executables point_lio
