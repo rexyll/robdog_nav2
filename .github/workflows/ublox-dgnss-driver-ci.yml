@@ -68,7 +68,9 @@ jobs:
             rosdep init
           fi
           rosdep update
+          set +u
           source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          set -u
           rosdep install --from-paths "$RUNNER_TEMP/ublox_ws/src" \
             --ignore-src --rosdistro "${ROS_DISTRO}" -r -y
 
@@ -76,7 +78,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +u
           source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          set -u
           cd "$RUNNER_TEMP/ublox_ws"
           colcon build --packages-up-to ublox_dgnss \
             --event-handlers console_direct+
@@ -85,8 +89,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +u
           source "/opt/ros/${ROS_DISTRO}/setup.bash"
           source "$RUNNER_TEMP/ublox_ws/install/setup.bash"
+          set -u
           ros2 pkg prefix ublox_dgnss_node
           ros2 pkg prefix ublox_ubx_msgs
           ros2 interface show ublox_ubx_msgs/msg/UBXNavPVT | grep -q "uint32 itow"
