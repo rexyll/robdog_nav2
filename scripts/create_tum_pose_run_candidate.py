@@ -48,6 +48,7 @@ def create_pose_run_candidate(
     if not math.isfinite(quaternion_norm_tolerance) or quaternion_norm_tolerance <= 0:
         raise ValueError("quaternion_norm_tolerance must be finite and greater than zero")
 
+    source_sha_before = sha256_file(source_path)
     try:
         source_text = source_path.read_text(encoding="utf-8-sig")
     except UnicodeDecodeError as exc:
@@ -135,7 +136,6 @@ def create_pose_run_candidate(
     candidate_records: list[dict[str, Any]] = []
     duplicates_removed = 0
     run_length_counts: Counter[int] = Counter()
-    run_ranges: list[tuple[float, float]] = []
     run_boundary_gaps: list[float] = []
 
     previous_run_max: float | None = None
@@ -169,7 +169,6 @@ def create_pose_run_candidate(
             raise ValueError(f"pose run {run_index} produced no unique timestamps")
         candidate_records.extend(unique_run)
         run_length_counts[len(run)] += 1
-        run_ranges.append((run_min, run_max))
         previous_run_max = run_max
 
     candidate_timestamps = [item["timestamp"] for item in candidate_records]
@@ -179,16 +178,8 @@ def create_pose_run_candidate(
     candidate_lines = [*comments, *(item["raw"] for item in candidate_records)]
     candidate_text = "\n".join(candidate_lines) + "\n"
     source_sha = sha256_file(source_path)
-
-    output_dir.parent.mkdir(parents=True, exist_ok=True)
-    staging_root = Path(
-        tempfile.mkdtemp(prefix=".tum-pose-run-candidate-", dir=output_dir.parent)
-    )
-    staged_dir = staging_root / "candidate"
-    staged_dir.mkdir()
-    staged_trajectory = staged_dir / "trajectory.tum"
-    staged_trajectory.write_text(candidate_text, encoding="utf-8")
-    candidate_sha = sha256_file(staged_trajectory)
+    if source_sha != source_sha_before:
+        raise RuntimeError("source trajectory changed while being audited; refusing candidate generation")
 
     manifest = {
         "schema_version": 1,
@@ -238,7 +229,17 @@ def create_pose_run_candidate(
         ],
     }
 
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_root = Path(
+        tempfile.mkdtemp(prefix=".tum-pose-run-candidate-", dir=output_dir.parent)
+    )
+    staged_dir = staging_root / "candidate"
     try:
+        staged_dir.mkdir()
+        staged_trajectory = staged_dir / "trajectory.tum"
+        staged_trajectory.write_text(candidate_text, encoding="utf-8")
+        candidate_sha = sha256_file(staged_trajectory)
+        manifest["output_sha256"] = candidate_sha
         (staged_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
