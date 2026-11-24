@@ -14,7 +14,6 @@ on:
     paths:
       - ".github/workflows/livox-mid360-ci.yml"
       - ".github/ros2/livox-mid360.repos"
-      - "docs/implementation/livox_mid360_driver_baseline.md"
   workflow_dispatch:
 
 jobs:
