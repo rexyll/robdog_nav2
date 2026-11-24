@@ -1,7 +1,7 @@
 # Livox MID-360：ROS 2 Jazzy 驱动锁定与接入基线
 
 - 日期：2026-11-24
-- 状态：官方驱动与 SDK 候选 commit 已锁定；尚未在项目工作区/Jetson 实际编译
+- 状态：官方驱动与 SDK release/commit 已锁定；x86_64 CI 的 SDK2 构建已通过一次，driver ROS 初始化步骤曾因工作流缺少 ROS 环境而失败；修正后 CI 正在复测，Orin ARM64 仍未验证
 - 唯一进度台账：[TaskPlan.md](../../TaskPlan.md)
 - 目标硬件：Livox MID-360（不是 MID-360S / MID-360L）
 
@@ -10,16 +10,18 @@
 | 组件 | 锁定候选 | 证据 | 状态 |
 |---|---|---|---|
 | ROS driver | livox_ros_driver2 tag 1.2.6，commit 13eb05e4e6dd7a765b934d0c5fd6236676a57b49 | 官方 1.2.6 release 明确列出 Ubuntu 24.04 / ROS 2 Jazzy 支持；1.2.6 CHANGELOG 覆盖 MID-360 系列兼容基线 | 候选 pin，待 build |
-| SDK | Livox-SDK2 commit c0796f04c143143899c87a773d9f6b7136453c0b | 官方仓库 current master commit，含 MID-360 family 支持；SDK README 支持 Linux/ARM、C++11、CMake | 候选 pin，需与 driver 实测组合 |
+| SDK | Livox-SDK2 tag v1.3.1，commit f5d9375f84efe2b15bc0a052d3e18482ed13adf4 | 官方 release 记录 v1.3.1 于 2026-04-15 发布；Intel Point-LIO Jazzy 手动复现明确使用 v1.3.1，并指出 GCC 13 需 `-include cstdint` | 固定候选，需与 driver CI 复测 |
 | ROS | ROS 2 Jazzy | 项目 AGX Orin Ubuntu 24.04 长期基线 | 目标环境，未在 Orin 验证 |
 | Driver license | MIT（driver 仓库 LICENSE） | 官方 LICENSE.txt | 按 MIT 要求保留声明；SDK 和二进制另行核对 |
 
-为什么锁定 1.2.6 而不是直接跟随 master：1.2.6 是官方 release，且包含 Ubuntu 24.04/Jazzy 支持说明；当前 master 后续增加了 Avia2、MID-360L 等功能，但项目使用标准 MID-360，现阶段优先使用明确发布版本以降低滚动更新风险。SDK2 当前 commit 仅作为 build 候选，若与 1.2.6 不兼容，则需记录实际兼容的 SDK2 commit 并重新跑 CI，不擅自假定兼容。
+为什么锁定 1.2.6 而不是直接跟随 master：1.2.6 是官方 release，且包含 Ubuntu 24.04/Jazzy 支持说明；当前 master 后续增加了 Avia2、MID-360L 等功能，但项目使用标准 MID-360，现阶段优先使用明确发布版本以降低滚动更新风险。SDK2 不再跟随滚动 master，改 pin 到 v1.3.1，与 Livox Driver 1.2.6 的时间窗口相邻。Intel Point-LIO Jazzy 参考构建同样使用该 SDK tag；GCC 13 下为 SDK2 增加 `-include cstdint` 兼容编译参数。此参考不替代本项目重新构建验收。
 
 来源：
 - [Livox ROS Driver2 1.2.6 release](https://github.com/Livox-SDK/livox_ros_driver2/releases/tag/1.2.6)
 - [Livox ROS Driver2 1.2.6 exact commit](https://github.com/Livox-SDK/livox_ros_driver2/tree/13eb05e4e6dd7a765b934d0c5fd6236676a57b49)
-- [Livox SDK2 exact candidate commit](https://github.com/Livox-SDK/Livox-SDK2/tree/c0796f04c143143899c87a773d9f6b7136453c0b)
+- [Livox SDK2 v1.3.1 release](https://github.com/Livox-SDK/Livox-SDK2/releases/tag/v1.3.1)
+- [Livox SDK2 v1.3.1 exact commit](https://github.com/Livox-SDK/Livox-SDK2/tree/f5d9375f84efe2b15bc0a052d3e18482ed13adf4)
+- [Intel Point-LIO Jazzy reference build using SDK2 v1.3.1](https://developer.robotics.intel.com/2026.3/development-stack/software_references/humanoid/sample_pipelines/point_lio_demo/index.html)
 - [Livox ROS Driver2 LICENSE](https://github.com/Livox-SDK/livox_ros_driver2/blob/1.2.6/LICENSE.txt)
 
 ## 2. 官方 Jazzy build flow
@@ -77,9 +79,9 @@ MID-360 使用 Ethernet 连接；本项目网络配置需由设备实物标签/�
 
 ## 5. 构建与测试计划（B4 / B11）
 
-- [ ] 在 Ubuntu 24.04 + ROS 2 Jazzy x86_64 container 完成 SDK2 + Driver2 组合 build；
+- [~] Ubuntu 24.04 + ROS 2 Jazzy x86_64：Livox SDK2 在 run 45332455019 已完成编译/安装；首次 driver 阶段失败原因为 workflow 使用裸 `source /opt/ros/jazzy/setup.bash`，镜像尚未由 CI action 准备 ROS 环境。工作流已切换到 `ros-tooling/action-ros-ci@v0.4` + pin manifest，当前正在复测（run 45333535949 及相邻修正 run）。
 - [ ] 在 JetPack 7.2.2 / Ubuntu 24.04 / ROS 2 Jazzy / aarch64 Orin 上完成同样 build；
-- [ ] 核验 SDK2 commit 与 driver 1.2.6 的 API/ABI 兼容；
+- [ ] 核验 SDK2 v1.3.1 与 driver 1.2.6 的 API/ABI 兼容；
 - [ ] 接入真实 MID-360，确认设备发现、点云和 IMU topic；
 - [ ] 验证 CustomMsg 中 timebase/offset_time 与实际时间单位，检查每点时间戳窗口；
 - [ ] 使能并验证 PTPv2/GPS 时间同步，测量 offset、drift 和恢复；
