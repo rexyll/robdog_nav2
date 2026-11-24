@@ -221,17 +221,19 @@ def convert_imu(source_message: Any, typestore: Any) -> Any:
             y=float(angular_velocity.y),
             z=float(angular_velocity.z),
         ),
-        angular_velocity_covariance=[
-            float(value) for value in source_message.angular_velocity_covariance
-        ], dtype=np.float64),
+        angular_velocity_covariance=np.asarray(
+            [float(value) for value in source_message.angular_velocity_covariance],
+            dtype=np.float64,
+        ),
         linear_acceleration=vector3_type(
             x=float(linear_acceleration.x),
             y=float(linear_acceleration.y),
             z=float(linear_acceleration.z),
         ),
-        linear_acceleration_covariance=[
-            float(value) for value in source_message.linear_acceleration_covariance
-        ],
+        linear_acceleration_covariance=np.asarray(
+            [float(value) for value in source_message.linear_acceleration_covariance],
+            dtype=np.float64,
+        ),
     )
 
 
