@@ -76,7 +76,6 @@ class TestM3DGRGTRTKCorrespondence(unittest.TestCase):
             [item[2] for item in points],
             [item[3] for item in points],
         )
-        # Build a TUM position trajectory with a fixed rigid transform.
         angle = np.radians(25.0)
         rotation = np.asarray(
             [
@@ -138,7 +137,7 @@ class TestM3DGRGTRTKCorrespondence(unittest.TestCase):
             "11.0 1 1 0 0 0 0 1",
             "12.0 2 2 0 0 0 0 1",
         ]
-        self.gt_path.write_text("\\n".join(rows) + "\\n", encoding="utf-8")
+        self.gt_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
         report = audit_gt_rtk_correspondence(self.bag_path, self.gt_path)
         metadata = report["rtk_navsatfix_metadata"]
         self.assertEqual(metadata["frame_id_distribution"], {"gps": 3})
