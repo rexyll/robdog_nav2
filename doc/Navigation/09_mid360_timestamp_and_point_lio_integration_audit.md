@@ -198,3 +198,32 @@ MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.ym
 - rosbag2 Jazzy sent/received timestamp feature summary: https://roscon.ros.org/2024/talks/Jazzy_Jalisco_rosbag2_updates_and_new_features.pdf
 
 本节与脚本改动不代表取得项目 pcap 或实际 rosbag；未执行目标设备录制、未在 ROS 2 Jazzy 环境读取真实 bag。
+
+
+## 11. MID-360 原始 UDP payload 严格解析器（协议 v1.4.12）
+
+### 11.1 固定字段与校验合同
+
+本项目新增纯 Python、无第三方依赖的 scripts/livox_mid360_udp_parser.py，解析边界仅为**单个 UDP application payload**，不解析 Ethernet/IP/UDP、PCAP/PCAPNG，也不解码为 ROS PointCloud2。
+
+按 Livox 官方 MID-360 协议 v1.4.12：
+- 所有多字节协议字段均为 little-endian；payload 最小头长 36 bytes，version=0，length 等于整个 UDP payload 长度。
+- Header：time_interval offset 3 / uint16（单位 100 ns）；dot_num offset 5 / uint16；udp_cnt offset 7 / uint16；frame_cnt offset 9 / uint8；data_type offset 10 / uint8；time_type offset 11 / uint8；reserved offset 12–23；CRC32 offset 24–27；timestamp offset 28–35 / uint64 ns；data 从 offset 36 开始。
+- time_type 当前有效枚举为 0（设备上电本地时间）、1（PTP/gPTP 主时钟时间）、2（GPS 时间）；它是时间来源类型，不是自动证明 PTP 已锁定的状态位。
+- data_type：0 IMU（每 sample 6×float32，24 bytes）；1 Cartesian32（XYZ int32 + reflectivity/tag，14 bytes）；2 Cartesian16（XYZ int16 + reflectivity/tag，8 bytes）；3 spherical（depth uint32 + theta/phi uint16 + reflectivity/tag，10 bytes）。解析器按 dot_num × sample_size 校验 data 长度，不擅自解释 reserved/tag_type 扩展语义。
+- 官方 CRC 表给出 CRC-32：poly 0x04C11DB7、init/xorout 0xFFFFFFFF、输入/输出反转。实现使用 Python zlib.crc32 的 CRC-32/ISO-HDLC 语义；校验覆盖 timestamp + data，即 payload bytes [28:]，报文中的 CRC 字段按 little-endian uint32 读取。
+
+### 11.2 实现与测试边界
+
+parse_mid360_udp_payload() 对版本、长度、点数、data_type、time_type、数据区长度和 CRC 进行严格校验；CRC 不匹配即拒绝，不提供隐式“跳过 CRC”模式。返回值保留原始 data/reserved 和已解析 header 元数据，避免将协议解析与点云坐标转换/ROS 消息适配耦合。
+
+scripts/tests/test_livox_mid360_udp_parser.py 使用**合成报文**覆盖四种 data_type、little-endian 字段、100 ns time_interval 单位、CRC 标准 check value，以及短头、版本、长度、dot_num、data_type、time_type、data 长度和 CRC 损坏等拒绝路径。合成向量只证明 parser 对已编码合同的单元测试行为，不是 Livox 官方 golden capture，也不代表真实设备包已验证。
+
+### 11.3 尚未实现/验证
+
+- 尚未实现 PCAP/PCAPNG 容器读取、UDP 五元组筛选、IP 分片重组、capture timestamp 解释或丢包统计。
+- 尚未从真实 MID-360 pcap 验证 CRC 字段行为、所有 data_type、IMU 点数/长度、firmware 兼容性或 time_type 分布。
+- 未验证实际网络 capture timestamp 与 sensor timestamp 的时钟域映射。
+- 不得把 parser 接受的合成包写成设备验收证据；后续必须使用保留 SHA-256 的原始设备 pcap 建立独立 golden fixtures，并同时记录型号/固件/配置/采集 NIC/snaplen/drop counters。
+
+协议依据：Livox 官方 [MID-360 Communication Protocol v1.4.12](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html)，特别是协议字节序、§2 点云/IMU header、§2.2 timestamp、§2.3 data types 与 §6 CRC Algorithm。
