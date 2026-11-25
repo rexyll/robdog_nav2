@@ -41,6 +41,7 @@ class PtpMessage:
     message_name: str
     transport_specific: int
     version_ptp: int
+    minor_version_ptp: int
     message_length: int
     domain_number: int
     flags: int
@@ -109,8 +110,13 @@ def parse_ptp_v2_message(payload: bytes, *, transport: str,
     message_type = first & 0x0F
     transport_specific = first >> 4
     version_ptp = second & 0x0F
+    minor_version_ptp = second >> 4
     if version_ptp != 2:
         raise PtpPacketError(f"unsupported PTP versionPTP: {version_ptp}")
+    if minor_version_ptp != 0:
+        raise PtpPacketError(
+            f"unsupported PTP minorVersionPTP: {minor_version_ptp}; parser is v2.0 only"
+        )
     message_length = struct.unpack_from("!H", data, 2)[0]
     if message_length < PTP_HEADER_SIZE or message_length > len(data):
         raise PtpPacketError("PTP messageLength outside captured payload")
@@ -156,6 +162,7 @@ def parse_ptp_v2_message(payload: bytes, *, transport: str,
         message_name=MESSAGE_NAMES.get(message_type, f"unknown_{message_type}"),
         transport_specific=transport_specific,
         version_ptp=version_ptp,
+        minor_version_ptp=minor_version_ptp,
         message_length=message_length,
         domain_number=domain_number,
         flags=flags,
@@ -359,6 +366,7 @@ class PtpCaptureAudit:
                 "message_type": message.message_name,
                 "domain_number": message.domain_number,
                 "transport_specific": message.transport_specific,
+                "minor_version_ptp": message.minor_version_ptp,
                 "source_port_identity": message.source_port_identity,
                 "sequence_id": message.sequence_id,
                 "two_step": message.two_step,
