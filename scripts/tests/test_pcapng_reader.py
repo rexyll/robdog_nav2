@@ -98,6 +98,21 @@ class TestPcapngReader(unittest.TestCase):
         with self.assertRaisesRegex(PcapngError, "fraction out of range"):
             list(iter_pcap_packets(io.BytesIO(header + record)))
 
+
+    def test_accepts_repeatable_interface_address_options(self):
+        opts = option(4, b"12345678") + option(4, b"abcdefgh")
+        raw = shb() + idb(opts=opts) + epb(b"data", 1)
+        packet, = list(iter_pcapng_packets(io.BytesIO(raw)))
+        self.assertEqual(packet.data, b"data")
+
+    def test_new_section_resets_interface_table(self):
+        raw = shb() + idb(link=1) + epb(b"one!", 1)
+        raw += shb(">") + idb(">", link=147) + epb(b"two!", 2, ">")
+        packets = list(iter_pcapng_packets(io.BytesIO(raw)))
+        self.assertEqual([p.section_index for p in packets], [0, 1])
+        self.assertEqual([p.interface_id for p in packets], [0, 0])
+        self.assertEqual([p.link_type for p in packets], [1, 147])
+
     def test_rejects_invalid_trailer(self):
         raw = bytearray(shb() + idb())
         raw[-1] ^= 1
