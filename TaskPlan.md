@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.130
+- 文档版本：v0.3.131
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -253,7 +253,7 @@
 - [ ] Dynamic03 GNSS Gate：range_meas 1054信号载波相位有效0、PVT全量diff_soln=false/carr_soln=0，当前bag不足以重建RTK Fixed。M3DGR SPP源码默认订阅raw/fix；MAVROS源码确认其来自MAVLink GPS_RAW_INT，covariance_type=1为eph/epv近似协方差分支，但物理接收机映射/RTK改正状态仍未闭环。需作者提供飞控参数/接线/RTCM证据；GT禁用于APE/RPE。详见策略§6.15–6.16。
 - [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
-- [~] N1 时间同步接口继续细化（doc/Navigation/16 §13–15）：Livox 官方资料已明确 MID-360 PTP v2.0 为 UDP/IP、two-step Sync/Follow_Up、E2E Delay_Req/Delay_Resp，设备为 slave；PTP/gPTP 不应混用，且多 GM 环境不支持。补充 time_sync_type、last_sync_time、time_offset=t0−t1、powerup_cnt、HMS 0x0402/0403/0405/0406/040A 健康诊断合同。LinuxPTP UDPv4/E2E/two-step/hardware timestamp 作为 Orin 实验起始配置；NVIDIA 载板约束及 32GB/64GB DevKit 社区案例表明必须区分 PHC 声明能力与 ptp4l 实际工作。PTP multicast/unicast、端口/domain/profile/VLAN/interval、目标 NIC PHC、phc2sys、故障切换仍待抓包与实物验证；新增 TIME-041..046，新增 §16 LinuxPTP/Orin 可执行 runbook：Orin 固定 clientOnly=1，PTP4L 用 UDPv4/E2E/hardware timestamp；禁止 Auto P2P、serverOnly 和 phc2sys -rr；phc2sys -a -r 负责 PHC→CLOCK_REALTIME 并由 ptp4l 自动提供 time properties，明示 PTP timescale 与 UTC 的偏移关系及 chrony/systemd-timesyncd 唯一时钟纪律；增加启动 step/re-lock generation、pmc 查询和 udp/Layer2 抓包步骤。Livox Wiki 已 pin 到 2026-09-21 commit 6b030b73a7fa1e035e44bf1b262d7a9cbebe0728，并回读三份源文件 blob SHA。新增 TIME-047..052；未采购/未接线/未在目标 Orin 运行 PTP 测试。
+- [~] N1 时间同步接口继续细化（doc/Navigation/16 §13–15）：Livox 官方资料已明确 MID-360 PTP v2.0 为 UDP/IP、two-step Sync/Follow_Up、E2E Delay_Req/Delay_Resp，设备为 slave；PTP/gPTP 不应混用，且多 GM 环境不支持。补充 time_sync_type、last_sync_time、time_offset=t0−t1、powerup_cnt、HMS 0x0402/0403/0405/0406/040A 健康诊断合同。LinuxPTP UDPv4/E2E/two-step/hardware timestamp 作为 Orin 实验起始配置；NVIDIA 载板约束及 32GB/64GB DevKit 社区案例表明必须区分 PHC 声明能力与 ptp4l 实际工作。PTP multicast/unicast、端口/domain/profile/VLAN/interval、目标 NIC PHC、phc2sys、故障切换仍待抓包与实物验证；新增 TIME-041..046，新增 §16 LinuxPTP/Orin 可执行 runbook：Orin 固定 clientOnly=1，PTP4L 用 UDPv4/E2E/hardware timestamp；禁止 Auto P2P、serverOnly 和 phc2sys -rr；phc2sys -a -r 负责 PHC→CLOCK_REALTIME 并由 ptp4l 自动提供 time properties，明示 PTP timescale 与 UTC 的偏移关系及 chrony/systemd-timesyncd 唯一时钟纪律；增加启动 step/re-lock generation、pmc 查询和 udp/Layer2 抓包步骤。Livox Wiki 已 pin 到 2026-09-21 commit 6b030b73a7fa1e035e44bf1b262d7a9cbebe0728，并回读三份源文件 blob SHA。新增 TIME-047..052；未采购/未接线/新增 §17 只读主机/NIC 基线采集工具 `tools/collect_ptp_host_inventory.sh`：收集 JetPack/L4T/kernel/device-tree、NIC driver/firmware、ethtool -T、PHC/sysfs、linuxptp 版本、时钟服务/进程、内核日志和 offload/IRQ；输出目录 0700、SHA256SUMS，不修改网络或系统时钟。增加平台身份、硬件 timestamp、driver/runtime、唯一时钟纪律和数据完整性 Gate。脚本已提交，未在真实 Orin、CI 或容器执行，等待目标板首次运行。
 
 - 2026-11-25 / v0.3.117：在 `doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md` 新增 §4.19，审计 GPS L1 C/A LNAV（IS-GPS-200N）、GPS L1C CNAV-2（IS-GPS-800J）与 GLONASS legacy/CDMA 时间接口。GPS LNAV UTC 参数为 A0/A1、8-bit WN_t/WN_LSF，控制段可上传时至少六日更新；L1C 为 A0-n/A1-n/A2-n、13-bit week，UTC(USNO) 参数至少三日更新，并独立广播 GGTO/EOP。核对 GPS.gov 2026-06 IRN-IS-200N-004 为 ISM 变更，未发现 UTC 字段修改。GLONASS 初审识别 τC/τGPS/N4/NA/B1/B2/KP 与 UTC(SU)/UT1/TAI/GPS 转换关系，但 ICD 5.1 PDF 附件读取失败、CDMA 2016 资料未从官方渠道取得，故明确标注为初审线索而非完整官方审计。新增 GNSS-UTC-IF-009..016，尤其要求 continuous UTC 后 GLONASS UTC(SU)/KP 缺乏权威迁移证据时返回 POLICY_UNVERIFIED。未实现代码、未采集实时电文、未运行测试。
 - 2026-11-25 / v0.3.116 补充校正：复核 §4.18 的 UTC realization 表述，GPS L5 Type 33 明确指向 UTC(USNO)，但本轮所审 Galileo OS SIS 与 BDS B3I ICD 未在已核验字段中充分确认其 UTC(k) 具体名称/溯源；已删除未经该两份 ICD 支持的 UTC(NTSC) 断言，并将 Galileo/BeiDou realization 标识列为待权威时间服务文件确认。避免把常见外部知识误写成当前规范证据。
@@ -287,6 +287,9 @@
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.131：新增 `tools/collect_ptp_host_inventory.sh`，作为 TIME-045/TIME-052 的只读目标机基线采集器；收集 JetPack/L4T、kernel、device-tree、NIC driver/firmware、ethtool timestamp capability、PHC/sysfs、linuxptp/ethtool 包版本、clock discipline services/processes、PTP 相关内核日志、IRQ/offload。脚本不改网卡、不操作 PTP daemon、不调系统时钟，输出目录 0700 并生成 SHA256SUMS；新增 `doc/Navigation/16` §17，定义执行方法、采集字段、平台/NIC/时钟纪律 Gate 和人工判读要求。已提交并回读；尚未在真实 Orin、CI 或容器执行 bash -n/shellcheck，故状态为待目标环境首次运行验证。N1 继续。
+
 
 - 2026-11-25 / v0.3.130：继续深化 `doc/Navigation/16` §16，将 LinuxPTP 从原则性建议推进为 Jetson 可执行 PTP client runbook。核对 LinuxPTP `ptp4l(8)`：Orin 应显式 `clientOnly=1`；UDPv4/E2E/hardware timestamp 可与 MID-360 已知 PTP v2.0 合同一致；LinuxPTP 的 `twoStepFlag` 是本机作为 server/GM 时的输出设置，不能强制或证明远端 GM 发送 two-step；`delay_mechanism Auto` 可能因 Pdelay 切换到 P2P，不适合作为 MID-360 当前合同。核对 `phc2sys(8)`：`-a` 随 ptp4l port state 自动选择方向，单次 `-r` 将 CLOCK_REALTIME 作为 sink；双 `-rr` 会允许 system clock 成为 source，不符合 Orin client-only 角色。补充 PTP timescale/PHC 与 UTC/CLOCK_REALTIME 的 offset 处理，禁止硬编码 `-O 0/37`；审计 chrony/systemd-timesyncd 的竞争式 system clock discipline。提供 ethtool/ptp4l/pmc/phc2sys/tcpdump 命令模板、启动 step/re-lock 和 mapping_generation 验收、TIME-047..052。Livox-SDK Wiki 固定至 commit `6b030b73a7fa1e035e44bf1b262d7a9cbebe0728`（2026-09-21），并回读确认 time_sync.rst、MID-360 protocol v1.4.12、HMS 三文件 blob SHA 与当前 master 一致。LinuxPTP 手册仍为滚动文档，目标 JetPack 安装版本未采集，必须在目标板记录 `ptp4l -v`/`phc2sys -v`。本轮只新增设计/runbook；未在目标 Orin 执行命令、未抓包、未构建/测试/仿真/实机验证，N1 继续进行。
 
