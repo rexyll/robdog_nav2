@@ -227,3 +227,23 @@ scripts/tests/test_livox_mid360_udp_parser.py 使用**合成报文**覆盖四种
 - 不得把 parser 接受的合成包写成设备验收证据；后续必须使用保留 SHA-256 的原始设备 pcap 建立独立 golden fixtures，并同时记录型号/固件/配置/采集 NIC/snaplen/drop counters。
 
 协议依据：Livox 官方 [MID-360 Communication Protocol v1.4.12](https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html)，特别是协议字节序、§2 点云/IMU header、§2.2 timestamp、§2.3 data types 与 §6 CRC Algorithm。
+
+
+## 12. PCAP / PCAPNG 容器读取器（抓包时间与接口元数据）
+
+新增 scripts/pcapng_reader.py，以 Python 标准库实现流式读取，输出统一 packet record，并保留 section_index、interface_id、link_type、captured/original length、原始接口 timestamp ticks（PCAPNG EPB）和换算后的 capture_timestamp_ns。当前覆盖：
+- Classic PCAP：little/big endian，microsecond/nanosecond magic，global header link type/snaplen，packet record timestamp 与截断长度检查。
+- PCAPNG：Section Header Block（按 BOM 切换 endian，并在新 section 重置 interface table）、Interface Description Block、Enhanced Packet Block、Simple Packet Block；IDB if_tsresol 支持十进制与二进制分辨率，if_tsoffset 按有符号秒偏移处理。
+- 对 block 长度/尾部重复长度、option padding/边界、未知 interface、captured/original length 和截断报文做结构检查。SPB 没有 packet timestamp，输出 timestamp_available=false / capture_timestamp_ns=null，不得伪造时间。
+
+### 12.1 时间语义
+
+Classic PCAP 的 packet timestamp 按文件 magic 指定的微秒或纳秒精度换算。PCAPNG EPB 时间戳为 64-bit ticks，必须结合该 interface 的 if_tsresol 和 if_tsoffset 换算；if_tsresol 最高位区分 base-2 与 base-10，低 7 位为 exponent。PCAPNG 的 link type 和 snaplen 是 interface-scoped 元数据。换算结果统一命名 capture_timestamp_ns，它只代表 capture file 所记录的抓包时间，不是 LiDAR timestamp、PTP clock offset 或网络单向时延。
+
+### 12.2 解析边界和测试
+
+本阶段没有解析 Ethernet/VLAN、Linux cooked capture、raw IP、IPv4/IPv6、UDP、IP fragmentation，也没有做 MID-360 UDP port/IP filter；reader 输出 link-layer packet bytes，下一阶段单独实现网络协议解码与 MID-360 payload dispatch。未知 PCAPNG block 按 validated block length 跳过。当前 PCAPNG 支持 SHB/IDB/EPB/SPB，未实现 obsolete Packet Block、Name Resolution Block、Interface Statistics Block、decryption/secrets、FCS 语义及自定义 option 的完整保留。
+
+scripts/tests/test_pcapng_reader.py 使用合成容器覆盖 PCAP microsecond/nanosecond 与 endian、PCAPNG interface link type、decimal/binary if_tsresol、signed if_tsoffset、EPB truncation、SPB 无时间戳和结构错误。合成测试不等于 Wireshark/tcpdump interoperability 或真实 Orin capture 验证。
+
+依据：IETF PCAPNG 格式草案的 IDB / EPB 定义及 if_tsresol、if_tsoffset 语义；其当前状态是 Internet-Draft，项目把它作为格式实现依据，不宣称其为已发布 RFC。
