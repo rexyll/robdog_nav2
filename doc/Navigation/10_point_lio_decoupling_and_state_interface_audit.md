@@ -148,3 +148,76 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 3. 当前 Point-LIO Odometry 缺少 ROS covariance 输出；默认 `use_imu_as_input=true` 时 angular twist 也没有由发布函数赋值。它只能作为待修复/适配的 LIO 原始观测，不能直接当作最终 base_link 状态。
 4. robot_localization 在 Jazzy 有维护中的发布包和 GNSS 转换链，是合理的第一融合基线，但必须先补齐 covariance、frame、heading、质量门控和相关性处理。
 5. 本轮均为 E1/E2 上游证据；未在本项目编译或运行，未获取真实 MID-360/IMU bag，未完成 Lite3 接口验证、Orin 测试或实机验收。
+
+
+## 8. Point-LIO ESEKF 协方差：已确认可访问，但尚未发布
+
+本轮进一步固定检查 Point-LIO `include/estimator.h` 与其 vendored IKFoM ESEKF：
+
+- `PointLio` 同时持有 `kf_input`（24 维）和 `kf_output`（30 维）滤波器对象。
+- IKFoM ESEKF 暴露 `get_P() const`，返回内部 covariance；并非算法本身没有协方差。
+- 默认 `config/default.yaml` 明确 `use_imu_as_input: true`，因此正常 MID-360 preset 继承默认输入模型时，实际状态与 covariance 来源是 `kf_input`，不是 `kf_output`。
+- `kf_input` 的状态字段声明顺序为 position、orientation、LiDAR-IMU rotation、LiDAR-IMU translation、velocity、gyro bias、accel bias、gravity；状态 covariance 初始化为 24×24，且源码显式对 6–11、15–20、21–23 等块设置初始值。按该声明顺序，位置/姿态位于前 6 个误差状态维度，速度位于 12–14；精确 SO(3)/重力误差参数化和内部状态映射仍须通过 IKFoM manifold 实现与单测最终锁定。
+- `publish_odometry()` / `set_posestamp()` / `set_odomtwist()` 未读取 `kf_input.get_P()`，也没有将任何内部 covariance 写入 ROS Odometry 的 pose/twist covariance。因此应修正此前可能产生的误解：**Point-LIO 内部确实维护 covariance，缺陷在于该 ROS2 输出路径没有导出它。**
+
+### 8.1 不允许直接截取 6×6 对角块作为最终 covariance
+
+建议 adapter 从内部 ESEKF 暴露经过版本锁定的状态快照 API，至少返回 state、完整 P、时间戳、状态模型类型（input/output）、外参估计状态与 tracking health。再根据已验证的误差状态定义构造选择/变换 Jacobian：
+
+- IMU/LIO 参考点 pose covariance：从 P 中提取 position 与 SO(3) error 子块，并保留二者之间的 cross-covariance。
+- 速度 covariance：提取 velocity 子块，并明确它在 world 还是 body 表达。
+- 将 LIO/IMU 参考点转换到 `base_link`：若存在固定 lever arm，pose covariance 需要用 SE(3) Jacobian/Adjoint 传播；不能仅复制原 6×6 块。若角速度参与从 IMU 原点换算到 base_link 原点的线速度，还需要 `v_base = v_imu + ω × r_imu_to_base` 及其协方差/交叉项。
+- SO(3) 的局部误差坐标与 ROS Odometry 采用的姿态参数化不应想当然地视为同一坐标。必须确认 IKFoM 的 left/right perturbation、误差注入和重置 Jacobian，再将姿态误差协方差转换到 ROS 约定。
+- 发布时必须验证对称性、有限值、半正定性、单位、frame、stamp 和误差状态顺序；不满足时置健康状态 invalid，不得用全零或任意常数掩盖。
+
+## 9. robot_localization Jazzy 源码行为与 GNSS 输入安全 Gate
+
+固定版本：`cra-ros-pkg/robot_localization jazzy-devel` SHA `fea7fc3dcad81c533121e4aa2fb1087a0565d8cc`（package.xml version 3.8.4，Apache-2.0）。
+
+### 9.1 EKF covariance 行为
+
+- EKF prediction 使用 `P = F P Fᵀ + Δt Q`；measurement correction 使用 Joseph form 更新 covariance。
+- measurement update 根据每个输入的 update vector 只融合选定状态维度；NaN/Inf 测量会被排除。
+- 对 measurement covariance 的负对角元素取绝对值；小于 `1e-9` 的对角元素会被提升到 `1e-9` 以保持数值稳定。
+- **因此全零 Odometry covariance 不会被理解为“未知/无效”，而可能变成极小观测噪声，令 EKF 过度信任该输入。** 这使 Point-LIO covariance 缺失成为融合阻断项，而非可忽略的消息字段问题。
+- `sensor_timeout` 只使滤波器在没有新测量时执行 prediction，不会替项目判断某一路 LiDAR/GNSS 是否仍有有效观测，也不是 RTK FIX/FLOAT 质量门控。
+- `smooth_lagged_data` 可在收到时间戳落后于最新滤波时刻的测量时回滚到历史状态并重放后续测量；启用时 `history_length` 必须覆盖最大传感器/计算延迟。Point-LIO 输出应使用测量参考时间，而不是回调到达或发布时间；真实延迟分布要由 bag 统计后配置。
+- `two_d_mode` 会强制将 Z、roll、pitch 及相关速度/加速度置零并修改 covariance；四足机器人在斜坡、台阶、崎岖地形运行，不能将其作为默认模式。
+
+### 9.2 navsat_transform_node 的 RTK 质量与 covariance 边界
+
+固定 Jazzy 源码的 `gpsFixCallback()`：
+- 接受条件只要求 `status != STATUS_NO_FIX` 且经纬高不是 NaN；不会在该回调内区分接收机厂商定义的 RTK FIX、RTK FLOAT、DGNSS、SINGLE、差分龄期或基站状态。
+- 位置 covariance 数值被直接复制；本轮未见根据 `position_covariance_type` 做 unknown/approximated/known 的可靠性分支。
+- `prepareGpsOdometry()` 会把该 covariance 旋转后写入 GPS Odometry pose covariance。故输入 NavSatFix 若 covariance type 为 UNKNOWN、协方差全零或供应商填值不可信，不能指望 navsat_transform 自动修正其语义。
+- GNSS 质量门控必须放在 navsat_transform 之前：检查接收机原始 RTK fix type、差分龄期/基站状态、卫星数/几何质量（若驱动提供）、NavSatFix status、covariance type 和 covariance 合理性；不合格时停止发布融合输入或显式标 invalid。恢复时要做跳变门控与重新收敛策略。
+- navsat_transform 只建立地理坐标到机器人 world frame 的转换，并不提供接收机 RTK 解状态机；它需要 Odometry、GNSS 和有地理参考的 heading。单天线 ZED-F9P 静止时不能仅凭位置解得到可靠机身 yaw；`use_odometry_yaw` 只能使用已经可靠对齐到地理方向的绝对 yaw，不能把任意 LIO 启动 yaw 当作地理航向。
+
+### 9.3 推荐融合拓扑更新
+
+先保留候选双滤波结构，而不是立即把所有数据喂入单个 EKF：
+
+1. **Local continuous filter（world=`odom`）：** 融合经过验证的腿式里程计/速度与一份明确的惯性输入，输出连续 `odom→base_link`。LIO 先作为独立观测/诊断基线；当其 covariance 和参考点合同修复后，再评估融合 LIO pose/velocity。
+2. **Global correction filter（world=`map`）：** 使用 local filter 的连续状态作为基础，接收经过 RTK quality gate + navsat_transform 的 GNSS 位置约束，输出 `map→odom`。GPS 输入保持 absolute（`differential=false`），并按上游说明配置。
+3. **IMU 相关性：** 若 Point-LIO 默认 `use_imu_as_input=true` 已将 MID-360 IMU 作为过程输入，不可未经相关性分析又把同一原始 IMU 的 orientation/angular velocity/acceleration 当作独立、统计独立观测全部加入 EKF。优先让 local filter 使用独立腿式状态估计提供的速度/姿态约束，或采用有明确信息分工的融合架构。
+4. **TF 唯一权威：** local filter 唯一发布 `odom→base_link`；global filter 唯一发布 `map→odom`；Point-LIO raw odom 不直接广播与融合器相同的 child TF。
+5. **四足三维状态：** 保持 3D roll/pitch/z 与地形高度能力；任何二维简化只能作为特定平地模式，不可影响完整导航系统的状态估计合同。
+
+## 10. 本轮新增 Gate 与未决项
+
+- [ ] 从 IKFoM state/manifold 源码和单元测试锁定 24 维 `kf_input` 的全部误差状态索引、SO(3) 误差坐标约定、gravity tangent 表达及 P 的 reset/boxplus 变换。
+- [ ] 在 Point-LIO adapter 中导出 `kf_input.get_P()` 的只读快照；验证实时读写线程同步，不允许无锁读取 EKF 状态/P。
+- [ ] 为 pose/velocity covariance 建立数学映射与有限差分/Monte Carlo 单测；包含 LIO IMU 原点到 `base_link` 的 lever-arm 与 cross-covariance。
+- [ ] 修正默认 IMU-input 分支 angular twist 未赋值的问题；优先明确发布 bias-corrected angular velocity 的 frame/stamp/covariance，或将该维度从 adapter measurement mask 中禁用。
+- [ ] 设计 RTK adapter 的质量状态机，验证 FIX→FLOAT→SINGLE→NO_FIX、差分龄期过期、covariance unknown/zero、跳变和恢复。
+- [ ] 通过真实 rosbag 统计 LIO output latency，决定 `smooth_lagged_data` 与 `history_length`，并测试乱序、重复 stamp、clock jump 和 bag loop。
+- [ ] 验证 `robot_localization` 的 3D EKF 与双滤波 TF 拓扑，特别是 LIO/GNSS reset 时 map→odom 是否连续、local odom 是否保持连续。
+- [ ] 获取 Lite3 厂商状态估计接口，确认腿式 odometry 是否已经融合机载 IMU；未确认前禁止重复融合同一 IMU。
+
+## 11. 本轮结论补充
+
+1. Point-LIO 内部 ESEKF covariance 可通过 IKFoM `get_P()` 读取；默认 MID-360 配置走 24 维 `kf_input`。当前 ROS Odometry publisher 没有导出内部 P，故应开发 adapter/state snapshot，而非虚构 covariance。
+2. Point-LIO 默认 IMU-input 分支不写 angular twist，消息字段会保持默认零值，不代表测得角速度。
+3. robot_localization EKF 会将小于 `1e-9` 的测量 covariance 对角元素抬到 `1e-9`；零 covariance 输入可能导致过度信任，Point-LIO 输出 covariance 缺失必须作为融合阻断 Gate。
+4. navsat_transform 对 NavSatFix 只排除 NO_FIX/NaN，不负责 RTK 解状态和差分龄期质量门控；且会直接使用 position covariance。RTK adapter 必须先验证质量状态和 covariance type。
+5. 双 EKF + navsat_transform 仍是候选拓扑，不是最终选型；四足系统必须保留 3D 状态，并处理同一 IMU 的信息相关性。
