@@ -126,13 +126,13 @@ jobs:
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
-          PYTHONPATH=scripts python3 -m unittest discover \
-            -s scripts/tests \
             -p "test_network_packet_decoder.py" \
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_audit_mid360_pcap.py" \
+            -v
+          PYTHONPATH=scripts python3 scripts/audit_mid360_pcap.py --help >/dev/null
             -v
           PYTHONPATH=scripts python3 scripts/audit_mid360_pcap.py --help >/dev/null
             -p "test_m3dgr_ros1_bag.py" \
