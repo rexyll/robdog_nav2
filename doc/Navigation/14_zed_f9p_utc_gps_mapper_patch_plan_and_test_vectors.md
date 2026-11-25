@@ -788,3 +788,56 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 - `UTC-REGIME-006`：验证新旧 policy artifact 并存、签名/哈希/审核状态/生效日期，启动时只加载唯一有效版本；重复、重叠或缺口均拒绝。
 
 当前证据边界：Resolution 5 已正式通过，continuous UTC 生效日期为 2027-05-20；Bulletin C 72 已明确 2026-12-31 无闰秒及 UTC−TAI=−37 s。尚未审计 BIPM/IERS 的完整 operational implementation package、各 GNSS constellation 的 post-transition interface、ZED-F9P 固件兼容性和实际 UBX 输出。不得声称目标设备已支持 continuous UTC；相关硬件与服务端证据仍为 `需要实物/授权，未完成`。
+
+#### 4.18 GPS / Galileo / BeiDou 广播 UTC 参数接口对照（首轮，2026-11-25）
+
+本节只记录已取得官方 ICD 的可核验字段和算法边界。它不是对 2027-05-20 后星座运营策略的确认；当前检索到的 GPS L5 ICD 为 2022-08 Revision J、Galileo OS SIS ICD 为 2025-11 Issue 2.2、BeiDou B3I ICD 为 2018-02 Version 1.0，均早于 CGPM Resolution 5 (2026)。
+
+##### 4.18.1 对照矩阵
+
+| 星座 / 官方接口文档 | 系统时间→UTC 广播参数 | 闰秒事件字段 / 算法特点 | 独立系统时间关系 / UT1 | 证据限制 |
+|---|---|---|---|---|
+| GPS L5 CNAV — IS-GPS-705J (2022-08) | Message Type 33；UTC reference 明确为 UTC(USNO)；A0-n/A1-n/A2-n 多项式，ΔtLS，tot，WN_ot | ΔtLSF、WNLSF、DN；DN=1..7；参考周数 WN_ot/WNLSF 需结合截断周数恢复；参数至少每 3 天更新（控制段可上传时），否则精度随时间退化 | Message Type 32 提供 EOP；可由 UT1−GPS 与 GPS−UTC 得到 UT1−UTC；Type 33 提供 GPS↔UTC | 规范版本早于 Resolution 5；未证明 Type 33/32 已针对 continuous UTC 更新；仅覆盖 L5 CNAV，不能代表所有 GPS 民用信号代际 |
+| Galileo OS SIS ICD Issue 2.2 (2025-11) | GST−UTC conversion；A0/A1 多项式、ΔtLS、t0t、WN0t | ΔtLSF、WNLSF、DN；WN0t/WNLSF 为截断 8-bit 周数；DN=1..7；闰秒边界前后 ±6h 使用单独算法分支 | 独立广播 GST−GPS（GGTO）参数 A0G/A1G/t0G/WN0G；不应把 GST 直接视作 GPS 时间 | 规范早于 Resolution 5；未证明 GST−UTC 广播字段/事件字段已切换到 continuous UTC；具体 Galileo UTC(k) realization 的长期实施细节仍需进一步权威来源核对 |
+| BeiDou B3I D1/D2 — BDS-SIS-ICD-B3I-1.0 (2018-02) | BDT−UTC；A0UTC/A1UTC、ΔtLS | ΔtLSF、WNLSF（8-bit modulo 256）、DN；按闰秒生效前/事件窗口/生效后三种算法分支；ICD 声称广播参数可使 UTC 计算误差不超过 1 μs | BDT−GPS 参数 A0GPS/A1GPS 在该 ICD 标注为“Not broadcast temporarily”；B3I 文档不应被用来推断 B1C/B2a/B2b CNAV 的字段完全相同 | 文档年代较早且仅覆盖 B3I D1/D2；BDS-3 CNAV 及新版本官方 ICD 尚需单独核验；不代表 BDS 所有公开信号 |
+
+##### 4.18.2 直接影响架构的结论
+
+1. **必须按 constellation + signal/message type 解码。** 建议抽象为 `GnssUtcBroadcastModel`，但每种 signal/message type 保留独立 parser、字段有效性、周数展开规则、参考历元和公式版本；禁止一个通用 `A0/A1/ΔtLS/WNLSF/DN` parser 直接吞入所有星座。
+2. **先转换到系统连续时间，再求 UTC。** GPS/GST/BDT 各自的 week/TOW 是原生连续时间；UTC 是带广播偏移/历史事件的映射。每个 UTC offset 记录必须带 `constellation`、`signal_id`、`message_type`、`utc_reference_realization`、`reference_week/tow`、`validity/health`、`received_monotonic_ns`、`receiver_generation`、`source_revision`。
+3. **多项式不能简化成固定整数秒。** GPS CNAV 有 A0/A1/A2；Galileo OS SIS 和 BDS B3I 所审计的版本有 A0/A1。实现须保留有符号定点系数、scale factor、reference week/TOW 和明确的计算顺序，避免浮点舍入或把 polynomial bias 当成 leap count。
+4. **周数截断恢复是协议专属规则。** Galileo GST−UTC 使用 8-bit WN0t/WNLSF，BDS B3I WNLSF 为 modulo 256，GPS L5 CNAV 使用 13-bit WN_ot/WNLSF。必须用同消息/同历元约束恢复 full week，拒绝歧义周数，不可借用另一星座的 rollover 窗口。
+5. **闰秒字段不是连续 UTC 实施证明。** 这些 ICD 都早于 Resolution 5，仍定义 ΔtLS/ΔtLSF 事件语义。Resolution 5 生效后，旧字段可能继续为兼容/历史用途保留，也可能由后续 ICD 或服务端更新定义新语义；在官方修订/服务公告与接收机原始导航数据验证前，不能假定事件字段停止广播、永远固定，或继续按旧语义解释。
+6. **UT1 必须单独建模。** GPS L5 Type 32 是明确证据：EOP/UT1 信息与 GPS−UTC 转换是相关但不同的数据面。连续 UTC 之后 |UT1−UTC| 允许增长至 3600 s，不意味着 EOP 可丢弃；普通导航时钟 mapper 不应把 UT1 缺失判成 GPS−UTC 失效，但地固/惯性变换与天文应用必须有独立 EOP freshness/conflict gate。
+7. **不要跨星座多数表决。** 同一接收机同一 epoch 收到多星座 UTC offset 时，先按各自 UTC reference realization 和系统间偏差模型归一化；在参考实现/偏差未确认时，标记 `CROSS_REALIZATION_UNRESOLVED`，不得把 GPS UTC(USNO)、Galileo 参考实现组合、BeiDou UTC(NTSC) 当作完全相同的 UTC realization。
+8. **接收机 API 能力是独立 Gate。** 本项目目标 ZED-F9P 是否提供原始 GPS/Galileo/BeiDou UTC 广播参数、保留了哪些 signal/message identity、是否提供 raw navigation page、是否在固件中融合/过滤参数，均未从本次 ICD 审计得到证明。UBX-NAV-PVT/TIMEUTC/TIMELS 是 receiver output，不等价于原始星座广播字段；后续需 MON-VER、配置快照、原始导航页和输出日志建立映射。
+
+##### 4.18.3 建议内部数据模型（设计草案）
+
+- `GnssTimeScale`: `GPS`, `GST`, `BDT`；携带 full week + integer TOW ns + system-time epoch/version。
+- `UtcOffsetPolynomial`: signed fixed-point `A0/A1/A2`（按消息 schema 允许字段）、scale factors、reference week/TOW、evaluation interval、uncertainty、raw bits。
+- `UtcLeapEventBroadcast`: current/past ΔtLS、future ΔtLSF、effective week/day、raw truncated week fields、event-valid flag、message issue/health。
+- `UtcReferenceRealization`: `UTC(USNO)` / Galileo reference realization identifier / `UTC(NTSC)`（以各版 ICD 和服务端文档精确定义为准）；不默认为同一 realization。
+- `Ut1EopBroadcast`: UT1−system-time 或协议规定的 EOP fields、xp/yp、epoch、validity、source/signal identity；独立于 UTC leap event cache。
+- 每个对象保留原始消息字节/页、ICD revision、接收单调时钟、receiver session/generation、解析器版本和审核状态。
+
+##### 4.18.4 新增验证合同
+
+- `GNSS-UTC-IF-001`：GPS L5 Type 33 解析 A0-n/A1-n/A2-n、ΔtLS、tot/WN_ot、ΔtLSF/WNLSF/DN；检查 signed two's-complement、scale、13-bit week rollover、DN 1..7、消息更新超时。
+- `GNSS-UTC-IF-002`：Galileo GST−UTC parser 验证 8-bit WN0t/WNLSF、DN 1..7、ΔtLS/ΔtLSF 和 ±6h 闰秒窗口分支；独立验证 GST−GPS GGTO，不允许误把 GST 当 GPS。
+- `GNSS-UTC-IF-003`：BDS B3I D1/D2 parser 验证 A0UTC/A1UTC、ΔtLS、8-bit modulo-256 WNLSF、DN、三段式事件算法；验证 ICD 所述 1 μs 误差仅适用于其广播算法合同，不外推到整机同步精度。
+- `GNSS-UTC-IF-004`：同一 UTC 标签由 GPS/GST/BDT 分别转换时，先应用各自系统时间偏移与 reference realization；没有跨 realization 偏差证据时必须返回 CROSS_REALIZATION_UNRESOLVED，不做平均。
+- `GNSS-UTC-IF-005`：模拟 Resolution 5 生效前后，旧 ICD 中 ΔtLSF 不变/无未来事件/字段无效三种情况；不得据此自行推断 continuous UTC offset 或合成 ±1 s leap event。
+- `GNSS-UTC-IF-006`：GPS Type 32 EOP 与 Type 33 UTC 参数独立更新/过期；UT1 consumer 的 stale gate 与普通 GPS−UTC mapper 状态隔离。
+- `GNSS-UTC-IF-007`：同一接收机多星座数据有不同 message issue、接收时刻、generation 或信号来源时，不跨 epoch 拼接参数。
+- `GNSS-UTC-IF-008`：目标接收机无法输出原始星座广播页时，标注 receiver abstraction boundary；不得声称已验证上游 ICD 字段到 UBX 输出的逐字段映射。
+
+##### 4.18.5 证据与后续缺口
+
+- GPS：本节采用 USCG NAVCEN 发布的 IS-GPS-705 Revision J（2022-08），章节 20.3.3.6（Type 33）及 20.3.3.5/Type 32 EOP；必须另审 IS-GPS-200 对 L1 C/A LNAV 的当前有效版本，以及 L1C/CNAV-2 规范，不能用 L5 Type 33 代表全部 GPS 民用信号。
+- Galileo：采用 European GNSS Service Centre OS SIS ICD Issue 2.2（2025-11），§5.1.7 GST−UTC 与 §5.1.8 GST−GPS；需继续审查后续正式 issue、服务公告及 Galileo 时间参考实现维护文档。
+- BeiDou：采用 China Satellite Navigation Office BDS-SIS-ICD-B3I-1.0（2018-02），§5.2.4.18–5.2.4.20；需取得并审计 B1C、B2a/B2b 与 BDS-3 CNAV 的官方当前 ICD，当前不把第三方镜像当作官方修订依据。
+- GLONASS 尚未纳入本节对照；需独立审查官方 ICD 的 UTC(SU) 时间标记、日历字段、闰秒/UTC 参数和 UT1/EOP 广播合同，不从 GPS/Galileo/BDS 规则推断。
+- 2027-05-20 之后的实际导航电文字段/服务政策、星座控制段更新、接收机固件兼容性和 ZED-F9P 原始输出均未完成验证，标记为 `需要官方后续规范/服务公告/实物或授权，未完成`。
+
+本节为官方 ICD 静态审计和设计合同，不是实际导航电文抓取、解码器实现或设备验证；未运行测试。
