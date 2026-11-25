@@ -15,11 +15,11 @@ class TestLivoxUdpSequenceAudit(unittest.TestCase):
         audit = LivoxUdpSequenceAudit()
         self.assertEqual(observe(audit, 65534), "first_packet")
         self.assertEqual(observe(audit, 65535), "in_order")
-        self.assertEqual(observe(audit, 0, frame=8), "frame_boundary")
+        self.assertEqual(observe(audit, 0, frame=8), "frame_reset_candidate")
         self.assertEqual(observe(audit, 1, frame=8), "in_order")
         report = audit.report()
         self.assertEqual(report["missing_counter_values_estimated"], 0)
-        self.assertEqual(report["events"]["frame_boundary"], 1)
+        self.assertEqual(report["events"]["frame_reset_candidate"], 1)
 
     def test_forward_gap_and_late_recovery(self):
         audit = LivoxUdpSequenceAudit()
@@ -45,19 +45,26 @@ class TestLivoxUdpSequenceAudit(unittest.TestCase):
         audit = LivoxUdpSequenceAudit()
         observe(audit, 0, frame=10)
         observe(audit, 5, frame=10)
-        self.assertEqual(observe(audit, 0, frame=11), "frame_boundary")
+        self.assertEqual(observe(audit, 0, frame=11), "frame_reset_candidate")
         self.assertEqual(observe(audit, 0, frame=11), "duplicate")
-        self.assertEqual(audit.report()["events"]["frame_boundary"], 1)
+        self.assertEqual(audit.report()["events"]["frame_reset_candidate"], 1)
 
-    def test_unexplained_reset_and_frame_change_without_reset(self):
+    def test_same_frame_counter_value_at_udp_zero_is_reset_candidate(self):
+        audit = LivoxUdpSequenceAudit()
+        observe(audit, 0, frame=10)
+        observe(audit, 5, frame=10)
+        self.assertEqual(observe(audit, 0, frame=10), "frame_reset_candidate")
+        self.assertEqual(audit.report()["events"]["frame_counter_unchanged_at_reset"], 1)
+
+    def test_frame_counter_change_without_udp_reset(self):
         audit = LivoxUdpSequenceAudit()
         observe(audit, 0, frame=2)
         observe(audit, 4, frame=2)
-        self.assertEqual(observe(audit, 0, frame=2), "unexplained_counter_reset")
-        self.assertEqual(observe(audit, 1, frame=3), "frame_change_without_counter_reset")
+        self.assertEqual(observe(audit, 0, frame=2), "frame_reset_candidate")
+        self.assertEqual(observe(audit, 1, frame=3), "frame_counter_changed_without_udp_reset")
         report = audit.report()
-        self.assertEqual(report["events"]["unexplained_counter_reset"], 1)
-        self.assertEqual(report["events"]["frame_change_without_counter_reset"], 1)
+        self.assertEqual(report["events"]["frame_counter_unchanged_at_reset"], 1)
+        self.assertEqual(report["events"]["frame_counter_changed_without_udp_reset"], 1)
 
     def test_large_gap_is_bounded(self):
         audit = LivoxUdpSequenceAudit(max_pending_gap=2)
