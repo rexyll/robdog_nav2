@@ -247,3 +247,47 @@ Classic PCAP 的 packet timestamp 按文件 magic 指定的微秒或纳秒精度
 scripts/tests/test_pcapng_reader.py 使用合成容器覆盖 PCAP microsecond/nanosecond 与 endian、PCAPNG interface link type、decimal/binary if_tsresol、signed if_tsoffset、EPB truncation、SPB 无时间戳和结构错误。合成测试不等于 Wireshark/tcpdump interoperability 或真实 Orin capture 验证。
 
 依据：IETF PCAPNG 格式草案的 IDB / EPB 定义及 if_tsresol、if_tsoffset 语义；其当前状态是 Internet-Draft，项目把它作为格式实现依据，不宣称其为已发布 RFC。
+
+
+## 13. PCAP 链路层 / IP / UDP 解码与 MID-360 流量提取
+
+新增：
+- `scripts/network_packet_decoder.py`：将 PCAP/PCAPNG packet record 解码为 UDP datagram 或明确 disposition。
+- `scripts/audit_mid360_pcap.py`：流式读取 classic PCAP/PCAPNG，筛选 MID-360 设备侧 UDP 端口，调用 v1.4.12 payload parser，输出 JSON 计数和少量样本。
+- `scripts/tests/test_network_packet_decoder.py`、`scripts/tests/test_audit_mid360_pcap.py`：合成帧与 payload 测试。
+
+### 13.1 支持的 capture link type
+
+按 IANA PCAP LinkType registry：
+- Ethernet (1)：EtherType IPv4/IPv6；支持 802.1Q C-tag (0x8100)、802.1ad S-tag (0x88A8) 和常见 0x9100 VLAN tag 的连续嵌套，最多 8 层。
+- Linux cooked capture v1 (113) 与 v2 (276)：分别解析 16-byte / 20-byte cooked header。
+- Raw IP (101)：按 IP version nibble 识别 IPv4/IPv6。
+- IPv4 (228) 与 IPv6 (229)：无 link-layer header 的专用 LinkType。
+- 其他 LinkType、Ethernet LLC/length frames、非 IPv4/IPv6 EtherType 返回 unsupported/non_ip，不猜测 payload 类型。
+
+### 13.2 IPv4 / IPv6 / UDP 边界
+
+IPv4 验证 version、IHL（含 options）、total_length 和捕获边界；IPv6 验证 base header / payload_length，解析 Hop-by-Hop、Routing、Fragment、AH、Destination Options、Mobility、HIP、Shim6 等扩展头，限制扩展头链最多 16 个。IPv6 jumbogram（payload_length=0）与 ESP opaque payload 当前不解析。
+
+IPv4 MF/fragment offset 非零，或 IPv6 Fragment header 表明数据报被分片时，统一返回 `fragmented`，不尝试仅凭单个分片解析 UDP，更不把首片当成完整 LiDAR UDP 包。IP 分片重组尚未实现；因此此类报文不会进入 MID-360 payload/CRC 统计。UDP length 必须至少为 8 且不越过 IP packet end，payload 仅截取 UDP length 所定义的范围。
+
+本实现不校验 Ethernet FCS、IPv4 header checksum 或 UDP checksum。NIC checksum offload、抓包点位置可能使 host capture 中的 checksum 字段看起来未完成；本阶段只做结构和长度边界审计，checksum validation 需要独立的 capture metadata / offload-aware 设计。
+
+### 13.3 MID-360 端口筛选合同
+
+Livox 官方 MID-360 v1.4.12 端口表规定设备侧端口：56100 control、56200 push、56300 point-cloud、56400 IMU、56500 log；56000 仅为广播设备发现端口。点云与 IMU 的 host receive port 可配置（文档示例默认 56301 / 56401），因此筛选默认依据设备侧 source port，不硬编码 host destination port。CLI 可通过 `--host-point-cloud-port` / `--host-imu-port` 显式增加 host-side port 映射，并可用 `--lidar-ip` 约束设备地址。端口映射只用于流量候选分类，不替代 MID-360 payload version/length/data_type/time_type/CRC 检验。
+
+`audit_mid360_pcap.py CAPTURE.pcapng --lidar-ip 192.0.2.10` 输出 capture packet dispositions、截断/畸形计数、流类型、有效 payload 数、CRC/格式错误、data_type/time_type 分布、接口及少量 packet 样本。Point-cloud port 的有效 payload 不允许 data_type=0；IMU port 预期 data_type=0，违反时单独计数。控制命令（56100）不进入点云/IMU payload parser。
+
+### 13.4 时间与证据边界
+
+报告同时保留 `capture_timestamp_ns`（抓包文件时间）与 `sensor_timestamp_ns`（MID-360 payload 时间），并显式声明两者之差不是网络延迟。PCAPNG interface ID / section index 继续保留，防止多接口/多 section 数据混淆。抓包记录若标记 truncated，直接计数并跳过；不尝试用 Ethernet padding 补足 IP/UDP payload。
+
+目前测试仅使用合成 Ethernet/VLAN/SLL/SLL2/raw-IP/IPv4/IPv6/UDP frames 和合成 MID-360 payload；没有真实 MID-360 pcap、设备 IP/host port 配置快照、Orin NIC offload 配置、tcpdump/Wireshark 互操作或 IP fragment reassembly 验证。尚未宣称设备级验收完成。
+
+依据：
+- Livox 官方 MID-360 Communication Protocol v1.4.12（端口表、UDP 封装、点云/IMU payload）；
+- IANA PCAP LinkType registry（101/228/229/276 等 link type）；
+- RFC 9542（EtherType 与 VLAN tag 语义）；
+- RFC 791 / RFC 8200（IPv4/IPv6 fragmentation 与 reassembly 语义）；
+- tcpdump LINKTYPE_LINUX_SLL2 结构说明（20-byte cooked v2 header）。
