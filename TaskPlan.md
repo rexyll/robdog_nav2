@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.66
+- 文档版本：v0.3.67
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -217,24 +217,20 @@
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. 为 ZED-F9P 明确实际 ROS 2 driver/UBX 输出配置；实现 NAV-PVT GNSSFixOK/carrSoln 与 NavSatFix 的同 GNSS epoch 配对及 clock-epoch 处理，再接入 quality gate；仅用实测 covariance、输出周期和时间延迟确定门限。
-1. 按供应商矩阵 V-06/V-13/V-16/V-19/V-21/V-22/V-28–V-32 向云深处取得正式接口、控制权、物理急停、电源、载荷与 CAD 书面答复。
-2. 向相机供应商确认两台 See3CAM_50CUG_CXXCC_BX_H01R1 的 GPIO 触发参数和匹配广角镜头。
-3. 确认 RTK 的 NTRIP/基站来源和部署测试区域。
-4. 继续完成质量/功耗/散热预算和初步安装 CAD，核实 3.6 kg 项目外设目标；重点获取 Lite3 每路辅助电源的额定电流。预算细节见 power_mass_budget.md。
-5. 保持 Livox/Point-LIO 的 x86_64 构建基线固定；为 Jetson AGX Orin aarch64 建立同版本交叉编译/原生构建验证，不能把 x86_64 pass 当作 Orin pass。
-6. 继续完成 A3–A10、A12 供应商确认和质量/电源/时间同步预算；A11 发行版策略已形成文档，实际 JetPack/Humble/Jazzy 构建矩阵待验证。
-7. 真实 Dynamic03 转换已通过：ros2 bag info 显示 59,749 条 CDR 消息（LiDAR 2,846、IMU 56,903）。GT↔raw-fix 逐条来源关联已获得强证据（时间戳最大差约 0.000712ms；诊断刚体拟合 RMSE 0.044mm），但 NavSatFix status=0 仅是普通未增强 STATUS_FIX，covariance_type=1 为近似协方差，RTK Fixed/GT 精度仍未认证。下一步 `git pull --ff-only origin main` 后重跑扩展版 `audit_m3dgr_gt_rtk_correspondence.py`，检查 NavSatFix frame/service/covariance 数值以及 `/ublox_driver/receiver_lla`、`receiver_pvt` 的真实类型/字段/首尾样本；不得做 nearest-time 猜配。依据字段确认 UBX fix flags、carrier solution、iTOW、accuracy/covariance、differential correction age 与 topic-device mapping，再确定 RTK 质量 Gate。原始 GT 不排序/去重；2,594 行候选不用于来源判断或 APE；不跑 evo、不做 Point-LIO 轨迹精度验证，直到来源质量、时钟、天线杆臂和 frame semantics 经证据确认。UrbanLoco P2 单独保留 provenance gate.
+1. Nav2 专项研究：按 `doc/Nav2/README.md` 的章节顺序完成架构、生命周期/任务流、生产者-消费者数据流、接口矩阵、算法插件、硬件适配、安全与验证设计；每份文档完成后回写本 TaskPlan。
+2. 继续推进 ZED-F9P 实际 ROS 2 driver/UBX 输出配置、四路消息 ROS adapter、clock epoch 与质量 gate；仅依据实测数据设阈值。
+3. 取得 Lite3 Venture 的正式 legged odometry、运动学/步态接口、SDK 控制权、急停、供电、载荷与 CAD 书面答复。
+4. 确认双 See3CAM GPIO 触发、镜头、双机同步和 Jetson USB3 带宽；完成载荷/供电/热设计/安装 CAD。
+5. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
+6. 保持 x86_64 与通用 ARM64 build、Jetson Orin 实机 build、仿真、HIL、真实机器狗验证分级记录；当前均不得混称。
 
 ---
 
 ## 4. 进度变更记录
 
-历史记录 v0.1–v0.3.54 已归档至 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。本表只保留最近影响当前基线的变更。
-
-| 日期 | 版本 | 变更 | 提交/证据 |
-|---|---|---|---|
-| 2026-11-24 | v0.3.55 | 新增 TUM GT 只读审计及 7 项测试；固定 M3DGR Livox ROS1 `offset_time`=ns/timebase/header 语义来源；确认 ROS1 `livox_ros_driver/CustomMsg` 与 Jazzy Point-LIO `livox_ros_driver2/msg/CustomMsg` 类型不同，记入显式类型映射/重序列化门禁；bag 5/5、GT 7/7、UrbanLoco 13/13 CI [45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success | TUM audit 0f42bcc5d1a5be5664696957fd187c1f7045b5d3; tests 0627d2afd732b5849c1e3e660a67550fdfc8bdb5 / 59b84dba906e744b1f049ab918537671ee63af94; Livox audit 23c334be6377bf19ead94f39d636a876cd98c819; docs f3ef67656deb932633957c7b13c825ba4ba381cb / cc107912a11d4bb46379555870012ac54f95dee2; CI 45416922661 |
+- v0.1–v0.3.54 历史变更见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
+- v0.3.55–v0.3.66 的完整 TaskPlan 快照（含当时进度、阻塞、证据和变更表）已归档：[TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
+- 2026-11-25 / v0.3.67：保存 Dynamic03 数据审计当前结论；启动 Nav2 专项研究，建立 `doc/Nav2/` 文档体系。文档研究以 Nav2 Jazzy 官方资料为主，分清 ROS/Nav2 通用事实、项目架构建议和待硬件/供应商确认项；当前只完成设计文档，不代表 Nav2 部署、仿真或实机验收。| 2026-11-24 | v0.3.55 | 新增 TUM GT 只读审计及 7 项测试；固定 M3DGR Livox ROS1 `offset_time`=ns/timebase/header 语义来源；确认 ROS1 `livox_ros_driver/CustomMsg` 与 Jazzy Point-LIO `livox_ros_driver2/msg/CustomMsg` 类型不同，记入显式类型映射/重序列化门禁；bag 5/5、GT 7/7、UrbanLoco 13/13 CI [45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success | TUM audit 0f42bcc5d1a5be5664696957fd187c1f7045b5d3; tests 0627d2afd732b5849c1e3e660a67550fdfc8bdb5 / 59b84dba906e744b1f049ab918537671ee63af94; Livox audit 23c334be6377bf19ead94f39d636a876cd98c819; docs f3ef67656deb932633957c7b13c825ba4ba381cb / cc107912a11d4bb46379555870012ac54f95dee2; CI 45416922661 |
 | 2026-11-24 | v0.3.56 | 新增 M3DGR Dynamic03 受控 ROS1→ROS2 转换器：官方 SHA256 + matching audit JSON 双门禁；合成转换/回读 4/4；真实 bag/GT 尚待审计 | converter/test/docs/CI commits ... | 
 | 2026-11-24 | v0.3.57 | 真实 Dynamic03 bag audit 通过，发现 MID-360 Driver2 类型；GT 4,269 行 TUM 格式但有 1,675 duplicate/728 backwards，阻断 evo | converter 97e9211ace2c83dce6ca1cc1f357a307a0669f73; tests b36e365a6ccb9c17c3aad7be07f049ba41a6758b; docs 96fabf895242f75a39c3e3393542d6d7bd41e771; CI 45423779787 |
 | 2026-11-24 | v0.3.58 | TUM audit 增加位姿/时间戳异常关联统计；CI [45424213139](https://github.com/rexyll/robdog_nav2/actions/runs/45424213139) success | audit 9b67ed712d4618f0551315921313bca6d65154ea; tests e6f0a4fdef2fc3aa4bd53a7a448ad7ff58262771; docs 3a66a48e14b35369f76c0f4a0d382096617685a1
@@ -301,8 +297,11 @@
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
+- [Nav2 专项研究总目录](doc/Nav2/README.md)
 - [系统架构](docs/architecture/system_architecture.md)
 - [传感器融合](docs/architecture/sensor_fusion.md)
 - [Nav2 导航和避障](docs/navigation/nav2_navigation.md)
 - [四足地形/安全验证](docs/validation/safety_and_validation.md)
 - [双目 RGB 深度感知](docs/perception/stereo_obstacle_perception.md)
+
+- [TaskPlan v0.3.66 基线快照](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)
