@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.63
+- 文档版本：v0.3.64
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -240,6 +240,7 @@
 | 2026-11-24 | v0.3.59 | 新增 TUM pose-run non-authoritative candidate generator，6/6 测试；CI 45425579274 success | generator f5d1ef3 / fe362365; tests 199f8229; workflow 34d29c5a; CI 45425579274 |
 | 2026-11-24 | v0.3.60 | 真实 Dynamic03 ROS2 转换/ros2 bag info 通过；新增只读逐行 GT↔raw-fix 时间/ENU 关联审计，CI [45427945207](https://github.com/rexyll/robdog_nav2/actions/runs/45427945207) success | audit 96303cb6; tests 4cdf5170; workflow 3c78e0dc; docs 823f4a30; CI 45427945207 |
 | 2026-11-25 | v0.3.61 | 真实 GT↔raw-fix 逐条时间/空间来源关联获得强证据；纠正 NavSatStatus=0 为普通 STATUS_FIX；扩展 frame/service/covariance 和两个 u-blox topic 的消息字段快照审计，新增回归测试；RTK Fixed/GT 精度仍未认证 | audit/tool+tests/docs/TaskPlan; CI pending |
+| 2026-11-25 | v0.3.64 | 修复 `/ublox_driver/range_meas` 的 NumPy 数组字段布尔判定异常：`status`/`CN0`/`LLI` 显式处理 `None` 并归一化序列，且将 NumPy 浮点纳入 CN0 统计；新增 NumPy 数组回归测试。数据集工具 CI [run 45550752872](https://github.com/rexyll/robdog_nav2/actions/runs/45550752872) success；该 CI 为合成/纯逻辑测试，真实 Dynamic03 bag 扩展审计仍待 VM 重跑 | audit `4d2ca36539a2b55b1a37dee4960d9441899f2df1`; tests `c4d9590a5fbf817fedfdada42b93f9e446c4330d`; CI 45550752872 |
 
 ---
 
