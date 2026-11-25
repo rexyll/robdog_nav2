@@ -504,3 +504,131 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 - 下一阶段应先实现/审计 transport-independent `GnssEpochCoordinator`（名称暂定）接口与 GPS week/receiver generation mapper 的状态转移规格，再决定是否拆分 ROS adapter package。
 - GNSS ACCEPTED 只代表该历元满足 GNSS 输入质量 Gate；不自动代表 global EKF/map pose 有效。Global filter 还需检查 local TF 对齐、measurement age、covariance、epoch 与 map→odom 发布连续性。
 - 本节为本项目固定分支源码和测试静态审计；没有新增测试运行、ROS 构建、真实 ZED-F9P bag、HIL 或硬件证据。
+
+
+## 21. GNSS / LIO / EKF / Nav2 跨组件 Epoch 与 Reset Coordinator 契约
+
+本节将 §19 的 validity Gate 与 §20 的 GNSS 纯算法 core 组合成可实现、可单测的系统事务设计。**这是项目侧设计合同，不代表当前仓库已经实现 coordinator，也不代表 robot_localization、Point-LIO 或 Nav2 原生支持跨节点原子 reset。**
+
+### 21.1 先区分四种 epoch，禁止混成一个计数器
+
+| 标识 | 所属对象 | 递增条件 | 不应触发的动作 |
+|---|---|---|---|
+| `estimator_epoch` | Point-LIO / LIO estimator 生命周期 | LIO map/state 被清空、重初始化、不可连续恢复的时钟回退/设备重启 | 单纯 GNSS FIX↔FLOAT 不应重置 LIO |
+| `local_odom_epoch` | local state estimator 的连续里程计坐标系 | local EKF 被 reset/reinitialize，或 odom 原点/状态发生不连续变化 | global GNSS correction 丢失不应重置健康的 local odom |
+| `gnss_receiver_generation` | 接收机时钟/启动生命周期 | 接收机重启、GPS week/iTOW 映射失效后重新建立、source clock identity 改变 | 单纯 RTK FIX↔FLOAT 不应递增 generation |
+| `map_epoch` | global map / map→odom 解释域 | map 原点、地图内容坐标解释、global localization datum 或地图版本发生不兼容变化 | 单纯 GNSS 暂时降级但地图基准未改变，不应自动清空地图 |
+
+另需为 reset transaction 分配独立单调 `reset_transaction_id`，以及各组件 `component_reset_generation`。所有 ID 在系统进程重启后不得被误认为仍处于旧生命周期；启动时必须创建新的 boot/session identity。跨进程持久化或 ROS 消息中使用复合 identity（boot UUID + uint64 counter），不能只依赖易重置的本地计数器。
+
+### 21.2 组件 reset ownership
+
+| 组件 | 唯一 reset owner | 必须清理/隔离 | 不得越权 |
+|---|---|---|---|
+| UBX epoch joiner | GNSS epoch coordinator | pending epochs、retired/tombstone 状态按 generation 规则重建；拒绝旧 generation callback | 不自行推断 GPS week 或接收机重启 |
+| RTK quality gate | GNSS epoch coordinator | source monotonic reference、recovery/reference history、连续 Fixed 计数 | 不自行变更 receiver generation |
+| GPS week / receiver time mapper | GNSS epoch coordinator 管理的 mapper | week anchor、iTOW unwrap、boot identity、source→ROS stamp mapping | 不以 host receive timestamp 伪造 receiver measurement time |
+| Point-LIO | LIO lifecycle supervisor（由系统 coordinator 编排） | LIO state/P、局部地图/ikd-tree、输入队列、时间基准、tracking health、TF epoch | GNSS generation 单独变化不得直接 reset LIO |
+| local EKF | local state-estimation supervisor | measurement queue/history、filter state、per-topic timestamps、TF buffer及 reset generation | global EKF/GNSS-only reset 不得重置仍健康的 local odom |
+| global EKF | global localization coordinator | GNSS measurement queue/history、global filter state、map→odom 关联与有效性 | 不得擅自发布与 local EKF 冲突的 odom→base_link |
+| elevation/map layers | map lifecycle coordinator | 与旧 estimator/map epoch 关联的动态/高程观测；保留或清空静态地图必须有明确策略 | 不得把旧 epoch 数据重新标为当前观测 |
+| Nav2 Planner/Controller/Costmap | navigation health supervisor | 阻止新 goal、取消受影响 goal、阻止无效 pose 进入控制；按需清理 costmap | Nav2 action 的 TF_ERROR/零速度不能代替 reset coordinator |
+| 四足平台 adapter / watchdog | 平台安全控制器 | 停止请求、命令超时、执行反馈与急停状态 | 软件 reset 成功不得推断平台已停止 |
+
+### 21.3 触发事件与最小影响范围
+
+1. **GNSS RTK FIX→FLOAT/SINGLE/NO_FIX**：只撤销 GNSS measurement validity，global localization 进入 DEGRADED/MAP_INVALID；若 local odom 健康则保留。默认不递增 receiver generation，不 reset joiner/gate 的时钟身份，不 reset LIO/local EKF。停止使用旧 GNSS fix 作为新观测。
+2. **GNSS receiver reboot / GPS week anchor 丢失 / source clock identity 改变**：递增 `gnss_receiver_generation`，执行 GNSS 子事务：隔离旧 generation 的四路缓存、reset quality gate、重建 time mapper；global EKF 暂停接收 GNSS，检查其旧 measurement history，必要时 reset global filter 或丢弃 GNSS 测量。local EKF/LIO 不随之自动 reset。
+3. **Point-LIO 输入时钟回退、设备重启或 LIO map/state 被重置**：递增 `estimator_epoch`。若 LIO 是 local EKF 的唯一/关键状态来源且无法证明状态连续，则 local pose validity 撤销并进入 local reset transaction；否则仅隔离 LIO 输入，保留经独立腿式里程计验证的 local odom。是否递增 `local_odom_epoch` 由 local filter 是否被 reset 决定。
+4. **local EKF 自身 reset 或 odom 原点改变**：递增 `local_odom_epoch`，旧 `odom→base_link` 历史、依赖旧 odom 的局部地图/规划全部失效。Nav2 必须暂停，不能将新 odom 原点伪装成连续旧 frame。
+5. **global datum/map origin 改变**：递增 `map_epoch`，暂停 global planner，清理/重投影与旧 map frame 绑定的地图和目标。若只是 GNSS 短时中断、global EKF 保持原 datum，则不递增 map epoch。
+6. **ROS time rewind / bag loop**：检测 clock epoch 变化。不能只依赖 robot_localization 的 `reset_on_time_jump`；必须停止输出消费、隔离旧 ROS-time measurements/TF、清理相关队列并显式发起 transaction。host steady clock freshness 与 ROS clock epoch 必须分开。
+7. **仅 Nav2 Costmap observation stale**：不触发 LIO/RTK/EKF reset；只令受影响 costmap invalid，禁止相关规划/控制，按传感器恢复和 map-layer 策略重建。
+
+### 21.4 Reset transaction 状态机与顺序
+
+Coordinator 必须由单一串行事件处理器（或等价的严格互斥状态机）处理触发事件，不能让多个 ROS callbacks 并发地分别 reset 各组件。推荐阶段：
+
+1. `DETECTED`：记录触发源、旧/新 epoch、时间域、原因码、关联组件和 transaction ID；相同事件去重，重复命令幂等。
+2. `QUIESCING`：冻结新导航 goal；取消受影响 Planner/Controller actions；向 command arbiter 发 stop request；平台 adapter/watchdog 确认执行状态。未确认停车时不得声称安全停稳，按平台安全策略升级。
+3. `INVALIDATING`：先发布新 transaction 的 invalidation barrier。所有 producer/consumer 检查 boot identity、epoch 和 transaction generation；拒绝迟到的旧 epoch 数据。此时 pose/map validity 均 fail-closed。
+4. `DRAINING`：停止相关输入回调进入下游，等待 in-flight callback/worker 退出；清空 ROS message filters、同步器、应用队列、TF buffer 中受影响的历史。不得仅清理算法内部 deque 而保留外部缓存。
+5. `RESETTING_COMPONENTS`：按影响范围调用组件唯一 owner 的 reset。GNSS-only transaction 不 reset LIO/local EKF；local odom discontinuity transaction 则按依赖图 reset local EKF、global alignment、局部地图和 Nav2。
+6. `REBASING`：建立新 receiver time mapping、local odom identity、map datum/epoch 和 TF authority。确认唯一 TF 发布者，等待同 epoch 的 transform 链完整。
+7. `WARMING_UP`：只接收新 epoch 数据，等待 LIO tracking、GNSS gate（若该事务需要 GNSS）、EKF measurement、TF freshness、Costmap 成功更新及平台 feedback 各自通过质量门。每个子系统必须报告自己的 last accepted measurement，不可用 timer tick 代替。
+8. `COMMITTING`：Coordinator 原子发布 transaction committed 状态和新 validity snapshot；解除 stop/goal inhibit 前，重新验证平台处于可运动状态、急停未触发、命令通路健康。
+9. `COMMITTED`：记录 transaction outcome、各组件 generation、耗时与诊断。恢复导航由上层重新发 goal，不自动恢复旧的 FollowPath 控制流。
+10. 任一阶段失败进入 `ABORTED_FAIL_CLOSED`：保持运动 inhibit、相关 pose/map invalid，保留可诊断现场；不得回滚成“旧状态仍有效”。人工/上层策略决定重试或人工介入。
+
+事务的“原子性”是**逻辑可见性原子性**：在 COMMIT 前所有受影响 consumer 都看到 invalid/inhibited；COMMIT 后才看到新 epoch 的一致快照。ROS 2 多节点不提供跨节点数据库式原子提交，因此需要 barrier、ack、generation fencing 和超时失败关闭来实现。
+
+### 21.5 跨组件数据接受规则
+
+每条状态/观测/TF/命令至少携带或可关联：
+- boot/session identity；
+- 相关 `estimator_epoch`、`local_odom_epoch`、`gnss_receiver_generation`、`map_epoch`（不相关字段显式标记 N/A，不能填 0 冒充有效）；
+- source measurement timestamp + source clock identity；
+- ROS header timestamp + ROS clock epoch；
+- host steady receive timestamp；
+- producer validity、quality reason、covariance validity；
+- 对于 reset 相关消息，`reset_transaction_id` 和 component generation。
+
+消费者规则：
+- epoch 不匹配、boot identity 不匹配、已撤销 generation、时间域无法映射、stamp 回退或 freshness 不合格：拒绝，不做“尽力接受”。
+- 同一 epoch 的重复 stamp 是否可接受由具体传感器合同定义；GNSS 完成 epoch 不得重复向 navsat_transform 发布。
+- 旧消息不能因 ROS queue 延迟、TF buffer 保留或 bag loop 在 reset 后重新进入系统。
+- `NavSatFix` 只作为 GNSS observation payload；只有与同一 ACCEPTED decision/epoch 绑定的记录才可送 global EKF。质量状态应并行发布，并由 adapter 保证一致性。
+- `map→odom` 只有 global filter 在同一 measurement time 查询到同一 `local_odom_epoch` 的 `odom→base_link` 且 covariance/age 合格时才有效；否则 map pose invalid。
+- Command arbiter 只接受当前有效 epoch 的速度命令；旧 epoch 命令必须丢弃，stop/inhibit 命令优先级高于普通导航命令。
+
+### 21.6 Reset ownership 与动作矩阵
+
+| 事件 | GNSS joiner/gate/mapper | LIO | local EKF / odom | global EKF / map | Nav2 / 平台 |
+|---|---|---|---|---|---|
+| RTK Fixed→Float | gate invalid；generation 不变 | 保持 | 保持 | 停止 GNSS 更新；global 降级 | global goal inhibit；若 local-only safe behavior 未验证则停车 |
+| Receiver reboot/week remap | 新 generation、清缓存、reset gate/mapper | 保持 | 保持 | 隔离旧 GNSS queue/history；按需 reset global | 停止 global navigation，确认 map datum 后恢复 |
+| LIO lost but independent leg odom healthy | 保持 | LIO reset/重新初始化 | local EKF可按融合策略继续，但标记 LIO source invalid | 取决于 local validity | 降速或停止，禁止旧 LIO TF 冒充有效 |
+| LIO reset is local pose authority | 保持 | 新 estimator epoch | local EKF reset；新 local_odom_epoch | global alignment 重建；旧 map→odom invalid | 停止、清局部地图、重新规划 |
+| local EKF reset | 不必 reset | 不必 reset（除非依赖闭环） | 新 local_odom_epoch | 重新建立 map→odom；旧历史隔离 | stop + cancel goals + costmap/plan epoch fencing |
+| global datum/map change | 视来源决定 | 保持 | 保持 | 新 map_epoch，global filter/datum 重建 | 仅 global navigation inhibit，local odom 保持 |
+| ROS clock rewind / bag loop | 重新校验 receiver mapping | 检查 LIO 时间/输入 epoch | 显式 reset/flush，不能依赖参数自动处理 | 显式 reset/flush | 所有时间相关 consumer inhibit，平台保持安全态 |
+
+### 21.7 最小可实现接口（先 transport-independent）
+
+建议先实现纯算法层状态机，不先引入 ROS 依赖。接口草案（字段语义合同，不是已提交代码/API）：
+
+- `ResetTrigger`: `trigger_id`、`reason_code`、`source_component`、旧/新 epoch proposals、source/ROS/steady timestamps、受影响 scope。
+- `ResetPlan`: transaction ID、需要 inhibit 的 consumer、组件 reset 顺序、需要等待的 acknowledgements、保留/失效的数据域。
+- `ComponentResetAck`: component name、boot identity、old/new generation、reset success、queue/history drained、TF authority ready、diagnostic reason。
+- `ValiditySnapshot`: 独立的 `pose_valid_local`、`pose_valid_global`、`gnss_measurement_valid`、`lio_tracking_valid`、`local_costmap_valid`、`global_costmap_valid`、`platform_stopped_confirmed` 与 epoch tuple。
+- `ResetOutcome`: COMMITTED/ABORTED_FAIL_CLOSED、各组件 ack、失败阶段、原因码和可恢复性。
+
+禁止单一 `system_ok=true` 掩盖 GNSS 无效但 local odom 有效、或 local pose 有效但 global map 无效等差异。
+
+### 21.8 必须先于 ROS adapter 的纯算法测试
+
+1. GNSS-only generation change 不改变 LIO/local_odom epoch；RTK FIX↔FLOAT 不增加 receiver generation。
+2. Receiver reboot 递增 generation；旧四路 UBX pending/late/duplicate 数据不能穿过 reset barrier；旧 gate recovery count 不得继承。
+3. GPS week rollover（连续时间）不触发 reboot generation；同 iTOW 不同 GPS week 不得误配；week unknown/ambiguous 必须 fail closed。
+4. local EKF reset 必须递增 local_odom_epoch；global datum reset 必须递增 map_epoch；仅 GNSS dropout 不清空健康 local odom。
+5. reset 事件重复、乱序、并发到达时 transaction ID 幂等且串行；旧 ack/迟到 ack 不得提交新 transaction。
+6. drain/ack timeout、组件 reset 失败、TF authority 冲突、平台 stop 未确认时进入 ABORTED_FAIL_CLOSED，保持 inhibit。
+7. COMMIT 前旧 epoch measurement/TF/cmd 全拒绝；COMMIT 后只接受新 epoch；跨 boot identity 的计数器碰撞不能误接受。
+8. local/global pose validity 独立；global GNSS 失效不误伤 local pose，local odom reset 必须使 global map→odom 失效。
+9. ROS clock rewind 与 host steady clock 前进同时出现时，host freshness 不能掩盖 ROS time epoch 变化；bag loop 不得复用旧 TF/measurement。
+10. 状态快照序列化/反序列化、崩溃恢复、进程重启、重复命令与故障注入的 property-based tests。
+
+### 21.9 尚未冻结的设计决策
+
+- LIO lost 后 local EKF 是否可依赖 Lite3 腿式 odometry 独立维持：等待厂商正式 odometry 接口、IMU 融合关系与协方差证据。
+- GNSS receiver generation 的可靠 reboot 判据：等待 ZED-F9P 原始 UBX/PVT/STATUS、GPS week 来源、boot/reset indicator 和实机日志。
+- global EKF 在 GNSS generation 改变后是保留 map datum 还是 reset global filter：按 map datum continuity 与历史 measurement queue 审查，不能一概而论。
+- map epoch 变化时静态地图、elevation map、动态障碍层分别保留/重投影/清空的策略：需有地图坐标基准和观测来源合同。
+- stop confirmation 的速度阈值、持续时间、ack timeout、warm-up 样本数：必须由 Lite3 驱动语义、实机日志、bag/HIL 与安全风险分析标定；当前不填猜测数值。
+
+### 21.10 证据与实施边界
+
+- §19：Navigation2 Jazzy 固定 SHA 的 Costmap/Planner/Controller 静态源码证据。
+- §20：本项目 GNSS core 与测试静态代码证据；本轮未重新运行测试。
+- 本节：基于上述证据形成的 E3 项目设计合同/待验证方案；不是实现完成或硬件安全认证。
+- 未新增 ROS package、未修改现有算法核心、未改 license/maintainer metadata，未运行 ROS build、bag、仿真、HIL 或机器狗实测。
