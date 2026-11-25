@@ -288,6 +288,8 @@
 
 ## 4. 进度变更记录
 
+- 2026-11-25 / v0.3.133：审查现有 MID-360 rosbag 审计工具，发现 `SequentialReader.read_next()` 返回的 bag receive timestamp 被丢弃；扩展 `audit_livox_rosbag_timing.py`，分别统计 LiDAR/IMU bag receive timestamp、单调性及 receive-minus-sensor 的描述性差值，明确其不等于网络延迟/时钟偏差，除非时钟域映射已证实。固定 Driver 2 CustomMsg/CustomPoint 消息定义审计确认 CustomMsg 不含原始 UDP 的 time_type/time_interval/udp_cnt/frame_cnt/CRC；新增 doc/Navigation/09 §10，规定原始 UDP pcap、ROS bag、PTP pcap、HMS 诊断双轨采集与证据边界。新增配对统计纯算法单测，并修正 P2 script workflow：允许 nav 分支触发，纳入本工具及测试文件的 py_compile/unittest。CI 尚未取得运行结果；未运行 ROS 2 Jazzy/rosbag2_py 真实 bag 测试，未取得设备 pcap；N1 继续。
+
 - 2026-11-25 / v0.3.132：新增 doc/Navigation/16 §18，形成 GM/交换机/Orin/MID-360 三观察面 PTP 抓包矩阵、UDP 319/320 与 L2 0x88f7 宽过滤、TShark 本机字段枚举与逐包解码流程、sourcePortIdentity/domain/sequenceId 关联规则、Livox time_type/HMS 同 run_id 跨层核验，以及 pcap capture timestamp 与 NIC raw hardware timestamp 的证据隔离。新增 TIME-053..056。核对 Livox 官方 MID-360 two-step/E2E 机制、Wireshark PTP 当前字段表及 Linux kernel SO_TIMESTAMPING 文档。尚无项目设备 pcap；未在目标机运行 tshark，字段名需按目标版本枚举；未完成硬件验证，N1 继续。\n\n- 2026-11-25 / v0.3.131：新增 `tools/collect_ptp_host_inventory.sh`，作为 TIME-045/TIME-052 的只读目标机基线采集器；收集 JetPack/L4T、kernel、device-tree、NIC driver/firmware、ethtool timestamp capability、PHC/sysfs、linuxptp/ethtool 包版本、clock discipline services/processes、PTP 相关内核日志、IRQ/offload。脚本不改网卡、不操作 PTP daemon、不调系统时钟，输出目录 0700 并生成 SHA256SUMS；新增 `doc/Navigation/16` §17，定义执行方法、采集字段、平台/NIC/时钟纪律 Gate 和人工判读要求。已提交并回读；尚未在真实 Orin、CI 或容器执行 bash -n/shellcheck，故状态为待目标环境首次运行验证。N1 继续。
 
 
