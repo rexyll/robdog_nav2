@@ -255,7 +255,7 @@
 
 ## 4. 进度变更记录
 
-- 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。提交待本轮 TaskPlan 更新后回填。
+- 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。首轮提交：Nav2 README 042f4000；Navigation README 7234a0ae；架构文档 d4e862df；数据流文档 8db9087f；TaskPlan 本轮提交 a3dffc63（本次提交之后以仓库 HEAD 为准）。
 
 - v0.1–v0.3.54：见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
 - v0.3.55–v0.3.66 完整快照：见 [TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
