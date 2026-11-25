@@ -221,3 +221,100 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 3. robot_localization EKF 会将小于 `1e-9` 的测量 covariance 对角元素抬到 `1e-9`；零 covariance 输入可能导致过度信任，Point-LIO 输出 covariance 缺失必须作为融合阻断 Gate。
 4. navsat_transform 对 NavSatFix 只排除 NO_FIX/NaN，不负责 RTK 解状态和差分龄期质量门控；且会直接使用 position covariance。RTK adapter 必须先验证质量状态和 covariance type。
 5. 双 EKF + navsat_transform 仍是候选拓扑，不是最终选型；四足系统必须保留 3D 状态，并处理同一 IMU 的信息相关性。
+
+
+## 12. Point-LIO tracking health、输入中断与 reset 生命周期审计
+
+固定源码：CTU-MRS Point-LIO `e7ff034328b263ab92b06252d91acba1dd969b6d`，重点文件：
+- `src/laser_mapping.cpp`（blob `30fe3a5b3650899d3d46e35d2ce03dcc1261f065`）
+- `include/imu_processing.hpp`（blob `61007da2d8edac33d175c31a91d8a3f0947c8523`）
+- `src/estimator.cpp`（blob `8555f72748e63060e057c30b2d564171d052f2b4`）
+
+### 12.1 初始化标志不是 tracking health
+
+- `is_initialized_` 在 `initialize()` 完成时置为 true；随后 LiDAR/IMU callbacks 和主处理 timer 只检查这个一次性启动标志。
+- IMU 初始化另有 `imu_need_init_` 和 `init_iter_num`；`ImuProcess::Process()` 在初始化样本不足时返回，输入 IMU 为空时也直接返回。
+- 在本次固定文件范围内，没有发现 tracking-valid/degraded/lost 状态机、持续残差/创新门限、退化检测结果向外发布、covariance health gate 或 DiagnosticArray/diagnostic_updater 输出。
+- 因此 `is_initialized_ == true` 仅表示节点完成参数/对象初始化；不证明当前 LiDAR/IMU 连续、地图匹配有效或估计可用于导航。Odometry publisher 没有健康状态字段/独立有效性 topic。
+
+### 12.2 时间回退与 bag loop 的实际行为
+
+- `callbackLivox()` / `callbackStandardPC()` 收到比 `last_timestamp_lidar` 更早的 header stamp 时，只记录 `loop back, clear buffer` 并 return；在这两个 callback 中未看到清空 lidar/time queues、重置 last timestamp 或发出 reset 状态。
+- `callbackIMU()` 先用 `header.stamp - time_lag_imu_to_lidar` 与 `last_timestamp_imu` 比较；回退时记录 `loop back, clear deque` 后 return，但该路径也没有实际清空 deque。
+- `flg_reset` 在类成员中初始化为 false，主处理 timer 存在 if 分支调用 `p_imu->Reset()`；在固定 `laser_mapping.cpp` 全文件中只找到声明/读取，未找到任何置 true 的赋值。因此该 reset 分支在当前固定源码中不可由已审计代码触发。
+- 即使该分支被触发，`ImuProcess::Reset()` 只重置均值加速度/角速度、`imu_need_init_` 和初始化计数；它本身不重置 Point-LIO ESEKF 状态与 covariance、ikd-Tree 地图、LIO 时间戳/队列、输出 TF 连续性或 map epoch。不能把它当成完整 estimator reset/relocalization。
+- 结论：bag loop、ROS clock rewind、设备重启/时间域切换时，当前固定实现没有形成可证明的全链路 reset contract。实际运行可能停留在旧时间戳/旧队列状态；必须在项目 adapter/生命周期管理层检测并显式隔离新旧 epoch。
+
+### 12.3 缺少输入 freshness 与失效传播
+
+- `sync_packages()` 需要 LiDAR 与 IMU 队列均有数据，并等待 `last_timestamp_imu >= lidar_end_time`；未满足时返回 false，主处理不消费当前扫描。
+- 这只是同步可用性条件，不是输入 freshness、最大队列龄期、IMU 覆盖率、点云丢帧率或估计退化检测。
+- 已发现的 `time_lag_imu_to_lidar` 仍只修正 IMU 回退 gate 时间，队列保存原始消息，后续 scan coverage/integration 读取原始 header stamp；必须先统一 IMU 样本时间轴，再定义 tracking health。
+- 不得将持续发布（或最后一条有效 Odometry 仍留在 topic/TF buffer）视为健康；下游必须依据最后有效测量时间和 health 状态拒绝 stale pose。
+
+### 12.4 四足导航要求的 health 状态合同
+
+项目侧新增 `robodog_lio_health`（名称暂定）状态输出，不修改上游 fork 的本轮审计范围。最低字段：
+- `header.stamp`：健康状态评估时刻；另带 last accepted LiDAR/IMU measurement stamp，全部注明 clock domain。
+- `state`：`INITIALIZING` / `TRACKING` / `DEGRADED` / `LOST` / `RESETTING`。
+- `tracking_valid`、`pose_valid`、`covariance_valid`；不可只用一个 bool 表达所有质量。
+- LiDAR/IMU age、scan/IMU queue depth、丢弃/乱序计数、scan-end IMU coverage、处理延迟、最近 reset/clock epoch ID。
+- 可用时包含有效匹配点比例、残差/innovation、迭代收敛信息、局部几何退化指标；若算法未暴露必须标 unavailable，不造数。
+- `TRACKING` 需同时满足输入新鲜、时间单调、scan/IMU 覆盖、估计数值有限、匹配质量和 covariance 合格；短时阈值待真实 bag 标定。
+- `DEGRADED`：不确定度或观测质量接近门限，限制速度/禁用高风险地形，不能继续按 nominal covariance 融合。
+- `LOST/RESETTING`：停止将 LIO pose 作为融合测量；保持 local odom 的连续性策略由融合层决定，必要时触发安全停车/降级；完成重初始化或 relocalization 后必须经过连续合格样本滞回才能恢复。
+- Reset/relocalization 必须增加单调递增 `estimator_epoch`，并明确 map reset、局部 odom continuity、TF authority、历史测量清空、下游 costmap/map 重新注册行为。
+
+这些是项目侧接口/安全要求，不是当前 Point-LIO 已具备能力。
+
+## 13. robot_localization Jazzy 延迟测量、重复时间戳与时钟跳变审计
+
+固定源码：`cra-ros-pkg/robot_localization @ fea7fc3dcad81c533121e4aa2fb1087a0565d8cc`，重点文件 `src/ros_filter.cpp`、`src/filter_base.cpp`、`src/ekf.cpp`、`src/navsat_transform.cpp`。
+
+### 13.1 每 topic 时间顺序与跨 topic lag 是两种情况
+
+- pose/twist/IMU/odometry callbacks 维护每 topic 的 `last_message_times_`。同一 topic 的较旧 stamp 被拒绝；相等 stamp 通过 `<=` 条件并入队，因此 duplicate stamp 并非自动拒绝。
+- `integrateMeasurements()` 用 priority queue 按 measurement stamp 排序；当队首时间早于 filter 最新 measurement time 且 `smooth_lagged_data=true` 时，尝试 `revertTo(first_stamp - 1ns)`，再重放历史测量。
+- 因为同一 topic 的倒序消息已在 callback 被拒绝，lag smoothing 的主要适用情形是某个 topic 的测量相对其他 topic/当前 filter 状态较晚到达，而不是修复同一 topic 任意乱序流。
+- 若 history 不足，`revertTo()` 返回 false；当前 `integrateMeasurements()` 仍会继续处理队列中的测量，而不会将其标记 invalid 或自动 reset。不能把开启 smooth_lagged_data 理解为所有迟到测量都安全可恢复。
+- `history_length` 应覆盖实测最大端到端迟到时间，并额外留出调度/抖动余量；超出窗口时项目 adapter 应丢弃或隔离该测量并发出诊断，而不是依赖 filter 自动处理。
+
+### 13.2 sensor_timeout 是预测触发，不是健康门控
+
+- 没有新 measurement 时，达到 `sensor_timeout` 后，`integrateMeasurements()` 会令 filter predict 到当前时间；它不会自动把输出标记为 stale/invalid，也不等同于传感器健康检查。
+- 默认 `predict_to_current_time=false`；当 sensor timeout 触发时会启用本轮预测。预测输出在消息层仍可能是有限、可发布的状态，但其可信度取决于过程噪声和失联时长。
+- 导航侧必须另行检查各传感器 last-valid stamp、预测时长、covariance 上界和融合输入质量；超过可接受 coast 时间后降级/停车。
+
+### 13.3 reset_on_time_jump 参数与显式 reset
+
+- Jazzy 源码声明 `reset_on_time_jump` 参数，但 pose/twist callback 中与之相关的时间跳变处理分支目前是注释代码；在本次固定 `ros_filter.cpp` 全文件中未发现该参数的有效执行路径。因此不能依赖设置该参数自动处理 ROS clock rewind。
+- 显式 reset service 会清理 measurement/history、TF buffer、各 topic last-message timestamps，并把 filter 置为 uninitialized；这是明确的状态重置路径，但调用方仍需协调所有传感器 epoch、bag loop 与 map/odom TF 连续性。
+- set_pose 路径记录 `last_set_pose_time_`，丢弃 stamp 不晚于 reset 的输入；reset 和 set_pose 语义不同，不应混用。
+
+### 13.4 双滤波 TF 连续性不是自动保证
+
+- Jazzy 源码按 REP-105 设计：world_frame=odom 的滤波器发布 `odom→base_link`；world_frame=map 的滤波器在可获得外部 `odom→base_link` 时计算并发布 `map→odom`。
+- 该结构允许 global correction 在 map frame 中跳变而 local odom 连续，但前提是 local filter 不被同一次 reset/时间跳变同步清零、输入 frame 与时间一致、TF buffer/history 被正确协调。
+- 项目必须用 bag/HIL 测试 local filter reset、global filter reset、GNSS FIX↔FLOAT、LIO epoch 变化、ROS time rewind、暂停/恢复和重复 stamp；量化 `odom→base_link` 连续性、`map→odom` 跳变量、TF lookup 成功率及恢复时间。
+
+## 14. 现有 robodog_gnss_quality 核心与 ROS adapter 边界
+
+本轮核对仓库已有 `src/robodog_gnss_quality`，不重复设计第二套 RTK quality core：
+
+- `quality_gate.py` 已有 fail-closed RTK Fixed gate、NavSatStatus 合法值、host freshness/source monotonicity、协方差类型/有限值/对称/PSD/退化与不确定度门限、3D jump gate、连续 Fixed 恢复滞回。
+- `ubx_epoch_joiner.py` 已实现 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS 按精确 iTOW 四路 join、有界缓存、接收单调时钟 watermark、stale/late/conflicting epoch tombstone、显式 receiver generation reset；纯算法层不依赖 ROS。
+- 该 package 仍没有实际 ROS subscriptions、receiver GPS-week/time mapper、ROS diagnostics publisher 或 NavSatFix/Odometry publisher。不能把纯算法单测通过描述成 RTK 驱动集成完成。
+- 推荐接口边界：u-blox 原始 UBX ROS topics → ROS adapter 解码/精确 iTOW join + validated GPS-week/boot generation mapper + host steady-clock freshness → 现有 `UbxFourMessageEpochJoiner` → 现有 `RtkQualityGate` → 仅对 ACCEPTED epoch 发布带正确 ENU covariance 与 measurement stamp 的 NavSatFix/quality status → `navsat_transform_node`。
+- adapter 必须处理 receiver reboot/week rollover、source clock epoch、topic callback 到达偏序、bounded cache、diagnostic counters、ROS time 与 steady-clock 分离；quality gate 的 `reset()` 与 joiner 的 `begin_generation()` 必须在同一受控 reset transaction 中协调。
+- NavSatFix 本身无法完整表达 RTK carrier state 与 receiver age，必须并行发布明确 quality/status topic；禁止仅靠 NavSatStatus=FIX 推断 RTK Fixed。
+
+## 15. 本轮新增验证 Gate
+
+- [ ] Point-LIO 输入中断、LiDAR/IMU 时间回退、设备重启、bag loop、ROS clock rewind、空/迟到 IMU、scan-end coverage 不足的单元/集成测试；确认 reset transaction 真正清理状态、队列、地图 epoch 与输出 validity。
+- [ ] 为 Point-LIO 建立 health state API/topic；对输入 freshness、queue age、处理延迟、匹配退化、数值有限性、covariance 合法性和连续恢复滞回建立测试。
+- [ ] 修正 `time_lag_imu_to_lidar` 让 gate、队列、同步与积分使用同一 corrected timestamp；加入正/负 lag 与乱序/重复 stamp 单测。
+- [ ] robot_localization 验证 same-topic duplicate stamp、same-topic out-of-order、cross-topic delayed sample、history 足够/不足、sensor timeout coast、explicit reset、set_pose、ROS clock rewind。
+- [ ] 验证 `reset_on_time_jump` 参数行为；当前固定源码只见声明和注释掉的 callback 分支，若上游无实现则项目不得依赖该参数。
+- [ ] 实施并测试双 EKF reset ownership：local odom 连续、global map correction 可控；LIO/GNSS receiver epoch reset 时清理对应 measurement history，禁止跨 epoch 重放。
+- [ ] 在现有 `robodog_gnss_quality` 纯算法 core 上新增 ROS 2 adapter/diagnostics 与 NavSatFix publisher；先完成消息/时钟/重启集成测试，再接 navsat_transform。
+- [ ] 用真实 MID-360/IMU + ZED-F9P rosbag 测量最大延迟、乱序、掉包、时钟回退与恢复时间；确定 health/timeout/history 参数。真实数据尚未具备前，不冻结数值阈值。
