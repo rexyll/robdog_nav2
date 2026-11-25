@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.84
+- 文档版本：v0.3.85
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -196,7 +196,7 @@
 - [x] 建立 robodog_lite3_bridge 只读软件骨架：隔离 mock odom/IMU/joint topics、DiagnosticArray topic freshness monitor、单元测试和双发行版 CI workflow 文件；Humble 与 Jazzy 构建和各 6 项测试均通过。
 - [x] 完成系统架构、数据流、RTK/双 EKF、双目、Nav2、Collision Monitor 和四足地形设计。
 - [x] 完成 Point-LIO 去 MRS 化可行性与 Odometry/TF 输出源码审计；已识别 covariance 缺失、默认 IMU-input 分支 angular twist 未赋值、非 base_link frame 和 TF 默认关闭等接口 Gate。详见 `doc/Navigation/10_point_lio_decoupling_and_state_interface_audit.md`。
-- [x] 完成 Point-LIO ESEKF covariance 与 robot_localization Jazzy / navsat_transform 源码行为审计：确认默认 `use_imu_as_input=true` 时 Point-LIO 使用 24 维 `kf_input`，内部 covariance 可由 IKFoM `get_P()` 读取，但 publisher 未导出；位置/姿态误差在前 6 维、速度位于 12–14 的候选索引按状态字段顺序建立，SO(3)误差映射/线程安全仍需单测锁定。确认 robot_localization EKF 将小于 `1e-9` 的测量 covariance 对角元素提升到 `1e-9`，全零 covariance 会导致过度信任风险；navsat_transform 只拒绝 `STATUS_NO_FIX`/NaN，并直接使用 NavSatFix covariance，需在其前置 RTK quality adapter 检查解状态、龄期和 covariance type。详见 10 §8–11；仅 E1/E2 源码证据。
+- [x] 完成 Point-LIO ESEKF covariance 与 robot_localization Jazzy / navsat_transform 源码行为审计：确认默认 `use_imu_as_input=true` 时 Point-LIO 使用 24 维 `kf_input`，内部 covariance 可由 IKFoM `get_P()` 读取，但 publisher 未导出；位置/姿态误差在前 6 维、速度位于 12–14；MTK SO(3) 使用右乘局部误差，S2 gravity 为 DOF2/DIM3 且 P 使用 24 维 ambient 表达，需将 gravity covariance 投影到当前切平面；全部索引与线程安全仍需项目单测锁定。确认 robot_localization EKF 将小于 `1e-9` 的测量 covariance 对角元素提升到 `1e-9`，全零 covariance 会导致过度信任风险；navsat_transform 只拒绝 `STATUS_NO_FIX`/NaN，并直接使用 NavSatFix covariance，需在其前置 RTK quality adapter 检查解状态、龄期和 covariance type。详见 10 §8–11；仅 E1/E2 源码证据。
 - [x] 完成 A–G 阶段拆分和测试/风险基线。
 - [x] 完成 Lite3 厂商 ROS 2 路线源码评估与 ADR-0003，明确 Foxy/Jazzy 不共享默认 DDS，且 new sdk_deploy 的 DRDDS status 不等于完整 Odometry。
 - [x] 建立 odometry fallback strategy 和 ADR-0004，将 Point-LIO 作为缺失厂商 odometry 时的首选备用 POC，并记录 FAST-LIO2/FAST-LIVO2 许可、per-point time 和 Orin 实机验证边界。
@@ -257,6 +257,8 @@
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.85：继续深入固定 Point-LIO vendored IKFoM MTK manifold，确认 SO(3) `boxplus/oplus` 使用右乘 `R·Exp(δθ)`，`boxminus` 使用 `Log(R_otherᵀ·R)`，旋转 covariance 因而处于右侧局部切空间；gravity S2 为 DOF=2、DIM=3，而 ESEKF covariance 使用 24 维 ambient 表达。结合 state field 顺序与 `P_init` block offsets，进一步固定 `kf_input` 的候选索引：position 0–2、rotation 3–5、LiDAR-IMU extrinsic rotation 6–8、translation 9–11、velocity 12–14、gyro bias 15–17、accel bias 18–20、gravity ambient block 21–23。明确 gravity covariance 必须按 S2 约束投影到当前切平面，不能直接当作普通三维向量 covariance；所有索引仍须以项目 adapter 编译期/运行期断言和单测最终验收。更新 10 专题文档；仅固定上游源码证据，不代表项目已实现或验证。
 
 - 2026-11-25 / v0.3.84：继续 N1/N3 状态估计接口审计，固定检查 Point-LIO `e7ff034...` 的 `estimator.h`、`laser_mapping.cpp`、默认 YAML 与 vendored IKFoM ESEKF，以及 `robot_localization jazzy-devel` SHA `fea7fc3...` 的 EKF/navsat_transform 实现。确认默认 `use_imu_as_input=true` 时 Point-LIO 使用 24 维 `kf_input`；IKFoM 有 `get_P()` covariance accessor，内部状态字段顺序为 pos/rot/extrinsic rot/extrinsic trans/vel/bg/ba/gravity，publisher 未导出 P；默认 IMU-input 分支 angular twist 保持消息默认值。确认 robot_localization EKF 对 measurement covariance 小于 `1e-9` 的对角元素设下限，故零 covariance 会带来过度信任风险；sensor_timeout 只预测、不提供传感器健康门控；smooth_lagged_data 可回滚重放延迟观测。navsat_transform `gpsFixCallback()` 只拒绝 STATUS_NO_FIX 和 NaN，直接复制 position covariance，未执行接收机 RTK FIX/FLOAT、差分龄期或 covariance_type 质量分级，必须由 GNSS adapter 前置门控。补充 covariance 的 SE(3)/SO(3) 映射、lever-arm、IMU 信息相关性、3D EKF 和双滤波 TF ownership Gate。更新 10 专题文档；仅 E1/E2 源码审计，无本项目构建、bag 或硬件验证。
 
