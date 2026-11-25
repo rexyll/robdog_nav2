@@ -356,7 +356,7 @@ Livox MID-360 v1.4.12 明确支持：
 
 ### 15.2 PTPv2 解析字段与关联
 
-Common header 固定 34 bytes；校验 versionPTP、messageLength、字段边界。解析 Sync / Delay_Req / Pdelay_Req / Pdelay_Resp / Follow_Up / Delay_Resp / Pdelay_Resp_Follow_Up 的关键时间戳和 requestingPortIdentity；Announce 解析 currentUtcOffset、priority1/2、grandmasterClockQuality、grandmasterIdentity、stepsRemoved、timeSource。
+当前 parser 严格限定 IEEE 1588 PTPv2.0（`versionPTP=2`、`minorVersionPTP=0`）；若 `minorVersionPTP` 非零则明确拒绝，不把 IEEE 1588-2019 PTPv2.1 的 `majorSdoId` / `minorSdoId` / `messageTypeSpecific` 字段布局误读成 PTPv2.0 的 `transportSpecific` / reserved 字段。Livox 对 MID-360 明确写的是 IEEE1588v2.0 UDP/IP；其 gPTP L2 profile 具体版本/字段合同尚需真实设备抓包确认。Common header 固定 34 bytes；校验 versionPTP、minorVersionPTP、messageLength、字段边界。解析 Sync / Delay_Req / Pdelay_Req / Pdelay_Resp / Follow_Up / Delay_Resp / Pdelay_Resp_Follow_Up 的关键时间戳和 requestingPortIdentity；Announce 解析 currentUtcOffset、priority1/2、grandmasterClockQuality、grandmasterIdentity、stepsRemoved、timeSource。
 
 按 domain + sourcePortIdentity + sequenceId 配对：
 - two-step Sync ↔ Follow_Up；
@@ -375,7 +375,7 @@ PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmas
 
 工具仅做协议字段、transport、domain、source identity、sequence correlation 和 Announce GM metadata 观察。correctionField 以 raw signed scaled value 与 ns 表示；PTP timestamp 保留 48-bit seconds + 32-bit nanoseconds，不自行转换 UTC/GPS，也不使用 capture 时间差推导链路延迟。
 
-本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
+本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证；PTPv2.1 minorVersionPTP 拒绝向量已覆盖。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
 
 依据：
 - Livox MID-360 v1.4.12：支持 IEEE1588v2.0 UDP/IP 与 gPTP L2；
