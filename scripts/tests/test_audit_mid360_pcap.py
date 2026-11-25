@@ -7,12 +7,12 @@ from audit_mid360_pcap import audit_packet_records
 from pcapng_reader import PcapngPacket
 
 
-def mid360_payload(data_type, dot_num=1, corrupt_crc=False):
+def mid360_payload(data_type, dot_num=1, corrupt_crc=False, udp_cnt=3, frame_cnt=1):
     sample_size = {0: 24, 1: 14, 2: 8, 3: 10}[data_type]
     data = bytes(range(sample_size * dot_num))
     payload = bytearray(36 + len(data))
     struct.pack_into("<BHHHHBBB", payload, 0, 0, len(payload), 100,
-                     dot_num, 3, 1, data_type, 1)
+                     dot_num, udp_cnt, frame_cnt, data_type, 1)
     struct.pack_into("<Q", payload, 28, 1_700_000_000_000_000_000)
     payload[36:] = data
     crc = zlib.crc32(payload[28:]) & 0xffffffff
@@ -50,6 +50,33 @@ class TestMid360CaptureAudit(unittest.TestCase):
         self.assertEqual(report["payload_errors"], {})
         self.assertEqual(report["time_types"], {"1": 2})
         self.assertFalse(report["time_semantics"]["delta_is_network_latency"])
+
+
+    def test_pointcloud_sequence_gap_and_reordered_recovery(self):
+        report = audit_packet_records([
+            record(mid360_payload(1, udp_cnt=10), 56300),
+            record(mid360_payload(1, udp_cnt=12), 56300),
+            record(mid360_payload(1, udp_cnt=11), 56300),
+            record(mid360_payload(1, udp_cnt=13), 56300),
+        ])
+        self.assertEqual(report["sequence_event_counts"]["forward_gap"], 1)
+        self.assertEqual(
+            report["sequence_event_counts"]["reordered_gap_recovered"], 1
+        )
+        sequence, = report["point_cloud_sequence_audits"].values()
+        self.assertEqual(sequence["missing_counter_values_estimated"], 1)
+        self.assertEqual(sequence["reordered_gap_packets_recovered"], 1)
+        self.assertEqual(sequence["unresolved_gap_values_at_end"], 0)
+
+    def test_pointcloud_frame_boundary_counter_reset(self):
+        report = audit_packet_records([
+            record(mid360_payload(1, udp_cnt=65535, frame_cnt=9), 56300),
+            record(mid360_payload(1, udp_cnt=0, frame_cnt=10), 56300),
+            record(mid360_payload(1, udp_cnt=1, frame_cnt=10), 56300),
+        ])
+        self.assertEqual(report["sequence_event_counts"]["frame_boundary"], 1)
+        sequence, = report["point_cloud_sequence_audits"].values()
+        self.assertEqual(sequence["missing_counter_values_estimated"], 0)
 
     def test_crc_error_counted_without_aborting_capture(self):
         report = audit_packet_records([
