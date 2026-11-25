@@ -23,6 +23,11 @@ DEFAULT_RTK_TOPIC = "/mavros/global_position/raw/fix"
 RELATED_GNSS_TOPICS = (
     "/ublox_driver/receiver_lla",
     "/ublox_driver/receiver_pvt",
+    "/ublox_driver/range_meas",
+    "/ublox_driver/ephem",
+    "/ublox_driver/glo_ephem",
+    "/ublox_driver/iono_params",
+    "/ublox_driver/time_pulse_info",
 )
 WGS84_A = 6_378_137.0
 WGS84_E2 = 6.69437999014e-3
@@ -335,6 +340,16 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
                 "num_sv", "h_acc", "v_acc", "p_dop", "vel_acc",
             )
         }
+        range_epoch_satellite_counts: list[int] = []
+        range_signal_counts: dict[str, int] = {
+            "pseudorange_valid": 0,
+            "carrier_phase_valid": 0,
+            "half_cycle_valid": 0,
+            "lost_lock": 0,
+            "satellite_observations": 0,
+            "signal_observations": 0,
+        }
+        range_signal_cn0: list[float] = []
         for connection, bag_timestamp_ns, rawdata in reader.messages(connections=connections):
             message = reader.deserialize(rawdata, connection.msgtype)
             count += 1
@@ -354,6 +369,26 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
                     value = getattr(message, name, None)
                     if value is not None:
                         pvt_values[name].append(value)
+            elif topic == "/ublox_driver/range_meas":
+                measurements = getattr(message, "meas", None)
+                if measurements is not None:
+                    range_epoch_satellite_counts.append(len(measurements))
+                    for observation in measurements:
+                        range_signal_counts["satellite_observations"] += 1
+                        status_values = list(getattr(observation, "status", []) or [])
+                        cn0_values = list(getattr(observation, "CN0", []) or [])
+                        range_signal_counts["signal_observations"] += len(status_values)
+                        range_signal_cn0.extend(
+                            float(value) for value in cn0_values
+                            if isinstance(value, (int, float)) and math.isfinite(float(value))
+                        )
+                        for status_value in status_values:
+                            status_int = int(status_value)
+                            range_signal_counts["pseudorange_valid"] += bool(status_int & 0x01)
+                            range_signal_counts["carrier_phase_valid"] += bool(status_int & 0x02)
+                            range_signal_counts["half_cycle_valid"] += bool(status_int & 0x04)
+                        lli_values = list(getattr(observation, "LLI", []) or [])
+                        range_signal_counts["lost_lock"] += sum(bool(int(value) & 0x01) for value in lli_values)
         pvt_summary = None
         if topic == "/ublox_driver/receiver_pvt":
             pvt_summary = {}
@@ -381,6 +416,24 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
                         "p95": float(np.percentile(finite, 95)) if finite.size else None,
                         "max": float(np.max(finite)) if finite.size else None,
                     }
+        range_summary = None
+        if topic == "/ublox_driver/range_meas":
+            range_summary = {
+                "epoch_satellite_count": {
+                    "count": len(range_epoch_satellite_counts),
+                    "min": min(range_epoch_satellite_counts) if range_epoch_satellite_counts else None,
+                    "median": float(np.median(range_epoch_satellite_counts)) if range_epoch_satellite_counts else None,
+                    "p95": float(np.percentile(range_epoch_satellite_counts, 95)) if range_epoch_satellite_counts else None,
+                    "max": max(range_epoch_satellite_counts) if range_epoch_satellite_counts else None,
+                },
+                "signal_counts": range_signal_counts,
+                "cn0_db_hz": {
+                    "count": len(range_signal_cn0),
+                    "median": float(np.median(range_signal_cn0)) if range_signal_cn0 else None,
+                    "p05": float(np.percentile(range_signal_cn0, 5)) if range_signal_cn0 else None,
+                    "p95": float(np.percentile(range_signal_cn0, 95)) if range_signal_cn0 else None,
+                },
+            }
         result[topic] = {
             "status": "audited",
             "message_types": types,
@@ -394,6 +447,7 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
             "first_message_sample": first_sample,
             "last_message_sample": last_sample,
             "pvt_field_distributions_and_ranges": pvt_summary,
+            "raw_measurement_summary": range_summary,
             "limitations": [
                 "Field snapshots and distributions are diagnostic data, not receiver identity or RTK quality certification.",
                 "No cross-topic nearest-time pairing is performed.",
