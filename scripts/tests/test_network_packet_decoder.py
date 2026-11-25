@@ -3,7 +3,8 @@ import struct
 import unittest
 import zlib
 
-from livox_mid360_udp_parser import parse_mid360_udp_payload\nfrom network_packet_decoder import (
+from livox_mid360_udp_parser import parse_mid360_udp_payload
+from network_packet_decoder import (
     LINKTYPE_ETHERNET, LINKTYPE_LINUX_SLL, LINKTYPE_LINUX_SLL2,
     LINKTYPE_RAW, LINKTYPE_IPV4, LINKTYPE_IPV6,
     PacketDecodeError, classify_mid360_datagram, decode_link_packet,
