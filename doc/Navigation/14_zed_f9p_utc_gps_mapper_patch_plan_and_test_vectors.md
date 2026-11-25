@@ -732,3 +732,28 @@ USNO/IERS 历史文件常见记录形式为：
 USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有列出 `tai-utc.dat`；不能把该清单中其他文件的 digest 借用给本文件。网页文本响应虽然可供逐行检查，但本运行环境无法直接下载原始字节（容器 DNS 下载失败），因此**仍没有可独立复算的原始文件 SHA-256/SHA-512**。网页目录时间/大小和行内容只作为 E1 来源可访问证据，不作为字节级快照/hash。当前状态继续为 source snapshot/hash pending、artifact DRAFT 前置 Gate 未关闭。
 
 本轮新增实查测试要求：固定列/record-number 假设必须失败；1972–1979 分段必须保留在连续性审计输入中；正则必须完整消费行并拒绝尾随垃圾；同一语义数据在空格宽度变化下解析一致。原 §4.15.1 的示意格式应按本节更正解释。
+
+
+#### 4.16 NIST machine-readable leap-second list 独立交叉核验（2026-11-25）
+
+本轮补充检查 NIST 官方页面及其链接的纯文本 leap-seconds.list：
+
+- NIST 页面说明该文件是机器可读的 leap-second 数据，并列出历史正闰秒日期；其当前页面记载 TAI−UTC=37 s，且说明正闰秒标签序列为 23:59:59 → 23:59:60 → 00:00:00。来源：https://www.nist.gov/pml/time-and-frequency-division/time-realization/leap-seconds。
+- 文件 URL：https://tf.nist.gov/leap-seconds.list。其数据行以 NTP epoch seconds + TAI−UTC offset 表示有效区间起点；注释明确每行 offset 从该 epoch 起生效，直到下一行或无限期（文件说明行 19–30）。
+- 文件列出 1972-01-01 offset 10 s、1980-01-01 offset 19 s、2015-07-01 offset 36 s、2017-01-01 offset 37 s，与本文件 §4.15 对 USNO 表的关键分段一致。注意 NIST 表的时间尺度是 TAI−UTC，不是 GPS−UTC；仍需单独处理 TAI−GPS 关系，不能直接把该列当 GPS offset。
+- 文件明确说明 1972-01-01 是当前 UTC/TAI 关系定义的起点；1972 前历史时间尺度复杂，不应把本项目的整秒模型向前扩展（文件说明行 46–50）。
+- 文件头记载最后一次 leap-second 值更新为 2016-07-08，但同时标记 Updated with data from IERS Bulletin C72、expiry 2027-06-28；这意味着数据表内容没有在 2016 后新增 leap-second offset，但其过期元数据已随 Bulletin C72 更新。该文件不是每次无闰秒公告都更新数据行的简单“最后修改日期”指标。
+- 文件末尾提供 SHA-1 39096da8b66c33126ea48831363f817b36782978，但其计算规则忽略注释和数据行空白，并纳入最后修改时间与过期时间字段；它不是原始文件字节 SHA-256/SHA-512，也不能代替字节快照的强哈希。
+- NIST 说明 IERS Bulletin C 是闰秒事件公告来源；因此建议源职责维持：IERS Bulletin C 决定是否新增事件，USNO tai-utc.dat 提供历史 TAI−UTC 分段，NIST leap-seconds.list 作为独立机器可读交叉核验与 expiry/更新状态参考，接收机 NAV-TIMELS 仅作当前接收机证据。任一冲突进入 CONFLICT，不做多数表决。
+
+截至本次检索，USNO leap-second 产品页公告：2026 年 12 月底不引入闰秒；最后一次正闰秒仍为 2016-12-31。该公告只覆盖其明确公告窗口，不构成未来无限期保证。来源：https://maia.usno.navy.mil/products/leap-second。项目 artifact 的 supported_until 应与实际审核公告/覆盖范围绑定，不能仅因 NIST expiry 到 2027-06-28 就自动把项目 artifact 延长到该日期。
+
+新增核验合同：
+1. NIST 文件解析器必须保留 NTP epoch 原值、offset、行号和原始行；使用整数算术验证每个 NTP epoch 对应 UTC 生效午夜，不用浮点时间戳。
+2. NIST 表只允许用于 1972-01-01 及之后的当前 UTC/TAI 关系；1972 前记录拒绝或明确标为不支持。
+3. 比较 USNO 与 NIST 时，按生效 UTC instant 对齐 TAI−UTC 值；不比较文件行号或把两种格式的记录数视为相同。
+4. 独立核对 GPS epoch：1980-01-01 TAI−UTC=19 s，GPS epoch 1980-01-06 的 GPS−UTC=0 s；同时确认 2017-01-01 起 GPS−UTC=18 s。
+5. 对 #$ / #@ / #h 元数据分别解析；SHA-1 只作为来源自带的完整性提示，不满足项目强哈希 Gate。
+6. Bulletin C 的“无闰秒”公告必须记录公告编号、发布日期、适用的 6 月/12 月事件窗口；不得把 NIST 文件 expiry 或旧的 #h 值解释为“没有新闰秒”的独立证明。
+
+结论：现在已建立 USNO 原始历史表 + NIST 机器可读表 + IERS Bulletin C 的三层证据职责，但 USNO 原始字节快照/SHA-256 仍未取得，NIST SHA-1 不替代该 Gate。没有生成 VERIFIED artifact，没有实现 parser/generator，也没有执行代码测试。
