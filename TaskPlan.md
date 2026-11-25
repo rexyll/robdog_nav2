@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.113
+- 文档版本：v0.3.114
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同、ROS 2 集成依赖、ESEKF covariance 导出和 robot_localization/GNSS 融合接口开展上游审计；本轮进一步将定位 validity/epoch/TF age 与 Nav2 Costmap、Planner、Controller 的失效传播串成接口矩阵；新增 ZED-F9P UTC→GPS mapper 的分层补丁计划、NAV-TIMELS parser/lifecycle fence 设计、deterministic synthetic test vectors，并补齐 source-policy/精确历元 join/fail-closed 状态机/12 组纯算法 property-style 测试合同（doc/Navigation/14 §4.12，设计未实现）；本轮补充 NAV-PVT 92-byte 与 NAV-TIMEUTC 20-byte 原始 payload 布局、validity/confirmation masks、signed nano 和长度/日历拒绝向量。GNSS 包 metadata 待确认项已完成分支来源核验：`package.xml` 与 `setup.py` 在 `main`、`nav` 及共同基点 `07a740711783c219f3c091a5c8e9f2fecc71cbc3` 内容完全一致，确认为 main 基线遗留而非 nav 新增；不修改许可证/维护者字段，仍须项目治理确认后才能解除实现 Gate。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、本项目自身 Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成；上游固定 Point-LIO 与 Estimator Plugin 已有 Jazzy AMD64/ARM64 CI 成功证据。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同、ROS 2 集成依赖、ESEKF covariance 导出和 robot_localization/GNSS 融合接口开展上游审计；本轮进一步将定位 validity/epoch/TF age 与 Nav2 Costmap、Planner、Controller 的失效传播串成接口矩阵；新增 ZED-F9P UTC→GPS mapper 的分层补丁计划、NAV-TIMELS parser/lifecycle fence 设计、deterministic synthetic test vectors，并补齐 source-policy/精确历元 join/fail-closed 状态机/12 组纯算法 property-style 测试合同（doc/Navigation/14 §4.12，设计未实现）；本轮补充 NAV-PVT 92-byte 与 NAV-TIMEUTC 20-byte 原始 payload 布局、validity/confirmation masks、signed nano 和长度/日历拒绝向量；新增 NIST 官方 leap-seconds.list 独立交叉核验（doc/Navigation/14 §4.16），确认其 NTP epoch→TAI−UTC 生效分段与 USNO 关键历史点一致，并审计 NIST #$/#@/#h 元数据语义、SHA-1 非原始字节强哈希的边界；结合 USNO/IERS 当前公告记录 2026 年 12 月底不安排闰秒。已形成 IERS Bulletin C（事件公告）/USNO tai-utc.dat（历史分段）/NIST leap-seconds.list（机器可读交叉核验）/NAV-TIMELS（接收机证据）的分层来源职责，冲突仍 fail-closed。USNO 原始字节快照与 SHA-256/SHA-512 仍未取得；未生成 VERIFIED artifact，未实现 parser/generator，未运行测试。GNSS 包 metadata 待确认项已完成分支来源核验：`package.xml` 与 `setup.py` 在 `main`、`nav` 及共同基点 `07a740711783c219f3c091a5c8e9f2fecc71cbc3` 内容完全一致，确认为 main 基线遗留而非 nav 新增；不修改许可证/维护者字段，仍须项目治理确认后才能解除实现 Gate。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、本项目自身 Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成；上游固定 Point-LIO 与 Estimator Plugin 已有 Jazzy AMD64/ARM64 CI 成功证据。**
 
 ---
 
@@ -247,6 +247,7 @@
 - [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
+- 2026-11-25 / v0.3.114：在 `doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md` 新增 §4.16，审计 NIST 官方机器可读 `leap-seconds.list`。核对其 NTP epoch seconds→TAI−UTC offset 生效区间语义、1972-01-01/1980-01-01/2015-07-01/2017-01-01 关键值，与 USNO `tai-utc.dat` 的对应分段交叉一致；明确 NIST 文件的 SHA-1 是按其专用规范忽略注释/空白并纳入更新/过期元数据计算，不是原始字节 SHA-256/SHA-512。记录 NIST 数据表 last-value-update=2016-07-08 与 Bulletin C72 expiry=2027-06-28 的区别，并确认 USNO 公告 2026 年 12 月底不引入闰秒。固化 IERS Bulletin C/USNO/NIST/NAV-TIMELS 四层来源职责、冲突 fail-closed 和 supported_until 不得由 NIST expiry 自动延长的规则。仅新增来源交叉审计与设计合同；USNO 原始字节快照/hash 仍 pending，未生成 VERIFIED artifact，未实现 parser/generator，未运行测试或硬件验证。
 - 2026-11-25 / v0.3.104：在 `doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md` §4.9–4.10 补齐 NAV-PVT 与 NAV-TIMEUTC byte-level parser fixtures。按 ZED-F9P R07 固定 NAV-PVT 92-byte 布局（UTC civil fields、valid byte offset 11、signed nano offset 16、flags2 offset 22）及 NAV-TIMEUTC 20-byte 布局（signed nano offset 8、UTC civil offsets 12–18、valid byte offset 19）；分别定义 PVT validDate/validTime/fullyResolved 与 confirmedAvail/confirmedDate/confirmedTime 的独立组合、TIMEUTC validTOW/validWKN/validUTC/utcStandard mask、负 nano、sec=60、reserved bits、payload 长度和日历边界测试。补充说明 parser 结构解码与 mapper policy 必须分层，确认元数据缺失只能进入 UNCONFIRMED。静态核对现有包仍为 `UNSPECIFIED` license 与 `maintainers@example.invalid` 占位 maintainer；不擅自修改 metadata、不创建生产代码、不运行测试/CI、不宣称接收机兼容。证据为官方 R07 协议 E1/E2 + 本项目静态结构与 E3 合成测试规格；目标 F9P MON-VER 和真实输出仍待用户提供/设备采集。
 
 - 2026-11-25 / v0.3.111：在 §4.14.3 补充 BIPM 对 TAI−GPS 的关系为 19s + C₀（C₀ 为随时间变化、量级数十纳秒），明确 USNO 整秒 TAI−UTC 历史表减 19s 仅能得到整秒 GPS−UTC leap offset，不能证明纳秒级 GPS/TAI realization。将 §4.13 输出定位为 nominal integer timeline，要求另行保留 receiver tAcc/时间实现不确定度；纳秒级溯源若成为需求，需另引入 BIPM/UTC(k)−GPS C₀ 数据及独立精度合同。仅修订设计边界，无代码、artifact、测试或硬件验证。
