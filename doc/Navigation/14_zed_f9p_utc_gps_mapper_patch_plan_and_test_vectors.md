@@ -620,3 +620,96 @@ IERS Bulletin C 用于确认公告日期及是否真的实施变化；USNO 历�
 3. 取得目标 ZED-F9P MON-VER 和原始 24-byte NAV-TIMELS 帧后，才冻结 firmware-specific event source allowlist、字段可用性和 receiver corroboration 策略。
 4. 完成驱动 parser/ROSIDL/dispatch/publisher 保真后，才可进行接收机 event evidence 实测。
 5. 在上述 Gate 关闭前，不实现 production mapper、不将 sec=60 接入 VALID；不添加网络运行依赖。
+
+
+### 4.15 USNO TAI−UTC 历史分段解析与离线 artifact 生成规格（设计，未生成）
+
+本节把 §4.14 的来源分层落实为可复核的解析/生成合同。当前已通过公开历史表交叉核验关键分段，但尚未取得并归档 USNO 原始 `tai-utc.dat` 字节快照；因此本节只冻结解析规则与测试向量，**不生成 VERIFIED transition artifact，不填写 source_sha256，也不宣称解析器已实现或测试通过**。
+
+#### 4.15.1 输入格式与解析边界
+
+USNO/IERS 历史文件常见记录形式为：
+
+```text
+<record-number> <YYYY> <MON> <DD> =JD <julian-date> TAI-UTC= <base-seconds> S + (MJD - <reference-mjd>) X <drift-seconds-per-day> S
+```
+
+实际文件可能包含注释、空行及早期格式变体。实现必须先固定具体原始文件版本及字节快照，再冻结严格 grammar；不得以网页展示文本代替原始文件 parser。字段语义如下：
+
+- civil effective date：该 TAI−UTC 分段在该 UTC 日期 00:00:00 起生效；
+- base-seconds：TAI−UTC 基值；
+- reference-mjd 与 drift：早期 UTC rate adjustment 的参考 MJD 与线性漂移系数；
+- JD：用于独立校验日期的冗余字段，不作为主日期来源；
+- record-number：仅源文件行标识，不是 transition ID。
+
+解析器必须保留 raw line、行号、所有原始 token 与解析结果。未知格式、重复字段、无法识别月份、非法日期、数字溢出、缺失字段或额外未解释 token 一律拒绝；不得尽力猜测或跳过无法解析的有效记录。
+
+#### 4.15.2 支持范围与 GPS epoch clipping
+
+- GPS epoch 为 1980-01-06 00:00:00 UTC。USNO/IERS 表中 1980-01-01 分段已给出 TAI−UTC = 19 s；该分段覆盖 GPS epoch，因此可将其作为 GPS epoch 初始基线。
+- GPS epoch 当时 GPS−UTC = 0 s，因为 nominal integer conversion 使用 `TAI−UTC − 19 s`。这只定义整秒 leap offset，不构成 §4.14.3 所述纳秒级时间实现证明。
+- artifact 的 `supported_from` 必须精确裁剪为 1980-01-06，而不是 1980-01-01；不得把 GPS epoch 之前的历史分段伪装成 GPS 时间线支持范围。
+- 必须保留 1980-01-01 原始分段作为 epoch clipping 的来源证据，并记录其 effective date 早于支持起点。
+- 任何查询早于 1980-01-06、晚于最后一个已审查分段的明确覆盖边界，均返回 OUT_OF_COVERAGE；最后一条开放区间不能无期限自动视为 VERIFIED，必须由审核记录确定 artifact 的 `supported_until`。
+
+#### 4.15.3 固定整数分段准入规则
+
+首版 artifact schema 仅支持 1972-01-01 之后的整秒 TAI−UTC 分段。对每条拟纳入记录：
+
+1. 解析 base-seconds、drift 与 reference-mjd；drift 必须精确为 0（按源文件十进制 token 做 Decimal/有理数解析，不使用 float epsilon）。
+2. base-seconds 必须是整数秒；否则拒绝进入本版 artifact。
+3. 将 `gps_minus_utc_s = tai_minus_utc_s - 19` 作为显式转换字段，保存输入 TAI−UTC 与转换规则版本；不得覆盖或丢弃源值。
+4. 每条记录的生效日期必须严格递增且唯一；日期字段必须与 JD（按源文件约定的 UTC 0h）交叉校验。
+5. 相邻记录的 offset 差值必须属于本版允许的 leap transition 集合（当前首版按 ±1 秒建模）；相同 offset 的重复记录应作为来源异常审查，不得自动合并。
+6. 本版遇到非零 drift、非整数 offset、非 ±1 跳变、缺失日期基线、乱序/重复日期或无法解释的连续性异常，整体生成失败，不得部分产出看似完整的 artifact。
+7. 1972 之前的 rate-adjustment 历史数据明确不属于本版 GPS epoch artifact；不能简单将其 drift 记录丢入整秒表，也不能以 1972 年前的数据推断 GPS epoch offset。
+
+#### 4.15.4 Transition 语义与 2016 样例
+
+分段表的 effective date 是新 offset 生效后的 UTC 午夜。对正闰秒，独立的 leap label 位于前一 UTC 日的 23:59:60；这两个时间概念必须分别保存。
+
+| UTC 分段/事件 | TAI−UTC | nominal GPS−UTC（减 19 s） | 解释 |
+|---|---:|---:|---|
+| 2015-07-01 至 2016-12-31 结束 | 36 s | 17 s | 事件前分段 |
+| 2016-12-31 23:59:60 | 事件期间沿用 17 s | 17 s | 正闰秒独立标签 |
+| 2017-01-01 00:00:00 起 | 37 s | 18 s | 新分段生效 |
+
+因此 canonical transition 的 `effective_utc_date` 为 2017-01-01，而 `leap_label_utc`（若 delta=+1）为 2016-12-31 23:59:60。记录必须满足 before=17、after=18、delta=+1。不能把 2017-01-01 00:00:00 写成闰秒标签，也不能将 effective date 回退一天。
+
+对于负闰秒，schema 必须保留 `delta=-1` 并另行定义缺失 civil label；不得复用正闰秒的 23:59:60 表达。首版没有负闰秒实证样例，相关转换仍须独立测试。
+
+#### 4.15.5 生成器输出与 provenance
+
+生成器输入：原始 USNO 文件字节、文件来源 URL/版本标识、retrieved_at、parser version、TAI−GPS conversion rule ID、review manifest。
+
+生成器输出分为两个文件/对象：
+- 原始来源快照（字节不变）及 SHA-256；
+- canonical transition artifact（schema version、GPS epoch coverage、records、源行引用、生成器版本、source hash、review status）。
+
+生成器只能输出 DRAFT；只有独立审查确认原始来源、TAI−GPS 转换、IERS 交叉核对、连续性与样例测试后，人工 review manifest 才能把记录提升为 VERIFIED。生成器不得自行把 DRAFT 标记为 VERIFIED。当前网页搜索可见的 IERS 历史表和 BIPM 表用于交叉核对关键值，不替代 USNO 原始字节快照；原始快照及 SHA-256 仍为 Gate。
+
+#### 4.15.6 必须新增的解析/生成测试合同
+
+| ID | 场景 | 预期 |
+|---|---|---|
+| USNO-PARSE-001 | 合法整秒记录，drift=0 | 精确解析所有字段并保留 raw line |
+| USNO-PARSE-002 | 注释行/空行/文件头 | 只按冻结 grammar 处理，不误认数据记录 |
+| USNO-PARSE-003 | 未知月份、非法日期、缺字段/额外 token | 明确拒绝并报告行号/reason |
+| USNO-PARSE-004 | 重复 effective date / 非递增日期 | 整体拒绝，不自动排序或去重 |
+| USNO-PARSE-005 | 非零 drift（含极小非零十进制） | 拒绝；不得使用 float epsilon 放行 |
+| USNO-PARSE-006 | 非整数 TAI−UTC | 拒绝进入整秒 artifact |
+| USNO-PARSE-007 | JD 与 civil date 不一致 | 拒绝并报告字段冲突 |
+| USNO-PARSE-008 | 1972 前 rate-adjustment 行 | 不进入本版 artifact；若混入目标区间则拒绝 |
+| USNO-GEN-009 | 1980-01-01 TAI−UTC=19，GPS epoch clipping | artifact 从 1980-01-06 开始，初始 GPS−UTC=0 |
+| USNO-GEN-010 | 2015-07-01 offset 36 到 2017-01-01 offset 37 | 生成 before=17/after=18/delta=+1 |
+| USNO-GEN-011 | 2016 leap label 与 effective midnight | 分别为 2016-12-31 23:59:60 与 2017-01-01 00:00:00 |
+| USNO-GEN-012 | offset 差值为 0、±2 或其他非 ±1 | 首版生成失败，进入人工审查 |
+| USNO-GEN-013 | 缺少 GPS epoch 前置基线记录 | 不猜初始 offset，生成失败 |
+| USNO-GEN-014 | 原始文件 hash 缺失或生成器版本缺失 | 只能保持 DRAFT/拒绝发布 |
+| USNO-GEN-015 | 生成结果与独立 BIPM/IERS 固定向量比较 | 所有已审查分段一致，否则 CONFLICT |
+| USNO-GEN-016 | 最后分段没有明确 supported_until/review | 禁止发布开放式无限覆盖 artifact |
+
+#### 4.15.7 本节结论与 Gate
+
+已由 IERS 历史表与 BIPM 年报交叉确认：1980-01-01 的 TAI−UTC 为 19 s；2015-07-01 至 2017-01-01 为 36 s；2017-01-01 起为 37 s。由此推得 GPS−UTC 整秒 offset 分别为 0、17、18 秒；2016 正闰秒事件标签和生效午夜的区分如上。当前尚未获取 USNO 原始 `tai-utc.dat` 文件字节及其 SHA-256，也未实现 parser/generator、冻结 artifact 或执行测试。因此本节状态为设计完成、来源快照 Gate 未关闭、实现/测试未开始。下一步先归档原始文件和 hash，再对照 IERS/BIPM 记录做逐行审核；不需要用户手动下载，除非后续访问/授权受阻。
+
