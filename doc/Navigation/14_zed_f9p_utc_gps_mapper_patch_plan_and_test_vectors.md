@@ -771,7 +771,7 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 
 对本项目 UTC→GPS mapper 的影响与保守实施规则：
 1. 将时间策略版本化，至少区分 `LEAP_STEP_REGIME`（旧制度历史区间）与 `CONTINUOUS_UTC_REGIME`（2027-05-20 起）。切换依据必须是版本化、审核通过的权威 policy record，不可仅凭主机日期静默切换。
-2. 2027-05-20 是制度边界，不是 leap event。transition artifact 应记录 `regime_effective_utc`、决议编号/版本、发布机构、原文 URL、获取时间、内容哈希、审查人/状态；不生成 `delta_gps_minus_utc_s=±1` 记录。
+2. 2027-05-20 是制度生效日期，不是 leap event。Resolution 5 只给出日历日期，未在本次审计到的文本中指定该日内的精确时刻；transition artifact 应先记录 `regime_effective_date`，只有后续权威实施文件明确时刻后才增加 `regime_effective_instant_utc`。同时记录决议编号/版本、发布机构、原文 URL、获取时间、内容哈希、审查人/状态；不生成 `delta_gps_minus_utc_s=±1` 记录。
 3. 在 continuous UTC regime，mapper 不应再期待未来 IERS leap-second events；但仍须保留历史 leap-second 表，以正确解释 1972–2017 历史 UTC 标签和 GPS−UTC offset。
 4. 当前 Bulletin C 72 记载 TAI−UTC=37 s（GPS−UTC 名义整数 offset=18 s）从 2017-01-01 起 until further notice。连续 UTC 的定义要求连续且与 TAI 同速，但 Resolution 5 摘要本身没有给出接收机 NAV-TIMELS 的字段迁移/新 firmware 行为。故 `GPS−UTC=18 s forever` 暂不得作为未复核的硬编码事实；需核对 BIPM/IERS 后续实施说明、GNSS 服务提供方接口与目标 ZED-F9P 固件，再把 post-transition offset policy 标为 VERIFIED。
 5. 不得因制度切换删除 `NAV-TIMELS`、`validCurrLs` 或 receiver raw evidence。接收机协议/固件可能继续提供兼容字段，也可能改变事件字段语义；以 MON-VER、固件版本和实测原始 UBX frame 建立 capability matrix。
@@ -780,7 +780,7 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 8. IERS Bulletin C 的数据模型需加入 `policy_regime`、`announcement_scope`、`valid_until`、`superseded_by_resolution`。Bulletin C 72 的 no-leap-second 结论只对应 2026-12-31，不应延伸为 2027 年 6 月或之后无期限结论。
 
 新增验证合同：
-- `UTC-REGIME-001`：2027-05-19T23:59:59Z、2027-05-20T00:00:00Z、2027-05-20T00:00:01Z 的 UTC/GPS 映射必须无人工一秒跳变；实际 offset 采用经审核 policy fixture，不由测试硬编码推断。
+- `UTC-REGIME-001`：围绕 Resolution 5 指定的 2027-05-20 制度生效边界，UTC/GPS 映射必须无人工一秒跳变；在权威实施文件未给出日内精确时刻前，测试不得擅自假定 00:00:00Z，而应以 policy fixture 中经审核的 effective instant 参数化；实际 offset 采用经审核 policy fixture，不由测试硬编码推断。
 - `UTC-REGIME-002`：旧 regime 历史正闰秒 2016-12-31 23:59:60 仍可正确表示；不得因新制度而删除历史 leap-second support。
 - `UTC-REGIME-003`：仅有 Bulletin C 72 不足以证明 2027-05-20 之后的 regime policy；缺少已审核 Resolution 5 policy record 时，mapper 对未来 regime 返回 POLICY_UNVERIFIED，而不是沿用旧表无期限外推。
 - `UTC-REGIME-004`：continuous UTC 下 UT1−UTC 可非零且随地球自转变化；UT1 数据过期不得污染 GPS−UTC mapper 状态，但 UT1-dependent consumer 必须 fail closed。
