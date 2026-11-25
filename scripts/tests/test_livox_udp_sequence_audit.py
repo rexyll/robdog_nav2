@@ -61,7 +61,7 @@ class TestLivoxUdpSequenceAudit(unittest.TestCase):
         observe(audit, 0, frame=2)
         observe(audit, 4, frame=2)
         self.assertEqual(observe(audit, 0, frame=2), "frame_reset_candidate")
-        self.assertEqual(observe(audit, 1, frame=3), "frame_counter_changed_without_udp_reset")
+        self.assertEqual(observe(audit, 1, frame=3), "forward_gap")
         report = audit.report()
         self.assertEqual(report["events"]["frame_counter_unchanged_at_reset"], 1)
         self.assertEqual(report["events"]["frame_counter_changed_without_udp_reset"], 1)
