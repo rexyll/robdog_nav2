@@ -632,3 +632,82 @@ Coordinator 必须由单一串行事件处理器（或等价的严格互斥状�
 - §20：本项目 GNSS core 与测试静态代码证据；本轮未重新运行测试。
 - 本节：基于上述证据形成的 E3 项目设计合同/待验证方案；不是实现完成或硬件安全认证。
 - 未新增 ROS package、未修改现有算法核心、未改 license/maintainer metadata，未运行 ROS build、bag、仿真、HIL 或机器狗实测。
+
+## 22. Reset API 逐事件 Transition Table 与现有 GNSS Core 适配约束
+
+本节将 §21 的系统设计转成逐事件执行表，并核对当前 GNSS core 的真实 reset API。状态机和 coordinator 仍是设计规格，不代表已实现。
+
+### 22.1 当前可调用的 GNSS reset API（源码核验）
+
+| API | 实际行为 | 不会做的事 / 注意事项 |
+|---|---|---|
+| RtkQualityGate.reset() | 将 consecutive Fixed samples 置 0，清除 last accepted jump reference | 不改变配置；不管理 receiver generation；不通知 global EKF/NavSatFix publisher |
+| UbxFourMessageEpochJoiner.reset() | source_clock_id 置空；requires-explicit-generation 置 true；清空 pending、retired、latest receive time、last emitted source timestamp | 不清空 evicted/rejected 累计诊断计数；reset 后 add_* 必须先 begin_generation() |
+| UbxFourMessageEpochJoiner.begin_generation(id) | 设置新的 source_clock_id；解除 explicit-generation barrier；清空 pending、retired 和 epoch 时间状态 | 不验证 GPS week/reboot 判据；不重置累计诊断计数；调用者必须先完成 generation 判定 |
+| UbxFourMessageEpochJoiner.expire_stale(now) | 按 host monotonic time 淘汰超龄 pending epoch 并写入 retired tombstone | 不是 receiver reset；不清理 gate 或 global EKF history |
+
+关键差异：Gate.reset() 清除的是质量恢复/跳变参考状态；Joiner.reset() 还会进入“禁止接收直到显式 begin_generation”的封锁状态。Joiner 的诊断计数是跨 generation 累计量，若需要按 generation 统计，应在 coordinator 外层记录 counter baseline 或增加分代 metrics，而不能假设 reset 会清零。
+
+另外，Gate.evaluate() 检测到 source_clock_id 与其上一条 reference 不同，会自行 reset 后继续处理；但 Joiner 对 source_clock_id 变化会抛出 EpochPairingError，要求显式 begin_generation()。因此 adapter 必须以 Joiner/coordinator 为 generation 权威，不能绕过 joiner 直接把新 clock ID 的 observation 喂给 Gate，否则两个组件可能对 generation 切换作出不同处理。
+
+### 22.2 逐事件 Transition Table
+
+| 事件 | 前置条件 / 判定 | Epoch 变化 | Reset / 隔离顺序 | 必需 ACK 与恢复条件 | 失败处理 |
+|---|---|---|---|---|---|
+| RTK FIXED→FLOAT/SINGLE/NO_FIX | 同一 receiver clock generation；接收机状态消息与测量历元已配对 | 不递增 receiver generation、estimator、local odom 或 map epoch | 先撤销 GNSS measurement valid；停止发布后续 NavSatFix；保留 joiner 配对状态与 mapper | GNSS gate 输出拒绝原因；global localization 明确报告 GNSS degraded；local odom 独立有效性仍通过 | Global pose 不可信时禁止 global goal；不得把最后一条 FIX 重复当新观测；local-only 运动须另有验证策略，否则停车 |
+| Receiver reboot / source clock identity 改变 | 有接收机 reboot 证据，或原 source clock mapping 已不可继续；仅 iTOW 变小不足以单独证明 reboot，必须结合 GPS week/boot evidence | receiver_generation +1；其他 epoch 默认不变 | 1) GNSS invalidation barrier；2) 停止 NavSatFix；3) joiner.reset()；4) gate.reset()；5) mapper 结束旧 generation 并建立新映射；6) mapper 验证新 generation 后 joiner.begin_generation(new_id)；7) 新 epoch 数据重新配对并经 gate | mapper ACK 新 clock identity/week anchor；joiner ACK active generation；gate recovery 从 0 重新开始；global EKF 确认旧 GNSS queue/history 已隔离或 reset | 任一 mapper/joiner/gate ACK 缺失则保持 GNSS invalid；global EKF 未隔离旧数据不得恢复 GNSS 输入 |
+| GPS week rollover（连续运行） | 有可信 week 证据，iTOW rollover 与 source time 连续；无 reboot 证据 | receiver_generation 不变；source clock mapping 更新其 week anchor/映射段 ID | 不调用 joiner.reset()/begin_generation()，除非实际 source clock identity 按接口设计需变化；必须保证连续 source_timestamp_ns 单调且相同 iTOW 不跨周混配 | mapper ACK 连续时间映射；joiner 输出 source timestamp 严格递增；gate 仅接受递增 source time | week 不确定、时间不连续或同 iTOW 跨周歧义时停止 GNSS 输出，转入 receiver-time recovery，不猜测 generation |
+| GPS week unknown / ambiguous | mapper 无法唯一确定 GPS week 或 boot identity | 暂不递增任何 generation，标记 time mapping invalid；确认重启后再递增 | 立即 GNSS invalidation；停止构造 GnssObservation；不允许以 host receive time 替代 source time | mapper 重新取得可信 week/boot anchor；随后按 rollover 或 reboot 两条路径恢复 | 保持 GNSS invalid；不能通过 reset joiner 后随意 begin_generation 绕过不确定性 |
+| Point-LIO tracking lost，但独立腿式 odom 健康 | 厂商腿式 odom 已证明独立、连续、时戳/covariance/TF 合格；目前该硬件证据尚缺 | 视 LIO 是否重置递增 estimator_epoch；local_odom_epoch 不变 | 隔离 LIO 输出与旧 epoch cloud/TF；如重启 LIO，由 LIO owner reset state/P/map/queues；local EKF 保留腿式 odom 路径 | LIO 新 epoch tracking ACK；local EKF 持续收到独立腿式 odom；local TF age/covariance 正常 | 没有独立 odom 证据时不得假设 local pose 可继续；停止或进入经验证的降级模式 |
+| Point-LIO 是 local pose authority 且 reset/lost 造成不连续 | 没有其他已验证 source 能保持 local odom continuity，或 LIO reset 改变 odom 原点 | estimator_epoch +1；local_odom_epoch +1；map_epoch 仅在 global datum/地图坐标解释也改变时递增 | stop/inhibit → LIO invalidation/reset → local EKF history/queue/TF reset → local odom 新 epoch → global EKF 重新建立 map→odom → 旧 local elevation/dynamic layers 按策略清理 | LIO tracking 与 local EKF measurement ACK；新 odom→base_link TF 连续于新 epoch；global map→odom 在同一时刻查询成功；Costmap 新观测更新 | 任一 TF/pose/covariance/Costmap gate 未通过则不 commit，保持停车/goal inhibit |
+| local EKF reset / odom origin jump | local filter reset 被显式请求或检测到输出不连续；须先确认不是单条 outlier | local_odom_epoch +1；global map_epoch 通常不递增，但旧 map→odom validity 撤销直至重建 | 冻结控制 → local pose invalid → drain local filter history/queues/TF → reset local EKF → 新 odom identity → global EKF 在新 local TF 上重建 map→odom → 重置依赖旧 odom 的局部地图/规划 | local EKF ACK 新 generation；唯一 odom→base_link authority；global EKF 同 measurement-time TF lookup 成功；costmap 以新 odom epoch 重建 | 新 local odom 未稳定前保持停止；不能把新原点沿用旧 frame/epoch 标签 |
+| global datum/map origin change | 明确执行 datum/地图基准更换，而非普通 GNSS dropout | map_epoch +1；local_odom_epoch 不变 | inhibit global goals → global pose invalid → global EKF reset/re-datum → 清理或重投影旧 map-frame layers/goals → 等待 map→odom 新 epoch | global EKF datum ACK；map→odom TF 唯一且同 local epoch；global costmap 和 global planner 输入新 map epoch | global localization 不可用；local odom 可保留，但不能运行依赖旧 map 的全局导航 |
+| ROS clock rewind / bag loop | ROS clock epoch 发生回退；host steady clock 与 ROS clock 分开监测 | 新建 ros_clock_epoch；是否递增其他 epoch 由组件 reset 影响决定 | 先 inhibit 所有时间相关 consumer → 清空 ROS-time message queues/message filters/TF buffers → LIO/EKF 各自按已验证 reset contract 处理 → GNSS mapper 检查 receiver clock 与 ROS clock 映射 → 新 clock epoch 后再恢复 | 所有受影响 producer/consumer ACK 清空旧 ROS-time history；新 TF stamp 与 clock epoch 一致；measurement age 合格 | 任何组件未清旧时间缓存则保持 inhibit；不能依赖 robot_localization reset_on_time_jump 自动完成事务 |
+| 仅 local/global Costmap observation stale | 定位 pose/TF 仍有效；仅特定 observation source age 超限或 source current=false | 所有定位/map epoch 不变；对应 costmap observation generation 可单独标记 invalid/recovered | 禁止受影响 costmap 的规划/控制消费；隔离 stale observation；恢复后等待新原始观测更新 bounds/costs | 对应 layer/source 报告新观测 stamp、TF transform 和 update 成功；Costmap current 恢复 | 不 reset LIO/GNSS/EKF；若 obstacle clearance 不可证明，则 stop rather than assume free space |
+
+### 22.3 GNSS 子事务的确定调用顺序
+
+针对 receiver reboot / source clock identity change，按当前 API 的最小安全顺序：
+
+1. coordinator 先将 GNSS validity 置 false，并在 adapter 发布路径上关闭 NavSatFix gate；这是跨组件 invalidation barrier。
+2. 停止新 UBX callbacks 进入 joiner，并等待正在执行的 add_* 调用退出；旧 callback 携带旧 generation token，之后即使迟到也必须拒绝。
+3. 调用 joiner.reset()。该调用清除 pending/retired/epoch ordering 状态并要求显式 begin_generation()；旧 generation 不可继续进入。
+4. 调用 gate.reset()，清除旧 generation 的 recovery counter 与 jump reference。
+5. 重建 receiver time mapper。先判定是真正 reboot、新 GPS week rollover，还是 clock identity 不明；不允许用 reset 操作替代判定。
+6. 仅在 mapper 给出可信新 generation ID 与单调 source timestamp mapping 后，调用 joiner.begin_generation(new_source_clock_id)。
+7. 接收新四路消息并完成 exact-iTOW pairing；每个完整 observation 只调用 gate.evaluate() 一次。
+8. 只有 Gate 返回 ACCEPTED 且 epoch、source clock、host freshness 均匹配当前 transaction 时，adapter 才发布 NavSatFix，并同步发布带相同 accepted epoch 的 quality status。
+9. global EKF consumer 需确认旧 generation measurement/history 已隔离，且新的 map→odom 与 local TF 对齐；否则 GNSS measurement 可以被质量 Gate 接受，但不得恢复 global pose validity。
+
+注意：Joiner 的累计诊断计数跨 generation 保留，推荐 diagnostics 同时输出 lifetime counters 与 generation-local counters（后者由 coordinator 在切换时保存 baseline 计算）。
+
+### 22.4 Coordinator 最小纯算法接口（进一步收敛）
+
+在不引入 ROS 依赖的前提下，建议最小接口分成三层：
+
+- GnssGenerationController：输入 ReceiverClockEvidence；输出 ROLLOVER_CONTINUOUS、REBOOT_NEW_GENERATION、CLOCK_AMBIGUOUS；只有前两种有对应可执行路径。
+- ResetCoordinator：输入 ResetTrigger；输出 immutable ResetPlan 和当前 transaction phase；按单线程事件序列消费 ComponentResetAck；禁止回调直接修改 epoch counters。
+- EpochFence：对每条 GNSS observation、Odometry、TF metadata、Costmap observation 和 cmd intent 校验 boot identity + relevant epoch tuple + transaction generation；拒绝旧数据。
+
+不得让 GNSS generation controller 单凭 iTOW 倒退判定 reboot；GPS week rollover 时 iTOW 自然回绕，必须结合 GPS week 与 source time continuity。
+
+### 22.5 对应测试与通过条件
+
+| 测试组 | 关键输入 | 通过条件 |
+|---|---|---|
+| Gate/Joiner reset semantics | reset 前后读取 counter、pending、retired、last timestamp、generation 状态 | Gate recovery/reference 清零；Joiner 要求显式 begin_generation；累计 counters 保留且有明确定义 |
+| GNSS generation switch | 旧 generation 延迟 callback 与新 generation 消息交错 | 旧 callback 全拒绝；新 generation pending 从空状态开始；旧 Gate reference 不影响新恢复计数 |
+| Week rollover | iTOW 从周末到周初，GPS week +1，source time 连续 | generation 不变；完成 epoch 严格递增；无跨周误配 |
+| Reboot vs ambiguous clock | iTOW 回退但无 week/boot 证据；随后补充可信 reboot evidence | ambiguous 阶段不发 NavSatFix；证据确认后才开始新 generation |
+| Gate exactly-once | 同一 completed epoch 重复回调或 adapter 重试 | Gate 只评估一次；NavSatFix 只发布一次；重复不会增加 recovery sample count |
+| EKF history fence | global EKF queue 中混入旧 receiver generation 测量 | 旧测量在进入 filter 前被隔离；若无法确认则 global pose invalid |
+| Fail-closed ACK | mapper/joiner/gate/global EKF 任一 reset/ACK 失败或超时 | transaction ABORTED_FAIL_CLOSED；GNSS invalid，global goal inhibit；local odom 按独立 validity 决定是否保留 |
+
+阈值（pair skew、stale age、ACK timeout、恢复样本数）仍须由真实 ZED-F9P 数据、host load 和安全分析标定，本节不填入猜测数值。
+
+### 22.6 证据边界
+
+- Joiner/Gate 的方法行为来自本项目当前 nav 分支源码静态核验；本轮没有重新运行单元测试。
+- Transition table 是 E3 项目设计规格；未实现 coordinator、mapper、EpochFence 或 ROS adapter。
+- Lite3 腿式 odometry 独立连续性、ZED-F9P reboot/week 证据、global EKF history 清理接口和平台 stop ACK 均仍是外部 Gate。
+- 未运行 build、bag、仿真、HIL 或实机测试。
