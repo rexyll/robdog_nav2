@@ -66,10 +66,9 @@ class LivoxUdpSequenceAudit:
                 self.high_water = 0
                 self.recent_seen.clear()
                 self.recent_set.clear()
-            elif frame_delta and udp_cnt != 0:
-                event = "frame_counter_changed_without_udp_reset"
-                self.events[event] += 1
             else:
+                if frame_delta and udp_cnt != 0:
+                    self.events["frame_counter_changed_without_udp_reset"] += 1
                 delta = (udp_cnt - self.high_water) & 0xFFFF
                 if delta == 0:
                     event = "duplicate"
