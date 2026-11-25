@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.122
+- 文档版本：v0.3.123
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -335,6 +335,8 @@
 - 2026-11-25 / v0.3.121：追溯 GLONASS CDMA ICD 的官方受控版本责任链。Roscosmos Order No.324（2017-09-12，2018-01-09 登记）第 1–3 条指定 RKS 保存、发布 FDMA L1/L2 Edition 5.1 与 CDMA L1/L2/L3 Edition 1.0 受控 ICD；GLONASS-SVO EVI 目录列出 2016 年 CDMA L1/L2/L3/General Description 四份 Edition 1.0 文档，GPS World 2016 报道及 UNOOSA/ICG 资料列出 RKS 历史原始 URL。直接访问 RKS PDF 本轮超时/不可用，因此只确认责任机构和历史发布 URL，不宣称已取得受控原件；当前版本、修订日期、签章和 SHA-256 未验证。明确证据状态 PUBLIC_CATALOG_LISTED / OFFICIAL_CONTROLLED_COPY_NOT_VERIFIED，continuous UTC 新字段仍 UNSPECIFIED_IN_VERIFIED_CONTROLLED_ICD。新增 doc/Navigation/14 §4.19.9，规定四份受控文件获取、哈希/签章核验、L1/L2/L3 分别审计和向 RKS 确认双尺度修订状态的 Gate。无代码/测试/仿真/实机变更。
 
 - 2026-11-25 / v0.3.122：进一步审计 GLONASS CDMA ICD 年份差异。GPS World 2016-12-14 报道描述 RKS 发布 draft versions 并列出四份原始 URL；GLONASS-SVO EVI 目录将 CDMA L1/L2/L3/General Description 列为 Edition 1.0 (2016)；UNOOSA/ICG 2019 WG-S 状态表则记录 ICD 1.0 for L1/L2/L3 CDMA (2017)。Roscosmos Order No.324 只确认 RKS 管理 Edition 1.0 受控版本，未写明批准日期。严谨区分 2016 历史草案公开年份与 2017 ICG 状态表记录年份；没有受控原件封面、批准/签署页、revision history 或官方哈希，不能证明两者文本相同或不同版本。对 RKS L1/L2/L3/General Description 四份历史 URL 均进行访问尝试，Web 访问层均返回不可访问/内部错误；这不证明服务器已删除或文件不存在。更新 doc/Navigation/14 §4.19.10，维持 OFFICIAL_CONTROLLED_COPY_NOT_VERIFIED，等待 RKS 受控副本或授权答复。无代码/测试/仿真/硬件变更。
+
+- 2026-11-25 / v0.3.123：在回读 §4.19.9 时发现此前记录的英文文件名 RKS URL 并非 GPS World 2016 报道实际列出的原始下载路径；已更正为报道逐字列出的四个俄文文件名 URL（CDMA General、L1、L2、L3），并明确此前英文路径记录作废。该修正仅纠正历史链接，不代表 URL 当前可访问或受控原件已取得。无代码/测试/仿真/硬件变更。
 
 ## 5. 文档索引
 
