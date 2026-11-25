@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.64
+- 文档版本：v0.3.65
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -212,6 +212,7 @@
 - [ ] gateway wire codec、UDP/TCP、vendor source mapping 均未实现；42 项纯逻辑测试通过及双发行版 CI 成功仍不代表实际网络链路/厂商 SDK 验证。Covariance validator 已增加矩阵对称性和 PSD 结构检查，但不证明来源协方差经过统计标定或真实可信；全零矩阵虽为数学 PSD，仍须由来源质量策略决定是否可接受。
 - [x] 新增消息类型/frame/covariance 检查后的最终 CI 已通过；失败 run 45328900700 根因为 `status` 未加入 message_type 白名单，修复后 45328937159 与 45328982630 双发行版均通过。
 - [ ] 未确认的 legged odometry 是定位架构的实质性阻塞项：如果 vendor SDK 不提供可信本体 odom，需转向经验证的 LiDAR odometry/SLAM 或 stereo VIO。
+- [ ] Dynamic03 GNSS 质量 Gate：真实 bag 的 /ublox_driver/range_meas 879 条、1054 信号观测中 carrier-phase-valid=0、lost-lock=1054、卫星数 median=1/max=3、CN0 median=13dB-Hz，最大历元间隔54.39s；PVT 全量 diff_soln=false/carr_soln=0，星历/PPS topic 缺失。当前 bag 不足以重建 RTK Fixed，GT 仍不可用于 APE/RPE；需向作者取得接收机映射、RTCM/base、配置/状态、天线杆臂与时间同步证据。详见 docs/datasets/alternative_dataset_strategy.md §6.15。
 - [!] lite3_transfer 启动/SDK_MODE 可能获取 SDK 控制权；未获得厂商只读 bring-up SOP、物理急停及遥控接管说明前，不在实机启动 SDK mode、不发送关节/速度命令。
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
@@ -241,6 +242,7 @@
 | 2026-11-24 | v0.3.60 | 真实 Dynamic03 ROS2 转换/ros2 bag info 通过；新增只读逐行 GT↔raw-fix 时间/ENU 关联审计，CI [45427945207](https://github.com/rexyll/robdog_nav2/actions/runs/45427945207) success | audit 96303cb6; tests 4cdf5170; workflow 3c78e0dc; docs 823f4a30; CI 45427945207 |
 | 2026-11-25 | v0.3.61 | 真实 GT↔raw-fix 逐条时间/空间来源关联获得强证据；纠正 NavSatStatus=0 为普通 STATUS_FIX；扩展 frame/service/covariance 和两个 u-blox topic 的消息字段快照审计，新增回归测试；RTK Fixed/GT 精度仍未认证 | audit/tool+tests/docs/TaskPlan; CI pending |
 | 2026-11-25 | v0.3.64 | 修复 `/ublox_driver/range_meas` 的 NumPy 数组字段布尔判定异常：`status`/`CN0`/`LLI` 显式处理 `None` 并归一化序列，且将 NumPy 浮点纳入 CN0 统计；新增 NumPy 数组回归测试。数据集工具 CI [run 45550752872](https://github.com/rexyll/robdog_nav2/actions/runs/45550752872) success；该 CI 为合成/纯逻辑测试，真实 Dynamic03 bag 扩展审计仍待 VM 重跑 | audit `4d2ca36539a2b55b1a37dee4960d9441899f2df1`; tests `c4d9590a5fbf817fedfdada42b93f9e446c4330d`; CI 45550752872 |
+| 2026-11-25 | v0.3.65 | 用户已在真实 Dynamic03 bag 上成功重跑扩展审计：range_meas 879条/1054信号，载波相位有效0、失锁1054、卫星数中位数1、CN0中位数13dB-Hz、最大时间断档54.39s；星历/PPS topic 缺失。与 PVT diff_soln=false/carr_soln=0 合并后判定当前 bag 不足以重建 RTK Fixed；GT Gate 保持阻塞，记录于数据集策略§6.15 | docs/TaskPlan; real bag audit JSON user-provided; source semantics [gnss_comm](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssObsMsg.msg) |
 
 ---
 
