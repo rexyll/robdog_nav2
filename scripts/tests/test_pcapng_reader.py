@@ -2,7 +2,7 @@ import io
 import struct
 import unittest
 
-from pcapng_reader import PcapngError, iter_pcap_packets, iter_pcapng_packets
+from pcapng_reader import PcapngError, iter_capture_packets, iter_pcap_packets, iter_pcapng_packets
 
 
 def block(kind, body, endian="<"):
@@ -112,6 +112,17 @@ class TestPcapngReader(unittest.TestCase):
         self.assertEqual([p.section_index for p in packets], [0, 1])
         self.assertEqual([p.interface_id for p in packets], [0, 0])
         self.assertEqual([p.link_type for p in packets], [1, 147])
+
+
+    def test_auto_detects_classic_pcap(self):
+        header = b"\\xd4\\xc3\\xb2\\xa1" + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
+        record = struct.pack("<IIII", 10, 0, 4, 4) + b"data"
+        packet, = list(iter_capture_packets(io.BytesIO(header + record)))
+        self.assertEqual(packet.data, b"data")
+
+    def test_auto_detects_pcapng(self):
+        packet, = list(iter_capture_packets(io.BytesIO(shb() + idb() + epb(b"data", 1))))
+        self.assertEqual(packet.data, b"data")
 
     def test_rejects_invalid_trailer(self):
         raw = bytearray(shb() + idb())
