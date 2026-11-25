@@ -375,7 +375,7 @@ PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmas
 
 工具仅做协议字段、transport、domain、source identity、sequence correlation 和 Announce GM metadata 观察。correctionField 以 raw signed scaled value 与 ns 表示；PTP timestamp 保留 48-bit seconds + 32-bit nanoseconds，不自行转换 UTC/GPS，也不使用 capture 时间差推导链路延迟。
 
-本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证；PTPv2.1 minorVersionPTP 拒绝向量已覆盖。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
+PTP parser/correlation 9 项、MID-360 capture audit 6 项合成测试已在 GitHub Actions run 45643176003 通过。本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证；PTPv2.1 minorVersionPTP 拒绝向量已覆盖。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
 
 依据：
 - Livox MID-360 v1.4.12：支持 IEEE1588v2.0 UDP/IP 与 gPTP L2；
