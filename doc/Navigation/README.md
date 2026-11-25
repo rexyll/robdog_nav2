@@ -180,5 +180,6 @@
 - [07 — MID-360 点云到高程地图与四足可通行性链路审计](07_mid360_elevation_traversability_audit.md)
 - [08 — Point-LIO 与 FAST-LIO2：MID-360 LIO / 时间补偿 / ROS 2 适配审计](08_point_lio_fast_lio2_audit.md)
 - [09 — MID-360 时间戳合同与 Point-LIO ROS 2 集成依赖审计](09_mid360_timestamp_and_point_lio_integration_audit.md)
+- [10 — Point-LIO 去 MRS 化与四足状态估计接口审计](10_point_lio_decoupling_and_state_interface_audit.md)
 
 上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
