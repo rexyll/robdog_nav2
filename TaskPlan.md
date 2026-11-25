@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.78
+- 文档版本：v0.3.79
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并开始固定 ROS 2 Jazzy 消息/Action 契约审计。完整导航模块仍处于早期研究阶段；N1 已完成 Costmap 生产端与 Planner/Controller 消费端的源码闭环审计；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、ROS 2 Jazzy 高程地图候选和四足地形层开展上游审计。N1 的其余接口/运行证据仍在补齐；采购、目标 Orin 联调、实机验证均未完成。**
 
 ---
 
@@ -76,7 +76,7 @@
 > 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
 
 - [x] N0 研究基线与范围冻结：已创建 nav 分支；研究目标已纠正为完整导航模块；已建立总体目录、系统架构与数据流框架、术语基线、证据等级和首轮上游仓库/commit 锚点。完成证据见 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md、02_subsystem_inventory_and_evidence_register.md。此状态仅表示研究范围/治理基线冻结，不代表各子系统源码研究完成。
-- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单、失效传播框架和 ROS 2 Jazzy 核心消息/action 契约；完成 Nav2 bringup→Controller/Behavior→Velocity Smoother→Collision Monitor 命令链与 NavigateToPose→BT→Planner/Controller action 链源码审计，详见 doc/Navigation/04_nav2_bringup_interface_audit.md（提交 4298dd67、f9d42d4a）。本轮新增 Costmap 观测输入审计 doc/Navigation/05_sensor_to_costmap_observation_audit.md（提交 834136a2）：核实 ObstacleLayer 原生支持 PointCloud2（仅 LaserScan/PointCloud2），使用 x/y/z float iterator；TF MessageFilter 与 sensor-data QoS depth 50；marking/clearing 分离；height/range 过滤；ObservationBuffer 的 expected_update_rate=0 不做 stale 检查；VoxelLayer 是有限 z_voxels 的二维代价投影，不是完整地形图。确认 Nav2 默认 YAML 的 local VoxelLayer、global ObstacleLayer 和 Collision Monitor 仍配置 LaserScan /scan，没有直接接入 MID-360 或双目 PointCloud2。仍未完成 Costmap2DROS update loop/current 状态传播、完整 BT recovery/preemption、运行时 QoS/频率/延迟、项目 PointCloud2 adapter/真实数据接入、Lite3 执行反馈；当前证据仅 E1/E2。
+- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单与 ROS 2 Jazzy 消息/action 契约；完成 Nav2 bringup→BT→Planner/Controller→Smoother→Collision Monitor 主链源码审计。Costmap 输入链详见 `doc/Navigation/05_sensor_to_costmap_observation_audit.md`；Costmap current 到 Planner/Controller 的等待/超时消费闭环详见 `doc/Navigation/06_costmap_health_and_consumers_audit.md`（Planner 默认 1.0s，Controller 默认 0.30s；超时路径已源码核验）。本轮增加 MID-360→deskew→elevation/grid_map→traversability 的跨子系统接口审计，详见 `doc/Navigation/07_mid360_elevation_traversability_audit.md`：固定 Livox Driver 2、elevation_mapping_cupy ROS2 branch、grid_map Jazzy 与传统 traversability_estimation 参考版本；识别出 elevation_mapping_cupy 默认 XYZ 输入会丢弃 Livox per-point timestamp/tag/line，且整帧按 header stamp 查询一次 TF，因此必须先完成逐点时间补偿再输入；Jetson Orin + MID-360 FPS 下降 issue #137 仍 open，v2.2.0 RTX 4090 性能数据不能外推到 Orin。仍未完成项目实际 adapter、驱动/SDK/ARM64 构建、运行 QoS/频率/延迟、LIO/deskew、Lite3 执行反馈与实机验证；当前证据为 E1/E2 上游资料/源码，不是项目运行证据。
 - [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
 - [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
 - [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
@@ -254,6 +254,8 @@
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.79：继续在 nav 分支开展跨子系统数据链审计。固定 Livox ROS Driver 2 commit `21445540f0d100dc86a7e6df312dd70bbdb4afdf`，确认 MID-360 CustomMsg 含 timebase/逐点 offset_time，PointXYZRTLT PointCloud2 含逐点 timestamp；固定 elevation_mapping_cupy ROS2 branch commit `d9e1c9fe42ea3d463519333a443da99f680adde8`，追踪 PointCloud2 parser、整帧 header stamp TF 查询、XYZ-only 融合与 GridMap 发布，确认默认路径不会保留 Livox 逐点时间且本节点不做逐点 deskew；审计 grid_map Jazzy `d9614992e36c66d3fe67d9125ca105a0a47676fe` 的多层 2.5D 容器与转换能力，以及 legacy traversability_estimation `14d24c059e1c43466aadf328280adf6394d78039` 的 slope/roughness/step/normal/footprint 过滤概念。识别 Jetson Orin AGX + MID-360 的 elevation_mapping_cupy FPS 下降 issue #137 仍 open；v2.2.0 性能验证使用 RTX 4090，不能外推为 Orin 通过。新增 `doc/Navigation/07_mid360_elevation_traversability_audit.md` 并更新专题索引。仅 E1/E2 上游证据，未在本项目编译/运行/实机验证。
 
 - 2026-11-25 / v0.3.78：继续 N1，固定 Navigation2 Jazzy commit `c7046550547d382a5186d106b0895eda02485d7c`，完成 Costmap current 状态从 LayeredCostmap 到 PlannerServer/ControllerServer 的消费端追踪。Planner 默认 `costmap_update_timeout=1.0s`，规划 Action 入口等待 global_costmap current，超时返回 TIMEOUT；Controller 默认 0.30s，在每个控制循环计算前等待 local_costmap current，超时发布零速度并以 CONTROLLER_TIMED_OUT 终止 FollowPath。明确 current Gate 不等于逐消息 freshness、动态障碍质量或实际底层停车确认；仿真时钟暂停/跳变仍需运行验证。新增 `doc/Navigation/06_costmap_health_and_consumers_audit.md`。仅 E2 上游源码证据，未运行 ROS/仿真/实机。
 
