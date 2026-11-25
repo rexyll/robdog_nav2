@@ -51,22 +51,19 @@ class LivoxUdpSequenceAudit:
             if frame_delta:
                 self.frame_counter_deltas[str(frame_delta)] += 1
 
-            if udp_cnt == 0 and self.high_water != 0 and frame_delta:
-                event = "frame_boundary"
+            if udp_cnt == 0 and self.high_water != 0:
+                event = "frame_reset_candidate"
                 self.events[event] += 1
-                self.pending_missing.clear()
-                self.high_water = 0
-                self.recent_seen.clear()
-                self.recent_set.clear()
-            elif udp_cnt == 0 and self.high_water != 0 and not frame_delta:
-                event = "unexplained_counter_reset"
-                self.events[event] += 1
+                if frame_delta:
+                    self.events["frame_counter_changed_at_reset"] += 1
+                else:
+                    self.events["frame_counter_unchanged_at_reset"] += 1
                 self.pending_missing.clear()
                 self.high_water = 0
                 self.recent_seen.clear()
                 self.recent_set.clear()
             elif frame_delta and udp_cnt != 0:
-                event = "frame_change_without_counter_reset"
+                event = "frame_counter_changed_without_udp_reset"
                 self.events[event] += 1
             else:
                 delta = (udp_cnt - self.high_water) & 0xFFFF
@@ -122,12 +119,15 @@ class LivoxUdpSequenceAudit:
             "events": dict(self.events),
             "missing_counter_values_estimated": self.missing_estimate,
             "reordered_gap_packets_recovered": self.recovered_reorder,
+            "frame_reset_interpretation": (
+                "udp_cnt==0 after a nonzero counter is a frame-reset candidate; "
+                "frame_cnt is corroborative only when valid for the configured scan mode"
+            ),
             "unresolved_gap_values_at_end": len(self.pending_missing),
             "frame_counter_delta_histogram": dict(self.frame_counter_deltas),
             "counter_semantics": (
                 "16-bit udp_cnt increments per point-cloud packet and resets to zero "
-                "at frame start; 8-bit frame_cnt increments per frame but is invalid "
-                "for non-repetitive scans"
+                "at frame start; 8-bit frame_cnt is not valid for non-repetitive scans"
             ),
             "gap_semantics": (
                 "observed sequence gaps in capture order; not proof of network loss; "
