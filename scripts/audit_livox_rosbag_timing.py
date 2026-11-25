@@ -27,6 +27,7 @@ from livox_time_audit_helpers import (
     stamp_to_ns,
     summarize_time_series,
     summarize_values,
+    summarize_timestamp_pairing,
     validate_cli_thresholds,
 )
 
@@ -109,7 +110,9 @@ def audit_rosbag(
     imu_message_class = get_message(imu_type_name)
 
     lidar_timebase_ns: list[int] = []
+    lidar_bag_receive_ns: list[int] = []
     imu_header_ns: list[int] = []
+    imu_bag_receive_ns: list[int] = []
     header_minus_timebase_ns: list[int] = []
     offset_samples_ns: list[int] = []
     total_points = 0
@@ -119,13 +122,15 @@ def audit_rosbag(
     imu_messages = 0
 
     while reader.has_next():
-        topic, serialized, _bag_timestamp_ns = reader.read_next()
+        topic, serialized, bag_receive_timestamp_ns = reader.read_next()
+        bag_receive_timestamp_ns = int(bag_receive_timestamp_ns)
         if topic == lidar_topic:
             message = deserialize_message(serialized, lidar_message_class)
             lidar_messages += 1
             timebase_ns = int(message.timebase)
             header_ns = stamp_to_ns(message.header.stamp)
             lidar_timebase_ns.append(timebase_ns)
+            lidar_bag_receive_ns.append(bag_receive_timestamp_ns)
             header_minus_timebase_ns.append(header_ns - timebase_ns)
 
             previous_offset: int | None = None
@@ -146,6 +151,7 @@ def audit_rosbag(
             message = deserialize_message(serialized, imu_message_class)
             imu_messages += 1
             imu_header_ns.append(stamp_to_ns(message.header.stamp))
+            imu_bag_receive_ns.append(bag_receive_timestamp_ns)
 
     if lidar_messages == 0 or imu_messages == 0:
         raise ValueError(
@@ -175,6 +181,19 @@ def audit_rosbag(
         },
         "lidar_timebase_ns": summarize_time_series(lidar_timebase_ns),
         "imu_header_stamp_ns": summarize_time_series(imu_header_ns),
+        "rosbag_receive_timestamp": {
+            "semantics": "SequentialReader.read_next timestamp; rosbag2 message receive timestamp",
+            "clock_domain": "not inferable from bag payload alone; inspect recorder use_sim_time and /clock configuration",
+            "lidar_ns": summarize_time_series(lidar_bag_receive_ns),
+            "imu_ns": summarize_time_series(imu_bag_receive_ns),
+            "lidar_receive_minus_custommsg_timebase": summarize_timestamp_pairing(
+                lidar_timebase_ns, lidar_bag_receive_ns
+            ),
+            "imu_receive_minus_header_stamp": summarize_timestamp_pairing(
+                imu_header_ns, imu_bag_receive_ns
+            ),
+            "warning": "receive-minus-sensor deltas are descriptive only; they are not transport latency or clock offset without proven clock-domain mapping",
+        },
         "lidar_header_stamp_minus_timebase_ns": summarize_values(
             header_minus_timebase_ns
         ),
@@ -200,6 +219,14 @@ def audit_rosbag(
                 + summarize_time_series(imu_header_ns)["backward_timestamp_count"]
             ),
             "point_offset_order_violation_count": offset_order_violations,
+            "lidar_bag_receive_timestamp_non_monotonic_count": (
+                summarize_time_series(lidar_bag_receive_ns)["duplicate_timestamp_count"]
+                + summarize_time_series(lidar_bag_receive_ns)["backward_timestamp_count"]
+            ),
+            "imu_bag_receive_timestamp_non_monotonic_count": (
+                summarize_time_series(imu_bag_receive_ns)["duplicate_timestamp_count"]
+                + summarize_time_series(imu_bag_receive_ns)["backward_timestamp_count"]
+            ),
             "nearest_lidar_imu_delta_is_not_a_clock_sync_proof": True,
         },
     }
