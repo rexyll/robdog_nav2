@@ -61,7 +61,8 @@
 - IMU callback 记录 IMU header stamp，并可应用 `time_lag_imu_to_lidar`。
 - `sync_packages()` 通过最大点时间推导 `lidar_end_time`，只有 IMU buffer 已覆盖到 scan end 才将该 scan 与 IMU 样本交给估计器。
 - 该逻辑依赖时钟域一致、header stamp 语义正确、点 offset_time 单位正确；队列积压、时间回退、IMU 缺样和驱动时间戳跳变需要显式测试。
-- 当前实现对 IMU callback 的 timestamp 检查使用修正后的 timestamp，但入队的仍是原始消息；消费端也用消息 header stamp。需要特别核对 `time_lag_imu_to_lidar` 是否真正贯穿整个同步计算，避免仅用于回退检查而未实际修正消息时间。建议把它列为代码复核/单测项，不直接假设已生效。
+- 当前实现对 IMU callback 的 timestamp 检查使用修正后的 timestamp，但入队的仍是原始消息；`sync_packages()` 和逐点状态循环又读取原始消息 header stamp。按当前固定源码，`time_lag_imu_to_lidar` 未贯穿消费端同步计算，疑似只影响回退检查。该项应作为优先修复/单测项，不能假设 lag 已生效。
+- `CustomMsg.timebase` 字段没有在该 Point-LIO parser/callback 中显式读取；点时间基准取 `msg.header.stamp`。必须审计 Driver 2 固定版本中 header stamp 与 timebase 的关系，并用录包检查二者一致性；不能仅凭消息字段存在就假定 Point-LIO 正确消费了 timebase。
 
 ### 3.3 逐点估计和点云输出语义
 
