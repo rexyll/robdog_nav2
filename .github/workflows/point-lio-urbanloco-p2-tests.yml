@@ -42,6 +42,8 @@ on:
       - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
+      - "scripts/livox_udp_sequence_audit.py"
+      - "scripts/tests/test_livox_udp_sequence_audit.py"
   pull_request:
     paths:
       - "scripts/urbanloco_gt_helpers.py"
@@ -78,6 +80,8 @@ on:
       - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
+      - "scripts/livox_udp_sequence_audit.py"
+      - "scripts/tests/test_livox_udp_sequence_audit.py"
   workflow_dispatch:
 
 jobs:
@@ -112,6 +116,7 @@ jobs:
             scripts/pcapng_reader.py \
             scripts/network_packet_decoder.py \
             scripts/audit_mid360_pcap.py
+            scripts/livox_udp_sequence_audit.py \
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
@@ -131,6 +136,10 @@ jobs:
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_audit_mid360_pcap.py" \
+            -v
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_livox_udp_sequence_audit.py" \
             -v
           PYTHONPATH=scripts python3 scripts/audit_mid360_pcap.py --help >/dev/null
           PYTHONPATH=scripts python3 -m unittest discover \
