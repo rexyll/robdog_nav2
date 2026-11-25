@@ -6,7 +6,7 @@ concurrency:
 
 on:
   push:
-    branches: [main]
+    branches: [main, nav]
     paths:
       - "scripts/urbanloco_gt_helpers.py"
       - "scripts/extract_urbanloco_ulhk4_gt.py"
@@ -29,6 +29,9 @@ on:
       - "scripts/tests/test_tum_pose_run_candidate.py"
       - "scripts/convert_m3dgr_dynamic03_to_ros2.py"
       - "scripts/tests/test_convert_m3dgr_dynamic03_to_ros2.py"
+      - "scripts/audit_livox_rosbag_timing.py"
+      - "scripts/livox_time_audit_helpers.py"
+      - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   pull_request:
@@ -83,7 +86,9 @@ jobs:
             scripts/audit_m3dgr_gt_rtk_correspondence.py \
             scripts/audit_tum_trajectory.py \
             scripts/create_tum_pose_run_candidate.py \
-            scripts/convert_m3dgr_dynamic03_to_ros2.py
+            scripts/convert_m3dgr_dynamic03_to_ros2.py \
+            scripts/audit_livox_rosbag_timing.py \
+            scripts/livox_time_audit_helpers.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
@@ -111,6 +116,10 @@ jobs:
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_convert_m3dgr_dynamic03_to_ros2.py" \
+            -v
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_livox_time_audit.py" \
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
