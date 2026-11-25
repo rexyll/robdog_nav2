@@ -283,7 +283,7 @@ Livox 官方 MID-360 v1.4.12 端口表规定设备侧端口：56100 control、56
 
 报告同时保留 `capture_timestamp_ns`（抓包文件时间）与 `sensor_timestamp_ns`（MID-360 payload 时间），并显式声明两者之差不是网络延迟。PCAPNG interface ID / section index 继续保留，防止多接口/多 section 数据混淆。抓包记录若标记 truncated，直接计数并跳过；不尝试用 Ethernet padding 补足 IP/UDP payload。
 
-目前测试仅使用合成 Ethernet/VLAN/SLL/SLL2/raw-IP/IPv4/IPv6/UDP frames 和合成 MID-360 payload；没有真实 MID-360 pcap、设备 IP/host port 配置快照、Orin NIC offload 配置、tcpdump/Wireshark 互操作或 IP fragment reassembly 验证。尚未宣称设备级验收完成。
+目前测试仅使用合成 Ethernet/VLAN/SLL/SLL2/raw-IP/IPv4/IPv6/UDP frames 和合成 MID-360 payload；PCAP/PCAPNG 16 项、网络解码 13 项、capture audit 3 项单测已在 GitHub Actions run 45641354918 通过。没有真实 MID-360 pcap、设备 IP/host port 配置快照、Orin NIC offload 配置、tcpdump/Wireshark 互操作或 IP fragment reassembly 验证。尚未宣称设备级验收完成。
 
 依据：
 - Livox 官方 MID-360 Communication Protocol v1.4.12（端口表、UDP 封装、点云/IMU payload）；
