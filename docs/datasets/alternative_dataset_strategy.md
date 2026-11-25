@@ -401,3 +401,24 @@ python scripts/audit_m3dgr_gt_rtk_correspondence.py \
 为避免只看首尾样本，新版审计脚本增加了 /ublox_driver/receiver_pvt 全量字段分布/范围统计：fix_type、valid_fix、diff_soln、carr_soln、num_sv 的计数分布，以及 h_acc、v_acc、p_dop、vel_acc 的 min/median/p95/max。数值按消息原生单位输出；在确认实际消息定义/版本前不做单位换算。用户需在 CI 通过后重新运行来源审计以生成该字段摘要。
 
 **当前判断：** TUM 与 15Hz MAVROS raw-fix 的逐行关联仍极强；但现有 10Hz u-blox PVT 首样本明确不是差分/载波相位解，raw-fix 自身只有普通 GPS fix 状态和近似协方差。GT 来源 Gate 继续阻塞，不能宣称 RTK Fixed、厘米级真值或运行 APE/RPE。下一步应审查 PVT 全量质量分布、M3DGR MAVROS/飞控配置与接收机连线，并检查是否存在未被当前摘要覆盖的 /ublox_driver/range_meas、RTCM/状态 topic 或接收机配置证据。
+
+
+### 6.14 Dynamic03 u-blox PVT 全量质量结果与 raw-measurement 下一步 (2026-11-25)
+
+用户在新增 PVT 全量统计后重新运行本地审计，结果：
+
+- /ublox_driver/receiver_pvt 共 2,845 条。fix_type: 3D=1,350、2D=739、No Fix=756；valid_fix=true 865 条（30.4%），false 1,980 条（69.6%）。
+- diff_soln=false 2,845/2,845；carr_soln=0 2,845/2,845；没有任何差分改正标志或载波相位 Float/Fixed 解。
+- num_sv: 8颗15条、7颗34条、6颗153条、5颗601条、4颗649条、3颗637条、0颗756条。
+- h_acc: min 12.721m、median 31.381m、P95 224.992m、max 394.584m。
+- v_acc: min 12.683m、median 32.408m、P95 327.376m、max 412.530m。
+- p_dop: min 3.14、median 35.44、P95/max 99.99。
+- vel_acc: median 0.79m/s、P95 2.6712m/s、max 4.204m/s。
+
+单位已通过 gnss_comm/msg/GnssPVTSolnMsg.msg 核实：h_acc / v_acc 是米，vel_acc 是 m/s；fix_type 仅表达 0=no fix、2=2D、3=3D 等定位类型，diff_soln 才表示是否应用差分改正，carr_soln 0/1/2 分别表示无载波相位/Float/Fixed。参考 [gnss_comm GnssPVTSolnMsg.msg](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssPVTSolnMsg.msg)。该 PVT 流在本序列中质量很差，不能作为 RTK 真值。
+
+官方 M3DGR topic 清单还列出 /ublox_driver/range_meas、/ublox_driver/ephem、/ublox_driver/glo_ephem、/ublox_driver/iono_params、/ublox_driver/time_pulse_info。range_meas 是每历元多卫星原始观测，包含伪距、载波相位、Doppler、CN0、LLI 和观测状态位；原始观测可进一步用于检查载波跟踪/失锁并评估是否能离线重算 GNSS，但不自动意味着存在差分改正或 RTK base 数据。参考 [M3DGR README](https://github.com/sjtuyinjie/M3DGR/blob/main/README.md)、[gnss_comm GnssMeasMsg.msg](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssMeasMsg.msg)、[gnss_comm GnssObsMsg.msg](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssObsMsg.msg)。
+
+审计脚本现已扩展为同时盘点上述五类 topic，并对 /ublox_driver/range_meas 汇总历元卫星数、伪距/载波相位/半周有效状态位、LLI 失锁标记和 CN0 分布；只读，不修改 bag。此更新尚未经过 CI，也尚未由用户在本地运行。
+
+**Gate 结论：** receiver_pvt 明确排除为 RTK Fixed 真值来源；GT 与 /mavros/global_position/raw/fix 的近乎逐行一致仍然强烈表明它们同源，但 raw-fix 的物理接收机身份与 RTK 状态仍未证明。下一步检查 raw measurement 是否完整、载波相位跟踪是否连续，以及是否存在 base/RTCM/correction 数据；即使原始观测完整，也需找到基站/改正源与接收机配置证据后才能讨论 RTK 重算。禁止据此运行或宣称 APE/RPE 精度验收通过。
