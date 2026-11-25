@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.67
+- 文档版本：v0.3.68
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -228,18 +228,9 @@
 
 ## 4. 进度变更记录
 
-- v0.1–v0.3.54 历史变更见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
-- v0.3.55–v0.3.66 的完整 TaskPlan 快照（含当时进度、阻塞、证据和变更表）已归档：[TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
-- 2026-11-25 / v0.3.67：保存 Dynamic03 数据审计当前结论；启动 Nav2 专项研究，建立 `doc/Nav2/` 文档体系。文档研究以 Nav2 Jazzy 官方资料为主，分清 ROS/Nav2 通用事实、项目架构建议和待硬件/供应商确认项；当前只完成设计文档，不代表 Nav2 部署、仿真或实机验收。| 2026-11-24 | v0.3.55 | 新增 TUM GT 只读审计及 7 项测试；固定 M3DGR Livox ROS1 `offset_time`=ns/timebase/header 语义来源；确认 ROS1 `livox_ros_driver/CustomMsg` 与 Jazzy Point-LIO `livox_ros_driver2/msg/CustomMsg` 类型不同，记入显式类型映射/重序列化门禁；bag 5/5、GT 7/7、UrbanLoco 13/13 CI [45416922661](https://github.com/rexyll/robdog_nav2/actions/runs/45416922661) success | TUM audit 0f42bcc5d1a5be5664696957fd187c1f7045b5d3; tests 0627d2afd732b5849c1e3e660a67550fdfc8bdb5 / 59b84dba906e744b1f049ab918537671ee63af94; Livox audit 23c334be6377bf19ead94f39d636a876cd98c819; docs f3ef67656deb932633957c7b13c825ba4ba381cb / cc107912a11d4bb46379555870012ac54f95dee2; CI 45416922661 |
-| 2026-11-24 | v0.3.56 | 新增 M3DGR Dynamic03 受控 ROS1→ROS2 转换器：官方 SHA256 + matching audit JSON 双门禁；合成转换/回读 4/4；真实 bag/GT 尚待审计 | converter/test/docs/CI commits ... | 
-| 2026-11-24 | v0.3.57 | 真实 Dynamic03 bag audit 通过，发现 MID-360 Driver2 类型；GT 4,269 行 TUM 格式但有 1,675 duplicate/728 backwards，阻断 evo | converter 97e9211ace2c83dce6ca1cc1f357a307a0669f73; tests b36e365a6ccb9c17c3aad7be07f049ba41a6758b; docs 96fabf895242f75a39c3e3393542d6d7bd41e771; CI 45423779787 |
-| 2026-11-24 | v0.3.58 | TUM audit 增加位姿/时间戳异常关联统计；CI [45424213139](https://github.com/rexyll/robdog_nav2/actions/runs/45424213139) success | audit 9b67ed712d4618f0551315921313bca6d65154ea; tests e6f0a4fdef2fc3aa4bd53a7a448ad7ff58262771; docs 3a66a48e14b35369f76c0f4a0d382096617685a1
-| 2026-11-24 | v0.3.59 | 新增 TUM pose-run non-authoritative candidate generator，6/6 测试；CI 45425579274 success | generator f5d1ef3 / fe362365; tests 199f8229; workflow 34d29c5a; CI 45425579274 |
-| 2026-11-24 | v0.3.60 | 真实 Dynamic03 ROS2 转换/ros2 bag info 通过；新增只读逐行 GT↔raw-fix 时间/ENU 关联审计，CI [45427945207](https://github.com/rexyll/robdog_nav2/actions/runs/45427945207) success | audit 96303cb6; tests 4cdf5170; workflow 3c78e0dc; docs 823f4a30; CI 45427945207 |
-| 2026-11-25 | v0.3.61 | 真实 GT↔raw-fix 逐条时间/空间来源关联获得强证据；纠正 NavSatStatus=0 为普通 STATUS_FIX；扩展 frame/service/covariance 和两个 u-blox topic 的消息字段快照审计，新增回归测试；RTK Fixed/GT 精度仍未认证 | audit/tool+tests/docs/TaskPlan; CI pending |
-| 2026-11-25 | v0.3.64 | 修复 `/ublox_driver/range_meas` 的 NumPy 数组字段布尔判定异常：`status`/`CN0`/`LLI` 显式处理 `None` 并归一化序列，且将 NumPy 浮点纳入 CN0 统计；新增 NumPy 数组回归测试。数据集工具 CI [run 45550752872](https://github.com/rexyll/robdog_nav2/actions/runs/45550752872) success；该 CI 为合成/纯逻辑测试，真实 Dynamic03 bag 扩展审计仍待 VM 重跑 | audit `4d2ca36539a2b55b1a37dee4960d9441899f2df1`; tests `c4d9590a5fbf817fedfdada42b93f9e446c4330d`; CI 45550752872 |
-| 2026-11-25 | v0.3.65 | 用户已在真实 Dynamic03 bag 上成功重跑扩展审计：range_meas 879条/1054信号，载波相位有效0、失锁1054、卫星数中位数1、CN0中位数13dB-Hz、最大时间断档54.39s；星历/PPS topic 缺失。与 PVT diff_soln=false/carr_soln=0 合并后判定当前 bag 不足以重建 RTK Fixed；GT Gate 保持阻塞，记录于数据集策略§6.15 | docs/TaskPlan; real bag audit JSON user-provided; source semantics [gnss_comm](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssObsMsg.msg) |
-| 2026-11-25 | v0.3.66 | 公开源码确认 M3DGR SPP 默认订阅 raw/fix，MAVROS raw/fix 来自 GPS_RAW_INT；covariance_type=1 对应 eph/epv 近似协方差分支。物理接收机和 RTK correction 仍未闭环 | docs §6.16; M3DGR pin 5fc892c; MAVROS global_position.cpp |
+- v0.1–v0.3.54：见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
+- v0.3.55–v0.3.66 完整快照：见 [TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
+- 2026-11-25 / v0.3.68：Nav2 专项首轮研究文档已写入 doc/Nav2/（架构、生命周期/任务流、生产者消费者矩阵、Costmap、算法、硬件软件模块、四足安全、验证路线）；属于设计文档，不代表 ROS 集成/仿真/实机验收。提交：archive 5c7bc4b6；TaskPlan 初始保存 080d3931；Nav2 文档 commits 11d97882、98dba2c4、1ce5231a、41bad402、65290550、60342d48、b6034826、a53b5ea3、3c38c112。
 
 ---
 
