@@ -293,3 +293,45 @@ Before driver implementation, add byte-array fixtures copied from protocol field
 - 固定候选驱动源码：https://github.com/aussierobots/ublox_dgnss/tree/9d4f5addbc72d092c57dde99b20712258e96e81e
 - 相关审计：`13_zed_f9p_utc_gps_time_mapping_audit.md`
 
+### 4.9 NAV-PVT byte-level UTC validity fixtures
+
+R07 NAV-PVT is UBX class/id `01/07`, payload length exactly 92 bytes. The UTC-related fields used by the mapper are:
+- offset 0..3: `iTOW`, U4 little-endian;
+- offsets 4..10: UTC year (U2 LE), month/day/hour/minute/second (U1); second permits 60 during a leap second;
+- offset 11: `valid` bitfield: bit 0 `validDate` (0x01), bit 1 `validTime` (0x02), bit 2 `fullyResolved` (0x04), bit 3 `validMag` (0x08), bits 4..7 reserved;
+- offsets 12..15: `tAcc`, U4 LE nanoseconds;
+- offsets 16..19: `nano`, signed I4 LE nanoseconds; preserve negative values;
+- offset 22: `flags2`: bit 5 `confirmedAvail` (0x20), bit 6 `confirmedDate` (0x40), bit 7 `confirmedTime` (0x80), bits 0..4 reserved.
+
+The payload parser must be structural only: exact length 92, explicit little-endian and signed decoding, preserve raw validity bytes, and never promote validity policy into parsing. A pure mapper applies confirmation policy after decoding. `confirmedAvail=0` means confirmation metadata is unavailable/not asserted and therefore can only yield an UNCONFIRMED candidate; when `confirmedAvail=1`, both `confirmedDate` and `confirmedTime` must be set for a confirmed candidate.
+
+Deterministic fixtures are built from a zero-filled 92-byte payload with the following byte mutations (all offsets zero-based; common valid date fixture sets year=2024 at [4..5] as `E8 07`, month/day/hour/min/sec at [6..10] as `01 01 00 00 00`):
+- `PVT-RAW-001`: offset 11 = `0x07`, offset 22 = `0xE0` → date/time/fullyResolved and confirmation available/date/time all true.
+- `PVT-RAW-002`: offset 11 = `0x07`, offset 22 = `0x00` → valid UTC fields but no confirmation metadata; mapper returns UNCONFIRMED, never confirmed.
+- `PVT-RAW-003`: offset 11 = `0x03` → validDate + validTime, but not fullyResolved; reject precise absolute mapping.
+- `PVT-RAW-004`: offset 11 = `0x05` → validDate + fullyResolved, validTime false; reject.
+- `PVT-RAW-005`: offset 11 = `0x06` → validTime + fullyResolved, validDate false; reject.
+- `PVT-RAW-006`: offset 22 = `0x60` → confirmedAvail + confirmedDate, confirmedTime false; reject confirmed candidate.
+- `PVT-RAW-007`: offset 22 = `0xA0` → confirmedAvail + confirmedTime, confirmedDate false; reject confirmed candidate.
+- `PVT-RAW-008`: offset 16..19 = `FF FF FF FF` → nano = -1 ns, not a large positive integer.
+- `PVT-RAW-009`: offset 10 = `3C` (60 seconds) → preserve explicit leap-second civil field; do not normalize it as ordinary second 0.
+- `PVT-RAW-010`: offset 11 reserved bit set (e.g. `0x87`) → preserve/report reserved bits; do not reinterpret them as validity.
+- Length tests: 0, 91, 92 and 93 bytes; only 92 is structurally accepted. Also test invalid calendar fields and out-of-contract nano values separately from valid-but-false flags.
+
+### 4.10 NAV-TIMEUTC raw payload fixtures
+
+R07 NAV-TIMEUTC is class/id `01/21`, payload length exactly 20 bytes. Layout:
+- 0..3 `iTOW` U4 LE; 4..7 `tAcc` U4 LE; 8..11 `nano` signed I4 LE;
+- 12..13 `year` U2 LE (1999..2099); 14 month; 15 day; 16 hour; 17 minute; 18 second (0..60); 19 `valid` bitfield.
+- Byte 19 masks: `validTOW=0x01`, `validWKN=0x02`, `validUTC=0x04`, reserved `0x08`, `utcStandard=(byte >> 4) & 0x0F`.
+
+Canonical 20-byte fixture with UTC=2024-01-01 00:00:00 and validUTC only:
+`00 00 00 00 00 00 00 00 00 00 00 00 E8 07 01 01 00 00 00 04`.
+Generate variants by changing only byte 19 to `00, 01, 02, 04, 08, 20, F4, 74`; expected bit interpretations are the `TIMEUTC-FLAGS-001..008` cases in §4.8. Additional raw parser checks:
+- payload lengths 0, 19, 20, 21; only 20 accepted;
+- `nano=FF FF FF FF` decodes to -1 ns;
+- UTC year lower/upper bounds 1999 and 2099 accepted structurally; out-of-range year and invalid calendar date rejected by civil-time validation;
+- raw byte 19 is always preserved, reserved bit 3 does not become a validity flag, and unknown `utcStandard` is not rejected by the byte decoder itself (policy layer rejects it);
+- PVT and TIMEUTC records with equal iTOW but different normalized civil UTC must fail the mapper cross-check; equal wall-clock-looking values with different iTOW must not be joined.
+
+These fixtures complement the NAV-TIMELS 24-byte fixtures in §4.7. They specify parser and policy test inputs; they are not executed tests or evidence of receiver output. The R07 protocol document is an early-production document, so target firmware/protocol compatibility still requires MON-VER and on-device message capture.
