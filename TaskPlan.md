@@ -255,6 +255,8 @@
 
 ## 4. 进度变更记录
 
+- 2026-11-25 / v0.3.78：继续 N1，固定 Navigation2 Jazzy commit `c7046550547d382a5186d106b0895eda02485d7c`，完成 Costmap current 状态从 LayeredCostmap 到 PlannerServer/ControllerServer 的消费端追踪。Planner 默认 `costmap_update_timeout=1.0s`，规划 Action 入口等待 global_costmap current，超时返回 TIMEOUT；Controller 默认 0.30s，在每个控制循环计算前等待 local_costmap current，超时发布零速度并以 CONTROLLER_TIMED_OUT 终止 FollowPath。明确 current Gate 不等于逐消息 freshness、动态障碍质量或实际底层停车确认；仿真时钟暂停/跳变仍需运行验证。新增 `doc/Navigation/06_costmap_health_and_consumers_audit.md`。仅 E2 上游源码证据，未运行 ROS/仿真/实机。
+
 - 2026-11-25 / v0.3.77：继续 N1，追踪 Costmap2DROS 与 LayeredCostmap：Costmap2DROS 通过独立 std::thread + WallRate 更新；getRobotPose 失败时本周期不更新；update_frequency 与 publish_frequency 分离；LayeredCostmap 按配置顺序执行 plugin updateBounds/updateCosts，filters 在 plugin 之后处理；isCurrent() 对所有启用 plugins/filters 做 AND 聚合。补充指出 current 聚合存在不等于 Planner/Controller 每次决策都会检查，消费端调用点仍需源码核验。审计追加至 doc/Navigation/05_sensor_to_costmap_observation_audit.md，提交 6421d3d1。仅 E2 源码证据，未运行验证。
 
 - 2026-11-25 / v0.3.76：继续 N1，固定 Navigation2 Jazzy commit c7046550547d382a5186d106b0895eda02485d7c，审计 ObstacleLayer/VoxelLayer/ObservationBuffer：确认 PointCloud2 原生输入、x/y/z 字段读取、TF MessageFilter、sensor-data QoS depth 50、marking/clearing、height/range filtering；确认 expected_update_rate=0 时 ObservationBuffer 不检查 stale；VoxelLayer 有限 z_voxels 最终仍投影为二维 Costmap；默认 YAML 的 local/global Costmap 和 Collision Monitor 仍使用 LaserScan /scan。新增 doc/Navigation/05_sensor_to_costmap_observation_audit.md，提交 834136a2。结论仅为 E1/E2 源码审计，不代表 MID-360/双目接入或运行验收。
