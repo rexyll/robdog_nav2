@@ -198,3 +198,9 @@
 - [09 §12 — Classic PCAP / PCAPNG 容器读取、接口元数据与抓包时间语义](09_mid360_timestamp_and_point_lio_integration_audit.md#12-pcap--pcapng-容器读取器抓包时间与接口元数据)
 - [PCAP / PCAPNG 流式读取器](../../scripts/pcapng_reader.py)
 - [PCAP / PCAPNG 读取器单元测试](../../scripts/tests/test_pcapng_reader.py)
+
+- [09 §13 — Ethernet/VLAN、Linux cooked、IPv4/IPv6/UDP 与 MID-360 PCAP 流量审计](09_mid360_timestamp_and_point_lio_integration_audit.md#13-pcap-链路层--ip--udp-解码与-mid-360-流量提取)
+- [MID-360 PCAP/PCAPNG 审计 CLI](../../scripts/audit_mid360_pcap.py)
+- [网络包解码器](../../scripts/network_packet_decoder.py)
+- [网络包解码器测试](../../scripts/tests/test_network_packet_decoder.py)
+- [MID-360 PCAP 审计测试](../../scripts/tests/test_audit_mid360_pcap.py)
