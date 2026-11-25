@@ -439,3 +439,16 @@ python scripts/audit_m3dgr_gt_rtk_correspondence.py \
 保留强来源关联结论：原始 TUM 4,269 行与 /mavros/global_position/raw/fix 4,269 条消息的 header 时间戳逐行最大差仍约 0.000712ms，诊断刚体拟合 RMSE 约 0.044mm；这说明两者极可能同源/直接派生，但不证明上游解算质量。原始 TUM 和 bag 均不修改，2,594 行 pose-run candidate 仍不可用于替代原始来源证据。
 
 **GT Gate 继续阻塞。** 暂不运行 evo APE/RPE、Point-LIO 精度评估或用该 GT 调参。若后续要挽救该数据集，需要从数据集作者/设备配置取得 Dynamic03 实际接收机身份、MAVROS 输入源、RTK base/NTRIP/RTCM 改正源、接收机配置/状态日志、天线位置与杆臂、时间同步说明；仅靠当前 bag 内的 u-blox 原始观测无法补齐这些证据。
+
+
+### 6.16 MAVROS raw-fix 数据链路的公开源码核查（2026-11-25）
+
+固定 M3DGR 源码 pin 5fc892c84defef42feb2418f7d38897bef40f490 后，发现 SPP 基线 voxel_mapping_common.cpp 将 common/gps_topic 默认设为 /mavros/global_position/raw/fix，注释称其为读取 ublox_driver 中的 GPS 数据。这证明 M3DGR 的 SPP 基线把该 topic 当作 GNSS 输入，但不证明 rosbag 中它对应 C-RTK2HP、C-RTK9Ps 或某一特定飞控物理端口。
+
+MAVROS ROS 2 global_position.cpp 的 handle_gps_raw_int() 明确将 MAVLink GPS_RAW_INT 转为 NavSatFix 并发布 ~/raw/fix：
+- raw_gps.fix_type > 2 只映射成 NavSatStatus::STATUS_FIX；这不是 RTK Fixed 判定。
+- 若 MAVLink v2 h_acc/v_acc 有效，协方差类型设为 DIAGONAL_KNOWN；否则在 eph/epv 可用时通过 eph/epv 与 gps_uere 估算，并标为 APPROXIMATED。
+- 本 bag 中 raw-fix covariance_type=1，说明走的是 APPROXIMATED 分支，而不是 h_acc/v_acc 的 DIAGONAL_KNOWN 分支。它与实测 covariance 水平中位方差 0.49m²（单轴标准差约0.7m）一致，但不是接收机独立精度认证。
+来源：[M3DGR SPP baseline](https://github.com/sjtuyinjie/M3DGR/blob/5fc892c84defef42feb2418f7d38897bef40f490/baseline_systems/SPP_M3DGR/src/SPP/src/voxel_mapping_common.cpp)、[MAVROS global_position.cpp](https://github.com/mavlink/mavros/blob/ros2/mavros/src/plugins/global_position.cpp)。
+
+**结论边界：** 已确认 topic 的软件链路为 MAVLink GPS_RAW_INT → MAVROS NavSatFix，并确认 M3DGR SPP 基线订阅该 topic；尚未确认 GPS_RAW_INT 是由哪台物理 GNSS/RTK 接收机或飞控输入端口产生，也未确认 MAVLink 原始 fix_type、RTK correction status/age、RTCM/NTRIP 来源。必须取得飞控参数/日志、接线图或作者说明，才能闭环物理设备映射与 RTK 状态。
