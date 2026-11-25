@@ -333,3 +333,52 @@ Livox MID-360 v1.4.12 规定：
 此外，分析只针对单个 capture file 的遍历顺序和单一 flow；多个接口、镜像口、不同 capture timestamp 精度、重复采集会改变观测结果。当前不做 IP 分片重组，也不把 IMU 的 udp_cnt 套用点云序号规则。
 
 合成测试验证的是算法行为，不是设备实际包率、帧模式、网络丢包或 NIC 捕获性能。序号审计单测 5/5、集成 capture audit 5/5 已在 GitHub Actions run 45642338867 通过。真实 MID-360 pcap 与设备 pattern_mode 配置仍需取得后再做硬件验收。
+
+
+## 15. PTPv2 / gPTP 报文识别与消息配对审计
+
+新增：
+- `scripts/ptp_packet_audit.py`：PTPv2 common header/body parser、UDP/IP 与 Ethernet L2 提取、bounded message correlator、streaming capture audit。
+- `scripts/tests/test_ptp_packet_audit.py`：合成 UDP/IPv4、Ethernet VLAN L2、Sync/Follow_Up、Delay_Req/Delay_Resp、Pdelay exchange、Announce、malformed/truncated 和 pending bound 测试。
+- `scripts/audit_mid360_pcap.py` 同时输出 `ptp_audit`，无需把整份 pcap 读入内存。
+
+### 15.1 两种传输模式
+
+Livox MID-360 v1.4.12 明确支持：
+- IEEE 1588 v2.0 over UDP/IP；
+- gPTP over Ethernet L2。
+
+本工具识别：
+- UDP/IP PTP：event/general ports 319/320，支持 IPv4/IPv6（底层 IP decoder 支持的协议范围内）。
+- L2 PTP：EtherType `0x88F7`，支持 Ethernet VLAN 标签及 Linux cooked v1/v2 protocol metadata。
+- 不将 UDP/IP 与 L2 PTP 混为同一 transport；输出 `udp/319`、`udp/320`、`ethernet_l2` 分布。
+- 保留 `transportSpecific`、`domainNumber`、`sourcePortIdentity`、`sequenceId`、`correctionField`、twoStepFlag、VLAN、capture timestamp 和 interface/section 信息。
+
+### 15.2 PTPv2 解析字段与关联
+
+Common header 固定 34 bytes；校验 versionPTP、messageLength、字段边界。解析 Sync / Delay_Req / Pdelay_Req / Pdelay_Resp / Follow_Up / Delay_Resp / Pdelay_Resp_Follow_Up 的关键时间戳和 requestingPortIdentity；Announce 解析 currentUtcOffset、priority1/2、grandmasterClockQuality、grandmasterIdentity、stepsRemoved、timeSource。
+
+按 domain + sourcePortIdentity + sequenceId 配对：
+- two-step Sync ↔ Follow_Up；
+- Delay_Req ↔ Delay_Resp（响应中的 requestingPortIdentity 对应请求源）；
+- Pdelay_Req ↔ Pdelay_Resp ↔ Pdelay_Resp_Follow_Up。
+
+Announce 的 grandmasterIdentity / priority / clockClass 只统计报文宣告内容，不代表设备已经选定该 GM。未解析 BMCA 全状态机、foreign-master announce receipt timeout、port state、profile-specific TLV 或设备 vendor-specific TLV。
+
+### 15.3 解释边界
+
+PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmaster，均**不证明**：
+- MID-360 已锁定该 GM，或 GM 是网络最终选出的 active grandmaster；
+- Orin PHC 正在运行 ptp4l，PHC hardware timestamp 已启用；
+- PTP offset、path delay、asymmetry、servo state 或同步精度达到验收目标；
+- PCAP capture timestamp 是 NIC hardware timestamp，或与 PTP message timestamp 同一时钟域。
+
+工具仅做协议字段、transport、domain、source identity、sequence correlation 和 Announce GM metadata 观察。correctionField 以 raw signed scaled value 与 ns 表示；PTP timestamp 保留 48-bit seconds + 32-bit nanoseconds，不自行转换 UTC/GPS，也不使用 capture 时间差推导链路延迟。
+
+本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
+
+依据：
+- Livox MID-360 v1.4.12：支持 IEEE1588v2.0 UDP/IP 与 gPTP L2；
+- IEEE 1588 common header / sequenceId / correctionField；
+- IEEE 1588 event/general UDP ports 319/320；
+- Ethernet PTP EtherType 0x88F7。
