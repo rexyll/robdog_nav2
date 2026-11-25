@@ -1,6 +1,6 @@
 # RobDog Nav2 项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.61
+- 文档版本：v0.3.62
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -101,7 +101,7 @@
 - [~] B11. Point-LIO P0/P1 与 P3a ARM64 build 已通过；UrbanLoco `HK-Data20190117_0.db3` 仅完成 rosbag2/topic/318 条 INSPVAX CDR 诊断，来源不明，不能代替指定 ROS1 原始 bag。UrbanLoco P2 replay/evo 仍被 provenance gate 阻塞（CI [45394849538](https://github.com/rexyll/robdog_nav2/actions/runs/45394849538) success），但不再作为整个项目唯一数据入口；并行替代基准转入 B13。
 - [~] B12. MID-360 rosbag 时间审计 CLI 已完成：读取 CustomMsg.timebase/header.stamp/逐点 offset_time 与 IMU header.stamp，统计频率、非单调时间、offset 分布和 LiDAR-IMU 最近样本差；CLI 阈值现在拒绝负数、NaN 与 ±Inf，并在打开 rosbag 前失败退出，0 与未指定阈值保持合法；新增 8 项参数/helper 和 CLI 前置校验测试，Python compile、CLI --help、21/21 项测试 CI [run 45384314282](https://github.com/rexyll/robdog_nav2/actions/runs/45384314282) success。代码提交：b2e44f7d5eb23f886f569e49a506fee22f742522、e3403fd8746c808e4b956f8da0b64256b242af62、afe8207d3f0310326e0736d1cec17e9e46b0072f、4b2e089f7206a639b8dadf7f150200d58bff1a6c。真实 MID-360 rosbag 尚未采集/审计，最近邻消息差不是 PTP 同步精度证明。
 - [~] B13. Dynamic03 原始 bag 官方 SHA256、结构 audit、真实 ROS1→ROS2 转换和 ros2 bag info 均通过；输出 59,749 条 CDR 消息，LiDAR 2,846、IMU 56,903，类型/计数正确。原始 GT 4,269 行有 1,675 duplicate + 728 backwards timestamp；pose-run candidate 2,594 行虽通过 TUM parser，但非权威。新线索：原始 GT 行数恰与 /mavros/global_position/raw/fix 4,269 条消息相同；M3DGR Dynamic 场景 GT 类型为 RTK/Mocap、平台 RTK 标称 15Hz，但逐行对应和 RTK/Mocap 类型未证实。来源关联审计待本地执行，evo 阻塞。详情见 [替代数据集策略 §6](docs/datasets/alternative_dataset_strategy.md)。
-- [~] B14. bag/TUM read-only audit、ROS1→ROS2 converter（Driver2 source）、pose-run candidate generator、GT↔RTK correspondence audit 已实现。真实用户 Dynamic03 rosbag2 转换和 ros2 bag info 通过；回归 CI [45427945207](https://github.com/rexyll/robdog_nav2/actions/runs/45427945207) success：bag 5/5、GT↔RTK 3/3、TUM 8/8、candidate 6/6、converter 5/5、UrbanLoco 13/13。用户本地来源关联报告：4,269 条按序时间戳全部 <1ms，诊断刚体拟合 3D RMSE 0.044mm，强烈支持 TUM 与 raw-fix 同源；但 NavSatFix status=0 为普通未增强 STATUS_FIX，covariance_type=1 为 approximate，不能据此证明 RTK Fixed/厘米级精度。新增 frame/service/covariance 数值与 /ublox_driver/receiver_lla、receiver_pvt 字段审计；CI 仍仅为脚本/合成测试，非真实 bag 回放。
+- [~] B14. bag/TUM 只读审计、ROS1→ROS2 converter、pose-run candidate、GT↔RTK correspondence audit 已实现；Dynamic03 真实 rosbag2 转换和 ros2 bag info 通过。基线 CI [45427945207](https://github.com/rexyll/robdog_nav2/actions/runs/45427945207) success。用户本地报告：4,269 条 GT/raw-fix 按序时间差全部 <1ms，诊断 SE(3) RMSE 0.044mm，强烈支持同源；raw-fix status=0 仅普通 STATUS_FIX、covariance_type=1 为 approximate，水平方差中位数 0.49m²；receiver_lla frame 为空/service=0/covariance UNKNOWN，首条 status=3 非标准枚举；receiver_pvt 首样本为 3D fix 但 diff_soln=false/carr_soln=0，末样本 invalid。已扩展 PVT 全量质量分布统计，待本地重跑。CI 新增测试曾因测试夹具误写换行符失败，已修复（commit ec32adc）；PVT 统计扩展 commit a462a70，文档补充 commit 24de781；最新 CI pending。GT Gate 仍阻塞，禁止宣称 RTK Fixed/厘米级真值、evo APE/RPE 或精度评测。
 
 ### 阶段 C — 状态估计与 RTK 全局定位
 
