@@ -55,6 +55,15 @@ class PtpMessage:
     timestamp_nanoseconds: int | None
     timestamp_ns: int | None
     requesting_port_identity: str | None
+    current_utc_offset: int | None
+    grandmaster_priority1: int | None
+    grandmaster_clock_class: int | None
+    grandmaster_clock_accuracy: int | None
+    grandmaster_offset_scaled_log_variance: int | None
+    grandmaster_priority2: int | None
+    grandmaster_identity: str | None
+    steps_removed: int | None
+    time_source: int | None
     transport: str
     capture_timestamp_ns: int | None
     interface_id: int
@@ -116,6 +125,10 @@ def parse_ptp_v2_message(payload: bytes, *, transport: str,
 
     timestamp_seconds = timestamp_nanoseconds = timestamp_ns = None
     requesting_identity = None
+    current_utc_offset = grandmaster_priority1 = None
+    grandmaster_clock_class = grandmaster_clock_accuracy = None
+    grandmaster_offset_scaled_log_variance = grandmaster_priority2 = None
+    grandmaster_identity = steps_removed = time_source = None
     if message_type in {0, 1, 2, 8}:
         if message_length < 44:
             raise PtpPacketError("PTP timestamp message shorter than 44 bytes")
@@ -125,6 +138,18 @@ def parse_ptp_v2_message(payload: bytes, *, transport: str,
             raise PtpPacketError("PTP response message shorter than 54 bytes")
         timestamp_seconds, timestamp_nanoseconds, timestamp_ns = _timestamp(data[34:44])
         requesting_identity = _port_identity(data[44:54])
+    elif message_type == 11:
+        if message_length < 64:
+            raise PtpPacketError("PTP Announce message shorter than 64 bytes")
+        current_utc_offset = struct.unpack_from("!h", data, 44)[0]
+        grandmaster_priority1 = data[47]
+        grandmaster_clock_class = data[48]
+        grandmaster_clock_accuracy = data[49]
+        grandmaster_offset_scaled_log_variance = struct.unpack_from("!H", data, 50)[0]
+        grandmaster_priority2 = data[52]
+        grandmaster_identity = data[53:61].hex(":")
+        steps_removed = struct.unpack_from("!H", data, 61)[0]
+        time_source = data[63]
 
     return PtpMessage(
         message_type=message_type,
@@ -145,6 +170,15 @@ def parse_ptp_v2_message(payload: bytes, *, transport: str,
         timestamp_nanoseconds=timestamp_nanoseconds,
         timestamp_ns=timestamp_ns,
         requesting_port_identity=requesting_identity,
+        current_utc_offset=current_utc_offset,
+        grandmaster_priority1=grandmaster_priority1,
+        grandmaster_clock_class=grandmaster_clock_class,
+        grandmaster_clock_accuracy=grandmaster_clock_accuracy,
+        grandmaster_offset_scaled_log_variance=grandmaster_offset_scaled_log_variance,
+        grandmaster_priority2=grandmaster_priority2,
+        grandmaster_identity=grandmaster_identity,
+        steps_removed=steps_removed,
+        time_source=time_source,
         transport=transport,
         capture_timestamp_ns=capture_timestamp_ns,
         interface_id=interface_id,
@@ -208,6 +242,7 @@ class PtpCorrelationAudit:
         self.message_types = Counter()
         self.domains = Counter()
         self.transports = Counter()
+        self.grandmasters = Counter()
         self.pending_sync = {}
         self.pending_delay_req = {}
         self.pending_pdelay_req = {}
@@ -226,6 +261,8 @@ class PtpCorrelationAudit:
         self.message_types[message.message_name] += 1
         self.domains[str(message.domain_number)] += 1
         self.transports[message.transport] += 1
+        if message.grandmaster_identity is not None:
+            self.grandmasters[message.grandmaster_identity] += 1
         if message.transport.startswith("udp/"):
             expected = (
                 PTP_EVENT_PORT if message.message_type in EVENT_MESSAGE_TYPES
@@ -281,6 +318,7 @@ class PtpCorrelationAudit:
             "message_types": dict(self.message_types),
             "domain_counts": dict(self.domains),
             "transport_counts": dict(self.transports),
+            "grandmaster_identity_counts": dict(self.grandmasters),
             "correlations": dict(self.counts),
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
@@ -324,6 +362,11 @@ class PtpCaptureAudit:
                 "source_port_identity": message.source_port_identity,
                 "sequence_id": message.sequence_id,
                 "two_step": message.two_step,
+                "grandmaster_identity": message.grandmaster_identity,
+                "grandmaster_priority1": message.grandmaster_priority1,
+                "grandmaster_clock_class": message.grandmaster_clock_class,
+                "grandmaster_priority2": message.grandmaster_priority2,
+                "steps_removed": message.steps_removed,
                 "transport": message.transport,
                 "capture_timestamp_ns": message.capture_timestamp_ns,
                 "timestamp_seconds": message.timestamp_seconds,
