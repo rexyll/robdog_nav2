@@ -3,7 +3,7 @@ import struct
 import unittest
 import zlib
 
-from network_packet_decoder import (
+from livox_mid360_udp_parser import parse_mid360_udp_payload\nfrom network_packet_decoder import (
     LINKTYPE_ETHERNET, LINKTYPE_LINUX_SLL, LINKTYPE_LINUX_SLL2,
     LINKTYPE_RAW, LINKTYPE_IPV4, LINKTYPE_IPV6,
     PacketDecodeError, classify_mid360_datagram, decode_link_packet,
@@ -118,6 +118,41 @@ class TestNetworkPacketDecoder(unittest.TestCase):
         struct.pack_into("!H", broken, 16, 10)
         with self.assertRaises(PacketDecodeError):
             decode_link_packet((LINKTYPE_ETHERNET, bytes(broken)))
+
+
+    def test_truncated_capture_record_is_not_decoded(self):
+        record = type("Packet", (), {"link_type": LINKTYPE_RAW,
+                                     "data": ipv4_udp(),
+                                     "truncated": True})()
+        self.assertEqual(decode_link_packet(record).disposition, "truncated_capture")
+
+    def test_lidar_ip_direction_filter(self):
+        from network_packet_decoder import UdpDatagram
+        datagram = UdpDatagram(LINKTYPE_RAW, 4, "192.0.2.10", "192.0.2.20",
+                               41000, 56301, b"data")
+        self.assertIsNone(classify_mid360_datagram(
+            datagram, lidar_ip="192.0.2.20", host_ports={56301: "point_cloud"}))
+        self.assertEqual(classify_mid360_datagram(
+            datagram, lidar_ip="192.0.2.10", host_ports={56301: "point_cloud"}),
+            ("point_cloud", "lidar_to_host"))
+
+    def test_network_to_mid360_payload_parser_end_to_end(self):
+        payload_data = bytes(range(14))
+        payload = bytearray(36 + len(payload_data))
+        struct.pack_into("<BHHHHBBB", payload, 0, 0, len(payload), 100,
+                         1, 4, 1, 1, 1)
+        payload[36:] = payload_data
+        struct.pack_into("<Q", payload, 28, 1_700_000_000_000_000_000)
+        struct.pack_into("<I", payload, 24, zlib.crc32(payload[28:]) & 0xffffffff)
+        decoded = decode_link_packet((LINKTYPE_RAW, ipv4_udp(
+            payload=bytes(payload), src_port=56300)))
+        self.assertEqual(decoded.disposition, "udp")
+        self.assertEqual(classify_mid360_datagram(decoded.datagram),
+                         ("point_cloud", "lidar_to_host"))
+        mid360 = parse_mid360_udp_payload(decoded.datagram.payload)
+        self.assertTrue(mid360.crc32_valid)
+        self.assertEqual(mid360.data_type, 1)
+        self.assertEqual(mid360.timestamp_ns, 1_700_000_000_000_000_000)
 
     def test_classifies_official_device_side_ports_and_optional_host_ports(self):
         result = decode_link_packet((LINKTYPE_RAW, ipv4_udp(src_port=56300)))
