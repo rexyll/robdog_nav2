@@ -57,6 +57,9 @@ on:
       - "scripts/tests/test_tum_pose_run_candidate.py"
       - "scripts/convert_m3dgr_dynamic03_to_ros2.py"
       - "scripts/tests/test_convert_m3dgr_dynamic03_to_ros2.py"
+      - "scripts/audit_livox_rosbag_timing.py"
+      - "scripts/livox_time_audit_helpers.py"
+      - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
   workflow_dispatch:
