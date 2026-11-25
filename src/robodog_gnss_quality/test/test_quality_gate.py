@@ -249,5 +249,28 @@ class TestRtkQualityGate(unittest.TestCase):
         self.assertEqual(decision.reason, RejectionReason.COVARIANCE_INVALID)
 
 
+    def test_explicit_reset_clears_recovery_and_jump_reference(self):
+        first = self.evaluate(index=0)
+        self.assertEqual(first.reason, RejectionReason.RECOVERING)
+        self.assertEqual(self.gate.consecutive_fixed_samples, 1)
+
+        self.gate.reset()
+        self.assertEqual(self.gate.consecutive_fixed_samples, 0)
+
+        # A lower source timestamp and distant position must be treated as the
+        # first sample of a new epoch, not as out-of-order or a position jump.
+        observation = make_observation(
+            source_timestamp_ns=100,
+            source_clock_id="zed_f9p_new_generation",
+            receive_monotonic_ns=5_100_000_000,
+            latitude_deg=37.01,
+        )
+        decision = self.gate.evaluate(
+            observation, now_monotonic_ns=5_110_000_000
+        )
+        self.assertEqual(decision.reason, RejectionReason.RECOVERING)
+        self.assertEqual(decision.consecutive_fixed_samples, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
