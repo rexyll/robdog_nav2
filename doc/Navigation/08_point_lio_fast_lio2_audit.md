@@ -16,7 +16,7 @@
 3. 两者都依赖 LiDAR 与 IMU 的可靠时间关联。Point-LIO README 明确把 IMU/LiDAR 同步列为关键要求；FAST-LIO README 也强调同步和逐点 time 字段，缺失会影响前向/后向传播。
 4. **Point-LIO CTU ROS2 fork 并非无依赖的通用 ROS2 包。** 它依赖 `mrs_lib`、`backward_ros`、Livox ROS Driver 2 和 MRS 风格组件；README 建议通过 `mrs-ctu/mrs_point_lio_core` 安装。其仓库 workflow 调用外部 reusable workflow，当前仓库本身未证明 ROS 2 Jazzy 构建通过。
 5. **FAST-LIO2 官方仓库不是 ROS 2/Jazzy 包。** 固定版本 CMake 仍使用 catkin、roscpp、ROS1 message 类型与 Livox ROS Driver（ROS1）；其 MID360 yaml 是 ROS1 topic/驱动接口。它只能作为算法基线，若要用在 Jazzy，必须采用经过审计的 ROS2 移植或独立移植，不能直接把官方仓库列为 Jazzy 可用依赖。
-6. **许可是阻断性审查项。** FAST_LIO 仓库 LICENSE 是 GPL-2.0；Point-LIO CTU fork LICENSE 同样是 GPL-2.0，但 package.xml 的 `<license>BSD</license>` 与 LICENSE 文件冲突，仓库元数据亦未明确识别 SPDX。必须先做上游许可澄清与法律审查，再决定是否纳入产品依赖或进行代码移植。
+6. **许可是阻断性审查项。** FAST_LIO 与 Point-LIO CTU fork 的 LICENSE 文件均为 GPL-2.0，但两者 package.xml 都声明 `<license>BSD</license>`，与 LICENSE 文件冲突；Point-LIO 仓库元数据也未明确识别 SPDX。必须先做上游许可澄清与法律审查，再决定是否纳入产品依赖或进行代码移植。
 7. 当前建议：Point-LIO ROS2 fork 进入“优先验证候选”，FAST-LIO2 作为算法/基准对照；两者都不冻结为最终依赖。必须先过 license、Jazzy/ARM64 build、MID-360 + 实际 IMU bag replay、时间语义与输出 frame contract。
 
 ## 2. 固定源码与许可证据
