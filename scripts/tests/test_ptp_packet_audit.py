@@ -89,7 +89,7 @@ class TestPtpPacketAudit(unittest.TestCase):
             parse_ptp_v2_message(ptp_message(0, body=timestamp(1, 1_000_000_000)),
                                  transport="ethernet_l2")
 
-    def test_extracts_udp_ipv4_and_l2_vlan_gptp(self):
+    def test_extracts_udp_ipv4_and_l2_vlan_ptp(self):
         sync = ptp_message(0, flags=0x0200, body=timestamp())
         udp_packet = packet(101, raw_ipv4_udp(sync, 319, 319))
         l2_packet = packet(1, ethernet_ptp(sync, vlan=True))
