@@ -103,6 +103,9 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
                 "source": f"{datagram.source_ip}:{datagram.source_port}",
                 "destination": f"{datagram.destination_ip}:{datagram.destination_port}",
                 "data_type": payload.data_type,
+                "udp_cnt": payload.udp_cnt,
+                "frame_cnt": payload.frame_cnt,
+                "sequence_event": sequence_event,
                 "time_type": payload.time_type,
                 "sensor_timestamp_ns": payload.timestamp_ns,
                 "capture_timestamp_ns": datagram.capture_timestamp_ns,
@@ -131,6 +134,14 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
             "host_to_lidar": counts["direction_host_to_lidar"],
         },
         "interfaces": dict(interfaces),
+        "point_cloud_sequence_audits": {
+            "|".join(map(str, key)): audit.report()
+            for key, audit in sequence_audits.items()
+        },
+        "sequence_event_counts": {
+            key.removeprefix("sequence_"): value
+            for key, value in counts.items() if key.startswith("sequence_")
+        },
         "sample_datagrams": samples,
         "time_semantics": {
             "capture_timestamp_ns": "capture-file timestamp; not LiDAR sensor time",
