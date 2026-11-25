@@ -137,6 +137,31 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(report["message_count"], 1)
         self.assertEqual(report["truncated_capture_records"], 1)
 
+
+    def test_announce_extracts_grandmaster_clock_quality(self):
+        body = bytearray(30)
+        body[:10] = timestamp(200, 456)
+        struct.pack_into("!h", body, 10, 37)
+        body[13] = 1
+        body[14] = 6
+        body[15] = 0x20
+        struct.pack_into("!H", body, 16, 0x1234)
+        body[18] = 2
+        body[19:27] = bytes.fromhex("aabbccddeeff0011")
+        struct.pack_into("!H", body, 27, 3)
+        body[29] = 0x20
+        msg = parse_ptp_v2_message(
+            ptp_message(11, body=bytes(body)), transport="udp/320"
+        )
+        self.assertEqual(msg.current_utc_offset, 37)
+        self.assertEqual(msg.grandmaster_priority1, 1)
+        self.assertEqual(msg.grandmaster_clock_class, 6)
+        self.assertEqual(msg.grandmaster_clock_accuracy, 0x20)
+        self.assertEqual(msg.grandmaster_priority2, 2)
+        self.assertEqual(msg.grandmaster_identity, "aa:bb:cc:dd:ee:ff:00:11")
+        self.assertEqual(msg.steps_removed, 3)
+        self.assertEqual(msg.time_source, 0x20)
+
     def test_pending_state_is_bounded(self):
         from ptp_packet_audit import PtpCorrelationAudit
         audit = PtpCorrelationAudit(max_pending=2)
