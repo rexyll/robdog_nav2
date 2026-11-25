@@ -90,7 +90,7 @@ Pure core 不读取 system wall clock、不调用 ROS clock、不访问 USB；ho
 
 ### 4.1 GPS epoch 与整数周边界
 
-GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。
+GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。GPS-001 是纯算法 epoch 单测，不是 NAV-PVT 可输入范围测试；R07 的 NAV-TIMEUTC UTC 年份字段范围为 1999–2099。
 
 | ID | UTC civil input | fixture GPS−UTC | Expected GPS time | Expected week / TOW |
 |---|---|---:|---|---|
@@ -170,10 +170,10 @@ GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。
 ### 4.7 Parser byte-level vectors still required
 
 Before driver implementation, add byte-array fixtures copied from protocol field layout and independently reviewed:
-- NAV-TIMELS payload length 24; offsets: iTOW 0..3 (U4), version 4 (U1), reserved 5..7, srcOfCurrLs 8 (U1), currLs 9 (I1), srcOfLsChange 10, lsChange 11 (I1), timeToLsEvent 12..15 (I4), reserved 16..22, valid 23 (bitfield).
+- NAV-TIMELS payload length 24; offsets: iTOW 0..3 (U4), version 4 (U1), reserved 5..7, srcOfCurrLs 8 (U1), currLs 9 (I1), srcOfLsChange 10 (U1), lsChange 11 (I1), timeToLsEvent 12..15 (I4), dateOfLsGpsWn 16..17 (U2), dateOfLsGpsDn 18..19 (U2), reserved 20..22, valid 23 (bitfield). The two date fields describe the next/last leap event and are valid only when validTimeToLsEvent is true; they are not current GPS week/time fields.
 - Verify little-endian signed decoding for `currLs` and `timeToLsEvent`; `validCurrLs` and `validTimeToLsEvent` bits are distinct.
-- Test payload lengths 0, 23, 24, 25; version unknown; reserved bytes nonzero; unknown source code; checksum failure at UBX frame layer.
-- Do not guess bit positions from a secondary summary: lock them against the exact Interface Description revision used by the target firmware before implementation.
+- Test payload lengths 0, 23, 24, 25; version unknown; reserved bytes nonzero; unknown source code; checksum failure at UBX frame layer. Add dateOfLsGpsWn/dateOfLsGpsDn validity tests gated by validTimeToLsEvent.
+- The R07 field table confirms the two validity meanings but the extracted text does not reliably encode the bitfield graphic's bit positions. Do not guess bit positions from a secondary summary: inspect the original R07 bitfield graphic and lock them against the exact Interface Description revision used by the target firmware before implementation.
 
 ## 5. Implementation order and review gates
 
