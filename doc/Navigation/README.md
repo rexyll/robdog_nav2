@@ -208,3 +208,7 @@
 - [09 §14 — MID-360 UDP 序号连续性、帧复位与乱序审计](09_mid360_timestamp_and_point_lio_integration_audit.md#14-mid-360-udp-序号连续性帧复位与乱序审计)
 - [MID-360 UDP 序号审计器](../../scripts/livox_udp_sequence_audit.py)
 - [MID-360 UDP 序号审计测试](../../scripts/tests/test_livox_udp_sequence_audit.py)
+
+- [09 §15 — PTPv2 / gPTP 报文识别与消息配对审计](09_mid360_timestamp_and_point_lio_integration_audit.md#15-ptpv2--gptp-报文识别与消息配对审计)
+- [PTPv2 / gPTP 抓包解析与关联器](../../scripts/ptp_packet_audit.py)
+- [PTP 报文解析与关联测试](../../scripts/tests/test_ptp_packet_audit.py)
