@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 
 from livox_mid360_udp_parser import Mid360PacketError, parse_mid360_udp_payload
+from livox_udp_sequence_audit import LivoxUdpSequenceAudit
 from network_packet_decoder import (
     PacketDecodeError, classify_mid360_datagram, decode_link_packet,
 )
@@ -21,6 +22,7 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
     payload_errors = Counter()
     data_types = Counter()
     time_types = Counter()
+    sequence_audits = {}
     interfaces = defaultdict(lambda: {"packets": 0, "capture_timestamp_min_ns": None,
                                        "capture_timestamp_max_ns": None})
     samples = []
@@ -75,6 +77,21 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
         counts[f"valid_{stream_name}_payloads"] += 1
         data_types[str(payload.data_type)] += 1
         time_types[str(payload.time_type)] += 1
+        sequence_event = None
+        if stream_name == "point_cloud" and direction == "lidar_to_host":
+            flow_key = (
+                datagram.section_index, datagram.interface_id,
+                datagram.source_ip, datagram.source_port,
+                datagram.destination_ip, datagram.destination_port,
+            )
+            sequence_audit = sequence_audits.setdefault(
+                flow_key, LivoxUdpSequenceAudit()
+            )
+            sequence_event = sequence_audit.observe(
+                udp_cnt=payload.udp_cnt, frame_cnt=payload.frame_cnt,
+                data_type=payload.data_type, timestamp_ns=payload.timestamp_ns,
+            )
+            counts[f"sequence_{sequence_event}"] += 1
         expected_type = 0 if stream_name == "imu" else None
         if expected_type is not None and payload.data_type != expected_type:
             counts["stream_data_type_mismatch"] += 1
