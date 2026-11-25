@@ -517,3 +517,106 @@ UBX iTOW 是整数毫秒，不能表达 sub-ms remainder。保留 gps_tow_ns 原
 #### 4.13.6 未冻结 Gate
 
 公式中的 L 必须来自同一历元有效 NAV-TIMELS，source allowlist/freshness 仍未冻结。sec=60 需要 transition evidence API；§4.12 的 current-offset source policy 本身不足以验证历史闰秒日期。PVT/TIMEUTC nano 合法范围及字段边界需以目标协议版本/MON-VER 为准。iTOW sub-ms 比较、tAcc 合成与容差仍待 receiver evidence/策略批准。仅增加设计和合成测试合同，不增加代码/依赖，不声称测试或硬件验证。
+
+
+### 4.14 Leap-transition evidence：数据模型、来源分层与冲突策略
+
+本节补足 §4.13 的 sec=60 证据缺口。设计目标是：每个 leap transition 都能追溯到权威来源或经验证的接收机事件记录；运行时不联网、不依赖主机 leap-second 文件；缺少/冲突证据时 fail-closed。本节为设计合同，尚未实现。
+
+#### 4.14.1 证据来源分层
+
+| 来源 | 可提供的证据 | 角色与限制 |
+|---|---|---|
+| IERS Bulletin C | 对某一可能生效日期是否引入闰秒的正式公告 | 官方事件公告；适合新事件确认，不是完整历史数据表 |
+| USNO tai-utc.dat | 历史 TAI−UTC 分段值及生效日期 | 历史转换数据源；需经审计的 parser 和 GPS/TAI 关系转换，不能把 TAI−UTC 数值直接当 GPS−UTC |
+| 接收机 UBX-NAV-TIMELS | 当前 currLs；可选的最近/未来事件信息、事件变化量、事件日期和来源 | 同历元运行时证据/交叉核验；不自动替代完整历史表，且需目标固件验证字段语义 |
+| 项目内冻结 transition artifact | 已审查、带 provenance/hash 的有限日期范围转换记录 | 运行时唯一可直接查询的历史 transition 数据；无网络依赖，超出覆盖范围拒绝 |
+
+协议证据（u-blox F9 HPG 1.30 / UBX-21046737 R01 §3.15.26）明确：NAV-TIMELS 长度 24 bytes；srcOfCurrLs 和 currLs 描述当前差值；srcOfLsChange 和 lsChange 描述未来事件来源/变化量；timeToLsEvent 为正表示未来、零表示事件当前发生、负表示过去；dateOfLsGpsWn/dateOfLsGpsDn 在 validTimeToLsEvent=1 时描述下一次或最近一次事件的 GPS week/day；valid bit 0 是 validCurrLs，bit 1 是 validTimeToLsEvent。bit 1 不应被误用为 bit 0 的替代。
+
+关键解释边界：
+- validCurrLs=1 只允许评估当前 offset，不自动证明任意历史 civil date 的 leap event。
+- validTimeToLsEvent=1 且 timeToLsEvent>0 表示未来事件信息；可用于安排未来 transition，但不得把尚未发生事件写进当前历史 offset。
+- validTimeToLsEvent=1 且 timeToLsEvent<0 表示相对最近一次事件的过去信息；dateOfLsGpsWn/Dn 可作为最近事件日期的接收机侧锚点，但必须检查固件版本、字段范围、来源和与离线表的一致性。
+- lsChange=0 既可能表示没有未来事件，也可能表示无信息；不能将其解释成“历史上从未发生事件”或“delta=0 的已确认事件”。
+- srcOfLsChange 是事件来源，不得与 srcOfCurrLs 混用；两套 allowlist 分开维护。
+- dateOfLsGpsWn/Dn 只给 GPS week/day，不应在未经协议语义和目标固件验证时推断精确秒/闰秒标签。timeToLsEvent 是相对导航历元的秒数；将其与日期字段组合前需明确整秒锚点、符号、舍入和 iTOW 对齐语义。
+
+#### 4.14.2 Canonical transition record（规范事件记录）
+
+每个事件记录至少包含：
+
+| 字段 | 类型/含义 | 约束 |
+|---|---|---|
+| transition_id | 稳定唯一 ID | 不使用数组下标作为身份 |
+| effective_utc_date | offset 生效后的 UTC 日期/午夜 | 对正闰秒，前一日 23:59:60 是独立标签；对负闰秒需单独建模缺失标签 |
+| delta_gps_minus_utc_s | GPS−UTC 的变化量 | 当前标准历史事件通常为 ±1；解析层不得硬编码只接受 +1 |
+| gps_minus_utc_before_s / gps_minus_utc_after_s | 事件前/后 offset | 必须满足 after = before + delta |
+| effective_gps_week / effective_gps_tow_ns | 事件在 GPS 连续时间线的有效边界 | 整数；需由独立验证路径生成 |
+| source_kind | IERS / USNO / UBX_RECEIVER / PROJECT_REVIEW | 多来源记录分别保留，不把来源压成单一字符串 |
+| source_document_id / source_revision / source_url | 来源标识、版本和地址 | 不可缺省或伪造 |
+| source_retrieved_at_utc / source_published_at_utc | 获取与发布时刻 | 区分发布时间与采集时间 |
+| source_sha256 | 原始来源快照摘要 | 对下载原始字节计算；网页动态内容需归档快照 |
+| parser_version | 解析器版本 | 任何解析规则变更可追溯 |
+| review_status | DRAFT / VERIFIED / REJECTED | 只有 VERIFIED 记录可进入 runtime artifact |
+| review_evidence | 交叉核对记录 | 至少包含第二来源或独立人工核验理由 |
+| supported_from / supported_until | 数据集覆盖范围 | 查询超范围必须返回 OUT_OF_COVERAGE，不外推 |
+
+规范表按 effective_utc_date 严格递增；相邻记录的 gps_minus_utc_after_s 必须等于下一记录的 gps_minus_utc_before_s；不得有重复生效时刻、重叠区间、offset 跳变不等于 delta、日期缺口或无法解释的来源冲突。原始来源记录与 canonical record 分开存储，禁止覆盖原始证据。
+
+#### 4.14.3 TAI−UTC 到 GPS−UTC 的来源转换边界
+
+USNO 历史表记录的是 TAI−UTC，不是 GPS−UTC。若项目选择它作为历史数据源，转换必须显式使用已独立审计的 TAI−GPS 常数关系（GPS 时间与 TAI 的固定 19 s 差值），而不是把表中数字直接填入 currLs。该常数关系、适用 epoch 和转换测试必须有单独来源与测试向量；本节不把未附证据的转换器视为已验收。
+
+IERS Bulletin C 用于确认公告日期及是否真的实施变化；USNO 历史表用于核对历史 offset 分段。若公告、历史表、接收机 event fields 三者冲突：
+1. 不通过“多数表决”自动选值；
+2. 将相关 transition 标记为 CONFLICT，阻止该事件及受影响日期生成 VALID；
+3. 保存各来源原始内容、版本、hash 和冲突字段；
+4. 需要人工审查并更新项目 artifact 后才能解除；
+5. 新公告不允许自动改变已发布的运行时 artifact。
+
+#### 4.14.4 Receiver event evidence 的校验合同
+
+接收机 NAV-TIMELS decoder 必须保留 24-byte raw payload 和以下 typed fields：iTOW、version、srcOfCurrLs、currLs、srcOfLsChange、lsChange、timeToLsEvent、dateOfLsGpsWn、dateOfLsGpsDn、raw valid byte。不得只保留 ROS 消息中被简化的 validity bool 而丢弃 raw byte。
+
+运行时评估分两条独立路径：
+- Current-offset path：validCurrLs、srcOfCurrLs、同 iTOW 及 generation/session/freshness 检查；用于 §4.13 普通 UTC label 的 offset。
+- Event-evidence path：只有 validTimeToLsEvent 为 true 才解释 event fields；验证 signed timeToLsEvent、lsChange、srcOfLsChange、GPS week/day 范围、消息版本、同 epoch 关系和目标固件行为。该路径只用于 event corroboration/未来事件计划，不能替代历史 transition artifact。
+- 对已过去事件，receiver 的 last-event date/week/day 应与冻结 artifact 对应事件一致；对未来事件，receiver schedule 必须与公告/策略一致。任何不一致均为 CONFLICT，不得悄悄更新 artifact。
+- 若目标驱动当前未解析/发布 NAV-TIMELS，则 receiver event evidence 当前不可用；不得假设 ROS topic 已存在。需要先完成 24-byte parser、dispatch、ROSIDL、publisher 和原始字段保真审计。
+
+#### 4.14.5 Runtime artifact 与更新治理
+
+建议文件格式采用 UTF-8 JSON 或 YAML，但 canonical schema 与内容 hash 必须固定；首版只覆盖项目明确支持的 GPS epoch 至当前已审查日期范围。运行时：
+- 不发起 HTTP 请求，不读取操作系统隐式 leap-second 数据库，不自动从网络更新；
+- artifact 缺失、schema/version 不支持、hash 不匹配、记录未 VERIFIED、查询日期超出覆盖范围或内部连续性检查失败时，返回明确 reason code 并阻止 VALID；
+- artifact 更新以单独 PR/commit 完成，包含原始来源快照、source URL/revision/retrieved time/hash、解析器版本、生成差异、人工审查记录和完整回归测试；
+- 禁止只改生成表而不更新 provenance；禁止无来源手工编辑历史 offset；
+- artifact 的版本与 hash 纳入 mapper diagnostic output，便于 rosbag 重放复现。
+
+#### 4.14.6 增补 transition evidence 测试矩阵
+
+| ID | 输入/场景 | 预期 |
+|---|---|---|
+| LEAP-EVID-001 | VERIFIED transition artifact，日期在覆盖范围内 | 可查询唯一 offset interval 和 transition |
+| LEAP-EVID-002 | sec=60 标签命中已确认正闰秒前一日 | 映射到独立 leap-second timeline slot |
+| LEAP-EVID-003 | sec=60 出现在无 transition 的日期 | REJECTED，不生成 VALID |
+| LEAP-EVID-004 | artifact 缺失/损坏/hash 不匹配/schema 不支持 | fail-closed，reason 可诊断 |
+| LEAP-EVID-005 | 查询日期早于/晚于 artifact coverage | OUT_OF_COVERAGE，不外推 |
+| LEAP-EVID-006 | 相邻记录 offset 连续性或 delta 不一致 | artifact validation failure |
+| LEAP-EVID-007 | IERS 公告与 USNO historical table 冲突 | CONFLICT，需人工审查 |
+| LEAP-EVID-008 | receiver past-event date 与 artifact 不一致 | CONFLICT，不覆盖 artifact |
+| LEAP-EVID-009 | receiver future event 与已公告事件不一致 | CONFLICT；不自动接受未来 offset |
+| LEAP-EVID-010 | validCurrLs=true、validTimeToLsEvent=false | 当前 offset 可单独评估；不得读取 event fields |
+| LEAP-EVID-011 | validCurrLs=false、validTimeToLsEvent=true | event metadata 可诊断；不得用于当前 offset |
+| LEAP-EVID-012 | timeToLsEvent=0 / lsChange=0 | 不能据此推断无事件或已发生 delta=0 事件 |
+| LEAP-EVID-013 | srcOfCurrLs 与 srcOfLsChange 分别枚举 | 独立 allowlist；未知/默认来源 fail-closed |
+| LEAP-EVID-014 | artifact 同一版本 rosbag 重放 | 结果与 source hash/artifact version 完全可复现 |
+
+#### 4.14.7 Gate 与结论
+
+1. 先审计并冻结 canonical schema、IERS/USNO source snapshot 归档方式及 TAI−GPS=19 s 转换来源；再生成第一版历史 artifact。
+2. 单独核对 UBX NAV-TIMELS event fields 的周/日/相对秒语义，尤其 dateOfLsGpsWn/Dn 与 timeToLsEvent 的组合方式；不得凭字段名猜测。
+3. 取得目标 ZED-F9P MON-VER 和原始 24-byte NAV-TIMELS 帧后，才冻结 firmware-specific event source allowlist、字段可用性和 receiver corroboration 策略。
+4. 完成驱动 parser/ROSIDL/dispatch/publisher 保真后，才可进行接收机 event evidence 实测。
+5. 在上述 Gate 关闭前，不实现 production mapper、不将 sec=60 接入 VALID；不添加网络运行依赖。
