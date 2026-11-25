@@ -70,6 +70,60 @@ Pure core 不读取 system wall clock、不调用 ROS clock、不访问 USB；ho
 - 当前 lifecycle snapshot 必须包含最后 event sequence，供重启 subscriber 对齐 event stream。
 - receiver reboot 需要 reset evidence 与显式 generation transaction；GPS week rollover 不得被误判为 reboot。
 
+## 2.4 Pure-core public API proposal（与现有包风格对齐）
+
+现有包的 `ubx_nav_pvt.py` 采用 frozen dataclass + 明确异常（`EpochPairingError`）+ 无 ROS 依赖函数；新 mapper 应沿用该风格，不另建隐式全局状态。
+
+建议对外 API（签名草案，非已实现代码）：
+
+```python
+@dataclass(frozen=True)
+class UbxNavTimelsEpoch:
+    i_tow_ms: int
+    version: int
+    src_of_curr_ls: int
+    curr_ls: int                 # signed int8
+    src_of_ls_change: int
+    ls_change: int               # signed int8
+    time_to_ls_event_s: int      # signed int32
+    date_of_ls_gps_week: int
+    date_of_ls_gps_day: int
+    valid_curr_ls: bool
+    valid_time_to_ls_event: bool
+    receive_monotonic_ns: int
+    process_session_id: str
+    connection_generation: int
+
+@dataclass(frozen=True)
+class UtcCivilTime:
+    year: int
+    month: int
+    day: int
+    hour: int
+    minute: int
+    second: int                 # 0..60; 60 is explicit leap-second state
+    nano: int                   # signed protocol field, normalized by helper
+
+@dataclass(frozen=True)
+class GpsTimeMapping:
+    gps_week: int
+    gps_tow_ns: int
+    gps_absolute_ns: int
+    status: str
+    reason_codes: tuple
+    source_clock_id: str
+    source_uncertainty_ns: int | None
+```
+
+函数边界建议：
+- `decode_nav_timels_payload(payload: bytes, *, receive_monotonic_ns, process_session_id, connection_generation) -> UbxNavTimelsEpoch`：只解码/校验协议结构，不自行决定 source 是否可信。
+- `normalize_utc_civil(fields: UtcCivilTime) -> NormalizedUtcInstant`：校验公历日期、nano 借位和 leap-second 规则；不使用 POSIX timestamp。
+- `gps_week_tow_from_utc(utc, gps_minus_utc_seconds) -> (week, tow_ns, absolute_ns)`：纯整数算术，调用方必须提供已通过策略 Gate 的 offset。
+- `map_utc_epoch(pvt, timeutc, timels, status, identity, policy) -> GpsTimeMapping`：做 exact iTOW/session join、validity/source/confidence 和 monotonicity。
+- 所有输入记录应 frozen/immutable；mapper 不修改传入 record，不用最近到达时间补齐缺失字段。
+
+异常策略：结构损坏、类型越界和 payload 长度错误抛出明确 decode exception；合法但无效的接收机状态返回 AMBIGUOUS_INVALID + reason code；不得把设备状态错误伪装成 parser exception，也不得返回看似有效的零值。
+
 ## 3. 关键算法约束
 
 1. NAV-PVT 为主 UTC candidate；要求 `valid_date && valid_time && fully_resolved`。
@@ -181,7 +235,7 @@ Before driver implementation, add byte-array fixtures copied from protocol field
   - `TIMELS-RAW-006`: set bytes 12..15 to `FF FF FF FF` → timeToLsEvent=-1 (signed I4); only meaningful when bit 1 is set.
   - `TIMELS-RAW-007`: set bytes 16..17 / 18..19 to little-endian nonzero WN/DN values; only expose as valid event date when bit 1 is set.
 - Test payload lengths 0, 23, 24, 25; version unknown; reserved bytes nonzero; unknown source code; checksum failure at UBX frame layer. Add dateOfLsGpsWn/dateOfLsGpsDn validity tests gated by validTimeToLsEvent.
-- R07 original bitfield graphic confirms: bit 0 = `validCurrLs`; bit 1 = `validTimeToLsEvent`; bits 2..7 reserved. Thus `valid = 0x01` means current leap-second offset valid only; `0x02` means event-time fields valid only; `0x03` means both; `0x00` means neither. This is confirmed for protocol v27.11 in R07; target firmware compatibility still requires MON-VER.
+- R07 original bitfield graphic confirms: bit 0 = `validCurrLs` (mask `0x01`); bit 1 = `validTimeToLsEvent` (mask `0x02`); bits 2..7 reserved. Thus `valid & 0x01` controls current offset validity and `valid & 0x02` controls event-time/date validity. The flags are independent; do not require both to use a valid current offset. This is confirmed for protocol v27.11 in R07; target firmware compatibility still requires MON-VER.
 
 ## 5. Implementation order and review gates
 
