@@ -128,13 +128,20 @@ class TestNetworkPacketDecoder(unittest.TestCase):
 
     def test_lidar_ip_direction_filter(self):
         from network_packet_decoder import UdpDatagram
-        datagram = UdpDatagram(LINKTYPE_RAW, 4, "192.0.2.10", "192.0.2.20",
-                               41000, 56301, b"data")
-        self.assertIsNone(classify_mid360_datagram(
-            datagram, lidar_ip="192.0.2.20", host_ports={56301: "point_cloud"}))
+        host_to_lidar = UdpDatagram(LINKTYPE_RAW, 4, "192.0.2.20", "192.0.2.10",
+                                    41000, 56301, b"data")
         self.assertEqual(classify_mid360_datagram(
-            datagram, lidar_ip="192.0.2.10", host_ports={56301: "point_cloud"}),
+            host_to_lidar, lidar_ip="192.0.2.10",
+            host_ports={56301: "point_cloud"}),
+            ("point_cloud", "host_to_lidar"))
+        lidar_to_host = UdpDatagram(LINKTYPE_RAW, 4, "192.0.2.10", "192.0.2.20",
+                                    56300, 41000, b"data")
+        self.assertEqual(classify_mid360_datagram(
+            lidar_to_host, lidar_ip="192.0.2.10"),
             ("point_cloud", "lidar_to_host"))
+        self.assertIsNone(classify_mid360_datagram(
+            host_to_lidar, lidar_ip="192.0.2.99",
+            host_ports={56301: "point_cloud"}))
 
     def test_network_to_mid360_payload_parser_end_to_end(self):
         payload_data = bytes(range(14))
