@@ -33,6 +33,8 @@ on:
       - "scripts/livox_time_audit_helpers.py"
       - "scripts/livox_mid360_udp_parser.py"
       - "scripts/tests/test_livox_mid360_udp_parser.py"
+      - "scripts/pcapng_reader.py"
+      - "scripts/tests/test_pcapng_reader.py"
       - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
@@ -61,6 +63,8 @@ on:
       - "scripts/tests/test_convert_m3dgr_dynamic03_to_ros2.py"
       - "scripts/audit_livox_rosbag_timing.py"
       - "scripts/livox_time_audit_helpers.py"
+      - "scripts/pcapng_reader.py"
+      - "scripts/tests/test_pcapng_reader.py"
       - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
       - ".github/workflows/point-lio-urbanloco-p2-tests.yml"
@@ -95,6 +99,7 @@ jobs:
             scripts/audit_livox_rosbag_timing.py \
             scripts/livox_time_audit_helpers.py \
             scripts/livox_mid360_udp_parser.py
+            scripts/pcapng_reader.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
@@ -103,6 +108,10 @@ jobs:
             scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
           bash scripts/tests/test_verify_public_dataset_checksum.sh
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_pcapng_reader.py" \
+            -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
             -p "test_m3dgr_ros1_bag.py" \
