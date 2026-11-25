@@ -1,15 +1,15 @@
-# RobDog Nav2 项目总任务计划（唯一进度台账）
+# RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.68
+- 文档版本：v0.3.69
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
-- 项目目标：以四足机器人为载体，使用 **LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS**，结合机器狗 IMU 与经验证的本体状态估计（厂商腿式 odometry 输出待确认），构建 ROS 2 / Nav2 全局导航、局部实时避障和四足地形可通行性能力。
+- 项目目标：以四足机器人为载体，研究、设计并最终集成完整的 ROS 2 导航模块，覆盖任务管理、传感器接入与时间同步、定位/状态估计/SLAM、环境感知、地图与地形表达、可通行性、全局/局部规划、动态避障、Nav2（仅为其中一个子系统）、四足运动接口、独立安全、运行时部署、监控和分层验证。
 - **本体技术预选：DEEP Robotics Lite3 Venture**（未采购，待供应商确认）。
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
-- 当前阶段：**阶段 A — 硬件基线与接口冻结**
-- 当前状态：**方案预选完成；采购、实物测量、驱动编译和机器狗实机验证未完成。**
+- 当前专项阶段：**N0 — 完整导航模块研究基线与范围冻结（仅 nav 分支）**；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
+- 当前状态：**硬件方案预选完成；完整导航模块研究刚开始。已有 Nav2 架构文档只是子系统级初稿，不代表整个导航模块研究完成；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
 
 ---
 
@@ -19,15 +19,19 @@
 2. 其他文档只保存详细设计、接口说明、ADR、测试报告和稳定参考资料；不得只更新其他文档或对话而不回写本文件。
 3. 每次推进必须更新本文件中的：当前阶段、变更任务状态、完成证据、Git commit SHA、测试/验证方式、风险/未决项、下一步动作。
 4. 文档/设计完成不等于代码实现；仿真通过不等于真实机器狗通过；只有证据足够才标记任务完成。
-5. 默认只在 `main` 推进；没有明确要求不创建新分支。
+5. **导航模块专项分支纪律（用户明确要求）：完整导航模块的研究、文档、代码、测试、CI 和相关决策只在 `nav` 分支进行。专项完成并通过 N9 验收前，不得将专项中间成果合并/复制到 `main`，不得在 `main` 上继续本专项。完成后先汇总差异、审查风险、形成回归证据和合并方案，再回到 `main`；是否合并以专项验收结论和用户既定主线治理规则执行。** 其他非导航专项仍按各自约定执行。
 6. 状态标记：`[ ]` 未开始；`[~]` 实施中/部分完成；`[x]` 已完成且有证据；`[!]` 阻塞或风险。
 7. 本文件超过约 30 KB 时按主题拆成 `TaskPlan_Part-*.md`。**拆分后仍必须把所有进度状态保留在本根文件**；分册只放详细设计，不放需要维护的重复进度清单。
 8. 未知传感器参数、供电电流、质量、时延、速度、协方差和准确度一律标“待确认/待测”，不猜测、不照抄示例参数。
 
 ## 1. 项目目标、硬件基线与系统决策
 
-### 1.1 目标
-使用四足机器狗 + 3D LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS，结合机器人 IMU/经验证的本体状态估计，基于 ROS 2 / Nav2 实现室内外导航、局部实时避障、动态障碍感知和后续四足地形可通行性。
+### 1.1 完整导航模块目标
+使用四足机器狗 + 3D LiDAR + 两台普通 RGB 相机（被动双目）+ RTK GNSS，结合机器人 IMU、经验证的本体状态估计和必要的外部定位/感知组件，构建从任务目标到安全运动执行反馈的完整导航闭环。Nav2 是候选导航框架/子系统，不是完整导航模块本身。
+
+完整范围至少包括：任务/航点/区域管理；设备驱动、时间同步和标定；腿式 odometry/LIO/VIO/GNSS/SLAM 与融合定位；动态环境感知和目标跟踪；2D/3D/语义/拓扑/高程地图；地形可通行性与四足约束；全局路线、全局路径、局部轨迹和动态避障；Nav2 任务/规划/控制/Costmap/恢复；四足步态和厂商 SDK 适配；命令仲裁、watchdog、Collision Monitor 与独立急停；ROS 2 runtime、Jetson 部署、可观测性、数据记录和分层验收。
+
+导航模块必须同时闭合“感知/定位→环境表达→规划决策”和“命令→安全仲裁→平台执行→真实反馈”两条链路。不得以 Nav2 action 成功、cmd_vel 已发布或仿真通过替代真实执行反馈与安全验收。
 
 ### 1.2 技术预选 BOM（未采购、待供应商确认）
 - **本体：** DEEP Robotics Lite3 Venture；公开标称载荷 4.5 kg，具备外部 Ethernet 和 24V/12V/5V 扩展供电，但各路持续/峰值电流、安装 CAD、质心限制均待书面确认。
@@ -66,6 +70,29 @@
 - [Lite3 厂商 SDK 集成评估](docs/implementation/lite3_vendor_sdk_integration_assessment.md)
 - [硬件接口确认清单](docs/interfaces/hardware_interface_checklist.md)
 - [Lite3 Venture 供应商技术确认矩阵](docs/interfaces/lite3_vendor_confirmation_matrix.md)
+
+### 导航模块专项深研计划 N0–N9（仅在 nav 分支执行）
+
+> 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
+
+- [~] N0 研究基线与范围冻结：已创建 nav 分支；已将研究目标纠正为完整导航模块；已建立总体目录、系统架构与数据流框架。待补充术语表、组件责任矩阵、证据分级和研究基线版本锁定。
+- [ ] N1 端到端数据流与接口审计：逐条追踪 Producer/Consumer、Topic/Action/Service/TF、消息字段/单位/frame/stamp、QoS、频率、延迟、带宽、质量门控、超时、失效传播和执行反馈。
+- [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
+- [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
+- [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
+- [ ] N5 任务管理、规划与动态避障：任务状态机/BT、拓扑路线、全局规划、局部轨迹优化、动态目标预测、恢复行为、四足运动学/步态约束。
+- [ ] N6 Nav2 子系统源码级深研：固定 Jazzy tag/commit；追踪 NavigateToPose Action→BT Navigator→Blackboard/BT tick→Planner Server→Controller Server→速度输出→反馈/结果；研究 Costmap、Lifecycle、插件、Behavior、Smoother、Collision Monitor 和 Nav2 外围接口。
+- [ ] N7 四足运动执行、安全和 ROS 2 运行时：Lite3 命令语义/能力边界、adapter、SDK 控制权、反馈、命令仲裁、watchdog、物理急停、DDS/QoS/Executor/Lifecycle、Jetson 资源和部署。
+- [ ] N8 系统验证与架构收敛：单元/集成/仿真/真实 bag 回放/硬件只读台架/HIL/封闭场地分层；算法对照、量化指标、故障注入、ADR、部署拓扑与完整集成方案。
+- [ ] N9 专项验收与回归：文档覆盖完整、源码/接口证据可追溯、风险和未决项闭环或显式保留、CI/测试可复现；输出 nav→main 差异审查和合并建议。N9 完成前不得将本专项合并回 main。
+
+**N0 首轮已完成的文件基线：**
+- [总体导航模块目录](doc/Navigation/README.md)
+- [完整导航模块架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
+- [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
+- [Nav2 子系统目录](doc/Nav2/README.md)（原有 8 篇 Nav2 文档继续保留）
+
+**N0 尚未完成：** 上游仓库/tag/commit 固定、术语表、组件/接口证据矩阵、源码级调用链、ROS 集成和运行验证。当前文档是研究框架，不得标记为系统深研完成。
 
 ### 阶段 A — 硬件基线与接口冻结（当前阶段）
 
@@ -125,7 +152,7 @@
 - [ ] D6. 测试墙/箱/人/细杆/玻璃/反光/无纹理/弱光/逆光/运动模糊。
 - [ ] D7. 输出深度误差、检测召回率、首次发现距离和端到端延迟报告。
 
-### 阶段 E — Nav2 平地导航和实时避障
+### 阶段 E — Nav2 导航框架、平地导航和实时避障（完整导航模块中的一个子系统）
 
 - [ ] E1. 明确室内 SLAM 地图与室外 RTK 地图/航点模式。
 - [ ] E2. 建立 global costmap 与 local rolling costmap。
@@ -217,16 +244,18 @@
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. Nav2 专项研究：按 `doc/Nav2/README.md` 的章节顺序完成架构、生命周期/任务流、生产者-消费者数据流、接口矩阵、算法插件、硬件适配、安全与验证设计；每份文档完成后回写本 TaskPlan。
-2. 继续推进 ZED-F9P 实际 ROS 2 driver/UBX 输出配置、四路消息 ROS adapter、clock epoch 与质量 gate；仅依据实测数据设阈值。
-3. 取得 Lite3 Venture 的正式 legged odometry、运动学/步态接口、SDK 控制权、急停、供电、载荷与 CAD 书面答复。
-4. 确认双 See3CAM GPIO 触发、镜头、双机同步和 Jetson USB3 带宽；完成载荷/供电/热设计/安装 CAD。
-5. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
-6. 保持 x86_64 与通用 ARM64 build、Jetson Orin 实机 build、仿真、HIL、真实机器狗验证分级记录；当前均不得混称。
+1. 严格在 `nav` 分支执行 N0→N9：先完成 N0 范围/架构/数据流基线，再按 `doc/Navigation/README.md` 顺序逐专题推进；Nav2 只在 N6 深研，不得把它当作整个导航模块。
+2. N1 优先建立可核验的全系统 Producer/Consumer 与接口矩阵，再进入单个算法/源码研究，避免只研究孤立软件包。
+3. 并行保留原硬件 Gate：推进 ZED-F9P ROS adapter/UBX 时钟与质量 gate、Lite3 正式 odometry/运动接口/急停/SDK 权限确认、双目同步/镜头/USB 带宽、载荷/供电/热设计。
+4. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
+5. 保持 x86_64、通用 ARM64 build、Jetson Orin 实机 build、仿真、真实 bag 回放、HIL、真实机器狗验证分级；不得混称。
+6. N9 专项验收前不回 main、不合并本专项成果；完成后先做差异/风险/CI/回归审查，再形成回 main 的提案。
 
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。提交待本轮 TaskPlan 更新后回填。
 
 - v0.1–v0.3.54：见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
 - v0.3.55–v0.3.66 完整快照：见 [TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
@@ -288,7 +317,10 @@
 - [Lite3 bridge package 说明](src/robodog_lite3_bridge/README.md)
 - [多传感器时间同步与标定](docs/implementation/time_sync_and_calibration.md)
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
-- [Nav2 专项研究总目录](doc/Nav2/README.md)
+- [完整导航模块专项研究总目录](doc/Navigation/README.md)
+- [完整导航模块总体架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
+- [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
+- [Nav2 子系统研究总目录](doc/Nav2/README.md)
 - [系统架构](docs/architecture/system_architecture.md)
 - [传感器融合](docs/architecture/sensor_fusion.md)
 - [Nav2 导航和避障](docs/navigation/nav2_navigation.md)
