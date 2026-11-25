@@ -190,3 +190,7 @@
 - [14 — ZED-F9P UTC→GPS Mapper 补丁计划与纯算法测试向量](14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md)
 - [15 — 传感器时钟域与全系统时间同步架构审计](15_sensor_clock_domains_and_sync_architecture.md)
 - [16 — GNSS PTP Grandmaster 与 PPS 时间标签分发 ADR 候选](16_gnss_ptp_grandmaster_vs_pps_distribution_adr.md)\n- [09 §10 — MID-360 原始 UDP、CustomMsg 与 rosbag 接收时间证据边界](09_mid360_timestamp_and_point_lio_integration_audit.md#10-原始-udp-包custommsg-与-rosbag-接收时间的证据边界)\n- [17 — Orin PTP 主机/NIC 基线采集与人工判读](16_gnss_ptp_grandmaster_vs_pps_distribution_adr.md#17-目标-orin-主机nic-基线采集工具-time-045--time-052)\n- [18 — GM/交换机/Orin/MID-360 PTP 抓包与解码检查表](16_gnss_ptp_grandmaster_vs_pps_distribution_adr.md#18-gm--switch--orin--mid-360-三观察面-ptp-抓包与解码检查表-time-053--056)
+
+- [09 §11 — MID-360 原始 UDP payload 严格解析器与合成测试合同](09_mid360_timestamp_and_point_lio_integration_audit.md#11-mid-360-原始-udp-payload-严格解析器协议-v1.4.12)
+- [MID-360 原始 UDP payload 解析器](../../scripts/livox_mid360_udp_parser.py)
+- [MID-360 原始 UDP payload 解析器单元测试](../../scripts/tests/test_livox_mid360_udp_parser.py)
