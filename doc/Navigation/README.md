@@ -183,5 +183,6 @@
 - [10 — Point-LIO 去 MRS 化与四足状态估计接口审计](10_point_lio_decoupling_and_state_interface_audit.md)
 - [11 — GNSS generation 与跨组件 Reset Coordinator 设计](11_gnss_generation_and_reset_coordinator_design.md)
 - [12 — ZED-F9P 固定驱动的 Receiver Generation 证据审计](12_zed_f9p_receiver_generation_evidence_audit.md)
+- [13 — ZED-F9P UTC / GPS 周时间映射与固定驱动扩展审计](13_zed_f9p_utc_gps_time_mapping_audit.md)
 
 上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
