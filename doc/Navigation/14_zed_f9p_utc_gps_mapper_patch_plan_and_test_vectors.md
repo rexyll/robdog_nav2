@@ -941,3 +941,54 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 - 未取得 GLONASS CDMA 新版 ICD/正式 Interface Control Document，未确认 L1OC/L2OC/L3OC 的双尺度广播字段和版本号；未取得控制段实施通知；未读取 ZED-F9P 真实 raw frames。
 
 因此本节把政策结论从“迁移政策完全未确认”细化为“国家规划已提出双尺度迁移/兼容路线，但信号级规范与运行实现未确认”。所有 GNSS-UTC-IF-017..020 仅为测试合同，未实现、未运行。
+
+
+##### 4.19.7 现行 GLONASS CDMA L1OC Type 25：UTC(SU)−TAI 与 UT1，不是连续 UTC 广播
+
+本节基于两类可交叉核对的材料：
+1. UNOOSA/ICG《GLONASS Timescale Description》（2017 文档，ICG 公开 PDF）：描述系统级时间尺度和 L1/L3 CDMA 参数位置。
+2. Russian Space Systems, JSC《GLONASS CDMA ICD L1 Edition 1.0 (2016)》的可读副本（当前可访问副本为 Scribd，不是官方分发站点）；其章节、字段定义和数值与 UNOOSA/ICG 系统级时间说明互相印证。GPS World 对 RKS 发布 2016 年 L1/L2/L3 CDMA ICD 草案的历史说明，以及 GNSS-SDR reference list 中的原始 RKS URL，证明文档的发布来源线索，但不能替代官方文件哈希/签章回读。
+
+**L1OCd 导航消息结构：**
+- Type 10/11/12 组成一个 immediate-data package；Type 11 必须跟随 Type 10，Type 12 必须跟随 Type 11。
+- Type 25 独立承载 Earth rotation parameters、ionosphere model parameters、UTC(SU) 与 TAI offset model parameters。
+- Service field KP 是当前季度末 UTC(SU) ±1 s 预期校正指示；00=无计划，01=日长增加 1 s，10=决定待定，11=日长减少 1 s。A 表示下一条字符串末端是否立即校正；A=1 与 KP=11/01 组合分别触发 1 s / 3 s anomalous string（Type 1/2）。
+- Type 1/2 的异常字符串用于旧 L1OCd 时间尺度的 leap-second 校正；Type 1 为 1 s / 125 bits，Type 2 为 3 s / 375 bits。它们不是 continuous UTC 时间标签。
+
+**Type 25 的字段合同：**
+- NB：MT 四年区间内的日序，定义该 Type 25 数据对应的 MT 日。
+- xp/yp 及一阶、二阶变化项：地球瞬时极位置模型。
+- B0/B1/B2：二次多项式参数，用于 τUT1 = TUT1 − TUTC，其中 TUTC 明确是 UTC(SU)；B0 为 UT1 差值，B1 为日变化率，B2 为变化率变化。
+- UTC−TAI：字段定义为 TUTC(SU) − TTAI，在 NB 对应 MT 日开始处的偏移；9 bit，单位秒，范围 ±255 s。
+- B0 选择 ±256 s 范围的注释，是为未来取消 UTC(SU) 校正预留数值空间；不能据此推导新 continuous UTC 已经编码在该字段中。
+- Type 25 的 UTC−TAI 与 B0/B1/B2 均以旧 ICD 定义的 UTC(SU) 为基准；不得把 UTC−TAI 改名/解释为 UTC-continuous−TAI。
+
+**L1/L3 CDMA 的系统级时间修正：**
+- UNOOSA/ICG 时间描述给出 L1 CDMA Type 10 字段：τj(tb) bits 116–147，γj(tb) bits 148–166，βj(tb) bits 167–181；τc(tb) bits 182–221，τ̇c(tb) bits 222–234。
+- L3 CDMA Type 10 字段：τj(tb) bits 123–154，γj(tb) bits 155–173，βj(tb) bits 174–188；τc(tb) bits 189–228，τ̇c(tb) bits 229–241。
+- τj/γj/βj 是 SV 信号时间到 GLONASS 系统时间的二次模型；τc 与其变化率是 GLONASS 系统时间到 UTC(SU) 的时间转换参数。两者不能混为一类“UTC 参数”。
+- ICG 文档给出系统时间到 UTC(SU) 的转换需结合 10800 s 时区项与模一天处理。实现必须以 ICD 的精确符号、时间单位和 epoch 规则为准，不得只套公式文字转录。
+- 2017 ICG 文档还声明 GLONASS Time 在 UTC(SU) 同步下与其相差 10800 s，系统尺度按当时闰秒公告同步修正；该描述是旧制度基线，不是 2027 后的连续 UTC 实施声明。
+
+**与 2026 国家规划的关系（关键区分）：**
+- 2016 CDMA ICD 已经存在 CDMA 信号，但其 Type 25 传输的是 UTC(SU)−TAI 和 UT1−UTC(SU)，且 KP/A/异常字符串仍定义旧 ±1 s 校正行为。
+- 2026 国家无线电导航计划所说“CDMA 双尺度”，因此不能被解释为“2016 Type 25 已经包含 continuous UTC”。更合理且证据一致的解释是：未来 CDMA 新版/修订 ICD 必须新增或重新定义字段/消息版本，向用户提供旧可校正尺度与重新定义后的连续 UTC 两套数据。
+- 目前没有取得该未来修订 ICD，故新 continuous UTC 字段、偏差符号、epoch、有效位、更新周期、与旧 Type 25 的并存/替换规则全部保持 UNKNOWN；禁止复用旧 UTC−TAI 字段作为 continuous UTC。
+- 2026 国家规划明确提出路线，不等于该路线已实现；2016 CDMA ICD 证明当前旧 CDMA 字段合同，不能证明新制度完成。
+
+**实现/数据模型要求：**
+- 分别定义 GLONASS_SV_TO_SYSTEM、GLONASS_SYSTEM_TO_UTC_SU_LEGACY、UTC_SU_TO_TAI_LEGACY、UT1_MINUS_UTC_SU 四个 typed model；各自带 signal_band、message_type、ICD edition、epoch、validity、source hash、raw payload。
+- future continuous UTC 参数必须另设 CONTINUOUS_UTC_REALIZATION 类型；在新版 ICD 未取得并审核前禁止实例化。
+- Type 25 的 NB/MT 日界与 UTC(SU) 日界相差 3 小时；不能把 NB 简化成 UTC civil date。闰秒切换时还必须联合 KP/A 状态和旧/新星历版本。
+- L1/L3 CDMA 字段位置不同；L2 CDMA 需单独审计其 ICD，不可从 L1 复制字段偏移。
+- Type 25 9-bit UTC−TAI 与 ±255 s 范围、B0 ±256 s 范围应逐位解析并保留 raw bits；不得在缺少原始位图/位编号核对时据 OCR 表格直接生成 parser 常量。
+
+新增测试合同：
+- GNSS-UTC-IF-021：Type 25 UTC−TAI 明确生成 UTC_SU_LEGACY_TO_TAI，不能被标记为 continuous UTC。
+- GNSS-UTC-IF-022：B0/B1/B2 的 UT1−UTC(SU) 符号、参考日 NB、MT 日界与时间单位正确；与 UTC−TAI 分离。
+- GNSS-UTC-IF-023：KP/A 组合与 Type 1/2 anomalous string 的时长/方向一致；KP=10 必须 pending，不得猜测。
+- GNSS-UTC-IF-024：L1 与 L3 Type 10 字段偏移独立；禁止交叉解析。
+- GNSS-UTC-IF-025：缺少未来 continuous UTC 新 ICD/版本/有效标志时，continuous UTC 输出状态为 UNSUPPORTED_SPEC / POLICY_UNVERIFIED。
+- GNSS-UTC-IF-026：Type 25 NB 与 MT/UTC(SU) 跨 3 小时时界、闰秒前后 old/new ephemeris 混合期间，拒绝错误历元配对。
+
+**证据边界：** UNOOSA/ICG 时间尺度文件是国际组织公开材料；SHD ECD (2020) 的首页显示 Roscosmos 核准签字，可作官方系统级辅助信息规范，但它是实时高精度辅助信息 ICD，不是 CDMA 新版信号 ICD；2016 L1 CDMA ICD 的当前副本不是官方站点原件。未取得原始导航比特流、未核验 ZED-F9P 支持 L1OC/L3OC、未实现解码器或运行测试。
