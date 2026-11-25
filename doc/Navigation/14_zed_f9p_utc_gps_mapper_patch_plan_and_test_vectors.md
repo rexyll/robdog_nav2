@@ -809,7 +809,7 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 4. **周数截断恢复是协议专属规则。** Galileo GST−UTC 使用 8-bit WN0t/WNLSF，BDS B3I WNLSF 为 modulo 256，GPS L5 CNAV 使用 13-bit WN_ot/WNLSF。必须用同消息/同历元约束恢复 full week，拒绝歧义周数，不可借用另一星座的 rollover 窗口。
 5. **闰秒字段不是连续 UTC 实施证明。** 这些 ICD 都早于 Resolution 5，仍定义 ΔtLS/ΔtLSF 事件语义。Resolution 5 生效后，旧字段可能继续为兼容/历史用途保留，也可能由后续 ICD 或服务端更新定义新语义；在官方修订/服务公告与接收机原始导航数据验证前，不能假定事件字段停止广播、永远固定，或继续按旧语义解释。
 6. **UT1 必须单独建模。** GPS L5 Type 32 是明确证据：EOP/UT1 信息与 GPS−UTC 转换是相关但不同的数据面。连续 UTC 之后 |UT1−UTC| 允许增长至 3600 s，不意味着 EOP 可丢弃；普通导航时钟 mapper 不应把 UT1 缺失判成 GPS−UTC 失效，但地固/惯性变换与天文应用必须有独立 EOP freshness/conflict gate。
-7. **不要跨星座多数表决。** 同一接收机同一 epoch 收到多星座 UTC offset 时，先按各自 UTC reference realization 和系统间偏差模型归一化；在参考实现/偏差未确认时，标记 `CROSS_REALIZATION_UNRESOLVED`，不得把 GPS UTC(USNO)、Galileo 参考实现组合、BeiDou UTC(NTSC) 当作完全相同的 UTC realization。
+7. **不要跨星座多数表决。** 同一接收机同一 epoch 收到多星座 UTC offset 时，先按各自 UTC reference realization 和系统间偏差模型归一化；在参考实现/偏差未确认时，标记 `CROSS_REALIZATION_UNRESOLVED`，不得把 GPS UTC(USNO)、Galileo GST−UTC 广播所指向的 UTC、BeiDou BDT−UTC 广播所指向的 UTC 默认视为同一物理 realization；Galileo/BeiDou 对应 UTC(k) 的具体实现标识与溯源仍须由各自权威时间服务文件确认。
 8. **接收机 API 能力是独立 Gate。** 本项目目标 ZED-F9P 是否提供原始 GPS/Galileo/BeiDou UTC 广播参数、保留了哪些 signal/message identity、是否提供 raw navigation page、是否在固件中融合/过滤参数，均未从本次 ICD 审计得到证明。UBX-NAV-PVT/TIMEUTC/TIMELS 是 receiver output，不等价于原始星座广播字段；后续需 MON-VER、配置快照、原始导航页和输出日志建立映射。
 
 ##### 4.18.3 建议内部数据模型（设计草案）
@@ -817,7 +817,7 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 - `GnssTimeScale`: `GPS`, `GST`, `BDT`；携带 full week + integer TOW ns + system-time epoch/version。
 - `UtcOffsetPolynomial`: signed fixed-point `A0/A1/A2`（按消息 schema 允许字段）、scale factors、reference week/TOW、evaluation interval、uncertainty、raw bits。
 - `UtcLeapEventBroadcast`: current/past ΔtLS、future ΔtLSF、effective week/day、raw truncated week fields、event-valid flag、message issue/health。
-- `UtcReferenceRealization`: `UTC(USNO)` / Galileo reference realization identifier / `UTC(NTSC)`（以各版 ICD 和服务端文档精确定义为准）；不默认为同一 realization。
+- `UtcReferenceRealization`: `UTC(USNO)`（GPS L5 Type 33 明确）/ Galileo GST−UTC 对应的 UTC realization identifier / BeiDou BDT−UTC 对应的 UTC realization identifier；后两者具体 UTC(k) 名称及溯源待权威服务文件确认，不得预设为 `UTC(NTSC)` 或某个固定组合。
 - `Ut1EopBroadcast`: UT1−system-time 或协议规定的 EOP fields、xp/yp、epoch、validity、source/signal identity；独立于 UTC leap event cache。
 - 每个对象保留原始消息字节/页、ICD revision、接收单调时钟、receiver session/generation、解析器版本和审核状态。
 
