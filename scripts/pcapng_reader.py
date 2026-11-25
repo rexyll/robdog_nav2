@@ -270,3 +270,22 @@ def iter_pcap_packets(stream: BinaryIO) -> Iterator[PcapngPacket]:
             caplen, origlen, data, True, caplen < origlen,
         )
         packet_index += 1
+
+
+def iter_capture_packets(stream: BinaryIO) -> Iterator[PcapngPacket]:
+    """Auto-detect and stream classic PCAP or PCAPNG from a seekable file."""
+    try:
+        position = stream.tell()
+        magic = stream.read(4)
+        stream.seek(position)
+    except (AttributeError, OSError) as exc:
+        raise PcapngError("capture stream must support tell/read/seek") from exc
+    if magic == b"\\x0a\\x0d\\x0d\\x0a":
+        yield from iter_pcapng_packets(stream)
+    elif magic in {
+        b"\\xd4\\xc3\\xb2\\xa1", b"\\xa1\\xb2\\xc3\\xd4",
+        b"\\x4d\\x3c\\xb2\\xa1", b"\\xa1\\xb2\\x3c\\x4d",
+    }:
+        yield from iter_pcap_packets(stream)
+    else:
+        raise PcapngError(f"unrecognized capture magic: {magic.hex()}")
