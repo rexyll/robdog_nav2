@@ -386,3 +386,18 @@ python scripts/audit_m3dgr_gt_rtk_correspondence.py \
 - 不进行跨 topic nearest-time 配对，不推断接收机身份，不更改输入 bag/GT。字段快照只用于识别下一步应检查的 UBX 状态字段。
 
 **GT Gate 仍阻塞：** 来源关联强，但 RTK 固定解状态、改正源、协方差语义、天线杆臂、时钟语义和 GT 坐标系尚未认证；原始 GT 时间戳仍非严格递增。禁止使用 2,594 行 pose-run candidate 替换原始 4,269 行来源证据，禁止 evo APE/RPE 或 Point-LIO 结果对齐调参。
+
+
+### 6.13 Dynamic03 GNSS quality interpretation and next audit (2026-11-25)
+
+用户返回的完整本地报告补充了以下事实：
+
+- /mavros/global_position/raw/fix 的 4,269 条消息均为 frame_id=base_link、service=1；covariance 矩阵均有限，水平 East/North 方差范围均为 0.25–2.89 m²、中位数 0.49 m²（对应单轴标准差中位数约 0.7 m），Up 方差为 0，非对角项均为 0。covariance_type=APPROXIMATED，不能把这些数值当作接收机独立测得的精度证书。
+- /ublox_driver/receiver_lla 有 2,845 条 sensor_msgs/NavSatFix，header frame_id 为空、service=0、covariance 全零且 type=UNKNOWN。首条 status=3，不属于 ROS NavSatStatus 定义的 -1..2 合法枚举值；末条 status=0。不能据此认定它是 RTK 解。
+- /ublox_driver/receiver_pvt 有 2,845 条 gnss_comm/msg/GnssPVTSolnMsg，约 10Hz；GNSS 时间 week=2343，首样本 tow=447592.0s，末样本 tow=447876.4s。首样本 fix_type=3（3D fix）、valid_fix=true，但 diff_soln=false、carr_soln=0（无载波相位解）、num_sv=8；末样本 fix_type=0、valid_fix=false、num_sv=0。这些只是首尾样本，不能代表全程分布。GNSS_comm/GVINS 对该字段的公开定义明确区分 3D fix、差分改正和 carrier phase Fixed/Float；只有 carr_soln=2 才是 carrier-phase fixed。参考 [GVINS-Dataset GNSS PVT field description](https://github.com/HKUST-Aerial-Robotics/GVINS-Dataset)。
+- /mavros/global_position/raw/fix 的字段路径与 MAVROS GlobalPosition 插件将 MAVLink GPS_RAW_INT 转换为 NavSatFix 的实现相符；插件 status=0 的判断条件只是 GPS_RAW_INT.fix_type > 2，不是 RTK Fixed 判定。参考 [MAVROS global_position.cpp](https://github.com/mavlink/mavros/blob/ros2/mavros/src/plugins/global_position.cpp)。
+- 目前仍不能证明 15Hz raw/fix 的 MAVLink 输入来自哪个物理接收机；M3DGR 同时记录独立 10Hz u-blox PVT topic。必须结合完整 PVT 字段分布、MAVROS/飞控配置和实际 receiver wiring 才能确定设备映射。
+
+为避免只看首尾样本，新版审计脚本增加了 /ublox_driver/receiver_pvt 全量字段分布/范围统计：fix_type、valid_fix、diff_soln、carr_soln、num_sv 的计数分布，以及 h_acc、v_acc、p_dop、vel_acc 的 min/median/p95/max。数值按消息原生单位输出；在确认实际消息定义/版本前不做单位换算。用户需在 CI 通过后重新运行来源审计以生成该字段摘要。
+
+**当前判断：** TUM 与 15Hz MAVROS raw-fix 的逐行关联仍极强；但现有 10Hz u-blox PVT 首样本明确不是差分/载波相位解，raw-fix 自身只有普通 GPS fix 状态和近似协方差。GT 来源 Gate 继续阻塞，不能宣称 RTK Fixed、厘米级真值或运行 APE/RPE。下一步应审查 PVT 全量质量分布、M3DGR MAVROS/飞控配置与接收机连线，并检查是否存在未被当前摘要覆盖的 /ublox_driver/range_meas、RTCM/状态 topic 或接收机配置证据。
