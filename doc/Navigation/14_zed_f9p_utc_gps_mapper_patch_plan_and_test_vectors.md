@@ -367,3 +367,85 @@ These fixtures complement the NAV-TIMELS 24-byte fixtures in §4.7. They specify
 **NAV-TIMELS 差距**：固定版本的 ubx_nav.hpp include、payload type aliases、container、constructor、frame dispatch 均没有 NAV-TIMELS；node 也没有对应 publisher/message。故 NAV-TIMELS 仍需新增 ROSIDL、payload parser、dispatch、publisher 与配置输出路径。此项与现有 PVT/TIMEUTC/STATUS 不同，不能只写 ROS adapter 订阅配置来解决。
 
 本节是固定源码静态审计；未运行编译、畸形帧注入、ROS topic 检查或 F9P 实机测试。后续实施必须在项目许可/维护者 Gate 通过后，对专用 fork/分支进行，不能直接改上游固定源或在本项目中复制 transport。
+
+### 4.12 UTC→GPS source policy table 与纯算法属性测试合同（设计，未实现）
+
+本节把前述 parser/test-vector 设计收敛为 mapper 的输入准入、跨消息配对、冲突拒绝、状态输出和生成式测试合同。它仍是 E3 设计规格：不增加生产代码、不增加依赖、不改变现有 Gate/Joiner API，也不表示任何测试已执行。
+
+#### 4.12.1 输入源准入与优先级
+
+主时间候选来自 NAV-PVT UTC；NAV-TIMEUTC 是同历元独立核验；NAV-TIMELS 提供当前 GPS−UTC leap-second offset；NAV-STATUS 只提供 receiver time validity / fix 状态指示。四类消息职责不同，不能互相代替。
+
+| 输入 | 必须满足的结构/语义条件 | mapper 处理 | 缺失/不满足时 |
+|---|---|---|---|
+| NAV-PVT | class/id 01/07、payload 92 bytes；validDate、validTime、fullyResolved 均为 true；日期合法；signed nano 合法；若 confirmedAvail=1，必须同时 confirmedDate 和 confirmedTime | 作为 UTC 主候选；保留 valid 与 confirmation 三个位；confirmedAvail=0 只能输出 UNCONFIRMED | 结构错误/字段矛盾 → AMBIGUOUS_INVALID；UTC validity 不足 → 不产生可用绝对时间 |
+| NAV-TIMEUTC | class/id 01/21、payload 20 bytes；validUTC=1；UTC civil/nano 合法；utcStandard 必须由显式 allowlist 接受 | 与 NAV-PVT 同 iTOW 严格配对并独立归一化，作为一致性核验；validTOW、validWKN 仍只是 validity bits | validUTC=0、未知/保留 utcStandard、无精确配对 → 不允许确认 PVT 候选；冲突 → AMBIGUOUS_INVALID |
+| NAV-TIMELS | class/id 01/26、payload 24 bytes；validCurrLs=1；currLs 有符号解码；source code 必须由显式 allowlist 接受 | 提供当前 GPS−UTC 秒差；validTimeToLsEvent 与 validCurrLs 独立，当前 offset 不得错误要求 event bit 同时有效 | validCurrLs=0、source=0（default/hardcoded）、source=255/未知或策略未批准 → fail closed，不输出 UTC→GPS 绝对映射 |
+| NAV-STATUS | class/id 01/03、payload 16 bytes；解析 gpsFixOK、towSet、wknSet | 只作 fix/time validity gate；towSet/wknSet 是标志，不能作为 iTOW/GPS week；msss 不可单独判定 reboot | 必需 validity flag 为 false 或 STATUS 不可配对 → NO_FIX 或 AMBIGUOUS_INVALID，按具体原因码区分 |
+
+utcStandard 和 srcOfCurrLs 的 allowlist 必须是显式、可审计、按目标固件配置的策略数据；不能因某个枚举“看起来常见”就隐式接受。NAV-TIMEUTC 的标准代码 0、1..7、15 及保留/未知值均须在策略表中逐项归类。NAV-TIMELS source 1..7 的语义虽已由协议定义，但项目是否接受每一来源仍需决策；source 0/default 与 255/unknown 默认拒绝。不得在代码中内置“当前 leap seconds”常量作为 TIMELS 缺失时的静默回退。
+
+PVT confirmation 是独立可信度维度：confirmedAvail=0 表示接收机未提供确认信息，最高只能是 UNCONFIRMED；confirmedAvail=1 但 confirmedDate/confirmedTime 不全，不能标成 confirmed。TIMEUTC 的 validUTC 只能交叉验证，不能替 PVT 补齐 confirmation bits。GNSS fix quality 与 UTC validity 也不得混成一个 bool：若 NAV-STATUS 表示 no-fix，即使日历字段看似有效，也不得将其发布为导航可用的 VALID 时间映射。
+
+#### 4.12.2 精确历元配对与缓存隔离
+
+1. PVT、TIMEUTC、TIMELS、STATUS 必须按完全相等的 iTOW 配对；不允许 nearest-neighbor、插值、按 ROS header stamp 猜测或以“最近到达”代替协议历元。
+2. 每条记录至少携带 (process_session_id, connection_generation, receive_monotonic_ns, queue_sequence, iTOW)。同一 join key 必须属于同一 session/generation；旧 generation 的迟到回调一律丢弃。
+3. iTOW 是周内毫秒计数，会在 GPS week 边界回绕；它不是全局唯一 epoch。精确相等必须再受 session/generation、接收单调时间 freshness 和缓存生命周期约束。不得让相隔一周但 iTOW 数值相同的记录跨缓存命中。
+4. 缓存容量、最大接收年龄、最大 receive skew 必须配置化；在阈值未由目标设备/运行证据冻结前，配置为 unset 时 mapper 保持 fail-closed，不得臆造默认毫秒数。
+5. GPS week rollover 本身不是 receiver reboot，也不自动触发 GNSS generation reset。周回绕识别必须使用可验证的连续性/周信息证据；NAV-STATUS wknSet 不是 week 数值，不能用于推导周号。
+6. generation 或 process session 变化时，先推进 lifecycle fence，再清空全部待配对缓存、已退休 key 和候选输出；清理后才允许新 generation 首帧进入。任何旧 sequence / 旧 generation 数据不得污染新缓存。
+
+#### 4.12.3 时间归一化、冲突与 fail-closed 规则
+
+- PVT 与 TIMEUTC 各自按协议 signed nano 归一化，允许负 nano 跨秒/日/月/年边界；归一化应使用 Gregorian calendar 和明确的 leap-second-aware UTC 表示。
+- 不得把 sec=60 直接交给普通 POSIX timestamp、Python datetime 或忽略 leap second 的库后再假定连续。必须保留 leap-second 显式状态，并由专用 UTC→GPS 转换器处理。
+- PVT/TIMEUTC 同 iTOW 的归一化 UTC 不一致时拒绝该历元；容差、tAcc 合成方式和 maximum source uncertainty 必须来自已批准策略，未配置时不以“差不多”放行。
+- TIMELS 的 validCurrLs、source allowlist、receive age 任一不满足，都不得使用上次值无限延续，也不得退回主机当前 leap-second 表；只能输出带 reason 的无效/陈旧状态。
+- STATUS towSet 或 wknSet 为 false 时，不得输出绝对 GPS 时间锁定。即使二者为 true，也只证明对应时间字段被 receiver 置为有效，不提供 week number 本身。
+- 当 source skew、消息 age、tAcc 门限、recovery hysteresis 尚未冻结时，不生成 VALID。策略配置缺失与输入数据错误必须使用不同 reason code，方便治理与运行诊断。
+
+#### 4.12.4 输出状态机与可发布性
+
+状态是 mapper 的时间映射状态，不是 RTK carrier solution 状态，也不是整个机器人 navigation health 状态。
+
+| 状态 | 进入条件（概要） | 是否发布绝对 GPS week/TOW |
+|---|---|---|
+| NO_FIX | NAV-STATUS/PVT 明确表示当前无可用 GNSS fix，或必需 fix validity 不成立 | 否 |
+| UNCONFIRMED | PVT UTC 字段有效且可与 TIMEUTC 核验，但接收机未提供完整 confirmation metadata | 默认否；只允许发布显式标注为候选的诊断数据 |
+| VALID | PVT validity/confirmation 满足策略；TIMEUTC 同 iTOW 一致且标准获准；TIMELS 当前 offset 有效且来源获准；STATUS time flags 有效；所有 age/skew/accuracy 参数已配置并通过；generation fence 当前有效 | 是 |
+| DEGRADED | 可保留诊断候选，但某个非致命的可选交叉核验/质量来源缺失，且策略明确允许降级运行 | 默认否；只有策略逐项批准后才可发布带降级标志的数据 |
+| AMBIGUOUS_INVALID | 同历元冲突、UTC/日历非法、未知枚举、source 不可信、join 失败、无法判定 epoch 或输入组合矛盾 | 否 |
+| STALE | 任一必需源超过已批准 freshness/age，或 receive skew 超限 | 否 |
+| RESETTING | detach/attach、session/generation 变化或 reset transaction 尚未完成 | 否 |
+
+默认发布策略为 fail-closed：只有 VALID 可以进入导航消费的绝对 GPS 时间通道。UNCONFIRMED / DEGRADED 仅供诊断；其他状态不发布可被误认为有效的 week/TOW。每个输出同时携带稳定的 machine-readable reason_codes、source identity、generation、source uncertainty 和输入历元；状态恢复必须服从单独冻结的恢复滞回策略。状态转换不得隐式清除/重置其他 GNSS quality gate 或 estimator epoch。
+
+#### 4.12.5 纯算法属性测试矩阵（Hypothesis 尚未引入）
+
+本轮检查 robodog_gnss_quality 的工程元数据与现有测试：package.xml 仅声明 pytest，setup.py 的 test extra 仅包含 pytest；当前测试文件使用 unittest.TestCase。没有已声明的 Hypothesis 依赖，也没有依据擅自增加第三方测试依赖。因此第一阶段采用 Python 标准库 + unittest 的确定性生成式/property-style tests：固定 seed、边界值集合、可重复的随机序列和最小反例输出；若以后希望采用 Hypothesis，需单独评估依赖供应链、ROS distro 可用性和项目许可 Gate，再明确批准后加入 test extra。
+
+| 属性 ID | 生成输入/扰动 | 必须始终成立的不变量 |
+|---|---|---|
+| UTC-NORM-PROP-001 | 生成合法日期时间与 nano（正/负、跨秒/日/月/年） | 归一化结果与独立整数纳秒 oracle 一致；不丢失符号，不发生静默溢出 |
+| UTC-NORM-PROP-002 | 生成闰年/世纪年/月末/年末日历 | Gregorian 闰年规则正确；非法日期拒绝，不自动滚入下月 |
+| UTC-LEAP-PROP-003 | 生成普通秒、显式 sec=60、闰秒前后相邻时刻 | leap second 被明确表示；禁止 POSIX shortcut；GPS 连续时间映射符合已核验 offset |
+| UTC-LEAP-VEC-004 | 固定 2016-12-31 正闰秒三向量：23:59:59 + offset 17 → GPS 2017-01-01 00:00:16；23:59:60 + offset 17 → GPS 00:00:17；2017-01-01 00:00:00 + offset 18 → GPS 00:00:18 | 三个连续 GPS 秒严格递增且相邻差为 1 秒 |
+| UTC-WEEK-PROP-005 | 在已知 GPS absolute ns 的周边界前后生成 -1 ns / 0 / +1 ns | week/TOW 满足 0 <= tow < 604800 s；绝对纳秒可由 week/TOW 无损重建；边界不多加/少加一周 |
+| UTC-JOIN-PROP-006 | 随机排列 PVT/TIMEUTC/TIMELS/STATUS 到达顺序、重复、延迟、缺失、错配 iTOW | 仅同 iTOW 且同 session/generation 的完整组合可 join；任何错配均不产出 VALID |
+| UTC-CONFLICT-PROP-007 | 对同 iTOW 的 PVT/TIMEUTC 注入任意 UTC/nano 差异 | 超出显式策略容差必拒绝；容差未配置时不得默许；冲突不能被后到消息覆盖 |
+| UTC-SOURCE-PROP-008 | 枚举所有 utcStandard、srcOfCurrLs 值及 reserved/unknown | 只有策略 allowlist 的值被接受；0/default、255/unknown 与未登记枚举 fail-closed |
+| UTC-VALID-PROP-009 | 枚举 PVT valid bits、confirmation bits、TIMEUTC valid bits、TIMELS valid bits、STATUS tow/week flags 的组合 | 各位独立解释；confirmation 不可由 TIMEUTC 代替；STATUS flags 不可被当作数值 |
+| UTC-GENERATION-PROP-010 | 在任意缓存状态中插入 session/generation 变化及旧 callback | generation 变化后旧缓存为空；旧 generation/sequence 永远不能产出或污染新 generation 结果 |
+| UTC-CACHE-PROP-011 | 生成重复 iTOW、跨 week wrap、超过 age/skew、超容量序列 | 缓存始终有界；过期/跨 epoch 样本不配对；周回绕不自动触发 reboot |
+| UTC-STATE-PROP-012 | 生成所有输入条件组合与状态转换序列 | 只有完整策略准入的 VALID 可发布；RESETTING/STALE/AMBIGUOUS_INVALID 不得残留上一历元的有效输出 |
+
+2016 正闰秒固定向量的解释必须统一：GPS−UTC 在闰秒前为 17 秒，闰秒后为 18 秒；sec=60 是真实的独立 UTC 标签，不能将它先折叠成下一日 00:00:00 再套用 18 秒 offset。实现必须采用能表达 leap second 的内部 civil-time 类型或等价整数时间线。
+
+#### 4.12.6 测试执行与参数 Gate
+
+- 第一阶段只新增纯算法 unittest，不导入 rclpy、ROS message、USB 或驱动包；所有随机生成均使用固定 seed，并在失败时打印 seed、property ID 和最小化后的输入。
+- 对每条属性测试同时保留 §4.7–§4.10 的固定原始 payload fixtures；结构解码、calendar validation、mapper policy、状态机四层分开测试。
+- 不在当前 Gate 未解除时新增 mapper/driver production code；本节本身也不执行测试或 CI。
+- 以下参数必须由目标固件/设备日志或正式策略决策确定，未确定前保持 unset 并阻止 VALID：最大消息 age、最大 receive skew、PVT/TIMEUTC UTC 比较容差、tAcc/uncertainty 上限、TIMELS 来源 allowlist、utcStandard allowlist、恢复滞回、缓存容量/TTL。
+- 目标设备 MON-VER（software/hardware/PROTVER）和真实 NAV-PVT/TIMEUTC/TIMELS/STATUS 原始帧仍未提供；不得宣称固件兼容、真实输出可用或 mapper 已验证。
