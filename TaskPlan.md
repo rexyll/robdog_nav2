@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.73
+- 文档版本：v0.3.74
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -76,7 +76,7 @@
 > 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
 
 - [x] N0 研究基线与范围冻结：已创建 nav 分支；研究目标已纠正为完整导航模块；已建立总体目录、系统架构与数据流框架、术语基线、证据等级和首轮上游仓库/commit 锚点。完成证据见 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md、02_subsystem_inventory_and_evidence_register.md。此状态仅表示研究范围/治理基线冻结，不代表各子系统源码研究完成。
-- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单、失效传播框架，并基于 ROS 2 Jazzy 固定源码核验 Imu、Odometry、PointCloud2、TwistStamped、NavigateToPose、FollowPath 的字段/语义；已建立接口契约文档。尚未完成各节点真实 topic/QoS/频率/时延、全调用链和 Lite3 实际执行反馈核验。
+- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单、失效传播框架和 ROS 2 Jazzy 核心消息/action 契约；新增 Nav2 bringup→Controller/Behavior→Velocity Smoother→Collision Monitor 命令链源码审计（固定 navigation2 commit c7046550547d382a5186d106b0895eda02485d7c），核实 navigation_launch 生命周期节点、cmd_vel_nav/cmd_vel_smoothed/cmd_vel remap、Controller Server FollowPath/action 与 odom/TF 依赖、Velocity Smoother OPEN_LOOP/CLOSED_LOOP 和超时参数、Collision Monitor source timeout→STOP 逻辑。新增 doc/Navigation/04_nav2_bringup_interface_audit.md（commit 4298dd67）。仍未完成 Planner/BT action client 全调用链、Costmap 真实观测链、各节点运行时 QoS/频率/延迟、PointCloud2 source 接入及 Lite3 执行反馈核验；当前证据仅 E1/E2。
 - [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
 - [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
 - [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
@@ -244,7 +244,7 @@
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. 严格在 `nav` 分支执行 N0→N9：N0 范围/架构/术语/证据基线已冻结；当前推进 N1，按 `doc/Navigation/README.md` 顺序逐专题推进；Nav2 只在 N6 深研。
+1. 严格在 `nav` 分支执行 N0→N9：N0 范围/架构/术语/证据基线已冻结；N1 已完成 Nav2 命令链首轮源码审计，继续追踪 Planner/BT action client、Costmap 观测源和全链路接口；Nav2 的完整内部深研仍归 N6。
 2. N1 将系统级 Producer/Consumer 清单细化为源码/消息定义可验证的接口矩阵，优先检查传感器→定位/感知→地图/Costmap→规划→命令仲裁→四足执行反馈，避免只研究孤立软件包。
 3. 并行保留原硬件 Gate：推进 ZED-F9P ROS adapter/UBX 时钟与质量 gate、Lite3 正式 odometry/运动接口/急停/SDK 权限确认、双目同步/镜头/USB 带宽、载荷/供电/热设计。
 4. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
@@ -254,6 +254,8 @@
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.74：在 nav 分支完成 N1 中 Nav2 bringup 与运动命令链首轮源码审计：固定 navigation2 Jazzy commit c7046550547d382a5186d106b0895eda02485d7c；追踪 navigation_launch lifecycle nodes、controller/behavior→cmd_vel_nav→velocity_smoother→cmd_vel_smoothed→collision_monitor→cmd_vel；核验 Controller Server FollowPath server、odom/TF、costmap update timeout 和失败零速度路径；核验 Velocity Smoother 双 Twist 输入、OPEN_LOOP/CLOSED_LOOP 与 velocity timeout；核验 Collision Monitor source timeout 触发 STOP 及 LaserScan 示例源限制。新增 doc/Navigation/04_nav2_bringup_interface_audit.md，提交 4298dd67。只属于 E1/E2 源码证据，未运行 ROS 集成或实机测试。
 
 - 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。首轮提交：Nav2 README 042f4000；Navigation README 7234a0ae；架构文档 d4e862df；数据流文档 8db9087f；TaskPlan 目标纠正 a3dffc63、回填 291ee40f；N0 上游基线/术语/证据登记 424317c3；N1 ROS 接口契约 10b0bbd6；Navigation 目录索引更新后续提交。
 
@@ -322,6 +324,7 @@
 - [验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [完整导航模块专项研究总目录](doc/Navigation/README.md)
 - [完整导航模块总体架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
+- [Nav2 bringup 到运动命令链接口审计](doc/Navigation/04_nav2_bringup_interface_audit.md)
 - [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
 - [导航子系统清单、上游基线与证据登记](doc/Navigation/02_subsystem_inventory_and_evidence_register.md)
 - [ROS 2 核心接口契约与数据语义](doc/Navigation/03_ros_interface_contracts.md)
