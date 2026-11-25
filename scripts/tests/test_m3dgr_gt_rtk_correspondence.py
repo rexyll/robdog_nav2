@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from types import SimpleNamespace
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ from rosbags.typesys import Stores, get_typestore
 
 from audit_m3dgr_gt_rtk_correspondence import (
     audit_gt_rtk_correspondence,
+    audit_related_gnss_topics,
     geodetic_to_enu,
     rigid_trajectory_correspondence,
     message_snapshot,
@@ -150,6 +152,43 @@ class TestM3DGRGTRTKCorrespondence(unittest.TestCase):
         self.assertEqual(snapshot["values"]["length"], 40)
         self.assertTrue(snapshot["values"]["truncated"])
         self.assertEqual(len(snapshot["values"]["items"]), 8)
+
+
+    def test_range_meas_numpy_arrays_are_audited_without_ambiguous_truth_value(self):
+        topic = "/ublox_driver/range_meas"
+        connection = SimpleNamespace(
+            topic=topic,
+            msgtype="gnss_comm/msg/GnssMeasMsg",
+        )
+        observation = SimpleNamespace(
+            status=np.asarray([0x01, 0x03, 0x07], dtype=np.uint8),
+            CN0=np.asarray([30.0, 40.0, 45.0], dtype=np.float32),
+            LLI=np.asarray([0, 1, 0], dtype=np.uint8),
+        )
+        message = SimpleNamespace(header=None, meas=[observation])
+
+        class FakeReader:
+            connections = [connection]
+
+            def messages(self, connections):
+                yield connection, 1_000_000_000, b"serialized"
+
+            def deserialize(self, rawdata, msgtype):
+                return message
+
+        report = audit_related_gnss_topics(FakeReader(), (topic,))
+        self.assertEqual(report[topic]["status"], "audited")
+        self.assertEqual(report[topic]["count"], 1)
+
+        summary = report[topic]["raw_measurement_summary"]
+        counts = summary["signal_counts"]
+        self.assertEqual(counts["signal_observations"], 3)
+        self.assertEqual(counts["pseudorange_valid"], 3)
+        self.assertEqual(counts["carrier_phase_valid"], 2)
+        self.assertEqual(counts["half_cycle_valid"], 1)
+        self.assertEqual(counts["lost_lock"], 1)
+        self.assertEqual(summary["cn0_db_hz"]["count"], 3)
+        self.assertEqual(summary["cn0_db_hz"]["median"], 40.0)
 
     def test_rigid_fit_reports_diagnostic_residual_without_scale(self):
         source = np.asarray(
