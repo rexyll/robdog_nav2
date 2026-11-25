@@ -1059,3 +1059,31 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 5. 在受控 ICD 获取前，禁止写入 CDMA 新时间字段 parser 常量、bit offsets、scale mapping 或 2027 transition 代码；保留 UNSUPPORTED_SPEC / POLICY_UNVERIFIED。
 
 **来源与限制：**Roscosmos Order No.324 正文可读取（当前检索到的是法规数据库转载文本，法律内容含命令原文）；GLONASS-SVO EVI 规范目录列出四份 Edition 1.0/2016 文档；GPS World 2016 报道列出 RKS 原始下载 URL；UNOOSA/ICG 参考资料目录列出对应 ICD 名称/版本。RKS PDF 直接访问本轮超时/不可用。没有受控原件、哈希、修订/签章核验或授权渠道确认；未修改生产代码、未运行测试。
+
+
+##### 4.19.10 GLONASS CDMA ICD 2016/2017 年份差异与受控基线判定
+
+本节修正并细化 §4.19.9 的版本年份表述。现有公开证据出现“2016”与“2017”两种年份，但证据所表达的含义并不相同，不能简单择一，也不能据此推断存在两个不同 Edition 1.0 版本。
+
+**分层证据：**
+- GPS World 2016-12-14 报道称 RKS released draft versions，并列出 L1/L2/L3 与 General Description 四份原始下载路径；这能证明 2016 年公开发布/草案传播线索，不足以证明已生效的受控版本批准日期。
+- GLONASS-SVO EVI 当前公开目录将 CDMA L1、L2、L3 和 General Description 均列为 Edition 1.0、2016；该目录同时说明文件信息来自 RKS 网站。它是可访问的公开目录证据，但不是 RKS 控制版本本身。
+- UNOOSA/ICG 2019 年 9 月 7 日 WG-S intersessional presentation 的状态表列出“ICD 1.0 for L1, L2&L3 CDMA (2017)”。这表示 2019 年国际工作组材料所记录的 CDMA ICD 1.0 年份为 2017；它并未给出各份文件的封面、批准页、修订记录或文件哈希。
+- Roscosmos Order No.324（2017-09-12，2018-01-09 登记）规定 RKS 对 CDMA L1/L2/L3 Edition 1.0 受控版本负责保存、官方发布俄文/英文电子版本并提供信息支持；命令没有在条文中给出该 Edition 1.0 的具体批准日期或逐文件版本历史。
+
+**严谨结论：**
+1. 2016 可暂记为“历史草案/公开下载版本年份（reported draft release）”。
+2. 2017 可暂记为“UNOOSA/ICG 2019 状态表所记录的 ICD 1.0 年份（reported ICD status year）”。
+3. 目前没有受控原件封面、批准/签署页、revision history 或官方文件哈希，不能证明 2016 草案与 2017 ICD 1.0 的文本完全相同，也不能证明两者是不同修订版。
+4. Roscosmos Order No.324 只确认受控版本的责任机构和 Edition 编号，不解决具体年份冲突。
+5. 因此规范基线仍保持 PUBLIC_CATALOG_LISTED / OFFICIAL_CONTROLLED_COPY_NOT_VERIFIED；在 RKS 受控原件取得前，不将“2016 Edition 1.0”或“2017 Edition 1.0”单独提升为已验证的正式基线年份。
+
+**原始 URL 访问复核：**
+本轮对 RKS 历史 HTTP URL 的 L1、L2、L3、General Description 四份 PDF 均尝试打开，Web 访问层均返回不可访问/内部错误；不能据此判断服务器文件已删除，也不能认定 RKS 不再托管。GPS World/历史参考文档给出的路径是 HTTP，浏览器请求自动升级 HTTPS 后仍失败。没有使用第三方镜像字节替代官方原件，没有生成伪 SHA-256。
+
+**下一步核验要求：**
+- 取得 RKS 官方控制副本后，逐份记录封面日期、Edition/Revision、批准签字主体、批准日期、生效条款、revision history、文件长度与 SHA-256。
+- 若官方文件仍不可下载，向 RKS 提交正式信息请求，要求确认 2016 草案与 2017 受控 ICD 1.0 的关系及当前有效版本；在取得答复前保持 NEEDS_AUTHORIZED_CONFIRMATION。
+- 对 L1/L2/L3 分别进行页码级字段审计，不从 General Description 或单一频段 ICD 推导其他频段字段。
+
+**来源与限制：**GPS World 2016 报道、GLONASS-SVO EVI 公共目录、UNOOSA/ICG 2019 WG-S 状态表、Roscosmos Order No.324 法规文本。RKS 四份 PDF 本轮均无法由 Web 访问层打开；未取得官方原始字节、签章、批准日期、修订历史或哈希。无生产代码/测试变更。
