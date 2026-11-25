@@ -1038,12 +1038,12 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 - GLONASS-SVO EVI 的公开规范目录列出 2008 FDMA L1/L2 Edition 5.1，以及 2016 CDMA L1、L2、L3、General Description 四份 Edition 1.0 文档；该站点目录可作为当前公开分发/服务目录的旁证，但不能代替 Roscosmos Order 指定的 RKS 官方受控副本。
 
 **可追溯的 RKS 原始文件 URL（历史发布路径）：**
-- General Description: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-General.-Edition-1.0-2016.pdf
-- L1: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L1.-Edition-1.0-2016.pdf
-- L2: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L2.-Edition-1.0-2016.pdf
-- L3: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L3.-Edition-1.0-2016.pdf
+- General Description: http://russianspacesystems.ru/wp-content/uploads/2016/08/IKD.-Obshh.-opis.-Red.-1.0-2016.pdf
+- L1: http://russianspacesystems.ru/wp-content/uploads/2016/08/IKD-L1-s-kod.-razd.-Red-1.0-2016.pdf
+- L2: http://russianspacesystems.ru/wp-content/uploads/2016/08/IKD-L2-s-kod.-razd.-Red-1.0-2016.pdf
+- L3: http://russianspacesystems.ru/wp-content/uploads/2016/08/IKD-L3-s-kod.-razd.-Red-1.0-2016.pdf
 
-这些 URL 由 2016 年 GPS World 对 RKS 发布的报道和 UNOOSA/ICG 公开技术资料的参考目录交叉列出；本轮直接访问 RKS PDF 时遇到超时/不可访问，故**只确认历史原始发布 URL 与责任机构，不宣称已下载官方受控文件**。目前没有取得四份文件的当前受控版本号/修订日期、签章页、官方 SHA-256 或下载后原始字节快照。公开目录显示 Edition 1.0/2016，不足以证明截至当前仍是最新受控版本，也不能证明存在新版或不存在新版。
+以上俄文文件名 URL 与 GPS World 2016 报道逐字列出的原始链接一致；此前曾记录的英文文件名路径并非该报道给出的原始 URL，现已更正。UNOOSA/ICG 参考资料用于交叉核对文档名称/版本；本轮直接访问 RKS PDF 时遇到超时/不可访问，故**只确认历史原始发布 URL 与责任机构，不宣称已下载官方受控文件**。目前没有取得四份文件的当前受控版本号/修订日期、签章页、官方 SHA-256 或下载后原始字节快照。公开目录显示 Edition 1.0/2016，不足以证明截至当前仍是最新受控版本，也不能证明存在新版或不存在新版。
 
 **本轮可形成的规范基线状态：**
 - CDMA L1/L2/L3 + General Description：PUBLIC_CATALOG_LISTED / OFFICIAL_CONTROLLED_COPY_NOT_VERIFIED。
