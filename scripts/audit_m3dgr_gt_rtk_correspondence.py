@@ -282,6 +282,13 @@ def message_snapshot(value: Any, *, max_items: int = 32, depth: int = 5) -> Any:
 def extract_header_ns(message: Any) -> int | None:
     return stamp_to_ns(message)
 
+def sequence_values(value: Any) -> list[Any]:
+    """Normalize ROS sequence/NumPy fields without evaluating array truthiness."""
+    if value is None:
+        return []
+    return list(value)
+
+
 
 def summarize_navsatfix_metadata(messages: list[Any]) -> dict[str, Any]:
     frames: dict[str, int] = {}
@@ -375,19 +382,20 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
                     range_epoch_satellite_counts.append(len(measurements))
                     for observation in measurements:
                         range_signal_counts["satellite_observations"] += 1
-                        status_values = list(getattr(observation, "status", []) or [])
-                        cn0_values = list(getattr(observation, "CN0", []) or [])
+                        status_values = sequence_values(getattr(observation, "status", None))
+                        cn0_values = sequence_values(getattr(observation, "CN0", None))
                         range_signal_counts["signal_observations"] += len(status_values)
                         range_signal_cn0.extend(
                             float(value) for value in cn0_values
-                            if isinstance(value, (int, float)) and math.isfinite(float(value))
+                            if isinstance(value, (int, float, np.integer, np.floating))
+                            and math.isfinite(float(value))
                         )
                         for status_value in status_values:
                             status_int = int(status_value)
                             range_signal_counts["pseudorange_valid"] += bool(status_int & 0x01)
                             range_signal_counts["carrier_phase_valid"] += bool(status_int & 0x02)
                             range_signal_counts["half_cycle_valid"] += bool(status_int & 0x04)
-                        lli_values = list(getattr(observation, "LLI", []) or [])
+                        lli_values = sequence_values(getattr(observation, "LLI", None))
                         range_signal_counts["lost_lock"] += sum(bool(int(value) & 0x01) for value in lli_values)
         pvt_summary = None
         if topic == "/ublox_driver/receiver_pvt":
