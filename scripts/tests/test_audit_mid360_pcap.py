@@ -20,8 +20,8 @@ def mid360_payload(data_type, dot_num=1, corrupt_crc=False, udp_cnt=3, frame_cnt
     return bytes(payload)
 
 
-def raw_ipv4_udp(payload, source_port):
-    udp = struct.pack("!HHHH", source_port, 45000, 8 + len(payload), 0) + payload
+def raw_ipv4_udp(payload, source_port, destination_port=45000):
+    udp = struct.pack("!HHHH", source_port, destination_port, 8 + len(payload), 0) + payload
     ip = bytearray(20)
     ip[0] = 0x45
     struct.pack_into("!H", ip, 2, 20 + len(udp))
@@ -77,6 +77,27 @@ class TestMid360CaptureAudit(unittest.TestCase):
         self.assertEqual(report["sequence_event_counts"]["frame_reset_candidate"], 1)
         sequence, = report["point_cloud_sequence_audits"].values()
         self.assertEqual(sequence["missing_counter_values_estimated"], 0)
+
+
+    def test_ptp_messages_are_audited_alongside_lidar_streams(self):
+        ptp = bytearray(44)
+        ptp[0] = 0
+        ptp[1] = 2
+        struct.pack_into("!H", ptp, 2, len(ptp))
+        struct.pack_into("!H", ptp, 6, 0x0200)
+        ptp[20:30] = bytes.fromhex("0011223344556677") + struct.pack("!H", 1)
+        struct.pack_into("!H", ptp, 30, 42)
+        ptp[34:40] = (100).to_bytes(6, "big")
+        struct.pack_into("!I", ptp, 40, 123)
+        frame = raw_ipv4_udp(bytes(ptp), 319, 319)
+        report = audit_packet_records([
+            record(mid360_payload(1, udp_cnt=1), 56300),
+            PcapngPacket(0, 0, 101, 124, 124, len(frame), len(frame),
+                         frame, True, False),
+        ])
+        self.assertEqual(report["ptp_audit"]["message_count"], 1)
+        self.assertEqual(report["ptp_audit"]["message_types"], {"sync": 1})
+        self.assertEqual(report["valid_payloads"]["point_cloud"], 1)
 
     def test_crc_error_counted_without_aborting_capture(self):
         report = audit_packet_records([
