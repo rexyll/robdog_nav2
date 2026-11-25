@@ -157,7 +157,7 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 - `PointLio` 同时持有 `kf_input`（24 维）和 `kf_output`（30 维）滤波器对象。
 - IKFoM ESEKF 暴露 `get_P() const`，返回内部 covariance；并非算法本身没有协方差。
 - 默认 `config/default.yaml` 明确 `use_imu_as_input: true`，因此正常 MID-360 preset 继承默认输入模型时，实际状态与 covariance 来源是 `kf_input`，不是 `kf_output`。
-- `kf_input` 的状态字段声明顺序为 position、orientation、LiDAR-IMU rotation、LiDAR-IMU translation、velocity、gyro bias、accel bias、gravity；状态 covariance 初始化为 24×24，且源码显式对 6–11、15–20、21–23 等块设置初始值。按该声明顺序，位置/姿态位于前 6 个误差状态维度，速度位于 12–14；精确 SO(3)/重力误差参数化和内部状态映射仍须通过 IKFoM manifold 实现与单测最终锁定。
+- `kf_input` 的状态字段声明顺序为 position、orientation、LiDAR-IMU rotation、LiDAR-IMU translation、velocity、gyro bias、accel bias、gravity；状态 covariance 初始化为 24×24，且源码显式对 6–11、15–20、21–23 等块设置初始值。按该声明顺序，位置/姿态位于前 6 个误差状态维度，速度位于 12–14；进一步固定 IKFoM MTK manifold：SO(3) 的 `boxplus/oplus` 均为右乘 `R ← R·Exp(δθ)`，`boxminus` 使用 `Log(R_otherᵀ·R)`，因此旋转误差是右侧局部切空间表达；S2 gravity 的 `DOF=2`、`DIM=3`，而该 ESEKF 使用 24 维 ambient covariance。故 P 的 gravity 末尾 3×3 块不是可直接当作普通 3D 向量 covariance 的独立自由度，导出时必须按 S2 约束和当前 gravity 方向投影到切平面。状态字段顺序与 `P_init` 块设置共同支持 position 0–2、SO(3) 3–5、外参旋转 6–8、外参平移 9–11、velocity 12–14、gyro bias 15–17、accel bias 18–20、gravity ambient block 21–23；但仍须通过编译期/运行期索引断言和单测锁定该分支的 P 坐标映射。
 - `publish_odometry()` / `set_posestamp()` / `set_odomtwist()` 未读取 `kf_input.get_P()`，也没有将任何内部 covariance 写入 ROS Odometry 的 pose/twist covariance。因此应修正此前可能产生的误解：**Point-LIO 内部确实维护 covariance，缺陷在于该 ROS2 输出路径没有导出它。**
 
 ### 8.1 不允许直接截取 6×6 对角块作为最终 covariance
