@@ -566,7 +566,7 @@ UBX iTOW 是整数毫秒，不能表达 sub-ms remainder。保留 gps_tow_ns 原
 
 #### 4.14.3 TAI−UTC 到 GPS−UTC 的来源转换边界
 
-USNO 历史表记录的是 TAI−UTC，不是 GPS−UTC。若项目选择它作为历史数据源，转换必须显式使用已独立审计的 TAI−GPS 常数关系（GPS 时间与 TAI 的固定 19 s 差值），而不是把表中数字直接填入 currLs。该常数关系、适用 epoch 和转换测试必须有单独来源与测试向量；本节不把未附证据的转换器视为已验收。
+USNO 历史表记录的是 TAI−UTC，不是 GPS−UTC。若项目选择它作为历史数据源，转换必须显式使用已独立审计的 TAI−GPS 常数关系（GPS 时间与 TAI 的固定 19 s 差值），而不是把表中数字直接填入 currLs。该常数关系、适用 epoch 和转换测试必须有单独来源与测试向量；本节不把未附证据的转换器视为已验收。BIPM 对 TAI−GPS 的正式关系写作 19 s + C₀，其中 C₀ 为随时间变化、量级为数十纳秒的项；因此从 USNO 的整秒 TAI−UTC 表减去 19 s，只能得到整秒 GPS−UTC leap offset，不能宣称获得纳秒级 GPS/TAI realization。若 mapper 输出整数纳秒坐标，必须把它标记为 nominal integer timeline，并另行保留 receiver tAcc/时间实现不确定度；不得把表格推导出的整秒 offset 当作纳秒精度证明。若未来需求要求纳秒级跨时间尺度溯源，必须引入经批准的 BIPM/UTC(k)−GPS C₀ 数据及其 epoch/interpolation/uncertainty 合同，当前版本不做该扩展。
 
 IERS Bulletin C 用于确认公告日期及是否真的实施变化；USNO 历史表用于核对历史 offset 分段。若公告、历史表、接收机 event fields 三者冲突：
 1. 不通过“多数表决”自动选值；
