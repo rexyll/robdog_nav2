@@ -340,4 +340,85 @@ TIME-027 必须按下列步骤执行：
 - F9P 的 UBX-TIM-TP 是 next-pulse 标签，不能按消息接收时刻或同批 NAV-PVT 简单配对；TIMEPULSE 在失锁后可能仍有脉冲但不再保持 TOW 对齐。
 - ADR 仍为 PROPOSED / NOT DECIDED。暂时没有足够证据批准采购，也没有把 A/B 任何一路认定为已验证冗余。
 
+
+## 13. PTP 网络交换设备与 NIC/端点兼容性审计（2026-11-25）
+
+### 13.1 交换机不能只按“支持 PTP”筛选
+
+PTP 交换设备至少区分：
+- **普通二层转发（Forward）：** 不修正驻留时间；网络负载、队列拥塞和链路不对称直接进入端到端误差。
+- **E2E Transparent Clock（TC）：** 在 PTP event message 中修正设备驻留时间；端点仍使用 end-to-end delay request 机制。
+- **P2P Transparent Clock：** 逐链路测量 peer delay；需要 GM、交换机和端点的 delay mechanism/profile 相容。
+- **Boundary Clock（BC）：** 交换机自身作为下游从时钟，再向下游作为主时钟重新分发；每一跳有本地 servo/clock 误差和额外收敛行为。
+  
+因此“交换机支持 IEEE 1588-2008”不等于所有 clock mode、profile、transport、delay mechanism、one-step/two-step 和 VLAN 组合都可用。
+
+### 13.2 Cisco Catalyst IE3x00 / IE3400 / IE3500 / IE9300：公开工业交换机候选
+
+Cisco 2026-06-26 PTP 配置指南列出这些平台的 PTP 行为和限制：
+- 仅支持 multicast PTP messages；
+- BC 模式只支持 two-step clock operation，不支持 one-step；TC 模式会把收到的 one-step Sync 转换为 two-step；
+- switch 与 GM 必须配置相同 PTP domain；
+- Default Profile 模式只支持 delay_request mechanism；Power Profile 模式只支持 peer_delay；
+- Power Profile 还要求 Announce TLV（Organization_extension、Alternate_timescale），否则可能丢弃 Announce；
+- QinQ 不支持；Boundary 模式只处理配置的 PTP VLAN；TC 模式的 VLAN/端口约束需按目标拓扑确认。
+  
+Cisco 公开冗余/网络指南给出的示例指标：
+- IE9300 Rugged：Default/Power 2011/2017，BC 约 200 ns/hop，TC 约 50 ns/hop；
+- IE3500 Rugged：Default/Power 2011/2017，BC 约 200 ns/hop，TC 小于 200 ns/hop；
+- 这些是平台/模式/拓扑条件下的 per-hop 参考，不是整网绝对误差保证；Cisco 还明确指出特定 GLC-T 铜 SFP 可能降低 PTP 精度。
+  
+**本项目适配风险：**
+- MID-360 已知支持 IEEE 1588v2.0 UDP/IP，但公开资料尚未把它的 multicast/unicast、E2E/P2P、one-step/two-step、VLAN tag 行为完整钉死。因此 Cisco 的 multicast-only 和 delay mechanism 限制目前只能列为待验证兼容条件，不能直接宣称可用。
+- 若 MID-360 仅支持 UDP/IP multicast Default Profile + E2E delay_request，则 Cisco Default Profile + E2E TC/BC 才有进一步测试价值；若设备需要 unicast 或 P2P，则该 Cisco 配置可能不兼容。
+- Power Profile / 802.1AS 不是默认优选路径；不得为了使用交换机特性而改变 MID-360 的时间同步协议合同。
+
+### 13.3 Microchip LAN9668 / EVB-LAN9668：开发台架候选，不是现成采购定案
+
+Microchip 官方将 LAN9668 标为量产中的 8-port TSN Gigabit Ethernet switch。EVB-LAN9668 用户指南说明：
+- PTP interfacing 经所有网络端口可用，时间戳由 LAN8814 PHY 提供；
+- 板载 DPLL、TCXO（可替换 OCXO）与 1PPS SMA 输入/输出；
+- LAN9668 可配置 Boundary Clock、Transparent Clock、PTP Master 或 PTP Slave；
+- EVB-LAN9668 是评估板，8 × 1G copper ports，带外部 DPLL 和系统同步连接器。
+  
+它适合作为实验室比较 TC/BC、PHC/硬件 timestamp、PPS 相位和链路延迟的开发平台候选；不能直接视为机器人量产网络交换机，也不能将评估板的外部 DPLL/板级性能外推到任意 LAN9668 商用板卡。正式使用需要确定 switch firmware/SDK、PTP profile/delay mechanism、PHY 型号、板卡时钟树、驱动、管理能力、EMC/供电/温度和工业连接器。
+
+### 13.4 端到端拓扑建议（待验证）
+
+**最小验证拓扑：**
+    GNSS-disciplined GM
+       │ dedicated PTP timing VLAN / isolated switch ports
+       ▼
+    candidate PTP switch (Forward vs E2E TC vs BC)
+       ├── MID-360 PTP endpoint
+       └── Jetson AGX Orin NIC with PHC
+
+并行观测：
+- 独立 PPS reference + calibrated time interval counter；
+- GM 1PPS output 与 switch/Jetson 可采集硬件事件；
+- Jetson NIC PHC 与 CLOCK_REALTIME cross timestamp；
+- MID-360 time_type / time_offset / last_sync_time；
+- 同步采集 PTP packet capture（含 Announce/Sync/Follow_Up/Delay_Req/Delay_Resp 或 Pdelay 消息）。
+
+**网络工程约束：**
+1. PTP VLAN 与相机 USB、控制器、普通 DDS 流量隔离；若 MID-360 PTP 与 LiDAR data 共用物理口/链路，必须测量高负载下队列拥塞与 timestamp jitter。
+2. 不把普通交换机的 QoS 优先级当作 TC/BC；QoS 只能减少拥塞风险，不能补偿 residence time 或路径 asymmetry。
+3. 尽量避免 GM 到 MID-360 的路径上存在未审计的交换机、媒体转换器、非对称光电模块和不同速率链路。
+4. PTP 网络主备路径切换必须验证路径不对称变化与设备重锁；链路冗余不自动等于时间冗余。
+5. Jetson 上分别验证每个 NIC 的 hardware TX/RX timestamp、PHC index、驱动、link speed、EEE、IRQ/CPU affinity、PTP servo；不能将某个 Orin DevKit 的 ethX/PHC0 结论外推到其它 carrier/NIC。
+6. 对每条 PTP path 记录 GM identity、domain、profile、transport、delay mechanism、one/two-step、VLAN、link rate、switch model/firmware/port、SFP SKU、cable type/length、temperature 与 traffic load。
+
+### 13.5 新增测试合同 TIME-037..040
+
+- **TIME-037 — MID-360 PTP packet mode compatibility：** 通过 packet capture 和 MID-360 设备状态确认 UDP/IP multicast/unicast、Default Profile、E2E/P2P delay mechanism、one-step/two-step、VLAN tagged/untagged 行为；与 GM/交换机逐项匹配，未知项不得推断。
+- **TIME-038 — Switch forwarding/TC/BC 对比：** 同一 GM、同一端点、同一线缆，分别使用普通转发、E2E TC、BC；在空载/高负载/链路速率变化时测端到端 offset、jitter、residence correction、收敛时间；明确每 hop 误差。
+- **TIME-039 — VLAN、SFP 与路径不对称：** 对铜/光 SFP、链路长度、VLAN tag、交换机端口/速率、单向路径差、REP/冗余路径切换做对照；所有路径变化均记录 GM/servo/generation，不能用平均 offset 掩盖方向性误差。
+- **TIME-040 — Jetson PHC 与 PTP path qualification：** 对实际载板每个 NIC 记录 ethtool -T、驱动/固件、PHC index、ptp4l 状态、phc2sys 方向、offset/path delay、cross timestamp、IRQ/CPU 负载、EEE 与 link flap；硬件 timestamp 不存在或不稳定则该接口不通过 PTP 高精度 Gate。
+
+## 14. PTP 网络器件初步结论
+
+- **不批准任何交换机采购。** Cisco IE3x00 系列具有明确工业 PTP 角色与限制，可进入设备级兼容验证；其 multicast-only、Default/Power profile 对 delay mechanism 的约束必须与 MID-360 真实协议行为逐项匹配。
+- **LAN9668/EVB-LAN9668** 可作为可编程/可观测的实验台架候选，用于 TC/BC 与硬件 timestamp 研究；不是现成量产交换机定案。
+- 下一步先获取 MID-360 PTP 实际报文与 profile/transport contract，再决定 Cisco 默认 profile/TC 或 LAN9668 台架路线；不能反过来用交换机功能定义传感器同步协议。
+
 未采购设备；未修改生产代码；未接线；未运行构建、测试、仿真或实机测试。
