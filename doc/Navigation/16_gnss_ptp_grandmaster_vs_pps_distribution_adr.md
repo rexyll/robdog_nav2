@@ -720,3 +720,101 @@ bash tools/collect_ptp_host_inventory.sh ./artifacts/orin_ptp_inventory_run01
 - 静态内容审查：只读命令、输出目录冲突保护、umask 077、SHA-256 清单和缺失工具容错已纳入脚本。
 - 仓库文件已提交并可回读；本轮没有在真实 Jetson 上执行脚本，也没有在 CI/容器中运行 bash -n 或 shellcheck。因此脚本当前状态是 **已提交、待目标环境首次执行验证**，不得标记为脚本运行通过。
 - 首次执行后应由用户回传采集目录（或脱敏压缩包）；如系统缺少工具、权限或输出异常，再针对目标发行版修订脚本。
+
+
+## 18. GM / Switch / Orin / MID-360 三观察面 PTP 抓包与解码检查表（TIME-053..056）
+
+本节是可执行采集合同，不代表项目网络已经抓包，也不预设实际 GM、交换机、Orin interface、MID-360 地址或 PTP domain。
+
+### 18.1 观察面矩阵
+
+| 观察面 | 推荐采集位置 | 目的与限制 |
+|---|---|---|
+| GM 发出侧 | GM 本机 capture；或 GM 接入交换机 ingress mirror | 确认实际 Announce/Sync/Follow_Up。主机 pcap 时间戳不自动等于 MAC/PHY hardware TX timestamp。 |
+| 交换机 | GM ingress、Orin egress、MID-360 egress 分别镜像；多交换机时逐跳记录 | 检查转发、VLAN、丢包/重排。SPAN 可能丢包或改变观测时序，镜像口时间戳不是线上 ingress/egress 硬件时间戳。 |
+| Orin | 目标 NIC 本机 capture，同时保存 ptp4l/pmc/phc2sys 与 PHC inventory | 将报文与 client port state、GM identity、PHC/servo 关联。tcpdump pcap 时间戳不等于逐包 NIC raw hardware timestamp。 |
+| MID-360 链路 | LiDAR 接入交换机 ingress mirror；同步记录 Livox diagnostic/status 与点云 UDP | 证明雷达链路可见的报文并关联设备状态。不假设 LiDAR 提供 shell 或直接 pcap 导出能力。 |
+
+优先同时采集 GM 发出侧、Orin 接收侧、MID-360 接入链路三个观察面。若只能提供一个 mirror 口，必须标明真实观察面，不得称为三端端到端证据。每份采集物记录 run_id、镜像源端口、交换机型号/固件/配置、VLAN、采集 NIC、capture 软件/版本、启动/停止时间和 pcap SHA-256。
+
+### 18.2 捕获过滤与解码
+
+先宽捕获，避免 VLAN、IPv6、L2 或解码器版本造成漏报：
+
+```bash
+tcpdump -ni "$IFACE" -nn -s 0 -w ptp-udp.pcap '(udp port 319 or udp port 320)'
+tcpdump -ni "$IFACE" -nn -s 0 -w ptp-l2.pcap 'ether proto 0x88f7'
+```
+
+Wireshark display filter：
+
+```
+ptp
+udp.port == 319 || udp.port == 320
+eth.type == 0x88f7
+```
+
+若有 VLAN/QinQ，先用无过滤 capture 或在实际封装下验证过滤器；过滤后 pcap 为空不能证明网络无 PTP。UDP 319/320 与 L2 EtherType 0x88f7 是两种独立观察路径。MID-360 当前公开合同为 PTP v2.0 UDP/IP；gPTP L2 是另一模式，不应混为一个配置。
+
+Wireshark 当前 PTP display-filter reference 列出 ptp.messagetype、ptp.sequenceid、ptp.sourceuuid、ptp.sourceportid、ptp.flags 等字段，但字段集合随版本变化。目标机先枚举本机解码器，再导出：
+
+```bash
+tshark -v
+tshark -G fields | grep -E '\\t(ptp\\.|frame\\.time)'
+tshark -r ptp-udp.pcap -Y ptp -V > ptp-decoded.txt
+tshark -r ptp-udp.pcap -Y ptp -T fields \\
+  -e frame.number -e frame.time_epoch \\
+  -e ptp.messagetype -e ptp.sequenceid \\
+  -e ptp.sourceuuid -e ptp.sourceportid -e ptp.flags \\
+  > ptp-fields.tsv
+```
+
+domainNumber、transportSpecific、twoStepFlag、correctionField、logMessageInterval、Announce dataset 和 delay mechanism 等字段，必须先在本机 tshark -G fields 输出及 packet details 中确认，再加入自动化导出。不要复制旧版字段名，也不要把字段不存在误判为报文不合规。归档 Wireshark/TShark 版本和字段枚举输出。
+
+### 18.3 报文关联与当前预期序列
+
+逐包至少记录 observation point、transport、VLAN/PCP、domainNumber、messageType、sourcePortIdentity（clock identity + port number）、sequenceId、flags/twoStepFlag、correctionField、PTP origin/receive timestamp 和 capture timestamp。GM identity/domain 是跨采集点比对的首要属性；sequenceId 只在同一 sourcePortIdentity/domain/message stream 内局部关联，不能当作全网唯一 ID。
+
+针对 MID-360 PTP v2.0 two-step/E2E 预期，逐周期检查：
+1. GM 发出 Sync，twoStepFlag 与 Follow_Up 机制一致。
+2. 同一 GM sourcePortIdentity/domain 下，Follow_Up 以匹配 sequenceId 提供 preciseOriginTimestamp；无孤立、重复或跨源错配。
+3. MID-360 发出 Delay_Req，Delay_Resp 对请求身份/sequence 正确闭合。
+4. 不得把 Pdelay_Req/Pdelay_Resp/Pdelay_Resp_Follow_Up 误当作当前 Livox E2E Delay_Req/Delay_Resp 合同。
+5. 若经过 BC/TC，解释其可能重新生成报文、改变 source identity/sequence 或更新 correctionField；不能简单要求跨 BC 后每包身份和 sequence 原样不变。
+
+若 Sync/Follow_Up 不匹配、MID-360 链路只见 gPTP/L2 而非目标 PTP UDP/IP、出现多个活跃 GM、domain/profile 不一致或 E2E 请求应答无法闭合，阻止 TIME-053/054 通过。报文周期和超时阈值由实际 GM 配置及误差预算确定，不猜数值。
+
+### 18.4 与 LiDAR 时间状态跨层关联
+
+同一 run_id 中同步保存：
+- 点云 UDP 原始包/rosbag，以及每包 time_type、timestamp、time_interval、udp_cnt/frame_cnt；
+- Livox diagnostic/status：time_sync_type、last_sync_time、time_offset、local_time_now、powerup_cnt、lidar_diag_status 与 HMS 原始码；
+- GM/Orin/MID-360 PTP pcap、Orin ptp4l/pmc/phc2sys 日志、PHC/NIC inventory；
+- 各采集器的时钟来源、时间域、capture timestamp 类型和不确定度说明。
+
+点云 time_type=1 与诊断 time_sync_type=1 只证明设备报告 PTP synchronization mode，不给出绝对误差上界。last_sync_time 应按 Livox 定义关联最近 Follow_Up 的 t1；time_offset=t0−t1 的符号按设备定义解释。诊断字段缺失则标记 unavailable，不以时间戳外观“像 Unix time”替代状态证据。
+
+### 18.5 Capture timestamp 与硬件时间戳隔离
+
+- pcap 的 frame.time_epoch 是 capture stack/采集程序记录的包时间，时间域取决于采集主机和 capture API/驱动配置。
+- Linux SO_TIMESTAMPING 可分别请求 NIC RX/TX hardware timestamp、software timestamp 等来源；必须记录实际 flags、driver/NIC 支持、raw hardware timestamp 是否回传及 PHC→system 转换路径。
+- NIC raw hardware timestamp、PHC、CLOCK_REALTIME、pcap capture timestamp、switch mirror timestamp、PTP originTimestamp/preciseOriginTimestamp 是不同证据字段。未经校准和映射，不可相减生成端到端误差。
+- 两台主机各自 pcap 的 frame.time_epoch 不可直接比较来推断纳秒级链路延迟。
+- SPAN capture time 不是原始线上 ingress/egress timestamp。测量交换机每跳驻留时间，需交换机 TC/BC timestamp 证据或经校准的独立硬件测量。
+
+### 18.6 新增测试合同 TIME-053..056
+
+- TIME-053 — 三观察面可见性与来源标记：GM、Orin、MID-360 链路分别取得 pcap 或记录不可采集原因；每份 pcap 带 capture point/interface/VLAN/run_id/版本/hash；记录 SPAN 丢包和镜像限制。
+- TIME-054 — PTP profile 与报文配对：逐包核对 domain、transport、messageType、sourcePortIdentity、sequenceId、twoStepFlag、correctionField、Sync/Follow_Up、Delay_Req/Resp；证明 GM 单一、MID-360 E2E two-step 兼容，并解释 BC/TC 对身份/sequence/correctionField 的影响。
+- TIME-055 — PTP→LiDAR 时间状态关联：同一 run_id 关联 PTP pcap、点云 time_type/time_interval/timestamp 与 Livox HMS/diagnostic；验证 PTP loss/recovery 状态和 mapping_generation，不以 time_type=1 单字段宣称精度通过。
+- TIME-056 — Capture/PHC timestamp provenance：记录 pcap timestamp source、NIC raw hardware timestamp flags、PHC index、PHC↔system mapping 和 uncertainty；证明没有把 SPAN/软件时间戳当作 NIC 硬件时间戳或端到端误差。
+
+### 18.7 验证边界与来源
+
+本节是抓包/解码检查表；尚无项目 GM、交换机、Orin 或 MID-360 实测 pcap，未执行 tshark，也未验证目标环境字段名。正式抓包前先运行 tshark -v 与 tshark -G fields，并在实际 capture point 检查 VLAN/UDP/L2 封装。依据：
+- Livox MID-360 protocol: https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html
+- Livox time synchronization: https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/common/time_sync.html
+- Wireshark PTP display-filter reference: https://www.wireshark.org/docs/dfref/p/ptp.html
+- Linux kernel timestamping: https://kernel.org/doc/html/latest/networking/timestamping.html
+
+无项目设备抓包、无 Orin/MID-360 操作、无生产代码、无构建/测试/仿真/实机验证；TIME-053..056 均待执行。
