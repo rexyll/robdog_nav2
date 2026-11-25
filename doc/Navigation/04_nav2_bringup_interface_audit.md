@@ -105,3 +105,40 @@
 3. 默认参数明显是通用示例，不应直接应用于 Lite3；尤其 DiffDrive、LaserScan、速度/加速度限制、footprint 和 collision zones 均需重做。
 4. 当前审计为 E1/E2 源码级证据，未达到 ROS 集成 E4、硬件 E5 或 HIL/E6。
 5. 下一步继续 N1：追踪 Planner Server / BT Navigator action client、local/global Costmap 数据生产者与传感器观测链；并将传感器、定位、地形、规划、执行、安全链逐边填入接口矩阵。
+
+
+## 8. BT Navigator → Planner/Controller Action 链（N1 追加核验）
+
+新增固定源码入口：
+- [bt_navigator.cpp](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_bt_navigator/src/bt_navigator.cpp)
+- [navigate_to_pose.cpp](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_bt_navigator/src/navigators/navigate_to_pose.cpp)
+- [planner_server.cpp](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_planner/src/planner_server.cpp)
+- [ComputePathToPose BT node](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_behavior_tree/plugins/action/compute_path_to_pose_action.cpp)
+- [FollowPath BT node](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_behavior_tree/plugins/action/follow_path_action.cpp)
+
+源码核验结果：
+
+1. `BtNavigator::on_configure()` 创建 TF Buffer/Listener，读取 global_frame、robot_base_frame、transform_tolerance、odom_topic；加载内置 BT plugin 列表和用户插件，并通过 pluginlib 加载 NavigateToPose / NavigateThroughPoses navigator plugins。它还创建 OdomSmoother 读取 odom，用于导航反馈速度估计。
+2. `NavigateToPoseNavigator::configure()` 创建对自身 action name 的 action client，并订阅 `goal_pose`（PoseStamped，SystemDefaultsQoS）作为 RViz/外部目标输入；配置默认 blackboard key `goal` 与 `path`。Goal 中的 `behavior_tree` 非空时用于加载指定 BT XML；未指定时默认使用 `navigate_to_pose_w_replanning_and_recovery.xml`。
+3. 默认 BT 由 BT action nodes 作为 action clients：`ComputePathToPose` 连接 `compute_path_to_pose`，从 blackboard 读取 goal/planner_id，成功时把 result path 写回 blackboard；失败时写入 error_code 并返回 FAILURE。 `FollowPath` 连接 `follow_path`，从 blackboard 读取 path/controller_id/goal_checker_id/progress_checker_id；运行中若 blackboard 的 path 或插件 ID 改变，会更新 action goal，形成重规划/路径更新接口。
+4. `PlannerServer::on_configure()` 创建 global Costmap2DROS 并启动 NodeThread，pluginlib 加载 GlobalPlanner；创建 `compute_path_to_pose` 与 `compute_path_through_poses` 两个 action server，并发布 `plan`（nav_msgs/Path）。示例参数默认 GridBased→NavFn，但这不是项目必须采用的算法。
+5. 因此源码层的核心任务链可明确为：外部 NavigateToPose goal → BtNavigator 的 navigator plugin/BT → ComputePathToPose action client → PlannerServer action server → Global Costmap + GlobalPlanner plugin → nav_msgs/Path/blackboard → FollowPath action client → ControllerServer action server → Controller plugin + Local Costmap + odom/TF → velocity command。
+
+### 8.1 已确认与未确认边界
+
+- 已确认 action 名称和主要 goal 输入：`compute_path_to_pose`、`follow_path`；Planner Server 同时提供 `compute_path_through_poses`。
+- 已确认 BT blackboard 在路径计算与路径跟踪间传递 Path；FollowPath BT 节点支持在运行中检测 path/plugin ID 变化并更新 action goal。
+- 已确认 Planner/Controller 分别持有 Global/Local Costmap2DROS，且启动独立 NodeThread；Costmap 不是一个只由 planner/controller 回调同步计算的普通函数。
+- 尚未完整追踪 BT XML 的所有节点、recovery 分支、goal preemption/cancel 的每个调用路径；尚未确认本项目实际 BT XML 和自定义插件。
+- 源码固定的 action/节点/接口不等于实际 ROS graph；topic 名、QoS、线程调度和运行频率仍需 launch 实测。
+
+### 8.2 N1 端到端链路状态更新
+
+| 链路 | 当前证据 | 状态 |
+|---|---|---|
+| NavigateToPose → BT Navigator | Navigator plugin、BT XML 选择、goal/path blackboard key | E2 源码核验 |
+| BT → ComputePathToPose → Planner Server | BT action client、action 名、goal/path/error_code、Global Costmap + plugin | E2 源码核验 |
+| BT → FollowPath → Controller Server | BT action client、path/controller/checker IDs、运行中更新 goal | E2 源码核验 |
+| Planner/Controller → Costmap | Global/Local Costmap2DROS 与 NodeThread | E2 源码核验 |
+| Controller → Smoother → Collision Monitor | launch remap 与节点 publisher/subscriber | E2 源码核验 |
+| Collision Monitor → Lite3 实际运动与反馈 | 仅存在 Nav2 输出边界；项目 adapter/SDK/feedback 未接通 | 未完成 / vendor Gate |
