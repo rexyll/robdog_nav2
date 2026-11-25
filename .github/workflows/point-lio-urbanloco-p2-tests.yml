@@ -34,6 +34,10 @@ on:
       - "scripts/livox_mid360_udp_parser.py"
       - "scripts/tests/test_livox_mid360_udp_parser.py"
       - "scripts/pcapng_reader.py"
+      - "scripts/network_packet_decoder.py"
+      - "scripts/audit_mid360_pcap.py"
+      - "scripts/tests/test_network_packet_decoder.py"
+      - "scripts/tests/test_audit_mid360_pcap.py"
       - "scripts/tests/test_pcapng_reader.py"
       - "scripts/tests/test_livox_time_audit.py"
       - "requirements-dataset-tools.txt"
@@ -63,6 +67,12 @@ on:
       - "scripts/tests/test_convert_m3dgr_dynamic03_to_ros2.py"
       - "scripts/audit_livox_rosbag_timing.py"
       - "scripts/livox_time_audit_helpers.py"
+      - "scripts/livox_mid360_udp_parser.py"
+      - "scripts/tests/test_livox_mid360_udp_parser.py"
+      - "scripts/network_packet_decoder.py"
+      - "scripts/audit_mid360_pcap.py"
+      - "scripts/tests/test_network_packet_decoder.py"
+      - "scripts/tests/test_audit_mid360_pcap.py"
       - "scripts/pcapng_reader.py"
       - "scripts/tests/test_pcapng_reader.py"
       - "scripts/tests/test_livox_time_audit.py"
@@ -100,6 +110,8 @@ jobs:
             scripts/livox_time_audit_helpers.py \
             scripts/livox_mid360_udp_parser.py \
             scripts/pcapng_reader.py
+            scripts/network_packet_decoder.py \
+            scripts/audit_mid360_pcap.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
@@ -114,6 +126,15 @@ jobs:
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_network_packet_decoder.py" \
+            -v
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
+            -p "test_audit_mid360_pcap.py" \
+            -v
+          PYTHONPATH=scripts python3 scripts/audit_mid360_pcap.py --help >/dev/null
             -p "test_m3dgr_ros1_bag.py" \
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
