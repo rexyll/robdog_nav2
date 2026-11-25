@@ -189,3 +189,4 @@
 
 - [14 — ZED-F9P UTC→GPS Mapper 补丁计划与纯算法测试向量](14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md)
 - [15 — 传感器时钟域与全系统时间同步架构审计](15_sensor_clock_domains_and_sync_architecture.md)
+- [16 — GNSS PTP Grandmaster 与 PPS 时间标签分发 ADR 候选](16_gnss_ptp_grandmaster_vs_pps_distribution_adr.md)
