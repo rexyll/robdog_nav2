@@ -78,6 +78,7 @@
 |---|---|---|
 | 00 总体架构与边界 | 全模块架构 | 子系统、责任边界、依赖、控制闭环、失效传播 |
 | 01 数据流与接口总表 | Producer/Consumer | 数据生产者/消费者、类型/单位/frame/stamp/QoS/频率/质量门控/超时 |
+| 03 ROS 2 核心接口契约 | ROS message/action | Imu、Odometry、PointCloud2、TwistStamped、NavigateToPose、FollowPath 字段和语义 |
 | 02 传感器驱动与时间同步 | 设备接入 | 驱动、协议、时钟域、PTP/PPS/trigger、标定、健康度 |
 | 03 定位、状态估计与 SLAM | 位姿来源 | 腿式 odom、LIO/VIO、GNSS、融合、重定位、漂移和协方差 |
 | 04 环境感知与动态目标 | 观测理解 | 点云/深度/语义、地面/障碍/动态目标/负障碍 |
