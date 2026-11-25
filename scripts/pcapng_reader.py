@@ -97,9 +97,13 @@ def _parse_options(data: bytes, endian: str) -> dict[int, bytes]:
             if any(data[pos:]):
                 raise PcapngError("nonzero bytes after end-of-options")
             break
-        if code in options:
+        singleton_options = {2, 3, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}
+        if code in singleton_options and code in options:
             raise PcapngError(f"duplicate singleton option code {code}")
-        options[code] = value
+        # Multi-valued options (notably interface IPv4/IPv6 addresses) are
+        # valid more than once. This reader does not consume them, so retain
+        # the first value without rejecting an otherwise valid capture.
+        options.setdefault(code, value)
     return options
 
 
