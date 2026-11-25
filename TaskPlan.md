@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.72
+- 文档版本：v0.3.73
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -264,7 +264,7 @@
 ---
 
 
-- 2026-11-25 / v0.3.70–v0.3.72：完成 N0 范围/架构/术语/证据基线并进入 N1。新增上游仓库基线登记（Nav2 Jazzy c7046550、robot_localization jazzy-devel fea7fc3d、slam_toolbox Jazzy f84dad92、image_pipeline Jazzy 6c3df309、grid_map ROS 2 0ece1b53、ros2_control Jazzy c3f7a299）；记录 elevation_mapping 仓库归档状态、traversability_estimation 404 等风险，不将未验证项目列为依赖。固定 common_interfaces Jazzy commit a941f14b，核验 Imu/Odometry/PointCloud2/TwistStamped，以及 Nav2 NavigateToPose/FollowPath Action 字段与语义。新增 doc/Navigation/02_subsystem_inventory_and_evidence_register.md、03_ros_interface_contracts.md；README 索引提交 8a06637e；TaskPlan 最新提交待回填。以上是源码/接口研究证据，不代表节点运行、构建或硬件验证。
+- 2026-11-25 / v0.3.70–v0.3.72：完成 N0 范围/架构/术语/证据基线并进入 N1。新增上游仓库基线登记（Nav2 Jazzy c7046550、robot_localization jazzy-devel fea7fc3d、slam_toolbox Jazzy f84dad92、image_pipeline Jazzy 6c3df309、grid_map ROS 2 0ece1b53、ros2_control Jazzy c3f7a299）；记录 elevation_mapping 仓库归档状态、traversability_estimation 404 等风险，不将未验证项目列为依赖。固定 common_interfaces Jazzy commit a941f14b，核验 Imu/Odometry/PointCloud2/TwistStamped，以及 Nav2 NavigateToPose/FollowPath Action 字段与语义。新增 doc/Navigation/02_subsystem_inventory_and_evidence_register.md、03_ros_interface_contracts.md；README 索引提交 8a06637e；TaskPlan 本轮更新提交 09d21408。以上是源码/接口研究证据，不代表节点运行、构建或硬件验证。
 
 ## 5. 文档索引
 
