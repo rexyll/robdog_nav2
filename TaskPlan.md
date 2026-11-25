@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.102
+- 文档版本：v0.3.103
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -304,7 +304,7 @@
 - 2026-11-25 / v0.3.70–v0.3.72：完成 N0 范围/架构/术语/证据基线并进入 N1。新增上游仓库基线登记（Nav2 Jazzy c7046550、robot_localization jazzy-devel fea7fc3d、slam_toolbox Jazzy f84dad92、image_pipeline Jazzy 6c3df309、grid_map ROS 2 0ece1b53、ros2_control Jazzy c3f7a299）；记录 elevation_mapping 仓库归档状态、traversability_estimation 404 等风险，不将未验证项目列为依赖。固定 common_interfaces Jazzy commit a941f14b，核验 Imu/Odometry/PointCloud2/TwistStamped，以及 Nav2 NavigateToPose/FollowPath Action 字段与语义。新增 doc/Navigation/02_subsystem_inventory_and_evidence_register.md、03_ros_interface_contracts.md；README 索引提交 8a06637e；TaskPlan 本轮更新提交 09d21408。以上是源码/接口研究证据，不代表节点运行、构建或硬件验证。
 
 
-- [~] N1 本轮新增 ZED-F9P UTC→GPS mapper 工程化设计（`doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md`）：将实现拆分为纯算法层（UTC civil/nano、GPS epoch/week、NAV-TIMELS typed model、exact-epoch mapper、clock identity）与后续 ROS driver adapter；明确 NAV-TIMELS 24-byte parser/ROSIDL/dispatch/publisher 插入点、process session/connection generation/queue sequence 有序 lifecycle fence、跨 callback group 线程安全和 fail-closed 条件。定义 GPS epoch/week 边界、负 nano 跨日历借位、2016 正闰秒连续性、NAV-TIMELS validity/source、PVT/TIMEUTC flags、exact iTOW/session join、reconnect/sequence gap/monotonicity 等 synthetic test vectors；二次核对 R07 原始 bitfield 图后确认 NAV-TIMELS bit 0=validCurrLs、bit 1=validTimeToLsEvent，bit 2..7 reserved；补充 flags=0x00/0x01/0x02/0x03 语义及 signed currLs/timeToLsEvent 的 byte-level raw fixtures；锁定 NAV-TIMEUTC valid flags mask 0x01/0x02/0x04、reserved 0x08、utcStandard 高四位；并按现有 frozen dataclass/显式异常风格定义纯算法 API 草案与 parser/normalizer/mapper 职责边界。向量为规格，不是测试运行结果；未修改代码、未运行单测/CI、未读取真实接收机。目标 F9P MON-VER、NAV 输出配置、leap-second source allowlist/staleness 阈值和 package license/maintainer 仍为 Gate。
+- [~] N1 本轮新增 ZED-F9P UTC→GPS mapper 工程化设计（`doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md`）：将实现拆分为纯算法层（UTC civil/nano、GPS epoch/week、NAV-TIMELS typed model、exact-epoch mapper、clock identity）与后续 ROS driver adapter；明确 NAV-TIMELS 24-byte parser/ROSIDL/dispatch/publisher 插入点、process session/connection generation/queue sequence 有序 lifecycle fence、跨 callback group 线程安全和 fail-closed 条件。定义 GPS epoch/week 边界、负 nano 跨日历借位、2016 正闰秒连续性、NAV-TIMELS validity/source、PVT/TIMEUTC flags、exact iTOW/session join、reconnect/sequence gap/monotonicity 等 synthetic test vectors；二次核对 R07 原始 bitfield 图后确认 NAV-TIMELS bit 0=validCurrLs、bit 1=validTimeToLsEvent，bit 2..7 reserved；补充 flags=0x00/0x01/0x02/0x03 语义及 signed currLs/timeToLsEvent 的 byte-level raw fixtures；锁定 NAV-TIMEUTC valid flags mask 0x01/0x02/0x04、reserved 0x08、utcStandard 高四位；并按现有 frozen dataclass/显式异常风格定义纯算法 API 草案与 parser/normalizer/mapper 职责边界；新增 NAV-TIMEUTC byte 19 的 validTOW/validWKN/validUTC/utcStandard 独立 mask vectors，明确 raw decoder 与 source policy 分层。向量为规格，不是测试运行结果；未修改代码、未运行单测/CI、未读取真实接收机。目标 F9P MON-VER、NAV 输出配置、leap-second source allowlist/staleness 阈值和 package license/maintainer 仍为 Gate。
 ## 5. 文档索引
 
 - [TaskPlan Part 1 — 架构与硬件完整设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
