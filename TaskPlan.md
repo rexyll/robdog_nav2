@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同和 ROS 2 集成依赖开展上游审计。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同和 ROS 2 集成依赖开展上游审计。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、本项目自身 Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成；上游固定 Point-LIO 与 Estimator Plugin 已有 Jazzy AMD64/ARM64 CI 成功证据。**
 
 ---
 
