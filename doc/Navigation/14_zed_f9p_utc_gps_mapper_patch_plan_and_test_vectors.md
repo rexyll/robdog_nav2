@@ -841,3 +841,72 @@ USNO 当前发布的 `checksums.sha512`（目录标示 2026-11-24 17:17）没有
 - 2027-05-20 之后的实际导航电文字段/服务政策、星座控制段更新、接收机固件兼容性和 ZED-F9P 原始输出均未完成验证，标记为 `需要官方后续规范/服务公告/实物或授权，未完成`。
 
 本节为官方 ICD 静态审计和设计合同，不是实际导航电文抓取、解码器实现或设备验证；未运行测试。
+
+#### 4.19 GPS L1 C/A / L1C 与 GLONASS UTC 接口补充审计（2026-11-25）
+
+##### 4.19.1 GPS L1 C/A LNAV（IS-GPS-200N）
+
+官方 GPS.gov ICD 页面列出 IS-GPS-200N（2022-08-22）及 IRN-IS-200N-003（2024-01-19）、IRN-IS-200N-004（2026-06-16）。最新 IRN-004 的变更主题是 Civil Integrity Support Message（ISM）格式；其正文修改/新增集中于 CNAV MT-40 / ISM，不含 UTC 章节修改。因此本轮仍以 IS-GPS-200N §20.3.3.5.1.6、§20.3.3.5.2.4 作为 LNAV UTC 基线，同时将 IRN-004 作为版本组合的一部分记录。
+
+- Subframe 4 Page 18 包含 GPS↔UTC 参数。
+- Table 20-IX：A0 为 32-bit signed two's-complement，LSB 2^-30 s；A1 为 24-bit signed，LSB 2^-50 s/s；ΔtLS 为 8-bit signed seconds；t_ot 为 8-bit × 2^12 s；WN_t 与 WN_LSF 均为 8-bit；DN 为 8-bit，范围 1..7；ΔtLSF 为 8-bit signed seconds。
+- 参数更新要求：控制段能够上传卫星时，至少每六天更新一次；无法上传时，广播 UTC 参数精度随时间退化。
+- WN_t、WN_LSF 以及当前 WN 均存在截断/周数回卷问题；必须按 IS-GPS-200 §3.3.4(b) 恢复 full week。不得套用 L5 CNAV 的 13-bit 周数处理。
+- UTC 算法包含事件前、事件窗口、事件后不同分支；事件窗口为生效时刻前后各六小时。事件后使用 ΔtLSF，且控制段后续上传需保持 UTC 时间尺度连续。
+- 证据：官方 PDF IS-GPS-200N §20.3.3.5.1.6、Table 20-IX、§20.3.3.5.2.4；GPS.gov 当前 ICD 页面列出 2026-06 IRN-004。IRN-004 不是 UTC 接口修订，不能把“最新 IRN”误解为 continuous UTC 兼容确认。
+
+##### 4.19.2 GPS L1C CNAV-2（IS-GPS-800J）
+
+L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
+
+- Subframe 3 Page 1 广播 UTC(USNO) 与 GPS Time 的关系，并包含未来/近期 ΔtLSF、WNLSF、DN。
+- Table 3.5-3：A0-n 16-bit signed / 2^-35 s；A1-n 13-bit signed / 2^-51 s/s；A2-n 7-bit signed / 2^-68 s/s²；ΔtLS 8-bit signed；t_ot 16-bit / 2^4 s；WN_ot 与 WNLSF 各 13-bit；DN 4-bit（1..7）；ΔtLSF 8-bit signed。
+- 控制段能够上传时，GPS↔UTC(USNO) 参数至少每三天更新一次。
+- Subframe 3 Page 2 同时承载 GGTO 与 EOP。GGTO 是 GPS 与其他 GNSS 系统时间的偏差模型；规范要求用户还须应用各系统定义中的整数秒差。EOP 用于 ECEF↔ECI 转换。
+- 因此 L1C 可以同时提供 UTC、跨星座系统时间偏差和 EOP，但它们是三个独立数据合同，不能合并为一个 offset 字段。
+- 证据：官方 IS-GPS-800J（2022-08-01）§3.5.4.1.1、§3.5.4.1.1.1、Table 3.5-3、§3.5.4.2、Table 3.5-4、Table 3.5-5。该版早于 Resolution 5。
+
+##### 4.19.3 GLONASS FDMA legacy navigation message（ICD Edition 5.1）
+
+本轮获得 GLONASS ICD 5.1 英文版的 UNAVCO 下载入口，但 PDF 附件服务以 application/octet-stream 返回，当前检索工具不能读取原件。因此以下内容按字段级初审处理，引用的二手解析器/接收机文档只作交叉线索，不能代替官方 ICD 原文验收。
+
+已找到的实现/设备资料交叉描述下列传统 GLONASS-M 导航字段：
+- τC：GLONASS time scale 相对 UTC(SU) 的修正量（按 ICD 定义的参考日/历元解释）。
+- τGPS：GPS 与 GLONASS time 的关系参数。
+- N4：自 1996 年起的四年周期编号；NA：四年周期内的日历日编号。
+- B1/B2：用于计算 UTC(SU) 与 UT1 的差值模型；传统字段通常以日初参数和日变化率表达。
+- KP：预告当前季度末 UTC(SU) 计划进行的 ±1 s 修正。接收机厂商文档对 KP 取值的解释为 00 无本季度更新、01 季末 +1 s、11 季末 −1 s；此枚举仍须回到 ICD 原文逐字段核验。
+- 传统 GLONASS 时间与 UTC(SU) 关联，UTC(SU) 本身是带闰秒阶跃的时间尺度；GLONASS 广播时间标记/历元处理与 GPS 连续时间模型不同。不得把 GLONASS time 直接当 GPS time，也不得用 GPS−UTC 整数偏移公式处理 GLONASS time。
+- GLONASS CDMA General Description Edition 1.0（2016）的可检索副本进一步描述 GLONASS time scale 依赖 UT1 与 UTC(SU)，并给出向 UTC(SU)、UT1、TAI、GPS 的转换数据面；其 Appendix B/H 说明 UT1 与 UTC(SU)、UTC(SU) 与 TAI 的转换。该副本不是本轮已验证的官方分发渠道，作为后续核验线索而非最终规范证据。
+
+**2027 continuous UTC 迁移的重大风险：**传统 GLONASS ICD 5.1 / CDMA 2016 资料定义了 UTC(SU) leap-step、KP 事件通知和相关转换语义；这些文档早于 2026 CGPM Resolution 5。不能假设 2027-05-20 后 UTC(SU)、GLONASS time、KP、τC、B1/B2 或导航时间标记会自动变成 continuous UTC 语义。必须取得 Russian Federation State Standard / UTC(SU) 维护机构、Russian Space Systems / GLONASS control segment 的正式迁移说明与新版 ICD；在此之前 GLONASS UTC 映射必须标记 POLICY_UNVERIFIED，不能作为 continuous UTC regime 的权威主时钟来源。
+
+##### 4.19.4 架构影响与验证合同
+
+1. GPS L1 C/A、GPS L1C、GPS L5 各自保留 signal-specific message parser 和字段位宽/scale schema；不能只按“GPS”选择一个通用 parser。
+2. GPS L1 C/A 与 L1C 虽都声明 UTC(USNO)，但数据更新周期、周数字段位宽、A0/A1/A2 系数和消息结构不同；跨信号融合前需按同一 GPS epoch、issue/health 和有效时间验证。
+3. GPS L1C GGTO、EOP、UTC 数据必须独立缓存和过期；EOP 不得因 UTC offset 更新而被错误刷新。
+4. GLONASS 需区分 FDMA legacy GNAV 与 CDMA navigation message 两条接口；在原始 ICD 未审计前，不共用数据结构，也不推断两者字段相同。
+5. UTC(SU) 与 UTC 的 realization/政策关系必须有独立 policy artifact；Resolution 5 对 UTC 的制度决定不能自动证明 UTC(SU) 的国内实现与 GLONASS control segment 已完成相同迁移。
+6. GLONASS 的 UT1/EOP 不能和 GPS L5/L1C EOP 或 IERS EOP 简单多数表决；须统一参考历元、符号约定、参考 realization 和有效区间后再做一致性检查。
+
+新增验证合同：
+- GNSS-UTC-IF-009：GPS L1 C/A LNAV 的 8-bit WN_t/WN_LSF、A0/A1、ΔtLS/ΔtLSF、DN 及 ±6h event window；覆盖 GPS week rollover。
+- GNSS-UTC-IF-010：GPS L1C CNAV-2 的 A0-n/A1-n/A2-n、13-bit WN_ot/WNLSF、t_ot scale、signed fields；不得误用 L1 C/A 或 L5 的位宽。
+- GNSS-UTC-IF-011：GPS L1C Page 2 的 GGTO 与 EOP 独立更新/过期；系统整数秒差不能被 modulo-one-second GGTO 隐藏。
+- GNSS-UTC-IF-012：IS-GPS-200N + IRN-IS-200N-004 组合验证，确认 IRN-004 的 ISM 修改不被误读为 UTC 字段更新。
+- GNSS-UTC-IF-013：GLONASS GNAV τC/τGPS/N4/NA/B1/B2/KP 原始字段保存；未确认 ICD 版本/字段有效性时 fail closed。
+- GNSS-UTC-IF-014：GLONASS FDMA 与 CDMA 分别解析，禁止未经规范证明的字段复用。
+- GNSS-UTC-IF-015：continuous UTC policy 生效后，GLONASS UTC(SU)/KP/τC 仍缺少权威迁移证据时返回 POLICY_UNVERIFIED，不把旧 KP 事件语义推演为未来规则。
+- GNSS-UTC-IF-016：跨 GPS/GLONASS 比较前验证时间尺度、UTC realization、epoch 和 UT1 符号约定；任一未确认返回 CROSS_REALIZATION_UNRESOLVED。
+
+##### 4.19.5 证据边界与待办
+
+- GPS L1 C/A：IS-GPS-200N（2022-08）及 IRN-IS-200N-003（2024-01）、IRN-IS-200N-004（2026-06）已取得官方发布页面；本轮读取了 IS-GPS-200N UTC 章节与 IRN-004 正文。IRN-004 仅处理 ISM 相关变更，未发现 UTC 字段修改。
+- GPS L1C：IS-GPS-800J（2022-08）官方 PDF 已读取 UTC、GGTO、EOP 章节。
+- GLONASS FDMA：ICD 5.1 英文版入口已定位，但原始 PDF 下载/读取失败；字段细节尚未完成官方原文逐字段复核。
+- GLONASS CDMA：Edition 1.0（2016）资料目前仅作为研究线索，需取得 Russian Space Systems 官方分发原件。
+- GLONASS UTC(SU) 与 CGPM Resolution 5 的国内实施协调、控制段广播字段迁移、2027-05-20 后导航电文行为均未确认。
+- ZED-F9P 是否输出 GLONASS raw navigation data、KP/τC/B1/B2、GPS L1C raw page、GPS L1 C/A raw subframe，仍需目标固件 MON-VER、配置与真实 raw frame 验证。
+
+本节是静态 ICD/公开资料审计与设计合同，不是实时导航电文采集、解码器实现、接收机验证或实机测试；以上测试合同均未运行。
