@@ -389,5 +389,49 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         ))
 
 
+    def test_reset_preserves_lifetime_counters_and_rejects_old_generation(self):
+        joiner = make_joiner(max_pending_epochs=1)
+        joiner.begin_generation(GENERATION)
+        joiner.add_pvt(
+            make_pvt(1000, 100),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=1_000_000,
+        )
+        joiner.add_pvt(
+            make_pvt(1001, 110),
+            source_clock_id=GENERATION,
+            source_timestamp_ns=2_000_000,
+        )
+        self.assertEqual(joiner.evicted_capacity, 1)
+        self.assertEqual(joiner.pending_count, 1)
+
+        joiner.reset()
+        self.assertIsNone(joiner.source_clock_id)
+        self.assertEqual(joiner.pending_count, 0)
+        self.assertEqual(joiner.retired_count, 0)
+        self.assertEqual(joiner.evicted_capacity, 1)
+
+        new_generation = "zed_f9p_week_2451_receiver_generation_1"
+        joiner.begin_generation(new_generation)
+        with self.assertRaisesRegex(EpochPairingError, "source_clock_id changed"):
+            joiner.add_pvt(
+                make_pvt(1002, 120),
+                source_clock_id=GENERATION,
+                source_timestamp_ns=3_000_000,
+            )
+        self.assertEqual(joiner.source_clock_id, new_generation)
+        self.assertEqual(joiner.pending_count, 0)
+        self.assertEqual(joiner.evicted_capacity, 1)
+
+        # The current generation can accept a fresh sample after the stale
+        # callback was rejected, without inheriting old epoch cache state.
+        self.assertIsNone(joiner.add_pvt(
+            make_pvt(1002, 121),
+            source_clock_id=new_generation,
+            source_timestamp_ns=4_000_000,
+        ))
+        self.assertEqual(joiner.pending_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
