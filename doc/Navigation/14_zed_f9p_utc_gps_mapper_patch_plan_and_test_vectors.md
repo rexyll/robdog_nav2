@@ -992,3 +992,39 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 - GNSS-UTC-IF-026：Type 25 NB 与 MT/UTC(SU) 跨 3 小时时界、闰秒前后 old/new ephemeris 混合期间，拒绝错误历元配对。
 
 **证据边界：** UNOOSA/ICG 时间尺度文件是国际组织公开材料；SHD ECD (2020) 的首页显示 Roscosmos 核准签字，可作官方系统级辅助信息规范，但它是实时高精度辅助信息 ICD，不是 CDMA 新版信号 ICD；2016 L1 CDMA ICD 的当前副本不是官方站点原件。未取得原始导航比特流、未核验 ZED-F9P 支持 L1OC/L3OC、未实现解码器或运行测试。
+
+
+##### 4.19.8 ZED-F9P 的 GLONASS 信号能力边界：支持 FDMA L1OF/L2OF，不支持 CDMA L1OC/L2OC/L3OC
+
+本节将上一节 GLONASS CDMA 双时间尺度研究与项目预选接收机 ZED-F9P 的公开能力对接。结论基于 u-blox 官方公开数据手册和产品信号矩阵，不以“接口文档未提及”作为唯一否定依据。
+
+**已核实的具体型号：**
+- ZED-F9P-01B 数据手册 UBX-17051259 R09（2023-03-24）列出的 GLONASS 信号只有 L1OF、L2OF；表 5 没有 L1OC/L2OC/L3OC。
+- ZED-F9P-05B 数据手册 UBXDOC-963802114-12824 R02（2024-10-16）列出的 GLONASS 信号同样只有 L1OF、L2OF；表 7 没有 CDMA 信号。
+- u-blox 产品页的 F9P 变体信号矩阵也将 GLONASS 列为 L1OF/L2OF（具体 SKU 组合有所不同），未列出 L1OC/L2OC/L3OC。采购/实物 SKU 尚未确认，后续仍须按完整 type number 与固件版本复核，不能将某一变体的能力无条件外推给所有模块。
+
+**原始导航数据能力的边界：**
+- ZED-F9P-01B 数据手册 §1.5 明确：接收机可通过 UBX-RXM-SFRBX 输出已跟踪卫星的受支持 GNSS 信号广播导航数据；因此其 GLONASS 原始导航数据输出边界仍受其已支持的 L1OF/L2OF 信号集合约束。
+- Integration Manual 对 SFRBX 的说明是：每次接收机从 tracked signal 解码完整数据子帧/字符串并通过校验后才产生消息。SFRBX 是已解码支持信号的数据输出接口，不是宽带 RF/IQ 捕获接口，也不会使不支持的 CDMA 信号变得可解码。
+- 因此，即使未来 CDMA L1OC/L3OC 广播了 legacy + continuous UTC 双尺度数据，ZED-F9P 也不能据此作为这些 CDMA 广播字段的直接接收/解码源。当前可用的 FDMA L1OF/L2OF 数据不能替代 CDMA 专属字段，也不能从 KP/τC/FDMA 字段推导未来 continuous UTC。
+
+**项目架构决策：**
+1. 保留 ZED-F9P 作为当前 RTK 定位/测量候选设备；它的 GLONASS FDMA 能力可用于当前 GNAV legacy 时间合同和 RTK 观测，不因缺少 CDMA 而否定其常规定位用途。
+2. 将“从 GLONASS CDMA 获取 2027 continuous UTC 双尺度广播”标记为 ZED-F9P 不支持的能力，不进入当前 ZED-F9P parser/driver 的实现范围，不允许以软件升级、SFRBX 配置或解码器补丁假设可补齐 RF/信号跟踪能力。
+3. 若项目未来确实要求从 GLONASS CDMA 广播直接获取双尺度数据，必须单独开展新接收机选型：明确支持的 CDMA 信号分量/频段（data/pilot）、原始导航数据输出或原始采样访问、对应 ICD edition、时间字段/validity、固件版本和实际空口验证。不能仅凭产品宣传中的“GLONASS”或“multi-GNSS”认定支持 CDMA。
+4. 在接收机替换/增加之前，continuous UTC 的系统级权威输入应由独立、可审计的时间源/经验证的星座广播源提供；ZED-F9P FDMA 数据只作为 legacy source，不参与 continuous UTC realization 的构造或多数表决。
+5. 对目标板卡必须采集完整 MON-VER、配置快照、NAV-SIG/跟踪状态、RXM-SFRBX 原始消息和天线/RF 链路信息。型号数据手册只能建立能力边界，不能替代目标固件与实际信号条件下的运行证据。
+
+**证据与限制：**
+- u-blox ZED-F9P-01B Data sheet UBX-17051259 R09：产品 type number、固件基线、L1OF/L2OF 信号表及 SFRBX 输出范围均已从厂商 PDF 读取。
+- u-blox ZED-F9P-05B Data sheet UBXDOC-963802114-12824 R02：2024-10-16 版本的信号表列出 L1OF/L2OF。
+- u-blox ZED-F9P Integration Manual UBX-18010802：SFRBX 只在完整数据块被解码且校验通过后输出。
+- 目前未取得用户实际采购模块的完整 SKU/硬件 revision/MON-VER；未连接设备、未采集真实 UBX raw frames、未做 RF/空口测试。因此这是厂商规格层面的能力结论，不是目标设备运行验收。
+
+新增验证合同：
+- GNSS-UTC-IF-027：F9P-01B/05B 的 GLONASS signal allowlist 仅接受 L1OF/L2OF；遇到 L1OC/L2OC/L3OC 需求时返回 UNSUPPORTED_SIGNAL，不得尝试将 FDMA parser 用于 CDMA。
+- GNSS-UTC-IF-028：SFRBX 解析前必须校验 gnssId、sigId（若该协议版本提供）、完整 type number、FWVER/PROTVER 与已验证的 signal capability manifest；能力未知或不匹配时 fail closed。
+- GNSS-UTC-IF-029：从真实目标接收机采集 MON-VER、NAV-SIG、RXM-SFRBX 与配置快照，证明实际启用信号和数据输出；没有设备/真实采集时状态保持 HARDWARE_EVIDENCE_PENDING。
+- GNSS-UTC-IF-030：CDMA 双尺度能力只允许由明确支持对应 CDMA signal + 经版本化 ICD 核验的字段生成；F9P FDMA 数据不得作为替代源。
+
+本节没有修改生产代码、驱动或测试文件；GNSS-UTC-IF-027..030 是待实现/待运行的验证合同，不是测试结果。
