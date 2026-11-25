@@ -318,3 +318,60 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 - [ ] 实施并测试双 EKF reset ownership：local odom 连续、global map correction 可控；LIO/GNSS receiver epoch reset 时清理对应 measurement history，禁止跨 epoch 重放。
 - [ ] 在现有 `robodog_gnss_quality` 纯算法 core 上新增 ROS 2 adapter/diagnostics 与 NavSatFix publisher；先完成消息/时钟/重启集成测试，再接 navsat_transform。
 - [ ] 用真实 MID-360/IMU + ZED-F9P rosbag 测量最大延迟、乱序、掉包、时钟回退与恢复时间；确定 health/timeout/history 参数。真实数据尚未具备前，不冻结数值阈值。
+
+
+## 16. robot_localization 双 EKF 的 TF 生成、重置和输出时效
+
+固定源码仍为 `cra-ros-pkg/robot_localization @ fea7fc3dcad81c533121e4aa2fb1087a0565d8cc`，`src/ros_filter.cpp`。
+
+### 16.1 map→odom 的计算不是第二个独立里程计 TF
+
+- 当滤波器的 `world_frame == odom_frame` 时，节点直接广播自身 `odom→base_link` 变换。
+- 当 `world_frame == map_frame` 时，节点先取得 global filter 的 `map→base_link` 状态，再在同一测量时间查询 TF buffer 中的 `odom→base_link`，计算并广播 `map→odom`。
+- 这意味着典型双 EKF 拓扑必须明确分工：local EKF 是 `odom→base_link` 的唯一权威；global EKF 的 `world_frame=map` 仅负责 `map→odom`。global EKF 必须能在对应时间查询 local odom TF，否则不会生成 map→odom，并输出错误日志。
+- global filter 的输入不能形成反馈环：不得把其自身的 map-frame corrected pose 又当作 local EKF 独立测量；输入配置必须逐维审计，避免把同一 local odom 的 pose/twist 和其上游原始数据当成统计独立观测重复融合。
+- map→odom 是两个估计结果的相对变换；GNSS/全局修正可以使 map-frame 位置发生离散变化，而 local odom 应保持连续。这个性质依赖 local EKF 不随 global reset 一起重置，且 TF 时间查询成功。
+
+### 16.2 显式 reset 的真实清理范围
+
+固定 Jazzy `reset()` 实现会清理：
+- initial/previous measurements、measurement queue、filter state history、measurement history；
+- angular acceleration 状态、last-state twist rotation；
+- last set-pose/diagnostic/control/published timestamps；
+- TF buffer 与 per-topic `last_message_times_`；
+- filter 内部状态，并重新装载 sensor timeout、process noise covariance 和 initial estimate covariance。
+
+这比 Point-LIO 的 `ImuProcess::Reset()` 完整，但它仍然只重置单个 robot_localization 实例，不会协调另一个 EKF、Point-LIO map、GNSS receiver generation、Nav2 costmap 或外部 TF broadcaster。项目必须有 reset coordinator/epoch policy，不能只调用一个 filter 的 reset service 就宣称全系统复位完成。
+
+### 16.3 reset_on_time_jump 不能作为 bag loop 保障
+
+- 参数 `reset_on_time_jump` 在参数加载中被声明。
+- pose/acceleration callback 检测同 topic 旧时间戳的分支里，调用 `reset()` 的代码仍被注释；当前固定 SHA 未实现自动 rewind reset。
+- 同 topic 时间戳相等满足 `last_message_time <= msg_stamp`，因此相等 stamp 会被接受；严格更旧的 stamp 会发诊断并丢弃。
+- bag loop 或 ROS time rewind 后，旧数据可能被按 topic 丢弃；即使手动 reset，也必须确认两个 EKF、TF、LIO/GNSS epoch 和 Nav2 下游状态按一致事务重新开始。
+
+### 16.4 发布时效与 NaN 输出不是 fail-closed
+
+- periodic update 在 filter 已初始化时持续调用 `getFilteredOdometryMessage()`；输出 header stamp 来自 filter 的 last measurement time，而 sensor timeout 可以推动 prediction 时间前进。因此输出时间戳不等于“刚刚收到新传感器观测”的证明。
+- `validateFilterOutput()` 检测到 NaN 时会记录 Critical Error，但当前周期代码没有因该返回值而立即阻止后续 Odometry 发布；不可把日志告警当作下游 fail-closed。
+- global EKF 生成 map→odom 时若查不到同时间的 odom→base_link，则跳过 TF 发布；这可能导致 global odometry topic 与 map→odom TF 更新不同步。必须用 diagnostics 和 TF-age gate 暴露该状态。
+- 项目融合输出 adapter/health supervisor 应独立检查 measurement age、prediction/coast duration、协方差界、finite/PSD、TF lookup age 和 epoch 一致性；失效时撤销 `pose_valid`，阻止规划器继续消费 stale pose，并触发速度限制或安全停车。
+
+## 17. GNSS 纯算法包的 ROS 化前置工程 Gate
+
+再次核对本仓库 `src/robodog_gnss_quality/package.xml` 与 `setup.py`：
+- 当前包是 `ament_python`，只依赖 `setuptools` 与测试工具，没有 `rclpy`、`sensor_msgs`、`diagnostic_msgs`、u-blox message package 或 ROS entry point；README 也明确没有 ROS node/receiver socket/UBX decoder/NavSatFix publisher。
+- package metadata 当前为 `license=UNSPECIFIED`，maintainer email 是 `maintainers@example.invalid` 占位值。纯算法 CI 通过不能视为可发布 ROS 包或可集成依赖；在新增 ROS adapter 前需先确定真实项目维护者信息与可核验 SPDX license，不能擅自猜测/填入。
+- 建议保持核心 transport-independent；另建独立 ROS 2 adapter package（例如 `robodog_gnss_ros`，命名待架构确认），依赖实际选定的 u-blox ROS message package，并通过 entry points 安装节点。adapter 将 ROS message 转成现有 immutable epoch records，调用 joiner 和 quality gate；只对 ACCEPTED 观测发布 NavSatFix，同时发布独立 quality/status 与 diagnostics。
+- receiver GPS week/boot generation mapper 必须独立测试，且不可用 ROS header stamp 或 callback arrival order 冒充 receiver measurement time。ROS steady clock 用于 host freshness；ROS time 用于消息 stamp/TF；receiver time 用于源测量 epoch，三者需要显式映射与 epoch ID。
+- 在确定真实驱动版本、消息类型、topic、receiver clock mapping 和许可之前，不新增未经验证的 ROS 依赖或伪造 NavSatFix 生产者。
+
+## 18. 本轮新增验证 Gate
+
+- [ ] 双 EKF 集成：local EKF 唯一发布 `odom→base_link`；global EKF 只发布 `map→odom`；验证 global EKF 查询同时间 local TF 的行为、TF timeout、map correction jump 与 local odom continuity。
+- [ ] 分别 reset local/global EKF，验证 measurement/history/TF buffer 清理范围、另一个 filter 的连续性、map→odom 恢复时间；再加入 LIO epoch 与 GNSS receiver generation 变化。
+- [ ] bag loop/ROS time rewind：测试 `reset_on_time_jump=true/false` 在固定 SHA 上均不能作为有效自动复位机制；项目 reset coordinator 应检测 clock epoch 并显式 reset/flush。
+- [ ] 测试重复 stamp、同 topic 乱序、跨 topic 延迟、history 不足、sensor timeout coast；监控发布 Odometry stamp、实际最新观测 stamp、prediction duration 和 output validity。
+- [ ] 注入 NaN/Inf、负/非 PSD covariance、TF 缺失/过期；验证 health supervisor 确实阻止无效 Odometry/TF 进入 Nav2，而不只是输出日志。
+- [ ] GNSS ROS adapter 实现前，确认包 SPDX license、真实 maintainer metadata、u-blox ROS driver/message package 固定 SHA、消息定义与依赖许可。
+- [ ] ROS adapter 完成后，在真实 ZED-F9P bag 验证四路 UBX 同历元 join、GPS week rollover、receiver reboot、时间映射、steady-clock stale、quality recovery 和 NavSatFix covariance frame；未验证前不得接入 global EKF。
