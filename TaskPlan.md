@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.71
+- 文档版本：v0.3.72
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -8,8 +8,8 @@
 - **本体技术预选：DEEP Robotics Lite3 Venture**（未采购，待供应商确认）。
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
-- 当前专项阶段：**N0 — 完整导航模块研究基线与范围冻结（仅 nav 分支）**；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**硬件方案预选完成；完整导航模块研究刚开始。已有 Nav2 架构文档只是子系统级初稿，不代表整个导航模块研究完成；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
+- 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并开始固定 ROS 2 Jazzy 消息/Action 契约审计。完整导航模块仍处于早期研究阶段；已有 Nav2 文档仅为子系统级初稿；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
 
 ---
 
@@ -94,7 +94,7 @@
 
 **N0 尚未完成：** 上游仓库/tag/commit 固定、术语表、组件/接口证据矩阵、源码级调用链、ROS 集成和运行验证。当前文档是研究框架，不得标记为系统深研完成。
 
-### 阶段 A — 硬件基线与接口冻结（当前阶段）
+### 阶段 A — 硬件基线与接口冻结（既有硬件 Gate；当前导航专项阶段见 N1）
 
 - [x] A1. 完成本体和外置导航传感器技术预选：Lite3 Venture、MID-360、双 See3CAM_50CUG_CXXCC_BX_H01R1、simpleRTK2B/ZED-F9P、AGX Orin。
 - [x] A2. 核对云深处 Lite3 Venture + AGX Orin + MID-360 官方扩展示例与初始软件版本。
@@ -262,6 +262,9 @@
 - 2026-11-25 / v0.3.68：Nav2 专项首轮研究文档已写入 doc/Nav2/（架构、生命周期/任务流、生产者消费者矩阵、Costmap、算法、硬件软件模块、四足安全、验证路线）；属于设计文档，不代表 ROS 集成/仿真/实机验收。提交：archive 5c7bc4b6；TaskPlan 初始保存 080d3931；Nav2 文档 commits 11d97882、98dba2c4、1ce5231a、41bad402、65290550、60342d48、b6034826、a53b5ea3、3c38c112。
 
 ---
+
+
+- 2026-11-25 / v0.3.70–v0.3.72：完成 N0 范围/架构/术语/证据基线并进入 N1。新增上游仓库基线登记（Nav2 Jazzy c7046550、robot_localization jazzy-devel fea7fc3d、slam_toolbox Jazzy f84dad92、image_pipeline Jazzy 6c3df309、grid_map ROS 2 0ece1b53、ros2_control Jazzy c3f7a299）；记录 elevation_mapping 仓库归档状态、traversability_estimation 404 等风险，不将未验证项目列为依赖。固定 common_interfaces Jazzy commit a941f14b，核验 Imu/Odometry/PointCloud2/TwistStamped，以及 Nav2 NavigateToPose/FollowPath Action 字段与语义。新增 doc/Navigation/02_subsystem_inventory_and_evidence_register.md、03_ros_interface_contracts.md；README 索引提交 8a06637e；TaskPlan 最新提交待回填。以上是源码/接口研究证据，不代表节点运行、构建或硬件验证。
 
 ## 5. 文档索引
 
