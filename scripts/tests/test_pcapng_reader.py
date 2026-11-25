@@ -2,7 +2,7 @@ import io
 import struct
 import unittest
 
-from pcapng_reader import PcapngError, iter_pcapng_packets
+from pcapng_reader import PcapngError, iter_pcap_packets, iter_pcapng_packets
 
 
 def block(kind, body, endian="<"):
@@ -75,6 +75,28 @@ class TestPcapngReader(unittest.TestCase):
         packet, = list(iter_pcapng_packets(io.BytesIO(raw)))
         self.assertFalse(packet.timestamp_available)
         self.assertIsNone(packet.capture_timestamp_ns)
+
+
+    def test_classic_pcap_little_endian_microseconds(self):
+        header = b"\\xd4\\xc3\\xb2\\xa1" + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
+        record = struct.pack("<IIII", 10, 123456, 4, 6) + b"data"
+        packet, = list(iter_pcap_packets(io.BytesIO(header + record)))
+        self.assertEqual(packet.link_type, 1)
+        self.assertEqual(packet.capture_timestamp_ns, 10_123_456_000)
+        self.assertTrue(packet.truncated)
+
+    def test_classic_pcap_big_endian_nanoseconds(self):
+        header = b"\\xa1\\xb2\\x3c\\x4d" + struct.pack(">HHIIII", 2, 4, 0, 0, 65535, 147)
+        record = struct.pack(">IIII", 2, 987654321, 4, 4) + b"data"
+        packet, = list(iter_pcap_packets(io.BytesIO(header + record)))
+        self.assertEqual(packet.link_type, 147)
+        self.assertEqual(packet.capture_timestamp_ns, 2_987_654_321)
+
+    def test_classic_pcap_rejects_invalid_fraction(self):
+        header = b"\\xd4\\xc3\\xb2\\xa1" + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
+        record = struct.pack("<IIII", 10, 1_000_000, 4, 4) + b"data"
+        with self.assertRaisesRegex(PcapngError, "fraction out of range"):
+            list(iter_pcap_packets(io.BytesIO(header + record)))
 
     def test_rejects_invalid_trailer(self):
         raw = bytearray(shb() + idb())
