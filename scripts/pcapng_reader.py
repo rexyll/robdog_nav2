@@ -280,11 +280,11 @@ def iter_capture_packets(stream: BinaryIO) -> Iterator[PcapngPacket]:
         stream.seek(position)
     except (AttributeError, OSError) as exc:
         raise PcapngError("capture stream must support tell/read/seek") from exc
-    if magic == b"\\x0a\\x0d\\x0d\\x0a":
+    if magic == b"\x0a\x0d\x0d\x0a":
         yield from iter_pcapng_packets(stream)
     elif magic in {
-        b"\\xd4\\xc3\\xb2\\xa1", b"\\xa1\\xb2\\xc3\\xd4",
-        b"\\x4d\\x3c\\xb2\\xa1", b"\\xa1\\xb2\\x3c\\x4d",
+        b"\xd4\xc3\xb2\xa1", b"\xa1\xb2\xc3\xd4",
+        b"\x4d\x3c\xb2\xa1", b"\xa1\xb2\x3c\x4d",
     }:
         yield from iter_pcap_packets(stream)
     else:
