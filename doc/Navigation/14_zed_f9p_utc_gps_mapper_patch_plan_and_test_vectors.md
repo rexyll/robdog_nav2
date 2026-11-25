@@ -449,3 +449,71 @@ PVT confirmation 是独立可信度维度：confirmedAvail=0 表示接收机未�
 - 不在当前 Gate 未解除时新增 mapper/driver production code；本节本身也不执行测试或 CI。
 - 以下参数必须由目标固件/设备日志或正式策略决策确定，未确定前保持 unset 并阻止 VALID：最大消息 age、最大 receive skew、PVT/TIMEUTC UTC 比较容差、tAcc/uncertainty 上限、TIMELS 来源 allowlist、utcStandard allowlist、恢复滞回、缓存容量/TTL。
 - 目标设备 MON-VER（software/hardware/PROTVER）和真实 NAV-PVT/TIMEUTC/TIMELS/STATUS 原始帧仍未提供；不得宣称固件兼容、真实输出可用或 mapper 已验证。
+
+
+### 4.13 UTC civil label → GPS integer timeline：数学定义与边界审查
+
+本节定义 P1 pure-core 的数学合同。R07 定义 GPS epoch 为 1980-01-06，并定义 NAV-TIMELS.currLs 为 GPS 自起点以来超前 UTC 的当前秒数；iTOW 是 GPS week TOW。此处为数学规格/合成向量，不代表目标接收机实测。
+
+#### 4.13.1 普通 UTC 标签的整数转换
+
+区分 UTC civil label 与 GPS 连续整数时间轴。令 D 为 Gregorian 日期与 1980-01-06 的日数差，h/m/s 为时分秒，n 为规范化 signed nanoseconds，L 为同一导航历元且通过 source/validity/freshness Gate 的 NAV-TIMELS.currLs（秒）：
+
+`nominal_utc_ns = (((D × 86400 + h × 3600 + m × 60 + s) × 10^9) + n)`
+
+`gps_absolute_ns = nominal_utc_ns + L × 10^9`
+
+`WEEK_NS = 604800 × 10^9`
+
+对非负 gps_absolute_ns：
+
+`gps_week, gps_tow_ns = divmod(gps_absolute_ns, WEEK_NS)`
+
+不变量：0 ≤ gps_tow_ns < WEEK_NS；gps_absolute_ns == gps_week × WEEK_NS + gps_tow_ns。全程整数，禁止 float seconds。GPS epoch 之前、负绝对时间、无效 offset、超出支持日期范围或目标存储类型溢出必须明确拒绝。nominal_utc_ns 是 civil label 的名义日历坐标，不调用 POSIX timestamp API；普通秒公式不适用于 sec=60。
+
+#### 4.13.2 闰秒标签必须独立表达
+
+2016-12-31 正闰秒的三个相邻标签：
+
+| UTC civil label | 当日名义秒坐标 | L | GPS 对应时刻 |
+|---|---:|---:|---|
+| 2016-12-31 23:59:59 | 86399 | 17 | 2017-01-01 00:00:16 |
+| 2016-12-31 23:59:60 | 86400 | 17 | 2017-01-01 00:00:17 |
+| 2017-01-01 00:00:00 | 次日 0 | 18 | 2017-01-01 00:00:18 |
+
+三者在 GPS 整数时间线上严格相邻 1 秒。闰秒前与闰秒标签使用旧 offset 17；生效后的午夜使用新 offset 18。不得先将 23:59:60 折叠为次日 00:00:00 再加 18 秒，否则会与午夜标签碰撞。
+
+sec=60 必须验证该日期确有 leap event，并能确定事件前/事件中 offset。仅有当前 currLs 不足以证明任意历史日期存在闰秒；必须有经审计的 leap transition fixture/table 或足以定位事件的有效协议证据。缺少证据时返回明确 unsupported/ambiguous reason，不生成 VALID。
+
+#### 4.13.3 signed nano 归一化
+
+- 先校验 Gregorian 日期及 civil fields；不得让非法日期自动滚入下月。
+- 普通秒的 signed nano 用整数商余数规范化，再执行跨秒/日/月/年借位。
+- sec=60 进入 leap-event-aware 分支。负 nano 可能回退到前一秒；正 nano 可能推进到事件后下一秒。跨越事件必须有 transition evidence 和前后 offset，否则拒绝。
+- 保留原始字段与规范化结果；拒绝协议/固件不允许的 nano 范围、非法 civil fields 和无法解释的 leap transition。
+- 测试 oracle 必须采用独立实现路径，避免与生产算法共享相同错误。
+
+#### 4.13.4 GPS 周边界与 UBX iTOW
+
+GPS week/TOW 由 gps_absolute_ns 整数 divmod 得到。边界前 1 ns → 前一周 WEEK_NS−1；边界正好 → 下一周 TOW=0；边界后 1 ns → 下一周 TOW=1。
+
+UBX iTOW 是整数毫秒，不能表达 sub-ms remainder。保留 gps_tow_ns 原值，并独立计算毫秒量化值与余数；与 iTOW 的比较必须有明确精度合同，不能直接要求纳秒 TOW 等于毫秒 iTOW，也不能静默四舍五入。Exact join 仍使用原始 iTOW；iTOW 不含 GPS week number，不能单独构造绝对时间。周回绕不得仅凭 iTOW 变化判定 reboot。
+
+#### 4.13.5 数学测试合同
+
+| ID | 输入/条件 | 不变量/预期 |
+|---|---|---|
+| GPS-MATH-001 | GPS epoch 1980-01-06 00:00:00，L=0 | absolute=0，week=0，TOW=0 |
+| GPS-MATH-002 | 2024-01-07 00:00:00，L=18 s | week=2296，TOW=18,000,000,000 ns |
+| GPS-MATH-003/004/005 | k×WEEK_NS−1 / k×WEEK_NS / k×WEEK_NS+1 | 分别为前周末、下一周 TOW=0、下一周 TOW=1 |
+| GPS-MATH-006 | UTC label + L 与独立整数 oracle | 绝对纳秒一致，无 float 路径 |
+| GPS-MATH-007 | 2016 闰秒三标签，L=17/17/18 | 三个 GPS instant 相邻 1e9 ns |
+| GPS-MATH-008 | 无事件证据的 sec=60 | 拒绝，不产生 VALID |
+| GPS-MATH-009 | sec=60 配合 nano=-1 或 +1e9，但无 transition evidence | 拒绝跨事件归一化 |
+| GPS-MATH-010 | iTOW 毫秒与 TOW 纳秒存在 sub-ms remainder | 保留 remainder，按显式精度策略比较 |
+| GPS-MATH-011 | int64 边界及越界 | 边界内精确，越界显式失败，不 wrap |
+| GPS-MATH-012 | GPS epoch 前日期/负绝对时间 | 按支持范围拒绝，不产生负周伪有效结果 |
+
+#### 4.13.6 未冻结 Gate
+
+公式中的 L 必须来自同一历元有效 NAV-TIMELS，source allowlist/freshness 仍未冻结。sec=60 需要 transition evidence API；§4.12 的 current-offset source policy 本身不足以验证历史闰秒日期。PVT/TIMEUTC nano 合法范围及字段边界需以目标协议版本/MON-VER 为准。iTOW sub-ms 比较、tAcc 合成与容差仍待 receiver evidence/策略批准。仅增加设计和合成测试合同，不增加代码/依赖，不声称测试或硬件验证。
