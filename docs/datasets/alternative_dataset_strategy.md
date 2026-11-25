@@ -422,3 +422,20 @@ python scripts/audit_m3dgr_gt_rtk_correspondence.py \
 审计脚本现已扩展为同时盘点上述五类 topic，并对 /ublox_driver/range_meas 汇总历元卫星数、伪距/载波相位/半周有效状态位、LLI 失锁标记和 CN0 分布；只读，不修改 bag。此更新尚未经过 CI，也尚未由用户在本地运行。
 
 **Gate 结论：** receiver_pvt 明确排除为 RTK Fixed 真值来源；GT 与 /mavros/global_position/raw/fix 的近乎逐行一致仍然强烈表明它们同源，但 raw-fix 的物理接收机身份与 RTK 状态仍未证明。下一步检查 raw measurement 是否完整、载波相位跟踪是否连续，以及是否存在 base/RTCM/correction 数据；即使原始观测完整，也需找到基站/改正源与接收机配置证据后才能讨论 RTK 重算。禁止据此运行或宣称 APE/RPE 精度验收通过。
+
+
+### 6.15 Dynamic03 range_meas 实测结果：不具备载波相位 RTK 重算条件（2026-11-25）
+
+用户在修复 NumPy 数组处理异常后，使用原始 SHA256 已核验的 3,434,689,371-byte Dynamic03 ROS1 bag 重新完成全量审计。/ublox_driver/range_meas 实际有 879 条 gnss_comm/msg/GnssMeasMsg 消息，bag record 时间戳严格递增，但相邻间隔最大 54.391s；每历元卫星数 min/median/P95/max = 1/1/2/3，累计 1,051 个卫星观测、1,054 个信号观测。
+
+原始观测状态汇总：
+- pseudorange valid 1,054；carrier-phase valid **0**；half-carrier valid status bit **0**。
+- LLI lost-lock count 1,054；样本 LLI 值为 3。消息定义将 LLI 定义为 lost-lock indicator（1=lost），status bit_0/1/2 分别为 pseudorange/carrier-phase/half-carrier validity。不能把 LLI 半周歧义标志与 status bit_2 的“半周载波相位有效”混为一谈。来源：[GnssObsMsg.msg](https://github.com/HKUST-Aerial-Robotics/gnss_comm/blob/main/msg/GnssObsMsg.msg)；RINEX LLI bit 0 为 loss-of-lock/cycle-slip、bit 1 为 half-cycle ambiguity：[RINEX 3.03](https://gssc.esa.int/wp-content/uploads/2018/07/RINEX-303.pdf)。
+- CN0 median 13 dB-Hz，P05 10、P95 20 dB-Hz，信号强度整体偏低。
+- /ublox_driver/ephem、glo_ephem、iono_params、time_pulse_info 均为 topic_absent。当前审计未发现这些星历/时间脉冲 topic，也没有识别到 RTCM/base correction 数据流。
+
+与此前 PVT 审计合并判断：receiver_pvt 2,845 条记录全部 diff_soln=false、carr_soln=0，valid_fix 仅 865/2845（30.4%）；range_meas 又没有任何 carrier-phase-valid 信号，且观测稀疏、有长时间断档。当前 bag 中可见的 u-blox 观测数据不足以支持离线 RTK Fixed 重建；不能用它们认证 /mavros/global_position/raw/fix 为 RTK，更不能认证 Dynamic03 TUM 为厘米级 RTK GT。
+
+保留强来源关联结论：原始 TUM 4,269 行与 /mavros/global_position/raw/fix 4,269 条消息的 header 时间戳逐行最大差仍约 0.000712ms，诊断刚体拟合 RMSE 约 0.044mm；这说明两者极可能同源/直接派生，但不证明上游解算质量。原始 TUM 和 bag 均不修改，2,594 行 pose-run candidate 仍不可用于替代原始来源证据。
+
+**GT Gate 继续阻塞。** 暂不运行 evo APE/RPE、Point-LIO 精度评估或用该 GT 调参。若后续要挽救该数据集，需要从数据集作者/设备配置取得 Dynamic03 实际接收机身份、MAVROS 输入源、RTK base/NTRIP/RTCM 改正源、接收机配置/状态日志、天线位置与杆臂、时间同步说明；仅靠当前 bag 内的 u-blox 原始观测无法补齐这些证据。
