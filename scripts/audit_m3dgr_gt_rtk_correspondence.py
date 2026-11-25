@@ -329,6 +329,12 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
         first_sample: Any = None
         last_sample: Any = None
         field_names: list[str] = []
+        pvt_values: dict[str, list[Any]] = {
+            name: [] for name in (
+                "fix_type", "valid_fix", "diff_soln", "carr_soln",
+                "num_sv", "h_acc", "v_acc", "p_dop", "vel_acc",
+            )
+        }
         for connection, bag_timestamp_ns, rawdata in reader.messages(connections=connections):
             message = reader.deserialize(rawdata, connection.msgtype)
             count += 1
@@ -343,6 +349,38 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
                 elif hasattr(message, "__slots__"):
                     field_names = [name for name in message.__slots__ if isinstance(name, str)]
             last_sample = message_snapshot(message)
+            if topic == "/ublox_driver/receiver_pvt":
+                for name in pvt_values:
+                    value = getattr(message, name, None)
+                    if value is not None:
+                        pvt_values[name].append(value)
+        pvt_summary = None
+        if topic == "/ublox_driver/receiver_pvt":
+            pvt_summary = {}
+            for name, values in pvt_values.items():
+                if not values:
+                    pvt_summary[name] = {"status": "field_absent"}
+                    continue
+                if name in ("fix_type", "valid_fix", "diff_soln", "carr_soln", "num_sv"):
+                    distribution: dict[str, int] = {}
+                    for value in values:
+                        key = str(value)
+                        distribution[key] = distribution.get(key, 0) + 1
+                    pvt_summary[name] = {
+                        "count": len(values),
+                        "distribution": distribution,
+                    }
+                else:
+                    numeric = np.asarray(values, dtype=np.float64)
+                    finite = numeric[np.isfinite(numeric)]
+                    pvt_summary[name] = {
+                        "count": len(values),
+                        "finite_count": int(finite.size),
+                        "min": float(np.min(finite)) if finite.size else None,
+                        "median": float(np.median(finite)) if finite.size else None,
+                        "p95": float(np.percentile(finite, 95)) if finite.size else None,
+                        "max": float(np.max(finite)) if finite.size else None,
+                    }
         result[topic] = {
             "status": "audited",
             "message_types": types,
@@ -355,9 +393,11 @@ def audit_related_gnss_topics(reader: Any, topics: tuple[str, ...]) -> dict[str,
             "top_level_fields": field_names,
             "first_message_sample": first_sample,
             "last_message_sample": last_sample,
+            "pvt_field_distributions_and_ranges": pvt_summary,
             "limitations": [
-                "Field snapshots are diagnostic samples, not receiver identity or RTK quality certification.",
+                "Field snapshots and distributions are diagnostic data, not receiver identity or RTK quality certification.",
                 "No cross-topic nearest-time pairing is performed.",
+                "PVT numeric fields are reported in message-native units; consult the pinned message definition before interpreting units.",
             ],
         }
     return result
