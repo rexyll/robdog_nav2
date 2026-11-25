@@ -172,8 +172,16 @@ GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。GPS-001 是纯�
 Before driver implementation, add byte-array fixtures copied from protocol field layout and independently reviewed:
 - NAV-TIMELS payload length 24; offsets: iTOW 0..3 (U4), version 4 (U1), reserved 5..7, srcOfCurrLs 8 (U1), currLs 9 (I1), srcOfLsChange 10 (U1), lsChange 11 (I1), timeToLsEvent 12..15 (I4), dateOfLsGpsWn 16..17 (U2), dateOfLsGpsDn 18..19 (U2), reserved 20..22, valid 23 (bitfield). The two date fields describe the next/last leap event and are valid only when validTimeToLsEvent is true; they are not current GPS week/time fields.
 - Verify little-endian signed decoding for `currLs` and `timeToLsEvent`; `validCurrLs` and `validTimeToLsEvent` bits are distinct.
+- Byte fixtures (all unspecified bytes zero; payload offsets are zero-based):
+  - `TIMELS-RAW-001`: `00 00 00 00 00 00 00 00 02 12 00 00 00 00 00 00 00 00 00 00 00 00 00 01` → iTOW=0, version=0, srcOfCurrLs=GPS(2), currLs=+18, validCurrLs=true, validTimeToLsEvent=false.
+  - `TIMELS-RAW-002`: same bytes with final byte `02` → current offset invalid, event-time fields valid; must not accept currLs as current offset.
+  - `TIMELS-RAW-003`: same bytes with final byte `03` → both validity flags true.
+  - `TIMELS-RAW-004`: same bytes with final byte `00` → neither validity flag true.
+  - `TIMELS-RAW-005`: set byte 9 to `FF` → currLs=-1 (signed I1), not 255.
+  - `TIMELS-RAW-006`: set bytes 12..15 to `FF FF FF FF` → timeToLsEvent=-1 (signed I4); only meaningful when bit 1 is set.
+  - `TIMELS-RAW-007`: set bytes 16..17 / 18..19 to little-endian nonzero WN/DN values; only expose as valid event date when bit 1 is set.
 - Test payload lengths 0, 23, 24, 25; version unknown; reserved bytes nonzero; unknown source code; checksum failure at UBX frame layer. Add dateOfLsGpsWn/dateOfLsGpsDn validity tests gated by validTimeToLsEvent.
-- The R07 field table confirms the two validity meanings but the extracted text does not reliably encode the bitfield graphic's bit positions. Do not guess bit positions from a secondary summary: inspect the original R07 bitfield graphic and lock them against the exact Interface Description revision used by the target firmware before implementation.
+- R07 original bitfield graphic confirms: bit 0 = `validCurrLs`; bit 1 = `validTimeToLsEvent`; bits 2..7 reserved. Thus `valid = 0x01` means current leap-second offset valid only; `0x02` means event-time fields valid only; `0x03` means both; `0x00` means neither. This is confirmed for protocol v27.11 in R07; target firmware compatibility still requires MON-VER.
 
 ## 5. Implementation order and review gates
 
