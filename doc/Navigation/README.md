@@ -181,5 +181,6 @@
 - [08 — Point-LIO 与 FAST-LIO2：MID-360 LIO / 时间补偿 / ROS 2 适配审计](08_point_lio_fast_lio2_audit.md)
 - [09 — MID-360 时间戳合同与 Point-LIO ROS 2 集成依赖审计](09_mid360_timestamp_and_point_lio_integration_audit.md)
 - [10 — Point-LIO 去 MRS 化与四足状态估计接口审计](10_point_lio_decoupling_and_state_interface_audit.md)
+- [11 — GNSS generation 与跨组件 Reset Coordinator 设计](11_gnss_generation_and_reset_coordinator_design.md)
 
 上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
