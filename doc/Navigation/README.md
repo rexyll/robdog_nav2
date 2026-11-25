@@ -170,3 +170,13 @@
 - Livox ROS Driver 2：https://github.com/Livox-SDK/livox_ros_driver2
 
 以上是候选入口，不代表已审查维护状态、许可证、接口或 Jetson 兼容性；结论以源码 pin 和专项审计为准。
+
+
+## 11. 已形成的专题审计文档
+
+- [04 — Nav2 Bringup 与 Action/命令接口审计](04_nav2_bringup_interface_audit.md)
+- [05 — 传感器观测到 Nav2 Costmap 输入链审计](05_sensor_to_costmap_observation_audit.md)
+- [06 — Costmap 健康状态与 Planner/Controller 消费端审计](06_costmap_health_and_consumers_audit.md)
+- [07 — MID-360 点云到高程地图与四足可通行性链路审计](07_mid360_elevation_traversability_audit.md)
+
+上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
