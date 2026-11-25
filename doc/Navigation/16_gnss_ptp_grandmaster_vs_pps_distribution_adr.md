@@ -664,3 +664,59 @@ LinuxPTP 在线手册为滚动文档，目标 JetPack 上实际 linuxptp 版本�
 5. default parameters：<https://www.linuxptp.org/documentation/default/>。
 
 本节为目标机配置与验证 runbook，不代表命令已在 AGX Orin 执行。实际 interface、PTP domain/profile、GM、PHC index、UTC offset、step/holdover 行为和精度阈值仍需实物/授权验证；无本项目设备操作、无生产代码、无构建/测试/仿真/实机结果。
+
+
+## 17. 目标 Orin 主机/NIC 基线采集工具（TIME-045 / TIME-052）
+
+新增仓库脚本：`tools/collect_ptp_host_inventory.sh`。
+
+### 17.1 设计约束
+
+脚本为**只读采集器**，不需要 sudo 才能启动，不会：
+- 修改 IP、MTU、VLAN、路由、网卡 offload 或 interface state；
+- 加载/卸载驱动、重置 PHY/NIC、创建或修改 PTP 配置；
+- 启动/停止/restart `ptp4l`、`phc2sys`、chrony、NTP 或 systemd-timesyncd；
+- 执行 `phc_ctl`、`pmc SET`、`date -s`、`timedatectl set-time` 或其它调钟操作；
+- 选择或假定某个网口是项目最终 PTP interface。
+
+脚本以当前普通用户权限收集信息；因权限不足或系统未安装工具而缺失的字段会记为不可用/命令失败，不应把“采集不到”误读为“设备不支持”。输出目录权限设为 0700，并为所有采集文件生成 `SHA256SUMS`。输出仍可能包含 hostname、MAC、设备型号、内核日志或其他环境信息，外发前必须由用户人工检查和脱敏。
+
+### 17.2 在目标板执行
+
+在仓库根目录运行：
+
+```bash
+bash tools/collect_ptp_host_inventory.sh
+```
+
+也可指定输出目录：
+
+```bash
+bash tools/collect_ptp_host_inventory.sh ./artifacts/orin_ptp_inventory_run01
+```
+
+预期采集文件：
+- OS/架构/内核、JetPack/L4T release、device-tree model/compatible；
+- 当前时钟状态、chrony/systemd-timesyncd/ntpd/ptp4l/phc2sys 服务和进程；
+- `linuxptp`、`ethtool`、chrony 包版本以及 `ptp4l -v` / `phc2sys -v`；
+- 网卡 interface、driver、firmware、PHY/PCI 线索、链路状态；
+- 每个非 loopback 网口的 `ethtool -T` 能力、硬件 timestamp 模式和 PTP Hardware Clock index；
+- `/sys/class/ptp`、`/dev/ptp*`、网卡与 PHC 的 sysfs 关联；
+- PTP/PHC/MGBE/EQOS/Ethernet/PHY 相关内核日志、IRQ 和 timestamp/VLAN/offload 能力；
+- 采集文件的 SHA-256 清单。
+
+脚本不会自动安装 `ethtool`、`linuxptp`、`lspci` 或其它依赖；缺失时记录不可用。不要为“补齐采集结果”而在目标板上未经审批升级 JetPack、替换 NVIDIA 内核驱动或覆盖发行版 linuxptp 二进制。
+
+### 17.3 人工判读 Gate
+
+1. **平台身份 Gate：** 先确认模块确为 AGX Orin、开发套件/载板型号与 revision、JetPack/L4T、kernel、PHY/driver。AGX Orin 平台资料中的 MGBE/RGMII 能力不等于每个载板每个物理网口都已实现；P3737 的验证结论不能自动套用自定义载板。Orin NX/Nano 或第三方 PCIe 网卡不因“Orin”名称而继承 AGX Orin MGBE 的 PTP 能力。
+2. **NIC timestamp Gate：** 目标接口的 `ethtool -T` 必须同时显示 hardware TX/RX timestamp 与有效 PHC index；再确认对应 `/dev/ptpN` 存在且 sysfs 关联正确。只有 software timestamp 不满足本项目硬件 PTP 基线。
+3. **driver/runtime Gate：** 保存 driver/firmware、PHY、内核版本、linuxptp 版本。不要只根据 `ethtool -T` 判定端到端 PTP 已工作；必须后续启动 client-only `ptp4l`，检查 TX timestamp 返回、port state、GM identity、offset/path delay 和实际报文。
+4. **时钟纪律 Gate：** 如果 chrony、systemd-timesyncd、ntpd 或其它服务仍直接调整 `CLOCK_REALTIME`，在设计并验证唯一时钟纪律策略之前，不启动会调整系统时钟的 `phc2sys`。采集脚本只报告状态，不会自动停服务。
+5. **数据完整性 Gate：** 用户提供采集目录后，先核对 `SHA256SUMS`，按实际 interface/PHC/driver 形成配置；未获得输出前，不填入接口名、PHC index、PTP domain 或 linuxptp 版本，不宣称目标板支持/不支持 PTP。
+
+### 17.4 采集脚本验证状态
+
+- 静态内容审查：只读命令、输出目录冲突保护、umask 077、SHA-256 清单和缺失工具容错已纳入脚本。
+- 仓库文件已提交并可回读；本轮没有在真实 Jetson 上执行脚本，也没有在 CI/容器中运行 bash -n 或 shellcheck。因此脚本当前状态是 **已提交、待目标环境首次执行验证**，不得标记为脚本运行通过。
+- 首次执行后应由用户回传采集目录（或脱敏压缩包）；如系统缺少工具、权限或输出异常，再针对目标发行版修订脚本。
