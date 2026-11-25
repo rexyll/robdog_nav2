@@ -19,11 +19,11 @@ def timestamp(seconds=100, nanoseconds=123):
 
 
 def ptp_message(message_type, *, source=PORT_A, sequence=1, domain=0,
-                flags=0, body=b"", correction=0, version=2):
+                flags=0, body=b"", correction=0, version=2, minor_version=0):
     length = 34 + len(body)
     header = bytearray(34)
     header[0] = message_type & 0x0f
-    header[1] = version
+    header[1] = (minor_version << 4) | version
     struct.pack_into("!H", header, 2, length)
     header[4] = domain
     struct.pack_into("!H", header, 6, flags)
@@ -76,6 +76,11 @@ class TestPtpPacketAudit(unittest.TestCase):
         with self.assertRaises(PtpPacketError):
             parse_ptp_v2_message(ptp_message(0, version=1, body=timestamp()),
                                  transport="ethernet_l2")
+        with self.assertRaises(PtpPacketError):
+            parse_ptp_v2_message(
+                ptp_message(0, minor_version=1, body=timestamp()),
+                transport="ethernet_l2",
+            )
         bad_length = bytearray(ptp_message(0, body=timestamp()))
         struct.pack_into("!H", bad_length, 2, 1000)
         with self.assertRaises(PtpPacketError):
