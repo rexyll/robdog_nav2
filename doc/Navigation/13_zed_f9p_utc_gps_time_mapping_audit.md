@@ -216,3 +216,56 @@ CMakeLists 中 ublox_ubx_msgs 使用显式 rosidl_generate_interfaces(...) 消�
 - ublox_ubx_msgs CMakeLists.txt：https://github.com/aussierobots/ublox_dgnss/blob/9d4f5addbc72d092c57dde99b20712258e96e81e/ublox_ubx_msgs/CMakeLists.txt
 
 **最终判断：** 当前固定 driver 已提供 NAV-PVT/NAV-TIMEUTC/NAV-STATUS，但缺 NAV-TIMELS 与 connection-generation event。UTC→GPS 映射可以设计，但在当前 driver 接口和目标 firmware 未确认前不能实现为生产级可信 source clock。NAV-TIMEGPS 是协议支持的可选交叉检查，不应覆盖 Integration Manual 的 UTC 时间建议。
+
+
+## 10. 固定 driver 中的具体扩展插入点与 lifecycle 并发约束
+
+进一步追踪固定 driver 的 NAV-TIMEUTC 发布链和 libusb event path，得到以下实现边界。
+
+### 10.1 NAV-TIMELS parser / ROS message 插入点
+
+固定版本不是通过单独 .cpp 为每条 NAV message 实现 parser，而是采用 header payload class + UbxNav dispatch + node publisher 的模式。新增 NAV-TIMELS 需要至少修改：
+
+1. 新增 ublox_ubx_msgs/msg/UBXNavTIMELS.msg，并在 ublox_ubx_msgs/CMakeLists.txt 的显式 rosidl_generate_interfaces 列表登记。
+2. 新增 nav payload header，定义消息 class/id、24-byte payload 字段 offset、signedness 和 validity bitfield；parser 需验证 frame payload length，不能仅 memcpy 后无条件读取。
+3. 在 ubx.hpp 增加 UBX_NAV_TIMELS message ID 常量（如固定版本尚无该常量）。
+4. 在 ubx_nav.hpp 增加 include、FrameComms typedef、成员、构造初始化、accessor 和 frame switch 分支。
+5. 在 ublox_dgnss_node.cpp 增加 ROS message include、publisher 创建/member、frame dispatch 和 publish method；字段必须逐项映射并保留 raw source/valid flags。
+6. 在 driver CI 增加消息字段、payload parser 和 ROS build/install 检查；现有 driver CI 只覆盖原固定 commit，不能证明新 patch。
+
+NAV-TIMEGPS 若作为可选交叉校验，采用同样扩展模式，但应与 NAV-TIMELS 分开评审、分开测试；不因增加 TIMEGPS 就认为当前 leap-second source 已可信。
+
+### 10.2 USB lifecycle callback 的实际执行路径
+
+固定 driver：
+- libusb hotplug attach/detach callback 在 usb.cpp 注册。
+- node 的 handle_usb_events_callback 由 10 ms wall timer 调用 usbc_->handle_usb_events()；该 timer 位于 callback_group_usb_events_timer_（MutuallyExclusive）。
+- handle_usb_events() 调用 libusb_handle_events_timeout()；libusb hotplug 和 transfer callbacks 在该 event processing 路径中被调用。
+- usb::Connection::hotplug_attach_callback() 打开设备、设置 CONNECTED/attached_ 后调用 node attach callback。
+- usb::Connection::hotplug_detach_callback() 关闭 device handle、设置 DISCONNECTED/attached_=false 后调用 node detach callback。
+- node attach callback 在重连时同步执行 perform_usb_initialization()；detach callback 仅更新 readiness/attached 标志并 reset device parameters。
+- UBX transfer callback ublox_in_callback() 以 rclcpp::Clock().now() 记时间，将原始 frame push 到 ubx_queue_；push 有 ubx_queue_mutex_ 保护。
+- ubx_timer_callback() 位于另一个 MutuallyExclusive callback group；当前实现读取 queue size/front 时没有持有 ubx_queue_mutex_，pop_front 时才加锁。若组件运行在 MultiThreadedExecutor / multithreaded component container 下，不能假设 USB event callback 与 UBX consumer 自动串行。
+
+### 10.3 generation event 不能只加一个 ROS topic
+
+必须把 lifecycle generation 和 frame queue ordering 一起设计：
+
+- 每次 driver process 启动创建新的 process_session_id。
+- 每次成功 attach 建立新的 driver_connection_generation；detach 立即撤销当前 generation。
+- 每个 UBX frame 在 USB callback 入队时捕获 process_session_id + connection_generation + queue_sequence。
+- attach/detach lifecycle event 与 UBX frame 使用同一受锁保护的 ingress event queue 或同一单调 sequence allocator，避免 lifecycle event 和旧 frame 之间无可审计的先后顺序。
+- detach 事件优先建立 invalid barrier；消费者看到 generation mismatch 的旧队列 frame 必须丢弃，不能在 reconnect 后重新发布为新 session 数据。
+- attach 只建立新的 connection session，不代表 GNSS UTC/iTOW 已有效；必须等有效时间锚点与 exact-epoch join 后才恢复 GNSS validity。
+- 不能只依赖一个易丢失的瞬时 ROS event topic。建议同时提供 latched/current lifecycle snapshot（含 event sequence、process session、connection generation、attached/readiness）和有序 event stream；subscriber 重启后先同步 snapshot，再接受新事件。
+- 事件队列满、序号跳跃、callback race、driver restart、detach/attach 快速连续发生时都必须 fail-closed。
+
+### 10.4 线程安全与队列语义 Gate
+
+固定 node 中 device_attached_、device_readiness_state_、has_been_connected_before_ 是普通成员；USB event timer、parameter-processing timer、UBX timer 属于不同 callback groups。MutuallyExclusive 只约束同一个 callback group 内的执行，不自动串行化不同 groups。若采用多线程 executor，应将跨组共享状态改为受 mutex/atomic 保护的 snapshot/transaction，不允许多个 callback 直接读写裸 bool/enum。
+
+此外，ubx_queue_ 的 size/front 读取与 push/pop 必须统一在同一 mutex 下完成，或改用明确的单生产者/单消费者队列；仅保护 push 和 pop 而不保护读取不能构成完整线程安全合同。
+
+### 10.5 当前审计边界
+
+以上是固定源码静态追踪和项目侧设计要求。未证明当前默认 deployment 使用 MultiThreadedExecutor，也未运行 ThreadSanitizer、USB disconnect stress 或实际 F9P reconnect 测试。不能把潜在并发问题标成已复现 bug；应作为多线程部署条件下的源码风险与测试 Gate。
