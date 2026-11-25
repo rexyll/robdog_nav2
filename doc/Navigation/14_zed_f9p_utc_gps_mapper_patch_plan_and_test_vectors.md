@@ -1028,3 +1028,34 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 - GNSS-UTC-IF-030：CDMA 双尺度能力只允许由明确支持对应 CDMA signal + 经版本化 ICD 核验的字段生成；F9P FDMA 数据不得作为替代源。
 
 本节没有修改生产代码、驱动或测试文件；GNSS-UTC-IF-027..030 是待实现/待运行的验证合同，不是测试结果。
+
+
+##### 4.19.9 GLONASS CDMA ICD 官方受控版本来源链与当前获取状态
+
+**规范管理责任已经有正式依据：**
+- Roscosmos Order No. 324 dated 2017-09-12（在俄罗斯司法部登记 2018-01-09）第 1–3 条规定：GLONASS FDMA L1/L2 Edition 5.1 与 CDMA L1/L2/L3 Edition 1.0 的受控 ICD 版本由 АО «Российские космические системы»（RKS）保存、在其官网发布俄文/英文电子受控版本并提供信息支持。
+- 因此，RKS 是本项目核验 CDMA ICD 官方基线的首要责任机构。第三方镜像、Scribd、研究论文或 GNSS-SDR 引用只能用于检索线索和交叉核对，不能作为受控原件、修订状态或哈希证据。
+- GLONASS-SVO EVI 的公开规范目录列出 2008 FDMA L1/L2 Edition 5.1，以及 2016 CDMA L1、L2、L3、General Description 四份 Edition 1.0 文档；该站点目录可作为当前公开分发/服务目录的旁证，但不能代替 Roscosmos Order 指定的 RKS 官方受控副本。
+
+**可追溯的 RKS 原始文件 URL（历史发布路径）：**
+- General Description: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-General.-Edition-1.0-2016.pdf
+- L1: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L1.-Edition-1.0-2016.pdf
+- L2: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L2.-Edition-1.0-2016.pdf
+- L3: https://russianspacesystems.ru/wp-content/uploads/2016/08/ICD-GLONASS-CDMA-L3.-Edition-1.0-2016.pdf
+
+这些 URL 由 2016 年 GPS World 对 RKS 发布的报道和 UNOOSA/ICG 公开技术资料的参考目录交叉列出；本轮直接访问 RKS PDF 时遇到超时/不可访问，故**只确认历史原始发布 URL 与责任机构，不宣称已下载官方受控文件**。目前没有取得四份文件的当前受控版本号/修订日期、签章页、官方 SHA-256 或下载后原始字节快照。公开目录显示 Edition 1.0/2016，不足以证明截至当前仍是最新受控版本，也不能证明存在新版或不存在新版。
+
+**本轮可形成的规范基线状态：**
+- CDMA L1/L2/L3 + General Description：PUBLIC_CATALOG_LISTED / OFFICIAL_CONTROLLED_COPY_NOT_VERIFIED。
+- 2016 L1 ICD 的 Type 25 / KP / A / Type 1/2 细节：仍仅作为已交叉核对的历史 Edition 1.0 研究材料，不升级为已核验的现行受控基线。
+- 未来 continuous UTC 双尺度字段：UNSPECIFIED_IN_VERIFIED_CONTROLLED_ICD。不能因国家规划已提出双尺度路线，就推定 2016 ICD 有未读到的字段或推定新版已发布。
+- L1/L2/L3 各频段 ICD 必须分别核对；L1 的 Type 10/25 位段、字段符号和更新规则不可复制到 L2/L3。
+
+**新增获取/审计门禁：**
+1. 从 RKS 官方站点或其书面授权渠道取得四份受控电子版本；记录获取时间、完整 URL、HTTP 元数据、文件大小、SHA-256、封面/修订页、签章/批准页、语言与版本。
+2. 对每份文件建立独立证据记录，提取 General Description 中的信号结构/消息体系，再分别核验 L1、L2、L3 的导航字符串结构、字段表、时间参数、validity、epoch、更新周期和异常/闰秒行为。
+3. 将四份官方受控文件与 UNOOSA/ICG、GLONASS-SVO EVI 目录、历史 2016 第三方副本逐项比对；差异必须定位到文档版本/页码/字段，不能只做文本搜索摘要。
+4. 向 RKS 确认 2026 国家无线电导航计划所称 CDMA 双尺度要求是否已触发 ICD 修订、修订号/发布日期/过渡时序，以及是否另有控制段/服务公告；若无可公开答复，记录 NEEDS_AUTHORIZED_CONFIRMATION。
+5. 在受控 ICD 获取前，禁止写入 CDMA 新时间字段 parser 常量、bit offsets、scale mapping 或 2027 transition 代码；保留 UNSUPPORTED_SPEC / POLICY_UNVERIFIED。
+
+**来源与限制：**Roscosmos Order No.324 正文可读取（当前检索到的是法规数据库转载文本，法律内容含命令原文）；GLONASS-SVO EVI 规范目录列出四份 Edition 1.0/2016 文档；GPS World 2016 报道列出 RKS 原始下载 URL；UNOOSA/ICG 参考资料目录列出对应 ICD 名称/版本。RKS PDF 直接访问本轮超时/不可用。没有受控原件、哈希、修订/签章核验或授权渠道确认；未修改生产代码、未运行测试。
