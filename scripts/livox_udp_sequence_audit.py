@@ -51,7 +51,11 @@ class LivoxUdpSequenceAudit:
             if frame_delta:
                 self.frame_counter_deltas[str(frame_delta)] += 1
 
-            if udp_cnt == 0 and self.high_water != 0:
+            if udp_cnt == 0 and self.high_water == 0xFFFF and not frame_delta:
+                event = "in_order"
+                self.events[event] += 1
+                self.high_water = 0
+            elif udp_cnt == 0 and self.high_water != 0:
                 event = "frame_reset_candidate"
                 self.events[event] += 1
                 if frame_delta:
