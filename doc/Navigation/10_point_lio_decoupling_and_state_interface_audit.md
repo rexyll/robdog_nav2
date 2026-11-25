@@ -444,3 +444,63 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 3. Planner/Controller 不原生理解 Point-LIO health、robot_localization measurement age、covariance validity、GNSS receiver generation 或 estimator epoch；这些必须由项目侧 supervisor/adapter 提供。
 4. Controller 的零速度是 ROS topic 输出，不是底层停止确认；必须贯通平台反馈与独立 watchdog。
 5. 本节为固定上游源码 E2 + 项目现有 GNSS package metadata 静态核验；没有新增 ROS 构建、仿真、真实 bag、HIL 或机器狗实测。
+
+
+## 20. 现有 GNSS quality core 与测试覆盖矩阵
+
+固定本项目审计对象（`nav` 分支当前版本）：
+- `src/robodog_gnss_quality/robodog_gnss_quality/quality_gate.py`（blob `1083b8d1cc261d4833928d3cfaf38bf522acf3c4`）
+- `src/robodog_gnss_quality/robodog_gnss_quality/ubx_epoch_joiner.py`（blob `9a9db8fdce9e035c3997f1a101165bef82b99817`）
+- `src/robodog_gnss_quality/robodog_gnss_quality/ubx_nav_pvt.py`
+- `test/test_quality_gate.py`（30 个测试）
+- `test/test_ubx_epoch_joiner.py`（17 个测试）
+
+### 20.1 已有纯算法能力（源码事实）
+
+**RtkQualityGate**
+- 输入是 immutable `GnssObservation`，包含 receiver source timestamp/clock ID、host monotonic receive time、坐标、NavSatStatus、receiver `gnss_fix_ok`、carrier solution、ENU 3×3 covariance 和 covariance type。
+- fail-closed 接受策略要求 NavSatStatus 属于合法值、receiver fix flag=true、carrier solution 明确 FIXED；FLOAT/NO_SOLUTION/UNKNOWN 不合格。
+- freshness 使用 host monotonic receive timestamp；source timestamp 仅在同一 source clock ID 内比较，拒绝非递增 epoch。
+- 对坐标 finite/range、covariance type、finite/symmetry/PSD/degenerate、水平/垂直标准差做门控；默认拒绝 APPROXIMATED 与 UNKNOWN covariance。
+- 使用 haversine + altitude delta 估算 3D 位移速度，拒绝超过配置的 plausible speed；跨越配置 continuity interval 的数据 gap 会重新开始 Fixed 连续样本计数。
+- 连续 Fixed 样本满足配置数量后才返回 ACCEPTED；无效输入通常清空 recovery/reference 状态。仅对 out-of-order 样本使用 `reset=False`，不让旧数据破坏当前连续计数。
+
+**UbxFourMessageEpochJoiner + UBX record builder**
+- 按精确 iTOW 聚合 NAV-PVT、NAV-HPPOSLLH、NAV-COV、NAV-STATUS 四路消息；四路 iTOW 必须完全一致，且同一 iTOW 的 source-time mapping 必须一致。
+- 校验 NAV-PVT 与 NAV-STATUS 的 fix flag/carrier solution 一致，FIXED 时要求 STATUS carrier_solution_valid；要求 HPPOSLLH 所有位置分量有效、NAV-COV pos_cor_valid。
+- 使用有界 pending LRU、host monotonic receive skew、显式 stale expiry 和 retired tombstone；拒绝 conflicting duplicate、late message、跨 generation 混入、重复完成 epoch 和非递增输出 epoch。
+- receiver week/boot generation 变化必须由调用方先验证，再显式调用 `begin_generation()`；`reset()` 后禁止隐式重新开始。
+- NAV-COV NED covariance 转 ENU 时对 Down 相关 cross terms 正确变号；不能只交换对角元素。HPPOSLLH 高精度坐标按 base + HP 分量换算。
+- 核心明确不包含串口/UBX 解码、ROS subscriptions、GPS-week mapper、NavSatFix publisher 或 diagnostics。
+
+### 20.2 已有测试覆盖
+
+| 范围 | 已覆盖场景 | 证据 |
+|---|---|---|
+| Gate 配置 | 非正 age、非有限阈值、恢复样本数非法 | 4 tests |
+| GNSS 基础质量 | FLOAT/NO_SOLUTION、NavSatStatus invalid、gnssFixOK=false、坐标越界/NaN | 7+ tests |
+| Freshness/时间 | stale、future receive timestamp、duplicate/out-of-order、长时间数据 gap、receiver clock epoch change | tests |
+| Covariance | UNKNOWN/APPROXIMATED、零/NaN、非对称、非 PSD、水平/垂直阈值、DIAGONAL_KNOWN 非零 off-diagonal | tests |
+| 动态跳变/恢复 | implausible position jump、合理小运动、反经线跨越、连续 Fixed hysteresis | tests |
+| UBX pairing | 四路任意到达顺序、跨 iTOW 不串配、同 iTOW mapping 冲突、PVT/STATUS 质量一致性、重复/冲突消息 | tests |
+| Cache/时钟 | 容量上限、stale expiry、late callback、retired epoch 防复活、GPS week iTOW 边界、显式 generation/reset | tests |
+
+以上是静态检查到的测试用例数量/名称与实现对应关系；未在本轮重新运行测试。此前 CI 的历史通过记录不替代当前 HEAD 的重新运行。
+
+### 20.3 仍缺少的集成契约与测试
+
+1. **GNSS generation transaction 尚未封装。** Joiner 有 `begin_generation/reset`，Gate 有独立 `reset`，但没有单一 coordinator 原子协调两者、GPS-week mapper、NavSatFix 输出 epoch 和 global EKF history。必须定义事务顺序，避免旧 epoch 观测在 reset 后进入 gate 或 EKF。
+2. **GPS-week/time mapper 不存在。** `source_timestamp_ns` 由 adapter 调用方提供；核心不会验证它与 GPS week/iTOW 的数学对应。需实现并测试 GPS week rollover、receiver reboot、iTOW wrap、GPS week 来源无效、设备上电/掉电与 ROS bag loop。
+3. **GNSS quality 状态未发布。** `QualityDecision` 有 reason/qualified/连续样本数/不确定度/速度，但没有 ROS diagnostics、状态 topic、last accepted epoch、receiver generation 和输出有效期；`UbxFourMessageEpochJoiner` 的内部 counters 也尚无统一 diagnostics contract。
+4. **NavSatFix 与质量状态的消费原子性未实现。** Adapter 必须保证仅同一 ACCEPTED epoch 的 NavSatFix 进入 navsat_transform；拒绝/过期/重置时不能保留旧 fix 作为新数据重复发布。质量状态与 NavSatFix 必须能按 epoch 关联。
+5. **输出时钟/坐标契约待 adapter 实现。** receiver measurement stamp、ROS time、host steady receive time 三者必须分别保留；NED→ENU covariance、WGS84 geodetic→map ENU 原点/高度基准、GNSS antenna→base_link lever arm 仍需显式映射与测试。
+6. **Gate 与 joiner 之间缺少组合级 property/fuzz 测试。** 需覆盖随机 topic arrival permutation、重复/冲突/迟到混合、bounded memory、generation 切换边界、相同 iTOW 不同 source mapping、gate reset 中断和异常恢复。
+7. **当前 package metadata 仍阻止正式 ROS 化发布。** `package.xml`/`setup.py` 的 `UNSPECIFIED` license 和 `maintainers@example.invalid` 需由项目维护者确认；本轮不修改这些声明，也不擅自新增 ROS dependencies。
+8. **阈值不应在无设备数据时冻结。** max fix age、pair receive skew、pending age、covariance std、plausible speed、continuity interval、recovery sample count 均须由 ZED-F9P 真实输出、host load 和导航速度/风险测试标定。
+
+### 20.4 对 N1/N3 的直接工程结论
+
+- 现有 GNSS 算法核心覆盖了重要的 fail-closed 质量策略与四路 UBX 同历元配对，不应另起炉灶重写。
+- 下一阶段应先实现/审计 transport-independent `GnssEpochCoordinator`（名称暂定）接口与 GPS week/receiver generation mapper 的状态转移规格，再决定是否拆分 ROS adapter package。
+- GNSS ACCEPTED 只代表该历元满足 GNSS 输入质量 Gate；不自动代表 global EKF/map pose 有效。Global filter 还需检查 local TF 对齐、measurement age、covariance、epoch 与 map→odom 发布连续性。
+- 本节为本项目固定分支源码和测试静态审计；没有新增测试运行、ROS 构建、真实 ZED-F9P bag、HIL 或硬件证据。
