@@ -375,3 +375,72 @@ ROS Index 当前将 `robot_localization` 列为 Jazzy 已发布包（Apache-2.0�
 - [ ] 注入 NaN/Inf、负/非 PSD covariance、TF 缺失/过期；验证 health supervisor 确实阻止无效 Odometry/TF 进入 Nav2，而不只是输出日志。
 - [ ] GNSS ROS adapter 实现前，确认包 SPDX license、真实 maintainer metadata、u-blox ROS driver/message package 固定 SHA、消息定义与依赖许可。
 - [ ] ROS adapter 完成后，在真实 ZED-F9P bag 验证四路 UBX 同历元 join、GPS week rollover、receiver reboot、时间映射、steady-clock stale、quality recovery 和 NavSatFix covariance frame；未验证前不得接入 global EKF。
+
+
+## 19. 定位有效性到 Nav2 Costmap / Planner / Controller 的故障传播审计
+
+固定 Navigation2 Jazzy 源码：`c7046550547d382a5186d106b0895eda02485d7c`。重点文件：
+- `nav2_costmap_2d/src/costmap_2d_ros.cpp`（blob `fe8cd94284e7b3b266c516c8fe40c1fb50053195`）
+- `nav2_costmap_2d/include/nav2_costmap_2d/costmap_2d_ros.hpp`
+- `nav2_planner/src/planner_server.cpp`（blob `15152434a3430e12dad6ac841d3b732501bb6df9`）
+- `nav2_controller/src/controller_server.cpp`（blob `a39db25a1aa5c17be431694971bed72c07cd8f4e`）
+- `nav2_util/src/robot_utils.cpp`（blob `a9f4d137fa21229404c7c9726c0d4f70bf4a11b1`）
+
+### 19.1 Costmap 的 robot pose 失败路径
+
+- `Costmap2DROS::getRobotPose()` 直接调用 `nav2_util::getCurrentPose()`，从 TF buffer 查询 `global_frame → robot_base_frame`；查询/变换失败时返回 false。
+- `Costmap2DROS::updateMap()` 每周期先取 robot pose；只有成功时才调用 `layered_costmap_->updateMap(x,y,yaw)`。pose 获取失败时本周期直接返回，不更新 layered costmap，也不发布本周期 footprint。
+- 这个失败路径没有在 `updateMap()` 中显式把 LayeredCostmap 的 current 标志设置为 false。LayeredCostmap current 是启用 layers/filters 的聚合状态；因此不能假设 TF 丢失必然令 `isCurrent()` 变 false。若各 layer/filter 仍报告 current，Planner/Controller 的 Costmap current wait gate 可能仍然放行。
+- 结果是两个独立健康维度必须分开监控：**Costmap observation/plugin current** 与 **robot pose/TF validity**。不能以 `isCurrent()==true` 代替定位 TF 有效。
+
+### 19.2 Planner 的 pose 失效传播
+
+- Planner 的 `waitForCostmap()` 只等待 global Costmap `isCurrent()`。
+- 随后 `getStartPose()` 在 goal 未提供显式 start pose 时调用 `getRobotPose()`；失败则抛出 `PlannerTFError("Unable to get start pose")`。
+- `computePlan()` / `computePlanThroughPoses()` 将该错误映射为 Planner Action 的 TF error 并终止当前规划 goal；Planner 不发布运动命令。
+- 因此 Planner 有 TF 失败终止路径，但没有读取项目侧 `pose_valid`、LIO tracking health、EKF measurement age、covariance health 或 estimator epoch 的原生接口。即使 TF 可查询，过期但仍留在 buffer 中的变换也不能由这一布尔查询证明为新鲜。
+
+### 19.3 Controller 的 pose 失效传播
+
+- Controller 每轮先等待 local Costmap `isCurrent()`；然后 `computeAndPublishVelocity()` 调用 `getRobotPose()`。
+- pose 查询失败时抛出 `ControllerTFError`；catch 路径调用 `publishZeroVelocity()`，FollowPath Action 以 `TF_ERROR` 终止。
+- 这是一条软件层零速度请求路径，不证明命令已穿过速度平滑器/Collision Monitor/平台 adapter，也不证明 Lite3 接受命令或已制动。
+- 若 TF 可查询但来自失效/过期 estimator，Nav2 原生代码没有项目级 health/epoch/freshness Gate；Controller 可能继续按该 pose 计算速度。因此必须在 Nav2 前的定位输出/TF 发布边界，或独立 command safety supervisor 设置明确的 pose-validity Gate。
+
+### 19.4 故障传播矩阵（项目设计合同，尚未实现）
+
+| 故障/状态 | 定位/融合输出 | Costmap 行为 | Planner | Controller / 安全层 |
+|---|---|---|---|---|
+| LIO `DEGRADED`，pose 仍经融合层验证有效 | 保留 pose_valid；标记降级与不确定度上升 | 只允许在传感器与 TF freshness 均合格时更新 | 允许受限重规划；禁止高风险地形路线 | 限速、扩大安全裕量；由 terrain/safety policy 决定是否禁行 |
+| LIO `LOST` 或 covariance/数值无效 | 撤销 LIO measurement validity；融合层按策略保持短时 local continuity 或标 invalid | 不得仅因旧 TF 仍存在就继续作为健康地图输入 | 阻止新规划/取消依赖当前 pose 的规划 goal | 立即请求安全停止；平台 watchdog 监督执行反馈 |
+| local EKF stale/coast 超限 | pose_valid=false；停止发布可被误认作新鲜的有效定位输出，或另发显式 invalid 状态 | pose 获取失败时 updateMap 本周期跳过；current 可能仍为 true | TF error/显式 supervisor gate 终止规划 | TF_ERROR 路径请求零速度；独立 watchdog 验证停车 |
+| global EKF / GNSS 失效，local odom 仍健康 | 保留 odom 连续性；撤销 global/map pose validity，冻结或标记 map correction | global Costmap 若依赖 map TF，可能停止更新；local Costmap 需独立评估 | 禁止依赖失效 map frame 的全局规划；可否 local safe-stop 由任务策略决定 | 仅允许经验证的局部受限行为；不得把旧 map→odom 当作当前全局定位 |
+| TF 缺失/时间外推失败 | pose lookup invalid | Costmap updateMap 跳过本周期，但 plugin current 不必然变 false | getStartPose 失败时 TF_ERROR | Controller 抛 ControllerTFError，发布零速度并终止 FollowPath |
+| 传感器停流但 layer current 未及时变 false | estimator/source age invalid | Costmap 可能仍报告 current（取决于 ObservationBuffer 配置） | Planner current gate 可能放行，必须由外部 health gate 拦截 | Controller current gate 可能放行，必须由 pose/sensor supervisor 拦截 |
+| receiver generation / estimator epoch 变化 | 隔离旧 epoch measurement/history；reset coordinator 完成后再恢复 valid | 清理/重建受影响地图层或标记其数据 epoch | 暂停依赖旧地图/定位的规划并在新 epoch 后重规划 | 进入 RESETTING/stop；恢复需连续合格样本滞回及平台状态确认 |
+
+### 19.5 建议的统一 validity contract 与动作状态机
+
+项目侧建议建立独立 `robodog_navigation_health` 聚合状态（名称暂定），不把多个子系统的 bool 简单 OR/AND 后丢失原因。至少维护：
+- `estimator_epoch`、`gnss_receiver_generation`、`map_epoch`；
+- LIO tracking state、pose/covariance validity、last accepted LiDAR/IMU measurement stamp；
+- local/global EKF last measurement stamp、prediction/coast duration、reset generation；
+- `odom→base_link` 与 `map→odom` 的 lookup success、transform stamp/age、authority；
+- global/local Costmap plugin current、最后成功 robot-pose update 时刻、update duration；
+- Planner/Controller Action 状态、最后有效命令时间、平台命令接收/执行反馈与实测速度。
+
+状态/动作建议：
+1. `INITIALIZING/RESETTING`：禁止新导航 goal 和运动命令；完成 epoch 对齐、TF/地图注册后进入恢复观察。
+2. `NOMINAL`：所有定位、TF、地图和平台反馈 Gate 合格，允许正常规划/控制。
+3. `DEGRADED`：保留的定位仍通过质量门限，但不确定度/数据龄期接近阈值；限速、缩短重规划周期、禁用高风险地形。
+4. `POSE_INVALID` 或 `MAP_INVALID`：分别阻止依赖该 frame 的 Planner/Controller；local odom 健康不代表 global map 健康，反之亦然。
+5. `STOP_REQUESTED`：发布零速度只是请求；必须等待平台反馈速度降至安全阈值或驱动器确认停止。超时则由独立 watchdog/物理急停路径升级处理。
+6. `RECOVERY`：只有同一 epoch 内连续合格观测、TF 查询成功、covariance/age 合格、Costmap 成功更新且平台反馈正常，才解除降级；具体样本数/时间阈值必须由真实 bag/HIL 标定，本阶段不预设数值。
+
+### 19.6 本轮结论与证据边界
+
+1. Nav2 Jazzy 的 Costmap pose lookup 失败会跳过本周期地图更新，但没有同步强制 `LayeredCostmap::isCurrent=false`；所以 Costmap current 与定位 TF validity 必须作为两个独立 Gate。
+2. Planner 在默认从 TF 获取起点时，pose 失败映射为 TF_ERROR 并终止规划；Controller pose 失败映射为 TF_ERROR、发布零速度并终止 FollowPath。
+3. Planner/Controller 不原生理解 Point-LIO health、robot_localization measurement age、covariance validity、GNSS receiver generation 或 estimator epoch；这些必须由项目侧 supervisor/adapter 提供。
+4. Controller 的零速度是 ROS topic 输出，不是底层停止确认；必须贯通平台反馈与独立 watchdog。
+5. 本节为固定上游源码 E2 + 项目现有 GNSS package metadata 静态核验；没有新增 ROS 构建、仿真、真实 bag、HIL 或机器狗实测。
