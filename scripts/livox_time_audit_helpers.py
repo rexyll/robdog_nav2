@@ -104,3 +104,23 @@ def nearest_neighbor_deltas_ns(
             candidates.append(ordered_samples[index - 1])
         deltas.append(min(abs(reference - candidate) for candidate in candidates))
     return deltas
+
+
+
+def summarize_timestamp_pairing(
+    sensor_times_ns: Sequence[int],
+    receive_times_ns: Sequence[int],
+) -> dict[str, Any]:
+    """Describe paired bag receive minus sensor timestamps without assuming a shared clock."""
+    if len(sensor_times_ns) != len(receive_times_ns):
+        raise ValueError("sensor and receive timestamp counts must match")
+    deltas = [
+        int(receive) - int(sensor)
+        for sensor, receive in zip(sensor_times_ns, receive_times_ns)
+    ]
+    return {
+        "pair_count": len(deltas),
+        "receive_minus_sensor_ns": summarize_values(deltas),
+        "same_clock_domain_proven": False,
+        "interpretation": "descriptive_only_until_clock_domains_and_mapping_are_verified",
+    }
