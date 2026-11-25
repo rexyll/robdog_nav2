@@ -369,9 +369,10 @@ Cisco 公开冗余/网络指南给出的示例指标：
 - 这些是平台/模式/拓扑条件下的 per-hop 参考，不是整网绝对误差保证；Cisco 还明确指出特定 GLC-T 铜 SFP 可能降低 PTP 精度。
   
 **本项目适配风险：**
-- MID-360 已知支持 IEEE 1588v2.0 UDP/IP，但公开资料尚未把它的 multicast/unicast、E2E/P2P、one-step/two-step、VLAN tag 行为完整钉死。因此 Cisco 的 multicast-only 和 delay mechanism 限制目前只能列为待验证兼容条件，不能直接宣称可用。
-- 若 MID-360 仅支持 UDP/IP multicast Default Profile + E2E delay_request，则 Cisco Default Profile + E2E TC/BC 才有进一步测试价值；若设备需要 unicast 或 P2P，则该 Cisco 配置可能不兼容。
-- Power Profile / 802.1AS 不是默认优选路径；不得为了使用交换机特性而改变 MID-360 的时间同步协议合同。
+- 已有 Livox 官方资料明确：MID-360 的 IEEE 1588v2.0 UDP/IP PTP 路径采用 two-step Sync/Follow_Up，并使用 E2E Delay_Req/Delay_Resp；设备作为 PTP Slave。因此 Cisco Default Profile 的 delay_request 机制可作为候选，Power Profile 的 peer_delay 机制不能直接配套这一 PTP 路径。
+- 仍未证实的是 PTP 报文本身的 multicast/unicast 寻址、PTP domain/profile、PTP UDP 端口、VLAN tag/PCP、TTL，以及 Announce/Sync/Delay interval。Cisco multicast-only 限制只有在抓包确认 MID-360 PTP 实际采用 multicast 后，才能判定兼容。
+- Livox 的点云与 IMU 数据流端口默认 UDP Unicast，且可配置 Multicast；这只是传感器数据流的传输合同，不能推断 PTP 同步报文采用同样的单播/组播方式。
+- 若实际 PTP 报文为 UDP/IP multicast，且 domain/profile/VLAN/interval 与目标配置匹配，可进入 Cisco Default Profile + E2E TC/BC 验证；若设备发送 unicast 或存在 Cisco 不支持的组合，则该 Cisco 配置不兼容。Power Profile / 802.1AS 不应为了交换机功能而替代已确认的 PTP v2.0 端点合同。
 
 ### 13.3 Microchip LAN9668 / EVB-LAN9668：开发台架候选，不是现成采购定案
 
@@ -387,7 +388,7 @@ Microchip 官方将 LAN9668 标为量产中的 8-port TSN Gigabit Ethernet switc
 
 **最小验证拓扑：**
     GNSS-disciplined GM
-       │ dedicated PTP timing VLAN / isolated switch ports
+       │ dedicated isolated timing LAN (VLAN tagging only after endpoint compatibility is verified)
        ▼
     candidate PTP switch (Forward vs E2E TC vs BC)
        ├── MID-360 PTP endpoint
@@ -398,7 +399,7 @@ Microchip 官方将 LAN9668 标为量产中的 8-port TSN Gigabit Ethernet switc
 - GM 1PPS output 与 switch/Jetson 可采集硬件事件；
 - Jetson NIC PHC 与 CLOCK_REALTIME cross timestamp；
 - MID-360 time_type / time_offset / last_sync_time；
-- 同步采集 PTP packet capture（含 Announce/Sync/Follow_Up/Delay_Req/Delay_Resp 或 Pdelay 消息）。
+- 同步采集 PTP packet capture；当前 PTP v2.0 预期消息序列为 Sync/Follow_Up 与 E2E Delay_Req/Delay_Resp。Announce、Pdelay 或其它消息只有在目标固件/配置的抓包中实际观察到时才记录，不预设设备支持。
 
 **网络工程约束：**
 1. PTP VLAN 与相机 USB、控制器、普通 DDS 流量隔离；若 MID-360 PTP 与 LiDAR data 共用物理口/链路，必须测量高负载下队列拥塞与 timestamp jitter。
@@ -410,15 +411,106 @@ Microchip 官方将 LAN9668 标为量产中的 8-port TSN Gigabit Ethernet switc
 
 ### 13.5 新增测试合同 TIME-037..040
 
-- **TIME-037 — MID-360 PTP packet mode compatibility：** 通过 packet capture 和 MID-360 设备状态确认 UDP/IP multicast/unicast、Default Profile、E2E/P2P delay mechanism、one-step/two-step、VLAN tagged/untagged 行为；与 GM/交换机逐项匹配，未知项不得推断。
+- **TIME-037 — MID-360 PTP packet addressing/profile capture：** 在已知 IEEE 1588v2.0 UDP/IP、two-step、E2E Delay_Req/Delay_Resp 的前提下，通过 packet capture 与设备状态确认 PTP 报文实际 multicast/unicast、源/目的地址与端口、domain/profile、Announce/Sync/Delay interval、VLAN tag/PCP/TTL；逐项对照 GM/交换机，禁止用点云/IMU 的 UDP 地址模式代替 PTP 报文证据。
 - **TIME-038 — Switch forwarding/TC/BC 对比：** 同一 GM、同一端点、同一线缆，分别使用普通转发、E2E TC、BC；在空载/高负载/链路速率变化时测端到端 offset、jitter、residence correction、收敛时间；明确每 hop 误差。
 - **TIME-039 — VLAN、SFP 与路径不对称：** 对铜/光 SFP、链路长度、VLAN tag、交换机端口/速率、单向路径差、REP/冗余路径切换做对照；所有路径变化均记录 GM/servo/generation，不能用平均 offset 掩盖方向性误差。
 - **TIME-040 — Jetson PHC 与 PTP path qualification：** 对实际载板每个 NIC 记录 ethtool -T、驱动/固件、PHC index、ptp4l 状态、phc2sys 方向、offset/path delay、cross timestamp、IRQ/CPU 负载、EEE 与 link flap；硬件 timestamp 不存在或不稳定则该接口不通过 PTP 高精度 Gate。
 
 ## 14. PTP 网络器件初步结论
 
-- **不批准任何交换机采购。** Cisco IE3x00 系列具有明确工业 PTP 角色与限制，可进入设备级兼容验证；其 multicast-only、Default/Power profile 对 delay mechanism 的约束必须与 MID-360 真实协议行为逐项匹配。
+- **不批准任何交换机采购。** 已确认 MID-360 的 PTP v2.0 是 UDP/IP、two-step、E2E Delay_Req/Delay_Resp；Cisco Default Profile + E2E 可以进入兼容验证，但前提是实测确认 PTP 报文的 multicast 寻址及其它 profile/domain/VLAN 参数。Cisco Power Profile 的 peer_delay 不匹配当前 MID-360 PTP 路径。
 - **LAN9668/EVB-LAN9668** 可作为可编程/可观测的实验台架候选，用于 TC/BC 与硬件 timestamp 研究；不是现成量产交换机定案。
-- 下一步先获取 MID-360 PTP 实际报文与 profile/transport contract，再决定 Cisco 默认 profile/TC 或 LAN9668 台架路线；不能反过来用交换机功能定义传感器同步协议。
+- Livox 要求单一 master clock；任何冗余均应先采用单活主时钟与受控切换方案，并在设备端验证切换瞬态、失锁、自动 fallback 与重锁。不可部署两个互相竞争的 active GM。
+- 下一步围绕实际 MID-360 packet capture、Jetson 目标载板 PHC 运行状态与 HMS 告警建立同步健康门控；不能反过来用交换机功能定义传感器同步协议。
 
 未采购设备；未修改生产代码；未接线；未运行构建、测试、仿真或实机测试。
+
+## 15. MID-360 PTP 报文合同、设备诊断与 Jetson PHC 实际可用性审计（2026-11-25）
+
+### 15.1 MID-360 PTP v2.0 已确认的报文/时钟角色
+
+Livox 官方 MID-360 时间同步说明与通信协议共同确认：
+
+1. **PTP v2.0 路径：** IEEE 1588v2.0 over UDP/IP；MID-360 是 PTP Slave，网络中由一个 PTP Master 提供参考时间。
+2. **同步报文：** 采用 two-step Sync/Follow_Up；设备使用 E2E Delay_Req/Delay_Resp 测量路径延迟，并通过四时间戳 t1/t2/t3/t4 计算 offset/delay。不能把 P2P Peer_Delay / Pdelay 当作该路径的默认机制。
+3. **版本边界：** MID-360 不支持 IEEE 1588v2.1。PTP v2.0 与 gPTP 同时存在时，官方明确不建议在同一应用场景混用。
+4. **主时钟边界：** Livox 官方说明多 master clock 环境不受支持。工程上应维护单一活动 GM；冗余必须通过受控 active/standby 切换实现，并且需在 MID-360 端验证切换时的 step、失锁、fallback 和重锁行为。
+5. **gPTP 是另一条独立模式：** 基于 IEEE 802.1AS/Ethernet Layer 2，Livox 文档描述了不同于 PTP v2.0 的消息/BMCA行为。设备状态接口无法区分 PTP 与 gPTP；不可只凭设备 time_type=1 判定当前网络跑的是哪一种协议。
+6. **时间源优先级：** PTP 优先于 GPS；二者同时可用时优先使用 PTP。公开说明并未完整保证断开 PTP 后自动切换到 GPS 的具体时刻、相位连续性或恢复策略，必须故障注入验证。
+
+**当前仍未从公开资料锁定的 PTP 网络字段：** PTP event/general 报文的源/目的 IP、multicast 或 unicast、UDP 319/320 实际使用情况、domain number、profile、VLAN tag/PCP、TTL、Announce/Sync/Delay interval、GM identity 和设备固件/配置依赖。以上不得从点云/IMU 数据流推断，也不得仅根据交换机能力猜定。
+
+### 15.2 传感器数据流与 PTP 控制流必须分开核验
+
+MID-360 通信协议将点云、IMU、命令和日志列为不同 UDP 数据端口。点云与 IMU 数据流默认使用 UDP Unicast，且数据流可以配置 Multicast；控制/日志接口也有各自的传输约定。这些端口说明的是 Livox 数据/控制数据面，并不声明 IEEE 1588 PTP event/general message 的地址、端口或 multicast 行为。
+
+因此，Cisco Catalyst IE 系列的 multicast-only 限制不能通过“点云默认 Unicast”直接判为不兼容，也不能通过“点云可 Multicast”直接判为兼容。必须在交换机与 MID-360 之间抓取真正的 PTPv2 报文，并将 packet capture 与设备配置/状态、GM 侧报文关联。
+
+### 15.3 设备端同步状态与 HMS 故障诊断
+
+MID-360 提供的诊断字段可组成可观察性链：
+
+| 字段 | 已知语义 | 项目使用约束 |
+|---|---|---|
+| **time_sync_type** | 0=未同步；1=IEEE 1588v2.0 PTP；2=GPS | 作为所选同步机制状态，不单独证明精度/锁定健康 |
+| **last_sync_time** | 最近同步时间；PTP 路径下对应 Follow_Up 携带的时间信息，GPS 路径下对应 PPS 上升沿 | 关联时间源、报文序号和设备启动 generation |
+| **time_offset** | t0 - t1，t0 为设备本地时刻，t1 为同步源时刻，单位 ns | 正值表示设备本地钟领先于 master；必须与采集时刻及来源状态一起解释 |
+| **local_time_now** | 设备本地当前时间 | 仅作设备时钟观测，不能当作 UTC/GPST |
+| **powerup_cnt** | 上电计数 | 用于识别设备重启/时钟 generation 变化 |
+| **lidar_diag_status** bit 12–15 | 通信模块（含时间同步）诊断位 | 用作粗粒度健康信号，需配合 HMS 明细 |
+
+MID-360 HMS 公开诊断码中与时间同步直接相关的项目包括：
+- **0x0402**：PTP 时间同步停止或时间间隔过大；
+- **0x0403**：PTP 版本错误，设备不支持 IEEE 1588v2.1；
+- **0x0405**：时间同步异常；
+- **0x0406**：时间同步精度偏低；
+- **0x040A**：同时检测到 PTP 与 gPTP 信号，应只使用一种。
+PPS/GPS 诊断还包括 **0x0404**、**0x0407**、**0x0408**、**0x0409**。采集时必须保留 HMS 原始码、severity/level、时间和设备 generation，不能仅把码值汇总成一个布尔量。
+
+**建议项目健康状态映射（设计，不是已实现行为）：**
+- **LOCKED**：时间源类型符合配置；持续观察到有效 two-step/E2E PTP 交互；time_offset 与独立参考误差预算相符；没有 0x0402/0403/0405/0406/040A 等活动告警。
+- **DEGRADED**：offset 超出正常阈值但在暂定降级范围内，或出现可恢复的低精度/链路告警；停止宣称高精度同步，并增加 uncertainty。
+- **LOST/INVALID**：PTP 交换停止、版本不匹配、PTP 与 gPTP 并存、设备重启后 generation 未重新建立、时间源类型与配置不一致；禁止把本地时间当作全局绝对时间继续输入定位 deskew。
+- **HOLDOVER**：只有实际测得设备/GM 在失去网络/参考后保持的时间漂移及有效期，才允许定义；不能把“仍在输出点云”或“时间戳单调递增”当成 holdover 证据。
+
+健康判定需联合 PTP packet capture、time_sync_type、last_sync_time、time_offset、powerup_cnt、HMS 与点云 timestamp；timestamp_type=1 或存在时间戳只说明数据采用某种时间基准，不代表满足本项目精度门限。
+
+### 15.4 Jetson AGX Orin PHC：区分芯片能力、载板能力与可运行性
+
+NVIDIA Jetson AGX Orin 平台资料说明 MGBE/RGMII 接口受模块、UPHY lane 分配、PHY 与载板实现影响；P3737 Developer Kit carrier 是官方验证的一种实现。采用第三方载板时必须核验 device tree、PHY driver/firmware、端口映射与时钟能力，不能将 P3737 的结论外推。
+
+公开开发者论坛报告分别呈现了不同套件/接口环境：
+- 一份 AGX Orin 32GB Developer Kit 记录显示网卡 ethtool -T 暴露 hardware TX/RX timestamp 与 PHC 0；这是特定板卡/驱动的社区实测，不是对所有 Orin 网口的保证。
+- 一份 AGX Orin 64GB Developer Kit 报告也展示了 PHC 能力字段，但其 ptp4l TX timestamp polling 出现 timeout，测试者报告部分硬件时间戳结果异常。该贴是单一环境的故障报告，不能推导为 64GB 平台普遍缺陷；它说明 ethtool -T 声明能力不等于 PTP 实际可运行。
+
+LinuxPTP 的 ptp4l 支持 OC/BC/TC；LinuxPTP 文档给出的配置语义中，E2E 是默认 delay mechanism，UDPv4 是常用传输，twoStepFlag=1 表示 two-step，硬件 timestamping 需要 NIC/driver/PHC 真正可用。结合 MID-360 的已确认协议，**UDPv4 + E2E + two-step + hardware timestamp** 可作为 Orin 端 PTP v2.0 的实验起始配置，但不是已经验证的最终配置。仍需确认 domain、GM identity/priority、PTP 地址、VLAN、announce/sync interval 和 ptp4l port role。
+
+目标平台的逐接口验收必须记录：
+1. 模块/载板型号与 revision、JetPack/L4T、Linux kernel、PHY 型号与固件、实际网口名和 driver；
+2. ethtool -T 全量能力、/dev/ptpN、PHC index 与 NIC 接口映射；
+3. 实际 Sync/Follow_Up/Delay_Req/Delay_Resp 硬件 TX/RX timestamp 是否持续成功，不能只有 ethtool 声明；
+4. ptp4l 的 port state、GM identity、domain、offset、mean path delay、servo state 与 log；分别在空载/点云满负载/ROS DDS 高负载下观察；
+5. phc2sys 的方向与 source/destination，建立 PHC→CLOCK_REALTIME 映射；测量 cross timestamp 和 host system clock offset，禁止把 PHC 与系统时钟当同一时钟；
+6. link flap、switch reboot、Jetson reboot、GM outage、PHC reset、主从切换后的 generation、重锁和时间 step。
+
+NVIDIA 官方平台资料证明的是平台接口与载板支持边界；论坛帖子只提供特定实测案例。当前未在本项目实际 64GB 目标开发套件、最终网口或未来定制载板上运行 ethtool / ptp4l / phc2sys，因此目标接口状态仍为 **需要实物/授权，未完成**。
+
+### 15.5 新增验证合同 TIME-041..046
+
+- **TIME-041 — MID-360 PTP transport/address capture：** 抓取真实 PTP event/general packets，确认源/目的 IP、UDP 端口、multicast/unicast、domain/profile、VLAN/PCP/TTL、消息间隔与 GM identity；将抓包与 firmware/config/设备状态一起归档。
+- **TIME-042 — E2E two-step message conformance：** 在 GM、交换机和 MID-360 三端验证 Sync/Follow_Up 与 Delay_Req/Delay_Resp 时序、t1/t2/t3/t4、时间戳完整性和 offset；拒绝把 Pdelay/P2P 作为默认合同，除非正式设备资料/实测证明目标固件采用另一模式。
+- **TIME-043 — MID-360 HMS/time-state health gate：** 联合解析 time_sync_type、last_sync_time、time_offset、powerup_cnt、lidar_diag_status 和 HMS 0x0402/0403/0405/0406/040A；注入 PTP 停止、版本不匹配、双协议并存、低精度和设备重启，验证 LOCKED→DEGRADED/LOST/INVALID 的门控。
+- **TIME-044 — PTP/GPS priority and failure transition：** 同时接入合规 PTP 与 GPS/PPS，验证 PTP 优先级、PTP master 消失后的实际 fallback、恢复时 phase step、generation 更新和重锁；确认单活动 master，不预设无缝切换。
+- **TIME-045 — Orin NIC PHC operational qualification：** 对目标 P3701/P3737 64GB Developer Kit 或正式载板的每个目标接口核验 ethtool -T、driver/PHY、PHC device/index，并证明 PTP event messages 的硬件 TX/RX timestamps 和 ptp4l slave servo 连续工作。
+- **TIME-046 — PHC↔system clock and network stress：** 验证 phc2sys 方向、PHC→CLOCK_REALTIME cross timestamp、offset/drift、点云/DDS 高负载、IRQ/CPU、EEE、链路 flap、交换机/GM 重启和重新锁定；为每个 generation 记录误差分布与失效窗口。
+
+### 15.6 来源与证据边界
+
+1. Livox-SDK 官方 Wiki，MID-360 Ethernet Communication Protocol：<https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md>。
+2. Livox-SDK 官方 Wiki，Time Synchronization：<https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/common/time_sync.rst>。
+3. Livox-SDK 官方 Wiki，MID-360 HMS Error Codes：<https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/hms_code_mid360.rst>。
+4. LinuxPTP ptp4l documentation 与 default configuration：<https://www.linuxptp.org/documentation/ptp4l/>；<https://www.linuxptp.org/documentation/default/>。
+5. NVIDIA Jetson AGX Orin series platform bring-up：<https://docs.nvidia.com/jetson/archives/r39.2.2/DeveloperGuide/HR/JetsonModuleAdaptationAndBringUp/JetsonAgxOrinSeries.html>。
+6. NVIDIA Developer Forum, AGX Orin 32GB hardware timestamp report：<https://forums.developer.nvidia.com/t/does-the-jetson-agx-orin-32gb-support-hardware-timestamping-for-ptp/337720>；AGX Orin 64GB ptp4l TX timestamp timeout report：<https://forums.developer.nvidia.com/t/jetson-agx-orin-64gb-ptp4l-service-timed-out-while-polling-for-tx-timestamp/316653>。
+
+本轮 Web 访问日期为 2026-11-25。Livox Wiki 源链接当前使用 master，本次未建立不可变 commit pin，后续必须保存源码 commit SHA/文件快照或供应商协议版本号。本节是上游规格与公开案例审计，不是目标板或网络实测；无设备抓包、无目标 Jetson 命令输出、无代码实现、无构建/测试/仿真/实机验证。
