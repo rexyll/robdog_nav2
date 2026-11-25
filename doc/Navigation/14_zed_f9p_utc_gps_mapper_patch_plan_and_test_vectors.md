@@ -221,6 +221,27 @@ GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。GPS-001 是纯�
 | VALID-009 | valid_wkn=false but UTC anchor otherwise valid | do not infer week from flag; derive week only from validated UTC+LS and mark flag discrepancy per policy |
 | VALID-010 | NAV-STATUS tow_set/wkn_set false | do not treat iTOW/week status as valid; absolute UTC policy decides separately, but no protocol consistency claim |
 
+### 4.8 NAV-TIMEUTC valid-byte masks
+
+R07 defines the NAV-TIMEUTC payload byte 19 as:
+- bit 0 / `0x01`: `validTOW`
+- bit 1 / `0x02`: `validWKN`
+- bit 2 / `0x04`: `validUTC`
+- bit 3 / `0x08`: reserved
+- bits 7..4 / `0xF0`: `utcStandard` (upper nibble)
+
+Required independent mask vectors:
+- `TIMEUTC-FLAGS-001`: byte=0x00 → no validity flags, utcStandard=0.
+- `TIMEUTC-FLAGS-002`: byte=0x01 → validTOW only.
+- `TIMEUTC-FLAGS-003`: byte=0x02 → validWKN only.
+- `TIMEUTC-FLAGS-004`: byte=0x04 → validUTC only.
+- `TIMEUTC-FLAGS-005`: byte=0x08 → reserved bit set; parser preserves/reports reserved-bit violation per strictness policy, never treats it as validUTC.
+- `TIMEUTC-FLAGS-006`: byte=0x20 → utcStandard=2 (NIST), no validity flags.
+- `TIMEUTC-FLAGS-007`: byte=0xF4 → utcStandard=15 (unknown), validUTC=true; semantic policy must still reject unknown standard.
+- `TIMEUTC-FLAGS-008`: byte=0x74 → utcStandard=7 (NTSC), validUTC=true, validWKN=false, validTOW=false.
+
+The bitfield decoder must preserve the raw byte and decode validity independently from the UTC-standard nibble. Whether a standard is accepted belongs to policy, not byte parsing.
+
 ### 4.7 Parser byte-level vectors still required
 
 Before driver implementation, add byte-array fixtures copied from protocol field layout and independently reviewed:
