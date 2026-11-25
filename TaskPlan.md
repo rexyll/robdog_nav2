@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.86
+- 文档版本：v0.3.87
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -248,16 +248,19 @@
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. 严格在 `nav` 分支执行 N0→N9：N0 范围/架构/术语/证据基线已冻结；N1 已完成 Nav2 主任务链首轮源码审计（NavigateToPose→BT→ComputePathToPose/Planner→FollowPath/Controller→Smoother→Collision Monitor），继续追踪 Costmap 观测源和非 Nav2 上下游接口；Nav2 的完整内部深研仍归 N6。
-2. N1 将系统级 Producer/Consumer 清单细化为源码/消息定义可验证的接口矩阵，优先检查传感器→定位/感知→地图/Costmap→规划→命令仲裁→四足执行反馈，避免只研究孤立软件包。
-3. 并行保留原硬件 Gate：推进 ZED-F9P ROS adapter/UBX 时钟与质量 gate、Lite3 正式 odometry/运动接口/急停/SDK 权限确认、双目同步/镜头/USB 带宽、载荷/供电/热设计。
-4. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
-5. 保持 x86_64、通用 ARM64 build、Jetson Orin 实机 build、仿真、真实 bag 回放、HIL、真实机器狗验证分级；不得混称。
-6. N9 专项验收前不回 main、不合并本专项成果；完成后先做差异/风险/CI/回归审查，再形成回 main 的提案。
+1. 本轮新增双 EKF/重置审计后，先完成 N1 定位输出有效性与 ROS adapter 契约矩阵：将 Point-LIO health epoch、local/global EKF reset coordinator、GNSS receiver generation、TF age 和 Nav2 pose-consumer Gate 串成可测试状态机；仅做设计/源码证据，未具备数据前不冻结超时阈值。
+2. 严格在 `nav` 分支执行 N0→N9：N0 范围/架构/术语/证据基线已冻结；N1 已完成 Nav2 主任务链首轮源码审计（NavigateToPose→BT→ComputePathToPose/Planner→FollowPath/Controller→Smoother→Collision Monitor），继续追踪 Costmap 观测源和非 Nav2 上下游接口；Nav2 的完整内部深研仍归 N6。
+3. N1 将系统级 Producer/Consumer 清单细化为源码/消息定义可验证的接口矩阵，优先检查传感器→定位/感知→地图/Costmap→规划→命令仲裁→四足执行反馈，避免只研究孤立软件包。
+4. 并行保留原硬件 Gate：推进 ZED-F9P ROS adapter/UBX 时钟与质量 gate、Lite3 正式 odometry/运动接口/急停/SDK 权限确认、双目同步/镜头/USB 带宽、载荷/供电/热设计。
+5. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
+6. 保持 x86_64、通用 ARM64 build、Jetson Orin 实机 build、仿真、真实 bag 回放、HIL、真实机器狗验证分级；不得混称。
+7. N9 专项验收前不回 main、不合并本专项成果；完成后先做差异/风险/CI/回归审查，再形成回 main 的提案。
 
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.87：继续固定 robot_localization Jazzy `fea7fc3...` 源码，追踪双 EKF TF 生成与 reset 实现。确认 `world_frame=odom` 直接发布 `odom→base_link`；`world_frame=map` 需在同一时间查询 local `odom→base_link`，再计算 `map→odom`，global EKF 不应与 local EKF争抢同一 TF。显式 reset 清理本实例 measurement queue/history、TF buffer、per-topic timestamps 和 filter state，但不协调另一个 EKF、LIO/GNSS epoch 或 Nav2 状态。`reset_on_time_jump` 参数虽声明，回调 reset 分支仍注释；重复 stamp 可接受、旧 stamp 丢弃。发现 `validateFilterOutput()` 检出 NaN 后当前周期仍未通过该返回值阻止发布，且 sensor-timeout prediction 的输出 stamp 不能证明有新传感器观测。核对 `robodog_gnss_quality` package metadata：仍是纯 ament_python core，无 ROS dependencies/entry point，license=UNSPECIFIED、maintainer email 为示例占位值；ROS adapter 前必须补齐可核验许可/维护者信息与实际驱动消息契约。追加 10 专题文档 §16–18。仅 E1/E2 固定源码与本仓库静态证据，无新增构建、bag 或硬件验证。
 
 - 2026-11-25 / v0.3.86：固定 Point-LIO 与 robot_localization Jazzy 源码继续审计 tracking health/reset/lagged data。Point-LIO `is_initialized_` 不代表 tracking valid；LiDAR/IMU 时间回退仅 log+return，队列未清理；`flg_reset` 在固定文件中未见置位，`ImuProcess::Reset()` 不重置 ESEKF/map/TF/时间 epoch。robot_localization 对每 topic 旧 stamp 丢弃、duplicate stamp 接受；跨 topic lag 可 history replay，但 history 不足时失败后仍继续处理；`sensor_timeout` 只预测不失效；`reset_on_time_jump` 当前仅声明且处理分支注释。确认项目已有 `robodog_gnss_quality` 纯算法 core 和 UBX 四路精确 iTOW joiner，缺 ROS adapter/time mapper/diagnostics/NavSatFix publisher。追加专题文档 §12–15，定义 health/reset contract 与新增验证 Gate。证据仅固定源码静态审计，未新增项目构建、bag 或硬件验证。
 - 2026-11-25 / v0.3.85：继续深入固定 Point-LIO vendored IKFoM MTK manifold，确认 SO(3) `boxplus/oplus` 使用右乘 `R·Exp(δθ)`，`boxminus` 使用 `Log(R_otherᵀ·R)`，旋转 covariance 因而处于右侧局部切空间；gravity S2 为 DOF=2、DIM=3，而 ESEKF covariance 使用 24 维 ambient 表达。结合 state field 顺序与 `P_init` block offsets，进一步固定 `kf_input` 的候选索引：position 0–2、rotation 3–5、LiDAR-IMU extrinsic rotation 6–8、translation 9–11、velocity 12–14、gyro bias 15–17、accel bias 18–20、gravity ambient block 21–23。明确 gravity covariance 必须按 S2 约束投影到当前切平面，不能直接当作普通三维向量 covariance；所有索引仍须以项目 adapter 编译期/运行期断言和单测最终验收。更新 10 专题文档；仅固定上游源码证据，不代表项目已实现或验证。
