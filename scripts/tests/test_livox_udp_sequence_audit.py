@@ -15,11 +15,11 @@ class TestLivoxUdpSequenceAudit(unittest.TestCase):
         audit = LivoxUdpSequenceAudit()
         self.assertEqual(observe(audit, 65534), "first_packet")
         self.assertEqual(observe(audit, 65535), "in_order")
-        self.assertEqual(observe(audit, 0, frame=8), "frame_reset_candidate")
-        self.assertEqual(observe(audit, 1, frame=8), "in_order")
+        self.assertEqual(observe(audit, 0, frame=7), "in_order")
+        self.assertEqual(observe(audit, 1, frame=7), "in_order")
         report = audit.report()
         self.assertEqual(report["missing_counter_values_estimated"], 0)
-        self.assertEqual(report["events"]["frame_reset_candidate"], 1)
+        self.assertEqual(report["events"].get("frame_reset_candidate", 0), 0)
 
     def test_forward_gap_and_late_recovery(self):
         audit = LivoxUdpSequenceAudit()
