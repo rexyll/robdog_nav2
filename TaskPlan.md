@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.69
+- 文档版本：v0.3.70
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -75,8 +75,8 @@
 
 > 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
 
-- [~] N0 研究基线与范围冻结：已创建 nav 分支；已将研究目标纠正为完整导航模块；已建立总体目录、系统架构与数据流框架。待补充术语表、组件责任矩阵、证据分级和研究基线版本锁定。
-- [ ] N1 端到端数据流与接口审计：逐条追踪 Producer/Consumer、Topic/Action/Service/TF、消息字段/单位/frame/stamp、QoS、频率、延迟、带宽、质量门控、超时、失效传播和执行反馈。
+- [x] N0 研究基线与范围冻结：已创建 nav 分支；研究目标已纠正为完整导航模块；已建立总体目录、系统架构与数据流框架、术语基线、证据等级和首轮上游仓库/commit 锚点。完成证据见 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md、02_subsystem_inventory_and_evidence_register.md。此状态仅表示研究范围/治理基线冻结，不代表各子系统源码研究完成。
+- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单和失效传播框架；正在逐项核验 ROS interface、源码调用、字段语义、单位/frame/stamp、QoS、频率、延迟、带宽、质量门控、超时和执行反馈。
 - [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
 - [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
 - [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
@@ -244,8 +244,8 @@
 - [ ] 时间同步方案已文档化；双目硬件触发、MID-360 PTP/内置 IMU 时钟、Lite3 UDP 时间戳、ZED-F9P PPS 均未测量。
 
 ### 下一步（按顺序执行）
-1. 严格在 `nav` 分支执行 N0→N9：先完成 N0 范围/架构/数据流基线，再按 `doc/Navigation/README.md` 顺序逐专题推进；Nav2 只在 N6 深研，不得把它当作整个导航模块。
-2. N1 优先建立可核验的全系统 Producer/Consumer 与接口矩阵，再进入单个算法/源码研究，避免只研究孤立软件包。
+1. 严格在 `nav` 分支执行 N0→N9：N0 范围/架构/术语/证据基线已冻结；当前推进 N1，按 `doc/Navigation/README.md` 顺序逐专题推进；Nav2 只在 N6 深研。
+2. N1 将系统级 Producer/Consumer 清单细化为源码/消息定义可验证的接口矩阵，优先检查传感器→定位/感知→地图/Costmap→规划→命令仲裁→四足执行反馈，避免只研究孤立软件包。
 3. 并行保留原硬件 Gate：推进 ZED-F9P ROS adapter/UBX 时钟与质量 gate、Lite3 正式 odometry/运动接口/急停/SDK 权限确认、双目同步/镜头/USB 带宽、载荷/供电/热设计。
 4. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
 5. 保持 x86_64、通用 ARM64 build、Jetson Orin 实机 build、仿真、真实 bag 回放、HIL、真实机器狗验证分级；不得混称。
@@ -255,7 +255,7 @@
 
 ## 4. 进度变更记录
 
-- 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。首轮提交：Nav2 README 042f4000；Navigation README 7234a0ae；架构文档 d4e862df；数据流文档 8db9087f；TaskPlan 本轮提交 a3dffc63（本次提交之后以仓库 HEAD 为准）。
+- 2026-11-25 / v0.3.69：用户纠正研究目标，正式将范围从“Nav2 专项”扩展为“完整机器人导航模块”；Nav2 明确降为 N6 子系统。固定专项纪律：研究/文档/代码/测试仅在 nav 分支开展，N9 验收前不合并 main。新增 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md；重写 doc/Nav2/README.md 明确其子系统定位。当前属于 N0 研究框架，尚未完成源码级深研、ROS 集成或硬件验证。首轮提交：Nav2 README 042f4000；Navigation README 7234a0ae；架构文档 d4e862df；数据流文档 8db9087f；TaskPlan 目标纠正 a3dffc63、回填 291ee40f；N0 上游基线/术语/证据登记 424317c3。
 
 - v0.1–v0.3.54：见 [TaskPlan-History-2026-11-24.md](docs/history/TaskPlan-History-2026-11-24.md)。
 - v0.3.55–v0.3.66 完整快照：见 [TaskPlan-Snapshot-v0.3.66-2026-11-25.md](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)。
@@ -320,6 +320,7 @@
 - [完整导航模块专项研究总目录](doc/Navigation/README.md)
 - [完整导航模块总体架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
 - [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
+- [导航子系统清单、上游基线与证据登记](doc/Navigation/02_subsystem_inventory_and_evidence_register.md)
 - [Nav2 子系统研究总目录](doc/Nav2/README.md)
 - [系统架构](docs/architecture/system_architecture.md)
 - [传感器融合](docs/architecture/sensor_fusion.md)
