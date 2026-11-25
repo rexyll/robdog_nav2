@@ -194,3 +194,7 @@
 - [09 §11 — MID-360 原始 UDP payload 严格解析器与合成测试合同](09_mid360_timestamp_and_point_lio_integration_audit.md#11-mid-360-原始-udp-payload-严格解析器协议-v1.4.12)
 - [MID-360 原始 UDP payload 解析器](../../scripts/livox_mid360_udp_parser.py)
 - [MID-360 原始 UDP payload 解析器单元测试](../../scripts/tests/test_livox_mid360_udp_parser.py)
+
+- [09 §12 — Classic PCAP / PCAPNG 容器读取、接口元数据与抓包时间语义](09_mid360_timestamp_and_point_lio_integration_audit.md#12-pcap--pcapng-容器读取器抓包时间与接口元数据)
+- [PCAP / PCAPNG 流式读取器](../../scripts/pcapng_reader.py)
+- [PCAP / PCAPNG 读取器单元测试](../../scripts/tests/test_pcapng_reader.py)
