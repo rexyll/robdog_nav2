@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.131
+- 文档版本：v0.3.132
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -288,7 +288,7 @@
 
 ## 4. 进度变更记录
 
-- 2026-11-25 / v0.3.131：新增 `tools/collect_ptp_host_inventory.sh`，作为 TIME-045/TIME-052 的只读目标机基线采集器；收集 JetPack/L4T、kernel、device-tree、NIC driver/firmware、ethtool timestamp capability、PHC/sysfs、linuxptp/ethtool 包版本、clock discipline services/processes、PTP 相关内核日志、IRQ/offload。脚本不改网卡、不操作 PTP daemon、不调系统时钟，输出目录 0700 并生成 SHA256SUMS；新增 `doc/Navigation/16` §17，定义执行方法、采集字段、平台/NIC/时钟纪律 Gate 和人工判读要求。已提交并回读；尚未在真实 Orin、CI 或容器执行 bash -n/shellcheck，故状态为待目标环境首次运行验证。N1 继续。
+- 2026-11-25 / v0.3.132：新增 doc/Navigation/16 §18，形成 GM/交换机/Orin/MID-360 三观察面 PTP 抓包矩阵、UDP 319/320 与 L2 0x88f7 宽过滤、TShark 本机字段枚举与逐包解码流程、sourcePortIdentity/domain/sequenceId 关联规则、Livox time_type/HMS 同 run_id 跨层核验，以及 pcap capture timestamp 与 NIC raw hardware timestamp 的证据隔离。新增 TIME-053..056。核对 Livox 官方 MID-360 two-step/E2E 机制、Wireshark PTP 当前字段表及 Linux kernel SO_TIMESTAMPING 文档。尚无项目设备 pcap；未在目标机运行 tshark，字段名需按目标版本枚举；未完成硬件验证，N1 继续。\n\n- 2026-11-25 / v0.3.131：新增 `tools/collect_ptp_host_inventory.sh`，作为 TIME-045/TIME-052 的只读目标机基线采集器；收集 JetPack/L4T、kernel、device-tree、NIC driver/firmware、ethtool timestamp capability、PHC/sysfs、linuxptp/ethtool 包版本、clock discipline services/processes、PTP 相关内核日志、IRQ/offload。脚本不改网卡、不操作 PTP daemon、不调系统时钟，输出目录 0700 并生成 SHA256SUMS；新增 `doc/Navigation/16` §17，定义执行方法、采集字段、平台/NIC/时钟纪律 Gate 和人工判读要求。已提交并回读；尚未在真实 Orin、CI 或容器执行 bash -n/shellcheck，故状态为待目标环境首次运行验证。N1 继续。
 
 
 - 2026-11-25 / v0.3.130：继续深化 `doc/Navigation/16` §16，将 LinuxPTP 从原则性建议推进为 Jetson 可执行 PTP client runbook。核对 LinuxPTP `ptp4l(8)`：Orin 应显式 `clientOnly=1`；UDPv4/E2E/hardware timestamp 可与 MID-360 已知 PTP v2.0 合同一致；LinuxPTP 的 `twoStepFlag` 是本机作为 server/GM 时的输出设置，不能强制或证明远端 GM 发送 two-step；`delay_mechanism Auto` 可能因 Pdelay 切换到 P2P，不适合作为 MID-360 当前合同。核对 `phc2sys(8)`：`-a` 随 ptp4l port state 自动选择方向，单次 `-r` 将 CLOCK_REALTIME 作为 sink；双 `-rr` 会允许 system clock 成为 source，不符合 Orin client-only 角色。补充 PTP timescale/PHC 与 UTC/CLOCK_REALTIME 的 offset 处理，禁止硬编码 `-O 0/37`；审计 chrony/systemd-timesyncd 的竞争式 system clock discipline。提供 ethtool/ptp4l/pmc/phc2sys/tcpdump 命令模板、启动 step/re-lock 和 mapping_generation 验收、TIME-047..052。Livox-SDK Wiki 固定至 commit `6b030b73a7fa1e035e44bf1b262d7a9cbebe0728`（2026-09-21），并回读确认 time_sync.rst、MID-360 protocol v1.4.12、HMS 三文件 blob SHA 与当前 master 一致。LinuxPTP 手册仍为滚动文档，目标 JetPack 安装版本未采集，必须在目标板记录 `ptp4l -v`/`phc2sys -v`。本轮只新增设计/runbook；未在目标 Orin 执行命令、未抓包、未构建/测试/仿真/实机验证，N1 继续进行。
