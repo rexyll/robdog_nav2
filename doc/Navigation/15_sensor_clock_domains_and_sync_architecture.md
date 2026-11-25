@@ -254,13 +254,78 @@ Generation 不一致的消息禁止进入同一个精确时间配对窗口。队
 4. 明确 stereo/LIO/VIO 算法误差预算，推导 TIME-010 等同步阈值。
 5. 实际接线后先做独立时钟/trigger 测量，再接入 ROS 2；不得直接进入全栈调参。
 
-## 11. 来源
+
+
+## 12. See3CAM_50CUG 彩色型号与 Jetson AGX Orin PTP 证据增量
+
+### 12.1 目标相机 SKU 与手册证据边界
+
+项目预选的精确型号是 See3CAM_50CUG_CXXCC_BX_H01R1（Color、无镜头、带 enclosure）。e-con 官方产品页将该 SKU 列在 See3CAM_50CUG 彩色型号变体中；同页说明该系列为 IMX264 5MP Global Shutter、USB 3.2 Gen 1，支持外部 Trigger，并列出 6-pin GPIO（I2C、Strobe、Trigger）。产品页同时列出 Color 版本的 Datasheet、Getting Started Manual 和 Extension Unit SDK API Manual 下载入口。
+
+但是本轮实际可读取的完整电气 Datasheet 是 See3CAM_50CUGM（Monochrome）Revision 1.1，2023-03-28，且其机械型号表包含 H02R1。它不是项目预选的 Color H01R1。该单色手册只可作为同系列 GPIO 设计参考，**不能把其中的电气阈值/针脚细节当作 Color H01R1 的正式额定值**。
+
+单色手册中可读到的参考参数（仅限 50CUGM，不可直接用于彩色 SKU）：
+- Trigger 输入：VIL 0–0.63 V；VIH 最低 1.17 V。
+- Strobe 输出：VOL 最大 0.4 V；VOH 最低 1.4 V。
+- GPIO 推荐输入电压 1.8 V；绝对最大 DC 输入 3.6 V。
+- GPIO 表列 CN6 pin 1 TRIG、pin 5 STROBE、pin 6 GND；TRIG 描述为 1.8 V external trigger input，STROBE 描述为 1.8 V sensor strobe output。
+
+上述数据表明即使同系列单色型号也不是可随意接收 3.3 V/5 V 的通用 GPIO。由于彩色型号电气手册尚未取得，禁止据此设计或接线。**在拿到 Color H01R1 对应 revision 的正式 datasheet 前，不得连接 F9P PPS、Jetson GPIO 或第三方 trigger fanout 到相机。**
+
+### 12.2 软件触发与连续视频边界
+
+e-con 产品页 FAQ 对 software trigger 的描述是：相机进入该模式后，在通过 HID interface 收到触发命令前不会 stream frames，且可控制捕获帧数。该模式是命令驱动的 capture 行为，不等价于可持续运行的双相机硬件外触发同步流。
+
+因此：
+- 软件 trigger 仅作为单帧/有限帧控制功能单独评估；
+- 不得把软件 trigger 当作高动态 stereo/VIO 的连续同步机制；
+- 产品页列出 external trigger 只证明产品系列提供该能力入口，不证明两台目标 H01R1 在目标固件/SDK 下可连续同步曝光；
+- 必须从 Color H01R1 Datasheet + Getting Started Manual + Extension Unit SDK API Manual 核实 trigger mode、continuous stream 行为、曝光相位、strobe 与曝光窗口关系、触发延迟/jitter、帧率上限和双机使用限制；
+- 对 e-con 提出书面问题：两台相同 H01R1 是否可由同一硬件脉冲持续触发；sensor exposure start 的左右偏差最大值/典型值；是否有 exposure active strobe；strobe 极性、输出驱动、电气时序；trigger 最小脉宽/周期、输入阈值和最大频率；是否需要 SDK/XU 固件配置。
+
+### 12.3 Jetson AGX Orin 的 PTP 硬件时间戳能力
+
+NVIDIA 官方 Developer Guide 对 AGX Orin 平台说明：系列可配置最多一个 MGBE (XFI) 与一个 RGMII 端口；P3737 carrier board 设计并验证了一个 MGBE 端口；自定义 carrier 的接口启用和 PHY 配置需要单独适配。NVIDIA 开发者论坛中 AGX Orin 32GB Developer Kit 用户给出 ethtool -T 结果，显示 hardware-transmit、hardware-receive、hardware-raw-clock 和 PTP Hardware Clock: 0；另一 AGX Orin Developer Kit 讨论也展示 eth1 对应 PHC 0 的硬件时间戳能力。NVIDIA 论坛工程人员确认 AGX Orin MGBE 路径支持硬件 PTP；Orin NX/Nano 的第三方 PCIe Ethernet 路径不应假设具备相同支持。
+
+据此更新架构判断：
+- 方案 A（GNSS-disciplined PTP GM）在 Jetson AGX Orin Developer Kit 上具备可行的公开硬件证据，不再是完全未知项；
+- 但证据不能替代本项目目标板实测，尤其不能外推到任意第三方载板、外接 USB/PCIe 网卡或不同 Ethernet interface；
+- 需要在目标板上逐个接口执行 ethtool -T <iface>，记录 interface driver、carrier board ID、JetPack/L4T、kernel、PHY、/dev/ptpN 绑定关系，并用 ptp4l 确认端口进入 SLAVE/MASTER/UNCALIBRATED 等正确状态；
+- phc2sys 应按 ptp4l 的 PHC 设备关系配置；不可简单把 interface 名当作 /dev/ptpN 参数使用，须核对本机 linuxptp 版本的参数语义和 -w/-s/-c 方向；
+- 需测量 PHC↔CLOCK_REALTIME cross timestamp、GM 切换、link flap、PHC reset 和 holdover；仅 ethtool -T 显示能力不等于 PTP servo 已锁定，更不等于 MID-360 与 Jetson 的端到端偏差达到算法预算。
+
+NVIDIA Jetson Linux 还提供 HTE（Hardware Timestamp Engine）文档，说明可对部分 LIC IRQ 和 AON GPIO 状态变化进行硬件时间戳采集。该能力可作为“相机 Strobe 回采”的候选诊断路径，但目标引脚是否为可用 AON GPIO、pinmux/HTE 驱动是否启用、外部电压兼容性、timestamp clock domain 和中断延迟均需目标板实测；不能把 HTE 视为自动可用的相机曝光时间戳接口。
+
+### 12.4 新增验收合同
+
+| ID | 测试 | 方法/通过条件 |
+|---|---|---|
+| TIME-017 | Color H01R1 电气合同 | 获取与 See3CAM_50CUG_CXXCC_BX_H01R1 硬件 revision 匹配的正式 datasheet；核实 Trigger/Strobe pinout、VIL/VIH、VOH/VOL、绝对最大额定值、输入脉宽/频率、驱动能力；未取得时禁止接线 |
+| TIME-018 | Color H01R1 双机连续触发 | 使用两台同 SKU/固件，验证硬件 trigger continuous stream、左右 exposure active/strobe 相位差、触发到曝光延迟/jitter、丢脉冲/恢复和 USB 负载；用外部逻辑分析仪/时间采集器测量，不以 USB arrival time 代替曝光时间 |
+| TIME-019 | AGX Orin PHC 绑定 | 目标载板逐接口记录 ethtool -T、driver、/dev/ptpN、carrier EEPROM/JetPack/L4T；验证 PHC 与网口映射和硬件 TX/RX timestamp |
+| TIME-020 | AGX Orin PTP servo 与故障 | 对照 GM identity/domain、ptp4l port state、offset/path delay、phc2sys 方向及 PHC↔system cross timestamp；注入 GM/link/PHC reset，验证 generation 变化和恢复 |
+| TIME-021 | HTE Strobe 回采可行性 | 确认目标 pin 的 AON GPIO/HTE 支持、pinmux、电压与输入保护；对相机 Strobe 与外部基准同时采集，测量硬件 timestamp 与 trigger/exposure 的关系；无实测不作为生产时间源 |
+
+## 13. 本轮结论修订
+
+1. **相机：** Color H01R1 产品级 external trigger/GPIO 能力已由 e-con 官方产品页确认；对应彩色型号电气 datasheet 和完整 trigger/stream API 尚未读取。50CUGM 单色 datasheet 仅作为系列参考，参数不得迁移到 Color H01R1。
+2. **Jetson：** AGX Orin Developer Kit 的 MGBE/PHC 硬件 PTP 有 NVIDIA 平台文档与官方论坛实测支持，方案 A 获得正向可行性证据；自定义 carrier/实际网口/软件版本仍必须验收。
+3. **双机同步：** 未证明连续双机 exposure synchronization，当前仍为 CAPABILITY_LISTED / CONTINUOUS_STEREO_SYNC_UNVERIFIED。
+4. **实现边界：** 不接线、不实现驱动、不宣称 PTP lock，不执行硬件测试；等待确切彩色相机手册与目标计算板硬件信息。
+
+
+## 14. 来源
 - ROS 2 Clock and Time design：https://design.ros2.org/articles/clock_and_time.html
 - Linux PTP Hardware Clock infrastructure：https://docs.kernel.org/driver-api/ptp.html
 - Linux socket timestamping：https://docs.kernel.org/networking/timestamping.html
 - chrony chrony.conf(5)：https://chrony-project.org/doc/latest/chrony.conf.html
 - Livox MID-360 Communication Protocol：https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html
 - Livox Time Synchronization Instructions：https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/common/time_sync.html
-- e-con See3CAM_50CUG official product page：https://www.e-consystems.com/sony-imx264-camera.asp
+- e-con See3CAM_50CUG Color/Monochrome product page and SKU/manual listing：https://www.e-consystems.com/sony-imx264-camera.asp
+- e-con See3CAM_50CUGM Monochrome Datasheet Rev 1.1 (series reference only; not Color H01R1)：https://www.e-consystems.com/Downloads/See3CAM_50CUGM/e-con_See3CAM_50CUGM_Datasheet.pdf
+- NVIDIA Jetson AGX Orin Platform Adaptation and Bring-Up：https://docs.nvidia.com/jetson/archives/r39.2.2/DeveloperGuide/HR/JetsonModuleAdaptationAndBringUp/JetsonAgxOrinSeries.html
+- NVIDIA Jetson Linux Hardware Timestamp Engine (HTE)：https://docs.nvidia.com/jetson/archives/r38.4/DeveloperGuide/SD/Kernel/GenericTimestampEngine.html
+- NVIDIA Developer Forum — AGX Orin 32GB ethtool -T PHC evidence：https://forums.developer.nvidia.com/t/does-the-jetson-agx-orin-32gb-support-hardware-timestamping-for-ptp/337720
+- NVIDIA Developer Forum — AGX Orin Developer Kit PTP/PHC interface evidence：https://forums.developer.nvidia.com/t/tsc-edge-out-functionality-on-jetson-agx-orin-developer-kit/335812
 
 未修改生产代码；未运行构建、单元测试、仿真或实机测试。
