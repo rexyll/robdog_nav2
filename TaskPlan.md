@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.75
+- 文档版本：v0.3.76
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -76,7 +76,7 @@
 > 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
 
 - [x] N0 研究基线与范围冻结：已创建 nav 分支；研究目标已纠正为完整导航模块；已建立总体目录、系统架构与数据流框架、术语基线、证据等级和首轮上游仓库/commit 锚点。完成证据见 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md、02_subsystem_inventory_and_evidence_register.md。此状态仅表示研究范围/治理基线冻结，不代表各子系统源码研究完成。
-- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单、失效传播框架和 ROS 2 Jazzy 核心消息/action 契约；新增 Nav2 bringup→Controller/Behavior→Velocity Smoother→Collision Monitor 命令链源码审计（固定 navigation2 commit c7046550547d382a5186d106b0895eda02485d7c），核实 navigation_launch 生命周期节点、cmd_vel_nav/cmd_vel_smoothed/cmd_vel remap、Controller Server FollowPath/action 与 odom/TF 依赖、Velocity Smoother OPEN_LOOP/CLOSED_LOOP 和超时参数、Collision Monitor source timeout→STOP 逻辑。新增 doc/Navigation/04_nav2_bringup_interface_audit.md（commit 4298dd67）。进一步核验 NavigateToPose navigator、goal_pose 订阅、默认 BT XML、ComputePathToPose/FollowPath BT action client、PlannerServer 两个规划 action、Global/Local Costmap2DROS 与独立 NodeThread；BT FollowPath 可在运行中检测 blackboard path/plugin ID 变化并更新 action goal。新增审计细节见 doc/Navigation/04_nav2_bringup_interface_audit.md（追加提交 f9d42d4a）。仍未完成完整 BT XML recovery/preemption 路径、Costmap 真实观测链、各节点运行时 QoS/频率/延迟、PointCloud2 source 接入及 Lite3 执行反馈核验；当前证据仅 E1/E2。
+- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单、失效传播框架和 ROS 2 Jazzy 核心消息/action 契约；完成 Nav2 bringup→Controller/Behavior→Velocity Smoother→Collision Monitor 命令链与 NavigateToPose→BT→Planner/Controller action 链源码审计，详见 doc/Navigation/04_nav2_bringup_interface_audit.md（提交 4298dd67、f9d42d4a）。本轮新增 Costmap 观测输入审计 doc/Navigation/05_sensor_to_costmap_observation_audit.md（提交 834136a2）：核实 ObstacleLayer 原生支持 PointCloud2（仅 LaserScan/PointCloud2），使用 x/y/z float iterator；TF MessageFilter 与 sensor-data QoS depth 50；marking/clearing 分离；height/range 过滤；ObservationBuffer 的 expected_update_rate=0 不做 stale 检查；VoxelLayer 是有限 z_voxels 的二维代价投影，不是完整地形图。确认 Nav2 默认 YAML 的 local VoxelLayer、global ObstacleLayer 和 Collision Monitor 仍配置 LaserScan /scan，没有直接接入 MID-360 或双目 PointCloud2。仍未完成 Costmap2DROS update loop/current 状态传播、完整 BT recovery/preemption、运行时 QoS/频率/延迟、项目 PointCloud2 adapter/真实数据接入、Lite3 执行反馈；当前证据仅 E1/E2。
 - [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
 - [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
 - [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
@@ -255,6 +255,8 @@
 
 ## 4. 进度变更记录
 
+- 2026-11-25 / v0.3.76：继续 N1，固定 Navigation2 Jazzy commit c7046550547d382a5186d106b0895eda02485d7c，审计 ObstacleLayer/VoxelLayer/ObservationBuffer：确认 PointCloud2 原生输入、x/y/z 字段读取、TF MessageFilter、sensor-data QoS depth 50、marking/clearing、height/range filtering；确认 expected_update_rate=0 时 ObservationBuffer 不检查 stale；VoxelLayer 有限 z_voxels 最终仍投影为二维 Costmap；默认 YAML 的 local/global Costmap 和 Collision Monitor 仍使用 LaserScan /scan。新增 doc/Navigation/05_sensor_to_costmap_observation_audit.md，提交 834136a2。结论仅为 E1/E2 源码审计，不代表 MID-360/双目接入或运行验收。
+
 - 2026-11-25 / v0.3.75：继续 N1，固定 Navigation2 Jazzy commit c7046550547d382a5186d106b0895eda02485d7c，源码追踪 NavigateToPoseNavigator、goal_pose 订阅、BT XML 选择、ComputePathToPose/FollowPath BT action client、PlannerServer 的 compute_path_to_pose/compute_path_through_poses action server、Global/Local Costmap2DROS 和独立 NodeThread；确认 FollowPath BT 节点可根据 blackboard path/plugin ID 变化更新 action goal。审计追加至 doc/Navigation/04_nav2_bringup_interface_audit.md，提交 f9d42d4a。仍属 E1/E2，不代表运行图或机器人执行验收。
 
 - 2026-11-25 / v0.3.74：在 nav 分支完成 N1 中 Nav2 bringup 与运动命令链首轮源码审计：固定 navigation2 Jazzy commit c7046550547d382a5186d106b0895eda02485d7c；追踪 navigation_launch lifecycle nodes、controller/behavior→cmd_vel_nav→velocity_smoother→cmd_vel_smoothed→collision_monitor→cmd_vel；核验 Controller Server FollowPath server、odom/TF、costmap update timeout 和失败零速度路径；核验 Velocity Smoother 双 Twist 输入、OPEN_LOOP/CLOSED_LOOP 与 velocity timeout；核验 Collision Monitor source timeout 触发 STOP 及 LaserScan 示例源限制。新增 doc/Navigation/04_nav2_bringup_interface_audit.md，提交 4298dd67。只属于 E1/E2 源码证据，未运行 ROS 集成或实机测试。
@@ -327,6 +329,7 @@
 - [完整导航模块专项研究总目录](doc/Navigation/README.md)
 - [完整导航模块总体架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
 - [Nav2 bringup 到运动命令链接口审计](doc/Navigation/04_nav2_bringup_interface_audit.md)
+- [传感器观测到 Nav2 Costmap 输入链审计](doc/Navigation/05_sensor_to_costmap_observation_audit.md)
 - [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
 - [导航子系统清单、上游基线与证据登记](doc/Navigation/02_subsystem_inventory_and_evidence_register.md)
 - [ROS 2 核心接口契约与数据语义](doc/Navigation/03_ros_interface_contracts.md)
