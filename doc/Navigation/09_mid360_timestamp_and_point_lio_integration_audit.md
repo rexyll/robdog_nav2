@@ -291,3 +291,45 @@ Livox 官方 MID-360 v1.4.12 端口表规定设备侧端口：56100 control、56
 - RFC 9542（EtherType 与 VLAN tag 语义）；
 - RFC 791 / RFC 8200（IPv4/IPv6 fragmentation 与 reassembly 语义）；
 - tcpdump LINKTYPE_LINUX_SLL2 结构说明（20-byte cooked v2 header）。
+
+
+## 14. MID-360 UDP 序号连续性、帧复位与乱序审计
+
+新增：
+- `scripts/livox_udp_sequence_audit.py`：对单条点云 UDP flow 做有界序号观察。
+- `scripts/tests/test_livox_udp_sequence_audit.py`：覆盖 uint16 wrap、前向缺口、迟到补齐、重复、乱序、归零候选和大缺口内存上限。
+- `scripts/audit_mid360_pcap.py` 集成 `point_cloud_sequence_audits` 与 `sequence_event_counts`，按 PCAPNG section/interface + src/dst IP/port 隔离 flow。
+
+### 14.1 官方协议字段语义
+
+Livox MID-360 v1.4.12 规定：
+- `udp_cnt` 为 uint16 点云 UDP 包计数，每个点云 UDP 包依次加 1，点云帧起始时清零。
+- `frame_cnt` 为 uint8 帧计数，每帧加 1；官方明确指出非重复扫描时该字段无效。
+- 官方当前参数表将 `pattern_mode=0` 定义为 non-repetitive scan；repetitive / low-frame-rate repetitive scan 标注为当前不支持。
+
+因此：
+- 序号归零只报告 `frame_reset_candidate`，不能把 frame_cnt 当作所有配置下的有效帧边界真值。
+- 若 `udp_cnt=0` 且 `frame_cnt` 同时变化，仅记录 `frame_counter_changed_at_reset` 作为旁证；若不变则记录 `frame_counter_unchanged_at_reset`，不因此否定归零候选。
+- `frame_cnt` 在非零 udp_cnt 处变化，记录为观测异常，不据此自动重排/修复数据。
+- uint16 从 65535 到 0 且 frame_cnt 不变按序号模数连续处理；实际帧复位则以归零候选记录，frame_cnt 仅在有效配置中辅助解释。
+
+### 14.2 事件分类
+
+- `in_order`：序号按模数连续。
+- `forward_gap`：相对高水位出现前向缺口；统计缺失序号估计值。
+- `reordered_gap_recovered`：此前缺口中的序号迟到到达，标记已补齐。
+- `duplicate`：重复序号。
+- `out_of_order`：较旧序号到达，但不属于当前有界 pending gap。
+- `frame_reset_candidate`：非零计数之后观察到 udp_cnt=0。
+- `frame_counter_changed_without_udp_reset`：frame_cnt 变化但 udp_cnt 非零。
+- `sensor_timestamp_regressions_in_capture_order`：抓包遍历顺序中传感器 timestamp 回退；它可能是 UDP 乱序，不等于传感器时钟倒退。
+
+每个 flow 独立维护状态，pending gap 和 recent duplicate window 有大小上限，避免损坏计数导致无界内存占用。超出 pending 上限的大缺口只计数，不逐个存储序号。
+
+### 14.3 解释边界
+
+`missing_counter_values_estimated` 是**抓包观察到的序号缺口估计**，不是网络层丢包计数。缺口可能来自网络丢包、NIC/内核/抓包工具丢包、过滤条件、抓包接口或捕获文件不完整；乱序到达也可能使缺口随后补齐。即使缺口未补齐，也不能仅凭 pcap 区分上述原因。
+
+此外，分析只针对单个 capture file 的遍历顺序和单一 flow；多个接口、镜像口、不同 capture timestamp 精度、重复采集会改变观测结果。当前不做 IP 分片重组，也不把 IMU 的 udp_cnt 套用点云序号规则。
+
+合成测试验证的是算法行为，不是设备实际包率、帧模式、网络丢包或 NIC 捕获性能。真实 MID-360 pcap 与设备 pattern_mode 配置仍需取得后再做硬件验收。
