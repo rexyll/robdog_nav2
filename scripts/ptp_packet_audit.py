@@ -296,24 +296,28 @@ class PtpCorrelationAudit:
         }
 
 
-def audit_ptp_records(packets) -> dict:
-    audit = PtpCorrelationAudit()
-    counts = Counter()
-    samples = []
-    for packet in packets:
+class PtpCaptureAudit:
+    """Streaming capture wrapper around the bounded PTP message correlator."""
+
+    def __init__(self):
+        self.audit = PtpCorrelationAudit()
+        self.counts = Counter()
+        self.samples = []
+
+    def observe_packet(self, packet) -> None:
         if getattr(packet, "truncated", False):
-            counts["truncated_capture_records"] += 1
-            continue
+            self.counts["truncated_capture_records"] += 1
+            return
         try:
             message = extract_ptp_message(packet)
         except (PacketDecodeError, PtpPacketError):
-            counts["malformed_ptp_candidates"] += 1
-            continue
+            self.counts["malformed_ptp_candidates"] += 1
+            return
         if message is None:
-            continue
-        audit.observe(message)
-        if len(samples) < 8:
-            samples.append({
+            return
+        self.audit.observe(message)
+        if len(self.samples) < 8:
+            self.samples.append({
                 "message_type": message.message_name,
                 "domain_number": message.domain_number,
                 "transport_specific": message.transport_specific,
@@ -326,12 +330,21 @@ def audit_ptp_records(packets) -> dict:
                 "timestamp_nanoseconds": message.timestamp_nanoseconds,
                 "vlan_ids": list(message.vlan_ids),
             })
-    report = audit.report()
-    report["malformed_ptp_candidates"] = counts["malformed_ptp_candidates"]
-    report["truncated_capture_records"] = counts["truncated_capture_records"]
-    report["sample_messages"] = samples
-    report["timestamp_semantics"] = (
-        "PTP message-body timestamps are not converted to UTC/GPS; capture timestamps "
-        "are file timestamps; no packet-time delta is reported as path delay"
-    )
-    return report
+
+    def report(self) -> dict:
+        report = self.audit.report()
+        report["malformed_ptp_candidates"] = self.counts["malformed_ptp_candidates"]
+        report["truncated_capture_records"] = self.counts["truncated_capture_records"]
+        report["sample_messages"] = list(self.samples)
+        report["timestamp_semantics"] = (
+            "PTP message-body timestamps are not converted to UTC/GPS; capture timestamps "
+            "are file timestamps; no packet-time delta is reported as path delay"
+        )
+        return report
+
+
+def audit_ptp_records(packets) -> dict:
+    audit = PtpCaptureAudit()
+    for packet in packets:
+        audit.observe_packet(packet)
+    return audit.report()
