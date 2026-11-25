@@ -141,3 +141,12 @@ B. **不修改 driver，adapter 从现有 UTC 字段恢复时间**
 - [ublox_dgnss_node.cpp](https://github.com/aussierobots/ublox_dgnss/blob/9d4f5addbc72d092c57dde99b20712258e96e81e/ublox_dgnss_node/src/ublox_dgnss_node.cpp)
 
 **证据等级：** 固定上游源码字段/代码为 E1；项目 adapter 前置条件和路线建议为 E3。没有真实设备证据，不得标记为硬件验证通过。
+
+
+## 7. 后续协议审计的修正（以 §13 为准）
+
+本节修正 §3.3 中将“增加 NAV-TIMEGPS”列为优先时间映射路线的表述。进一步核对 ZED-F9P Integration Manual R12 后，可靠绝对时间应优先使用 NAV-PVT UTC 及其有效性/确认字段；NAV-TIMEGPS 虽在 protocol 27.11 中定义 week/fTOW/leapS 和 validity flags，但不应未经论证取代 UTC 主时间来源。
+
+当前建议主链为 NAV-PVT UTC + NAV-TIMEUTC 同历元一致性 + NAV-TIMELS 当前 leap-second offset + NAV-STATUS 时间有效性标志；固定驱动缺少 NAV-TIMELS parser/publisher，仍需扩展。NAV-TIMEGPS 保留为可选诊断交叉校验。完整字段、validity、负 nano、sec=60、leap-second source 和测试 Gate 见 [§13 ZED-F9P UTC/GPS 时间映射审计](13_zed_f9p_utc_gps_time_mapping_audit.md)。
+
+此外，NAV-TIMEUTC 的 valid_wkn 仅为 week validity flag，不包含 week number 数值；其 valid_utc、valid_tow、utc_std 语义必须分别处理。NAV-PVT 的 confirmed_avail/confirmed_date/confirmed_time 与 valid_date/valid_time/fully_resolved 也不能混为同一标志。
