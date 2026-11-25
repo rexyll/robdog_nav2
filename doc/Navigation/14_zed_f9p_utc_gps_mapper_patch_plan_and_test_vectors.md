@@ -335,3 +335,35 @@ Generate variants by changing only byte 19 to `00, 01, 02, 04, 08, 20, F4, 74`; 
 - PVT and TIMEUTC records with equal iTOW but different normalized civil UTC must fail the mapper cross-check; equal wall-clock-looking values with different iTOW must not be joined.
 
 These fixtures complement the NAV-TIMELS 24-byte fixtures in §4.7. They specify parser and policy test inputs; they are not executed tests or evidence of receiver output. The R07 protocol document is an early-production document, so target firmware/protocol compatibility still requires MON-VER and on-device message capture.
+
+### 4.11 固定驱动的 NAV-PVT / TIMEUTC / STATUS 输出合同审计
+
+审计对象固定为 aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e，不是仓库当前 main 的浮动版本。关键文件与职责：
+- ublox_dgnss_node/include/ublox_dgnss_node/ubx/nav/ubx_nav_pvt.hpp：NAV-PVT payload 字段/offset 解码；
+- .../ubx_nav_timeutc.hpp：NAV-TIMEUTC payload 字段/offset 解码；
+- .../ubx_nav_status.hpp：NAV-STATUS payload 字段/offset 解码；
+- ublox_dgnss_node/include/ublox_dgnss_node/ubx/ubx_nav.hpp：NAV class/id dispatch 与对应 payload container；
+- ublox_dgnss_node/src/ublox_dgnss_node.cpp：ROS publisher 创建、UBX frame 分发及字段映射；
+- ublox_ubx_msgs/msg/UBXNavPVT.msg、UBXNavTimeUTC.msg、UBXNavStatus.msg：ROSIDL 输出字段。
+
+| UBX 消息 | 固定驱动输出 | 已映射的关键字段 | 未保留/限制 |
+|---|---|---|---|
+| NAV-PVT (01/07) | ubx_nav_pvt / UBXNavPVT | iTOW、UTC civil、valid_date/time/fully_resolved、t_acc、signed nano、confirmed_avail/date/time | 原始 valid/flags/flags2 字节与 reserved bits 未发布；UTC mapper 可用语义 bool，但无法从 ROS topic 审计原始 reserved bits |
+| NAV-TIMEUTC (01/21) | ubx_nav_time_utc / UBXNavTimeUTC | iTOW、t_acc、signed nano、UTC civil、valid_tow/wkn/utc、utc_std.id | 原始 valid byte 未发布；ROSIDL year/month/day/hour/min/sec 使用 int16/int8，而 UBX wire 为 U2/U1；正常协议值可表示，但需 adapter 验证范围 |
+| NAV-STATUS (01/03) | ubx_nav_status / UBXNavStatus | iTOW、gps_fix_ok、wkn_set、tow_set、carr_soln_valid、carr_soln、msss | 没有 GPS week 数值；wkn_set/tow_set 只是 validity flags；原始 flags/fixStat/flags2 未发布 |
+
+字段和发布路径核对结果：
+1. NAV-PVT payload 从 offset 0/4/6..10/11/12/16/20/21/22 读取 iTOW、UTC civil、valid、tAcc、signed nano、fixType、flags、flags2；ROS publisher 将 valid 的三个 UTC 位与 flags2 的三个 confirmation 位逐个映射为 bool。confirmedAvail 不能被误读成 confirmedDate && confirmedTime，mapper 必须保留三位独立状态。
+2. NAV-TIMEUTC payload 从 offset 0/4/8/12/14..18/19 读取 iTOW、tAcc、signed nano、UTC civil 与 valid byte；ROS publisher 将 validTOW/WKN/UTC 和 utcStandard id 分别映射。协议源中的 utcStandard 编码为 4-bit enum；策略层必须对 0、1..7、15 及保留/未知编码显式分类。
+3. NAV-STATUS payload 从 offset 0/4/5/6/7/8/12 读取 iTOW、fix type、flags、fixStat、flags2、ttff、msss；ROS publisher 输出 wkn_set/tow_set。不得把这两个 bool 当成 GPS week 数值，也不得用 msss 单独断定 reboot。
+4. ubx_nav.hpp 已对 PVT、STATUS、TIMEUTC 注册 frame container 和 class/id dispatch；node 侧分别创建 publisher，并在 NAV frame switch 中调用对应 publish helper。因此这三类消息的基础 transport/ROS 输出链已存在，mapper 可先作为 ROS-independent pure core 接入，而不是复制一套 USB/UBX transport。
+
+**关键实现风险 — payload 长度检查**：
+- 三个 payload 构造函数均按传入的 size resize/copy，再直接从固定 offset 调用 buf_offset<T>()；该 helper 仅执行 memcpy(buf->data()+offset, sizeof(T))，本身没有边界检查。
+- 在已审计的这些固定文件/构造函数中，没有看到 NAV-PVT=92、NAV-TIMEUTC=20、NAV-STATUS=16 的 exact payload length guard。不能据此证明任意畸形帧一定能进入该路径，但一旦短 payload 到达构造函数，后续固定 offset 读取存在越界读取风险。
+- P0 driver hardening：在任何 payload 字段读取前校验 class/id 与 exact payload length；不匹配时拒绝 frame、计数并记录 reason，不允许继续构造消息。还需单测短/长 payload，及合法长度但非法日历字段的分层处理。
+- ROSIDL 语义字段足以完成大部分 mapper validity policy，但不能验证 reserved bits。若需求包含原始协议可观测性，应在专用 fork 的 ROSIDL 消息增加 raw validity/status bytes（例如 PVT valid/flags/flags2、TIMEUTC valid、STATUS flags/fixStat/flags2），或在同一 adapter 进程内先消费原始 UBX event；不得声称现有 ROS topic 已保留这些字节。
+
+**NAV-TIMELS 差距**：固定版本的 ubx_nav.hpp include、payload type aliases、container、constructor、frame dispatch 均没有 NAV-TIMELS；node 也没有对应 publisher/message。故 NAV-TIMELS 仍需新增 ROSIDL、payload parser、dispatch、publisher 与配置输出路径。此项与现有 PVT/TIMEUTC/STATUS 不同，不能只写 ROS adapter 订阅配置来解决。
+
+本节是固定源码静态审计；未运行编译、畸形帧注入、ROS topic 检查或 F9P 实机测试。后续实施必须在项目许可/维护者 Gate 通过后，对专用 fork/分支进行，不能直接改上游固定源或在本项目中复制 transport。
