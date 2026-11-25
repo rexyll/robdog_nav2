@@ -104,3 +104,26 @@ MID-360
 4. 继续研究非 Nav2 的 elevation/traversability 实现与四足地形规划接口；N1 完成后转入 N2/N3/N4 专题，但不提前把未完成任务标为完成。
 
 本报告是固定源码 E2 审计，不包含项目节点运行、PointCloud2 实际接入、Costmap 运行图或 Lite3 实机证据。
+## 9. Costmap2DROS 更新线程与 LayeredCostmap 汇总（N1 追加）
+
+新增固定源码：
+- [costmap_2d_ros.cpp](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_costmap_2d/src/costmap_2d_ros.cpp) — SHA fe8cd94284e7b3b266c516c8fe40c1fb50053195
+- [layered_costmap.cpp](https://github.com/ros-navigation/navigation2/blob/c7046550547d382a5186d106b0895eda02485d7c/nav2_costmap_2d/src/layered_costmap.cpp)
+
+源码确认：
+1. Costmap2DROS 在 Lifecycle configure/activate 流程中创建独立 std::thread 执行 mapUpdateLoop，频率取 update_frequency；循环采用 rclcpp::WallRate，而不是 ROS time rate。deactivate 会 stop、设置 shutdown 标志并 join 更新线程。
+2. mapUpdateLoop 在未 stopped 时加锁调用 updateMap；随后按 publish_frequency 发布 master costmap 和各 layer costmap。update_frequency 与 publish_frequency 是不同参数，发布频率不能当作地图内部更新频率。
+3. updateMap 首先通过 getRobotPose 获取机器人位姿；只有 pose 获取成功且未 stop_updates 时才调用 LayeredCostmap::updateMap，并发布 footprint。TF/位姿获取失败时本周期不会推进地图更新；外部监控必须同时观察 pose/TF 健康和 costmap 更新时间。
+4. LayeredCostmap::updateMap 先按插件配置顺序调用每个 plugin 的 updateBounds，再调用 filters 的 updateBounds；确定更新窗口后 reset master 区域，再按 plugin 配置顺序依次 updateCosts；启用 filters 时先构建 primary costmap，再 copy 到 combined costmap，最后按顺序应用 filters。
+5. 这意味着插件顺序具有语义影响。例如 InflationLayer 通常应在障碍写入层之后；不能随意调换配置顺序。配置顺序与运行时 plugin list 必须纳入审计。
+6. LayeredCostmap::isCurrent() 将所有 enabled plugins 与 filters 的 isCurrent() 做逻辑 AND；disabled layer 不阻断 current。它是聚合健康状态，不等于地图更新时间或发布频率。
+7. 当前源码审计确认 current 聚合接口存在；各 Planner/Controller 路径是否在每次决策前检查 current、等待策略和超时如何组合，仍需分别追踪调用点，不能仅凭 isCurrent() 实现就推断所有消费者都会阻止使用 stale costmap。
+
+项目适配结论：
+- 必须分开记录传感器接收 age、observation buffer current、Costmap update cycle age、Costmap publish age、planner/controller 实际消费时刻。
+- update loop 使用 WallRate，而时间戳和 TF 仍依赖 ROS clock；use_sim_time/bag replay 下必须验证时钟倒退、暂停、跳变时的行为。
+- Costmap 发布频率低于更新频率是允许的，但 Planner/Controller 是否读取内部 master grid 还是订阅发布 topic，必须沿各自源码/接口核实。
+- 插件 updateCosts 是顺序组合，不是任意并行融合；需要在参数 YAML 和运行 graph 中记录真实顺序。
+- robot pose/TF 不可用时，地图更新链停顿；Safety Supervisor 应将定位/TF freshness 纳入运动许可，不可仅凭旧 costmap 仍可读取就继续导航。
+
+本节仍为 E2 固定源码审计；没有 ROS graph、实时频率、Costmap stale 实验或硬件验证。
