@@ -711,3 +711,45 @@ Coordinator 必须由单一串行事件处理器（或等价的严格互斥状�
 - Transition table 是 E3 项目设计规格；未实现 coordinator、mapper、EpochFence 或 ROS adapter。
 - Lite3 腿式 odometry 独立连续性、ZED-F9P reboot/week 证据、global EKF history 清理接口和平台 stop ACK 均仍是外部 Gate。
 - 未运行 build、bag、仿真、HIL 或实机测试。
+## 23. GNSS core 包工程化前置条件与 coordinator 实施边界
+
+本轮静态核对当前 nav 分支的 package.xml、setup.py、setup.cfg 与两个测试模块，目的是确定 transport-independent coordinator 能否安全地落入现有包。
+
+### 23.1 当前包形态
+
+| 项目 | 当前事实 | 工程影响 |
+|---|---|---|
+| ROS build type | ament_python | 现有 core 是 ROS 2 workspace 可识别的 Python 包，但其算法代码不依赖 ROS transport |
+| package runtime dependencies | 仅 setuptools；未声明 rclpy、sensor_msgs、nav_msgs、diagnostic_msgs 或 u-blox ROS messages | 不应把 ROS adapter 直接塞入 core 的默认 import/runtime path |
+| Python packaging | setup.py + setup.cfg；未发现 pyproject.toml 或 requirements.txt | 依赖与构建声明较轻，但 Python 最低版本/运行时矩阵尚未明确 |
+| test framework | 测试模块继承 unittest.TestCase；setup.cfg 配置 pytest testpaths=test、python_files=test_*.py；package.xml 声明 python3-pytest | 可继续沿用 unittest 风格并由 pytest/colcon test 驱动；需在实际 workspace 验证 runner 行为 |
+| license | package.xml 与 setup.py 均为 UNSPECIFIED | 发布、复用、拆分 adapter 前的治理阻断；不得自行猜测 SPDX 标识 |
+| maintainer | email 为 maintainers@example.invalid | ROS 包元数据未达到正式发布条件；须由用户/项目维护者提供真实责任主体 |
+
+### 23.2 推荐的代码边界（不改变现有包的 transport independence）
+
+建议后续将纯算法 coordinator 放在现有 robodog_gnss_quality 包中，前提是用户/项目维护者先确认该包的 SPDX license 和 maintainer metadata。推荐模块职责：
+
+- generation.py：接收经过验证的 ReceiverClockEvidence，判定 CONTINUOUS_WEEK_ROLLOVER、NEW_RECEIVER_GENERATION 或 AMBIGUOUS；不解析串口字节，不从 host receive time 推造 receiver time。
+- coordinator.py：串行消费 ResetTrigger，产生 immutable ResetPlan/phase/ack outcome；负责 joiner.reset()、gate.reset() 与显式 begin_generation() 的顺序和 generation fence。
+- epoch_fence.py：提供纯函数校验 boot/session identity、receiver generation、相关 epoch tuple 和 reset transaction generation；不依赖 ROS message 类型。
+- diagnostics.py：定义 lifetime counters 与 generation-local counters 的数据模型；具体 ROS diagnostics publisher 留给独立 adapter。
+- ROS adapter：后续独立 package（名称待定），依赖真实选定的 u-blox ROS driver/message package；负责 ROS clock/steady clock、消息解码、NavSatFix 与 quality status 发布及 navsat_transform 对接。
+
+不得在现有 core 中导入 rclpy 或具体 ROS message class；不得让 core 直接创建 NavSatFix；不得将 receiver GPS week/iTOW mapper 假设为已存在。
+
+### 23.3 当前可先做与必须等待的工作
+
+| 工作 | 是否可先做 | 前置条件 |
+|---|---|---|
+| 为现有 Gate/Joiner reset 语义增加回归测试 | 可以 | 不改变 license/maintainer 声明；在当前测试风格下增加 unittest |
+| 纯算法 generation evidence model 与判定状态表 | 设计可先做；代码前需治理确认 | GPS week/boot evidence 字段先定义，不虚构 ZED-F9P 实际消息映射 |
+| ResetCoordinator/ EpochFence 纯算法实现 | 暂缓提交代码 | 先确认包 SPDX license、maintainer；明确 API 后再实现 |
+| GPS week/iTOW mapper 的真实时间算法 | 部分可做 | 可先定义数学/边界测试；最终 boot/week 判据必须由接收机协议与真实日志证实 |
+| u-blox ROS adapter | 不可冻结依赖 | 先审查实际选定驱动、Jazzy compatibility、消息定义、source timestamp 与 license |
+| NavSatFix/global EKF integration | 不可宣称完成 | 需 adapter、epoch fence、global filter history 隔离与真实 bag 测试 |
+
+### 23.4 当前审计结论
+
+现有包结构足以容纳 transport-independent Python 状态机，但 license/maintainer 元数据尚未达到可发布治理要求。由于本轮没有获得真实 SPDX 许可和维护者身份，本轮只记录实现边界，不创建代码、不修改元数据、不引入 ROS dependencies。静态文件检查未运行 colcon build、pytest 或 unittest；不得将包结构审计视为构建通过。
+
