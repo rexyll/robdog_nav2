@@ -14,6 +14,7 @@ from network_packet_decoder import (
     PacketDecodeError, classify_mid360_datagram, decode_link_packet,
 )
 from pcapng_reader import PcapngError, iter_capture_packets
+from ptp_packet_audit import PtpCaptureAudit
 
 
 def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
@@ -23,11 +24,13 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
     data_types = Counter()
     time_types = Counter()
     sequence_audits = {}
+    ptp_audit = PtpCaptureAudit()
     interfaces = defaultdict(lambda: {"packets": 0, "capture_timestamp_min_ns": None,
                                        "capture_timestamp_max_ns": None})
     samples = []
 
     for packet in packets:
+        ptp_audit.observe_packet(packet)
         counts["capture_packets"] += 1
         interface_key = f"{packet.section_index}:{packet.interface_id}"
         iface = interfaces[interface_key]
@@ -134,6 +137,7 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
             "host_to_lidar": counts["direction_host_to_lidar"],
         },
         "interfaces": dict(interfaces),
+        "ptp_audit": ptp_audit.report(),
         "point_cloud_sequence_audits": {
             "|".join(map(str, key)): audit.report()
             for key, audit in sequence_audits.items()
