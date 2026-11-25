@@ -332,4 +332,4 @@ Livox MID-360 v1.4.12 规定：
 
 此外，分析只针对单个 capture file 的遍历顺序和单一 flow；多个接口、镜像口、不同 capture timestamp 精度、重复采集会改变观测结果。当前不做 IP 分片重组，也不把 IMU 的 udp_cnt 套用点云序号规则。
 
-合成测试验证的是算法行为，不是设备实际包率、帧模式、网络丢包或 NIC 捕获性能。真实 MID-360 pcap 与设备 pattern_mode 配置仍需取得后再做硬件验收。
+合成测试验证的是算法行为，不是设备实际包率、帧模式、网络丢包或 NIC 捕获性能。序号审计单测 5/5、集成 capture audit 5/5 已在 GitHub Actions run 45642338867 通过。真实 MID-360 pcap 与设备 pattern_mode 配置仍需取得后再做硬件验收。
