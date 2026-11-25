@@ -115,8 +115,8 @@ jobs:
             scripts/livox_mid360_udp_parser.py \
             scripts/pcapng_reader.py \
             scripts/network_packet_decoder.py \
-            scripts/audit_mid360_pcap.py
-            scripts/livox_udp_sequence_audit.py \
+            scripts/audit_mid360_pcap.py \
+            scripts/livox_udp_sequence_audit.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
             scripts/run_urbanloco_ulhk4.sh \
