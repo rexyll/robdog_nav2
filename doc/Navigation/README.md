@@ -178,5 +178,6 @@
 - [05 — 传感器观测到 Nav2 Costmap 输入链审计](05_sensor_to_costmap_observation_audit.md)
 - [06 — Costmap 健康状态与 Planner/Controller 消费端审计](06_costmap_health_and_consumers_audit.md)
 - [07 — MID-360 点云到高程地图与四足可通行性链路审计](07_mid360_elevation_traversability_audit.md)
+- [08 — Point-LIO 与 FAST-LIO2：MID-360 LIO / 时间补偿 / ROS 2 适配审计](08_point_lio_fast_lio2_audit.md)
 
 上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
