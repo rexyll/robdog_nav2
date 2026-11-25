@@ -98,7 +98,7 @@ jobs:
             scripts/convert_m3dgr_dynamic03_to_ros2.py \
             scripts/audit_livox_rosbag_timing.py \
             scripts/livox_time_audit_helpers.py \
-            scripts/livox_mid360_udp_parser.py
+            scripts/livox_mid360_udp_parser.py \
             scripts/pcapng_reader.py
           bash -n \
             scripts/prepare_urbanloco_ulhk4.sh \
