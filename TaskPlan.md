@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.79
+- 文档版本：v0.3.80
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、ROS 2 Jazzy 高程地图候选和四足地形层开展上游审计。N1 的其余接口/运行证据仍在补齐；采购、目标 Orin 联调、实机验证均未完成。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的时间补偿和 ROS 适配开展上游审计。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成。**
 
 ---
 
@@ -76,7 +76,7 @@
 > 本专项覆盖完整导航模块；Nav2 对应 N6，不再作为全部研究对象。详细目录和专题交付物见 [doc/Navigation/README.md](doc/Navigation/README.md)。
 
 - [x] N0 研究基线与范围冻结：已创建 nav 分支；研究目标已纠正为完整导航模块；已建立总体目录、系统架构与数据流框架、术语基线、证据等级和首轮上游仓库/commit 锚点。完成证据见 doc/Navigation/README.md、00_system_architecture_and_scope.md、01_end_to_end_dataflow_and_interfaces.md、02_subsystem_inventory_and_evidence_register.md。此状态仅表示研究范围/治理基线冻结，不代表各子系统源码研究完成。
-- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单与 ROS 2 Jazzy 消息/action 契约；完成 Nav2 bringup→BT→Planner/Controller→Smoother→Collision Monitor 主链源码审计。Costmap 输入链详见 `doc/Navigation/05_sensor_to_costmap_observation_audit.md`；Costmap current 到 Planner/Controller 的等待/超时消费闭环详见 `doc/Navigation/06_costmap_health_and_consumers_audit.md`（Planner 默认 1.0s，Controller 默认 0.30s；超时路径已源码核验）。本轮增加 MID-360→deskew→elevation/grid_map→traversability 的跨子系统接口审计，详见 `doc/Navigation/07_mid360_elevation_traversability_audit.md`：固定 Livox Driver 2、elevation_mapping_cupy ROS2 branch、grid_map Jazzy 与传统 traversability_estimation 参考版本；识别出 elevation_mapping_cupy 默认 XYZ 输入会丢弃 Livox per-point timestamp/tag/line，且整帧按 header stamp 查询一次 TF，因此必须先完成逐点时间补偿再输入；Jetson Orin + MID-360 FPS 下降 issue #137 仍 open，v2.2.0 RTX 4090 性能数据不能外推到 Orin。仍未完成项目实际 adapter、驱动/SDK/ARM64 构建、运行 QoS/频率/延迟、LIO/deskew、Lite3 执行反馈与实机验证；当前证据为 E1/E2 上游资料/源码，不是项目运行证据。
+- [~] N1 端到端数据流与接口审计：已建立系统级 producer/consumer 清单与 ROS 2 Jazzy 消息/action 契约；完成 Nav2 bringup→BT→Planner/Controller→Smoother→Collision Monitor 主链源码审计。Costmap 输入链详见 `doc/Navigation/05_sensor_to_costmap_observation_audit.md`；Costmap current 到 Planner/Controller 的等待/超时消费闭环详见 `doc/Navigation/06_costmap_health_and_consumers_audit.md`（Planner 默认 1.0s，Controller 默认 0.30s；超时路径已源码核验）。本轮增加 MID-360→deskew→elevation/grid_map→traversability 的跨子系统接口审计，详见 `doc/Navigation/07_mid360_elevation_traversability_audit.md`：固定 Livox Driver 2、elevation_mapping_cupy ROS2 branch、grid_map Jazzy 与传统 traversability_estimation 参考版本；识别出 elevation_mapping_cupy 默认 XYZ 输入会丢弃 Livox per-point timestamp/tag/line，且整帧按 header stamp 查询一次 TF，因此必须先完成逐点时间补偿再输入；Jetson Orin + MID-360 FPS 下降 issue #137 仍 open，v2.2.0 RTX 4090 性能数据不能外推到 Orin。仍未完成项目实际 adapter、驱动/SDK/ARM64 构建、运行 QoS/频率/延迟、LIO/deskew、Lite3 执行反馈与实机验证；当前证据为 E1/E2 上游资料/源码，不是项目运行证据。 本轮新增 `doc/Navigation/08_point_lio_fast_lio2_audit.md`：固定审计 CTU Point-LIO ROS2 fork 与 HKU FAST-LIO2 官方实现。Point-LIO ROS2 fork 已接入 Livox CustomMsg/逐点 offset_time，并按点时间推进状态、将点投影到 world；但 body cloud 不是 deskewed，world cloud 输出丢失逐点时间；`time_lag_imu_to_lidar` 疑似仅用于回退检查而未作用于同步消费端，且 parser 未显式读取 CustomMsg.timebase。FAST-LIO2 官方代码有 IMU 前向传播+反向 scan-end deskew，但官方仓库仍为 ROS1/catkin，不能直接用于 Jazzy。两者 LICENSE 文件均 GPL-2.0、package.xml 均写 BSD，许可证声明冲突，已列为冻结依赖前阻断 Gate。CTU fork 还依赖 MRS libs，仓库 CI 未证明 Jazzy/ARM64。仍未完成项目 adapter、构建、bag A/B、Orin soak、Lite3 执行反馈与实机验证；当前证据为 E1/E2 上游资料/源码，不是项目运行证据。
 - [ ] N2 传感器驱动、时钟同步与标定：MID-360、双目、IMU、ZED-F9P、Lite3 遥测；驱动源码/协议、PTP/PPS/硬件触发、时钟域转换、外参/内参、数据记录与健康监测。
 - [ ] N3 定位、状态估计、SLAM 与地图：腿式 odom、Point-LIO/FAST-LIO2、VIO、GNSS quality gate、robot_localization、SLAM、重定位、地图坐标注册和不确定度管理。
 - [ ] N4 环境感知、地形表达与可通行性：点云/深度预处理、地面/障碍/动态目标/负障碍、elevation/grid_map、坡度/粗糙度/台阶/沟坎/落足风险。
@@ -254,6 +254,8 @@
 ---
 
 ## 4. 进度变更记录
+
+- 2026-11-25 / v0.3.80：继续 N1，固定审计 `ctu-mrs/point-lio @ e7ff034328b263ab92b06252d91acba1dd969b6d` 与 `hku-mars/FAST_LIO @ 7cc4175de6f8ba2edf34bab02a42195b141027e9`。确认 CTU ROS2 Point-LIO 将 Livox CustomMsg offset_time 转为毫秒，按点时间推进/更新状态并将点变换到 world；其 body cloud 未做 scan-end deskew，world cloud 输出不保留逐点时间；IMU lag 参数疑似未贯穿同步消费端，CustomMsg.timebase 未显式读取。FAST-LIO2 官方实现执行 IMU 前向传播与反向逐点 scan-end deskew，但其官方仓库为 ROS1/catkin，不可直接用于 Jazzy。两项目 LICENSE 文件为 GPL-2.0 而 package.xml 声明 BSD，形成许可冲突；Point-LIO ROS2 fork 另依赖 MRS libs，Jazzy/ARM64 构建未证实。新增 `doc/Navigation/08_point_lio_fast_lio2_audit.md` 并更新专题索引。上述均为 E1/E2 上游证据；本项目未编译、未回放、未在 Orin/实机验证。
 
 - 2026-11-25 / v0.3.79：继续在 nav 分支开展跨子系统数据链审计。固定 Livox ROS Driver 2 commit `21445540f0d100dc86a7e6df312dd70bbdb4afdf`，确认 MID-360 CustomMsg 含 timebase/逐点 offset_time，PointXYZRTLT PointCloud2 含逐点 timestamp；固定 elevation_mapping_cupy ROS2 branch commit `d9e1c9fe42ea3d463519333a443da99f680adde8`，追踪 PointCloud2 parser、整帧 header stamp TF 查询、XYZ-only 融合与 GridMap 发布，确认默认路径不会保留 Livox 逐点时间且本节点不做逐点 deskew；审计 grid_map Jazzy `d9614992e36c66d3fe67d9125ca105a0a47676fe` 的多层 2.5D 容器与转换能力，以及 legacy traversability_estimation `14d24c059e1c43466aadf328280adf6394d78039` 的 slope/roughness/step/normal/footprint 过滤概念。识别 Jetson Orin AGX + MID-360 的 elevation_mapping_cupy FPS 下降 issue #137 仍 open；v2.2.0 性能验证使用 RTX 4090，不能外推为 Orin 通过。新增 `doc/Navigation/07_mid360_elevation_traversability_audit.md` 并更新专题索引。仅 E1/E2 上游证据，未在本项目编译/运行/实机验证。
 
