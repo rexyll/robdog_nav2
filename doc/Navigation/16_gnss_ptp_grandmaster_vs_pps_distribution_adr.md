@@ -257,4 +257,87 @@ F9P 产品摘要中的 TCXO 和可配置 TIMEPULSE 频率不是整机 holdover �
 - Safran SecureSync holdover behavior and oscillator-dependent drift：https://safran-navigation-timing.com/online-manuals/2400/Content/NC_and_SS/Com/Topics/CONFIG/Holdover.htm
 - NVIDIA Jetson AGX Orin PTP/PHC platform evidence and HTE boundary：见 [doc15 §12](15_sensor_clock_domains_and_sync_architecture.md)
 
+
+## 11. 具体设备规格的二次核验（2026-11-25）
+
+### 11.1 SecureSync 2400：内置 PTP 与 1204-32 不能混为一谈
+
+Safran SecureSync 2400 User Manual Rev.13.1（2026-06-09）明确区分两套 PTP 实现：
+
+**SecureSync 主机内置 PTP（ETH0/ETH1）：**
+- 两个 Ethernet PTP 端口，IEEE 1588-2008 PTP v2；
+- 可配置为 PTP Master 或 PTP Slave；
+- 10/100/1000 Mb/s；
+- 文档列出 Default、Telecom G.8265.1、Power Utility 61850-9-3、Power System C37.238-2017、Enterprise、802.1AS-2011 profiles；
+- Unicast、Multicast（IPv4/Ethernet）和 Hybrid 模式；
+- 手册将其与 1204-32 选件的配置说明明确分开。
+
+**1204-32 独立 PTP Grandmaster 选件：**
+- 单个 SFP Ethernet 端口，PTP Ordinary Clock，只能配置为 Master；
+- 独立 1PPS BNC 输出；
+- IEEE 1588-2008 PTP v2；Default、Telecom、Enterprise profiles；
+- 8 ns（±4 ns）packet timestamp resolution；
+- 30 ns（3σ）Master-to-Slave accuracy 只注明 crossover cable 测试条件；
+- 支持 one-step 或 two-step master 模式；需要核对实际配置。
+
+**设计影响：** 采购比较表必须把“SecureSync 2400 主机内置 PTP”和“SecureSync 2400 + 1204-32”拆成两个 BOM/接口方案。不得把内置双端口 Master/Slave 能力、选件卡单口 Master-only 能力和选件卡 30 ns crossover 指标合并描述。对本项目而言，内置 PTP 方案可能更适合需要 PTP upstream/downstream 分离的实验架构；但这仍需验证具体端口角色、GNSS input/reference、profile、network asymmetry 与 MID-360 互通。1204-32 单口 Master-only 方案不能仅凭 30 ns 指标就判定更优。
+
+### 11.2 TimeProvider 4100：已确认平台能力，未确认项目配置
+
+Microchip TimeProvider 4100 官方产品页与 Release 2.2 application note 提供以下平台级信息：
+- IEEE 1588 v2 PTP Grandmaster，具备 PTP、NTP、SyncE；
+- 官方产品页列出双机 active/standby 或 active/active 软件冗余选项；
+- 内置 GNSS firewall（BlueSky）抗干扰/抗欺骗能力；
+- Release 2.2 资料列出 multi-band GNSS、mini OCXO / Super OCXO / Rubidium oscillator 选项；
+- 标准平台列出 8 个 Ethernet 端口、2 × 1PPS/ToD 端口、2 × 1PPS/10 MHz 端口；可选 1GE/10GE expansion module；
+- 资料列出多种 PTP profile 和多域 boundary clock 能力。
+
+但这些是系列/版本/选件级公开信息，不代表任一可报价 SKU 都包含全部端口、振荡器或 license。ePRTC 30 ns 规格是特定架构等级，不是“任意单机 + 单 GNSS + 本项目以太网网络”的端到端保证。采购询价必须要求厂商给出完整 ordering code、硬件/软件 revision、profile matrix、振荡器、GNSS 模块、PTP 端口/授权、PPS/ToD 接口选件和 holdover test condition。
+
+**对 MID-360 的重要限制：** “IEEE 1588 v2”并不能证明兼容性。必须确认 GM 能发出 MID-360 支持的 IEEE 1588-2008 UDP/IP profile/transport 与 delay mechanism；电信 PTP profile、802.1AS 或 boundary-clock 能力不能自动代替 Default profile 互通验证。
+
+### 11.3 ZED-F9P TIMEPULSE 与 UBX-TIM-TP 的准确时序关系
+
+本项目应以 u-blox ZED-F9P Integration Manual UBX-18010802 R16（2024-10-30）作为当前字段/时序审计依据。其 §3.13 明确：
+
+1. UBX-TIM-TP 提供**下一次 TIMEPULSE 脉冲**的时间信息和时间来源，不是“消息到达时刻”。
+2. 官方建议 measurement rate (CFG-RATE-MEAS) 与 TIMEPULSE (CFG-TP-*) 都设为 1 Hz。若 TIMEPULSE 频率高于 1 Hz，消息输出节奏不保证每个脉冲各有一条一一对应的消息。
+3. 1PPS 图示中，在边沿 T1 之后发出的 UBX-TIM-TP 指向下一次边沿 T2；同一串口批次中的 NAV-PVT 可对应上一历元 T1。不得将“同一串口批次”误解为 TIM-TP 与 NAV-PVT 指向同一个脉冲。
+4. CFG-TP-TIMEGRID_TP* 选择 GPS/GNSS/UTC time grid；CFG-NAVSPG-UTCSTANDARD 选择 UTC 实现。不同 GNSS UTC realization 可有数百纳秒差异，不能只存一个无来源标记的“UTC”字符串。
+5. CFG-TP-ALIGN_TO_TOW 使脉冲对齐到秒边界；polarity 决定首边沿上升/下降；user delay 和 antenna cable delay 会影响实际脉冲相位，必须纳入校准。
+6. 官方示例在未锁定时仍可维持 1 Hz 输出，但 TOW 对齐只有在 GPS time locked 时才能维持。若配置 locked other setting，可在 locked/unlocked 时切换脉冲行为，甚至在未锁定时禁用 pulse；项目必须明确配置该行为，不得仅凭 GPIO 有边沿就宣称有效。
+7. 绝对时间应用需要校准完整用户系统；u-blox 建议固定且准确的位置，并在适用 GNSS 模式和温度下校准。多接收机相对时间应用还需一致产品家族与 cable/user delay 校准。
+
+**推荐的标签绑定键：**
+- primary epoch key：timeBase + week + TOW（若协议/固件返回字段足够）；
+- validity：保存 TIM-TP flags、UTC availability、time source/reference、receiver time validity、GNSS fix/time validity；
+- pulse edge identity：本机单调递增 pulse_sequence，由硬件边沿采集器计数；
+- transport metadata：消息接收 monotonic timestamp、serial port、CRC/checksum、receiver boot generation；
+- calibration metadata：antenna cable delay、user delay、fanout channel delay、capture channel delay、温度/设备 SKU。
+
+如果固件/协议消息中没有可用的 week/TOW、UTC standard 或 validity 字段，不能由 host receive time 推算补齐；应标记 UNMAPPED/INVALID，再通过对应 Interface Description 和目标固件验证字段是否支持。
+
+### 11.4 TIME-027..030 测试合同加严
+
+TIME-027 必须按下列步骤执行：
+1. 固定目标 F9P SKU、FWVER、PROTVER、配置快照；显式设置 CFG-RATE-MEAS=1 Hz、CFG-TP 的 1 Hz、time grid、align-to-TOW、polarity、pulse width、locked/unlocked behavior。
+2. 同步采集 TIMEPULSE 电气边沿（硬件 timestamp/逻辑分析仪）、原始 UBX 字节流、UBX-TIM-TP、NAV-PVT、NAV-TIMEUTC、NAV-TIMELS、MON-VER/状态字段。
+3. 按手册图示验证每条 TIM-TP 是“next pulse”标签，检查 T1 边沿之后的消息指向 T2；明确 NAV-PVT 与 pulse 的历元关系，不按串口消息邻近性配对。
+4. 在冷启动、热启动、GPS locked、GNSS time invalid、天线断开、GNSS interference、receiver reboot、UART 丢字节/缓冲延迟下重复测试。
+5. 证明 time grid / UTC standard / validity / pulse polarity / edge alignment；若 1 Hz pulse 仍输出但 TOW 不再锁定，系统必须进入 HOLDOVER/LOST/INVALID，不得维持 LOCKED。
+6. 对实际 fanout 每路测量从 F9P pin 到 consumer input 的延迟和 skew；不能仅测 receiver pin。
+
+新增测试条目：
+- **TIME-033 — TIM-TP 与 NAV-PVT 的 next-pulse 关联：** 用硬件边沿采集与原始 UBX stream 证明 TIM-TP 标签对应下一 pulse；检查跨秒 off-by-one、week rollover、GNSS/UTC time grid 和消息乱序；失败必须 INVALID。
+- **TIME-034 — TIMEPULSE unlocked behavior：** 分别验证持续输出、locked-other-setting、禁用输出三种配置；注入 GNSS invalid/失锁，证明 1 Hz 边沿存在但 TOW 不可信时不会继续发布 LOCKED absolute time。
+- **TIME-035 — SecureSync PTP implementation separation：** 对内置 ETH0/ETH1 PTP 与 1204-32 选件分别建立硬件/端口/角色/profile/one-step-two-step/accuracy 证据；禁止跨实现复用指标。
+- **TIME-036 — GM full ordering-code procurement audit：** 对 TimeProvider 4100 与 SecureSync 2400 候选，核对完整订货编码、选件卡、软件许可、振荡器、GNSS 模块、PTP profiles、PPS/ToD 端口、holdover 与质保/交期报价；只有书面 SKU 证据才能进入 BOM。
+
+## 12. 本轮研究结论修订
+
+- SecureSync 2400 不能再以一个泛化“PTP GM”条目比较；内置 PTP 与 1204-32 作为两种独立实现分别评估。
+- TimeProvider 4100 已取得 Release 2.2 的官方平台/接口/振荡器摘要；具体 SKU、选件和 profile 仍未确认。
+- F9P 的 UBX-TIM-TP 是 next-pulse 标签，不能按消息接收时刻或同批 NAV-PVT 简单配对；TIMEPULSE 在失锁后可能仍有脉冲但不再保持 TOW 对齐。
+- ADR 仍为 PROPOSED / NOT DECIDED。暂时没有足够证据批准采购，也没有把 A/B 任何一路认定为已验证冗余。
+
 未采购设备；未修改生产代码；未接线；未运行构建、测试、仿真或实机测试。
