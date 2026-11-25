@@ -7,6 +7,7 @@ from livox_time_audit_helpers import (
     stamp_to_ns,
     summarize_time_series,
     summarize_values,
+    summarize_timestamp_pairing,
     validate_cli_thresholds,
 )
 
@@ -121,6 +122,19 @@ class TestNearestNeighbor(unittest.TestCase):
 
     def test_missing_samples(self):
         self.assertEqual(nearest_neighbor_deltas_ns([1, 2], []), [])
+
+
+class TestTimestampPairing(unittest.TestCase):
+    def test_receive_minus_sensor_delta_is_descriptive(self):
+        result = summarize_timestamp_pairing([100, 200, 300], [110, 195, 350])
+        self.assertEqual(result["pair_count"], 3)
+        self.assertEqual(result["receive_minus_sensor_ns"]["min"], -5.0)
+        self.assertEqual(result["receive_minus_sensor_ns"]["max"], 50.0)
+        self.assertFalse(result["same_clock_domain_proven"])
+
+    def test_mismatched_pair_counts_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, "counts must match"):
+            summarize_timestamp_pairing([1, 2], [3])
 
 
 class TestValueSummary(unittest.TestCase):
