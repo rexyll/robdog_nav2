@@ -186,3 +186,5 @@
 - [13 — ZED-F9P UTC / GPS 周时间映射与固定驱动扩展审计](13_zed_f9p_utc_gps_time_mapping_audit.md)
 
 上述文档均为分主题研究材料；项目进度、Gate、状态与提交证据以根目录 `TaskPlan.md` 为准。
+
+- [14 — ZED-F9P UTC→GPS Mapper 补丁计划与纯算法测试向量](14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md)
