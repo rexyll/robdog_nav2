@@ -74,7 +74,7 @@ class TestMid360CaptureAudit(unittest.TestCase):
             record(mid360_payload(1, udp_cnt=0, frame_cnt=10), 56300),
             record(mid360_payload(1, udp_cnt=1, frame_cnt=10), 56300),
         ])
-        self.assertEqual(report["sequence_event_counts"]["frame_boundary"], 1)
+        self.assertEqual(report["sequence_event_counts"]["frame_reset_candidate"], 1)
         sequence, = report["point_cloud_sequence_audits"].values()
         self.assertEqual(sequence["missing_counter_values_estimated"], 0)
 
