@@ -156,9 +156,9 @@ MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.ym
 固定源码仅能证明该版本的实现行为。尚未取得本项目真实 MID-360/IMU rosbag，未检查真实硬件时间域、偏差和丢包；已核实上游 Actions 在 Jazzy 容器中的 AMD64/ARM64 CI 成功（见 §6.1），但本项目未自行构建；MRS core 当前 HEAD 的完整依赖树仍需 CI 验证；未在 Jetson Orin 硬件验证；未完成 GPL/BSD 许可证冲突澄清。上游文档/源码审计不等于项目验证。
 
 
-## 8. 原始 UDP 包、CustomMsg 与 rosbag 接收时间的证据边界
+## 10. 原始 UDP 包、CustomMsg 与 rosbag 接收时间的证据边界
 
-### 8.1 CustomMsg 有意保留的字段与丢失的协议字段
+### 10.1 CustomMsg 有意保留的字段与丢失的协议字段
 
 固定 Livox ROS Driver 2 commit `21445540f0d100dc86a7e6df312dd70bbdb4afdf` 的消息定义：
 - `CustomMsg`: Header、timebase、point_num、lidar_id、reserved、points；
@@ -166,7 +166,7 @@ MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.ym
 
 因此 ROS CustomMsg 没有直接保留 MID-360 原始 UDP 包头中的 `time_type`、`time_interval`、`udp_cnt`、`frame_cnt`、包级 CRC 字段。虽然可从每点 offset_time 检查相对时间顺序和重建点时间，但不能仅凭 CustomMsg 反向证明原始 UDP 包的 time_type=1、包 CRC 正确、UDP 序号连续或设备当时 PTP 锁定。CustomMsg 是驱动解码/组帧后的表示，不是原始网络报文的无损归档。
 
-### 8.2 必须保留的双轨证据
+### 10.2 必须保留的双轨证据
 
 同一采集 run 至少保留：
 1. ROS bag：`/livox/lidar` CustomMsg、`/livox/imu`、驱动/设备诊断 topic、`/tf` 与 `/clock`（如存在）；记录 topic type、QoS、storage_id、rosbag2/ROS 版本和 recorder 参数。
@@ -177,7 +177,7 @@ MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.ym
 
 不得从点云 ROS topic 单独推断原始 UDP 的 time_type；也不得把诊断查询时刻的状态回填成整个 bag 录制期间持续锁定。
 
-### 8.3 三种时间戳独立统计
+### 10.3 三种时间戳独立统计
 
 现有 `audit_livox_rosbag_timing.py` 读取 `SequentialReader.read_next()` 的第三个返回值时，原先直接丢弃了 bag receive timestamp。本次审计工具扩展为同时统计：
 - LiDAR CustomMsg.timebase / header.stamp；
@@ -187,7 +187,7 @@ MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.ym
 
 该差值仅是 paired timestamp difference。除非已证明两者处于同一 clock domain，或具备有界误差的 PHC/system/ROS clock mapping，否则它不是网络传输延迟、驱动排队延迟或传感器时钟偏差。录制器使用 `use_sim_time` 时，rosbag2 时间戳可能来自最新收到的 `/clock`；因此必须保留 recorder 参数与 /clock 数据，不能只看 bag metadata 推断时钟域。Jazzy rosbag2 支持 sent/received timestamp 的能力与存储格式有关；当前工具只审计 reader 暴露的 receive timestamp，不声称恢复 sent timestamp。
 
-### 8.4 离线审计工具当前边界
+### 10.4 离线审计工具当前边界
 
 工具可检查 CustomMsg/header/timebase/point offset/IMU 与 bag receive timestamp 的单调性、统计分布和配对差值；不能从 CustomMsg恢复原始 UDP header、time_type、CRC 或 UDP packet counter。下一阶段若增加 pcap decoder，必须以 MID-360 protocol 固定版本实现字段偏移、字节序、长度、CRC-32、time_type 和 data_type 校验，并以官方样本/捕获包做 golden vectors；在拿到真实 pcap 前只能完成纯算法测试，不能宣称设备协议验证。
 
