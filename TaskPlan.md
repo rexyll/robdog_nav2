@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.77
+- 文档版本：v0.3.78
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并开始固定 ROS 2 Jazzy 消息/Action 契约审计。完整导航模块仍处于早期研究阶段；已有 Nav2 文档仅为子系统级初稿；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并开始固定 ROS 2 Jazzy 消息/Action 契约审计。完整导航模块仍处于早期研究阶段；N1 已完成 Costmap 生产端与 Planner/Controller 消费端的源码闭环审计；采购、实物测量、目标硬件驱动和机器狗实机验证均未完成。**
 
 ---
 
@@ -331,7 +331,7 @@
 - [完整导航模块专项研究总目录](doc/Navigation/README.md)
 - [完整导航模块总体架构与边界](doc/Navigation/00_system_architecture_and_scope.md)
 - [Nav2 bringup 到运动命令链接口审计](doc/Navigation/04_nav2_bringup_interface_audit.md)
-- [传感器观测到 Nav2 Costmap 输入链审计](doc/Navigation/05_sensor_to_costmap_observation_audit.md)
+- [传感器观测到 Nav2 Costmap 输入链审计](doc/Navigation/05_sensor_to_costmap_observation_audit.md)\n- [Costmap 健康状态与 Planner/Controller 消费端审计](doc/Navigation/06_costmap_health_and_consumers_audit.md)
 - [端到端数据流与接口审计框架](doc/Navigation/01_end_to_end_dataflow_and_interfaces.md)
 - [导航子系统清单、上游基线与证据登记](doc/Navigation/02_subsystem_inventory_and_evidence_register.md)
 - [ROS 2 核心接口契约与数据语义](doc/Navigation/03_ros_interface_contracts.md)
