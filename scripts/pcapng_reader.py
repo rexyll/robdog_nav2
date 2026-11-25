@@ -214,3 +214,55 @@ def iter_pcapng_packets(stream: BinaryIO) -> Iterator[PcapngPacket]:
                 caplen, origlen, packet_data, False, caplen < origlen,
             )
         # Unknown block types are skipped by their validated total length.
+
+
+@dataclass(frozen=True)
+class PcapGlobalHeader:
+    endian: str
+    timestamp_resolution_ns: int
+    snaplen: int
+    link_type: int
+
+
+def iter_pcap_packets(stream: BinaryIO) -> Iterator[PcapngPacket]:
+    """Read classic libpcap files (microsecond or nanosecond timestamp magic)."""
+    magic = _read_exact(stream, 4)
+    variants = {
+        b"\xd4\xc3\xb2\xa1": ("<", 1_000),
+        b"\xa1\xb2\xc3\xd4": (">", 1_000),
+        b"\x4d\x3c\xb2\xa1": ("<", 1),
+        b"\xa1\xb2\x3c\x4d": (">", 1),
+    }
+    if magic not in variants:
+        raise PcapngError(f"unsupported classic PCAP magic: {magic.hex()}")
+    endian, fractional_unit_ns = variants[magic]
+    major, minor, _thiszone, _sigfigs, snaplen, link_type = struct.unpack(
+        endian + "HHIIII", _read_exact(stream, 20)
+    )
+    if major != 2:
+        raise PcapngError(f"unsupported classic PCAP major version: {major}")
+    if snaplen == 0:
+        raise PcapngError("classic PCAP snaplen must be nonzero")
+    section_index = 0
+    packet_index = 0
+    while True:
+        header = stream.read(16)
+        if not header:
+            return
+        if len(header) != 16:
+            raise PcapngError("truncated classic PCAP packet header")
+        seconds, fraction, caplen, origlen = struct.unpack(endian + "IIII", header)
+        fraction_limit = 1_000_000 if fractional_unit_ns == 1_000 else 1_000_000_000
+        if fraction >= fraction_limit:
+            raise PcapngError("classic PCAP timestamp fraction out of range")
+        if caplen > snaplen:
+            raise PcapngError("classic PCAP captured length exceeds snaplen")
+        if caplen > origlen:
+            raise PcapngError("classic PCAP captured length exceeds original length")
+        data = _read_exact(stream, caplen)
+        timestamp_ns = seconds * 1_000_000_000 + fraction * fractional_unit_ns
+        yield PcapngPacket(
+            section_index, 0, link_type, None, timestamp_ns,
+            caplen, origlen, data, True, caplen < origlen,
+        )
+        packet_index += 1
