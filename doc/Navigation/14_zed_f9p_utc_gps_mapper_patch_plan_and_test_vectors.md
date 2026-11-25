@@ -910,3 +910,34 @@ L1C 的 UTC 参数不是简单地从 L1 C/A LNAV 复用相同位宽：
 - ZED-F9P 是否输出 GLONASS raw navigation data、KP/τC/B1/B2、GPS L1C raw page、GPS L1 C/A raw subframe，仍需目标固件 MON-VER、配置与真实 raw frame 验证。
 
 本节是静态 ICD/公开资料审计与设计合同，不是实时导航电文采集、解码器实现、接收机验证或实机测试；以上测试合同均未运行。
+
+##### 4.19.6 俄罗斯 2026 年国家无线电导航计划：从“未知”修正为“路线已公开、接口未验收”
+
+本轮找到并读取《俄罗斯联邦无线电导航计划》（由俄罗斯工业和贸易部 2026-01-30 第 362 号命令批准）的公开全文副本。该计划第 3.2.2 节及 3.2.2.14.1 节对 UTC 连续化后的 GLONASS 时间架构给出比旧 ICD 更明确的国家层面路线：
+
+- 将 GLONASS 系统时间的基准描述为俄罗斯国家 UTC(SU)，并说明传统 UTC/UTC(SU) 以整数秒校正的旧制度。
+- 为兼容现有用户设备，要求同时维持两种时间尺度：一是用于现有设备向后兼容的“可校正秒”旧时间尺度；二是改变 dUT 约束后的连续 UTC 时间尺度。
+- 对信号分支作了明确区分：现有 FDMA（频分）导航信号应继续传递旧的、带校正秒的时间信息；新引入的 CDMA（码分）信号及其用户设备应传递旧时间尺度和重新定义后的连续 UTC 时间尺度。
+- 时间频率保障体系也应支持两种时间尺度，并建设 UTC 与 UTC(SU)、GLONASS 中央同步器时间等尺度间的比对能力。
+
+**证据等级与时间适用性：**该文件是政府部门批准的国家无线电导航规划文本，属于国家规划/政策路线证据，不是 GLONASS 信号 ICD、控制段运行通告、CDMA 广播字段定义或接收机固件行为证据。可检索全文目前来自 Garant 法律信息平台副本；本轮未从 Минпромторг 官方网站或俄罗斯官方法律公布门户取得同一文件的原始发布页面/签章附件。因此将其记录为强政策线索（E1-policy candidate），正式来源链仍待官方门户复核。更重要的是，命令日期为 2026-01-30，早于 2026-10-15 的 CGPM Resolution 5 (2026)；它可证明俄罗斯规划文本已经预先考虑双尺度架构，但不能证明其已按 2026 Resolution 最终条款完成同步修订或已投入运行。
+
+该发现修正 §4.19.3 的过宽表述：不能再说“俄罗斯尚无公开的 UTC 连续化迁移路线”；准确结论应为“国家无线电导航计划公开提出 FDMA 保留旧可校正尺度、CDMA 双尺度并行的兼容路线，但广播字段、实施时序、UTC(SU) 国内 realization、旧/新时间尺度的精确映射和接收机部署仍未由 ICD/正式运行文件证实”。因此：
+- 对 GLONASS FDMA legacy GNAV：继续将 KP、τC 等解释限定在旧 leap-step/兼容尺度合同内；不得把 KP=00 解释为连续 UTC 无事件，也不得将旧 τC 直接当作连续 UTC 偏差。
+- 对 GLONASS CDMA：架构上预留 legacy-corrected 与 continuous-UTC 两套独立 typed time-scale records / validity / epoch / source / version；在新 ICD 字段映射取得前，parser 状态必须为 UNSUPPORTED_SPEC 或 POLICY_UNVERIFIED，不允许从 FDMA 字段猜测 CDMA 字段。
+- 对接收机：ZED-F9P 的旧 FDMA 输出与未来 CDMA 输出能力必须分别核实；不能因芯片支持某 GLONASS 信号频段就推断其输出两套时间尺度，也不能推断固件会暴露原始导航页。
+- 对跨星座：continuous UTC 与 GPS/Galileo/BeiDou 系统连续时间映射仍需各自广播参数和 realization provenance；GLONASS legacy time 不能加入 UTC 主时钟融合/投票。
+
+新增验证合同：
+- GNSS-UTC-IF-017：FDMA legacy-only。输入旧 GNAV/KP/τC，只能生成 LEGACY_STEP_REALIZATION；不能自动构造 continuous UTC。
+- GNSS-UTC-IF-018：CDMA dual-scale contract。只有经版本化 ICD 明确映射并验证的双尺度字段，才可分别生成 LEGACY_STEP_REALIZATION 与 CONTINUOUS_UTC_REALIZATION；缺少任一字段或有效标志时分别降级/拒绝。
+- GNSS-UTC-IF-019：dual-scale continuity。构造 2027-05-20 前后测试向量，验证连续 UTC 支路无 ±1 s 人工跳变，旧尺度支路按兼容合同独立处理；不假定该日期的具体广播生效瞬间。
+- GNSS-UTC-IF-020：receiver capability fence。MON-VER、信号跟踪状态、raw navigation page availability、解码字段版本和时间尺度 source 必须全部满足能力合同；不得仅凭型号或频段宣称 dual-scale support。
+
+**本轮来源与限制：**
+- 俄罗斯工业和贸易部命令 2026-01-30 №362 及所附《Радионавигационный план Российской Федерации》公开全文副本（Garant 法律信息平台；尚待官方发布门户回读）。
+- Rosstandart 官方页面确认 ГОСТ Р 8.930-2016 仍标记为“Действует”，其范围为通过 GLONASS 传递 UTC(SU)；该标准 2016 年制定，不能替代 2026 年迁移实施规范。
+- GLONASS ICD L1/L2 Edition 5.1 (2008) 的 UNAVCO 镜像本轮已可读取：§3.3.3 明确 GLONASS time 与 UTC(SU) 的传统关系；§4.5 定义 τc、τGPS、B1/B2、KP；Appendix 2 定义 leap-second 期间旧/新 UTC 与旧/新星历并用的接收机行为。该副本有签署页，但 ICD 自述官方分发机构为 Russian Institute of Space Device Engineering；UNAVCO 镜像不等于官方分发链。
+- 未取得 GLONASS CDMA 新版 ICD/正式 Interface Control Document，未确认 L1OC/L2OC/L3OC 的双尺度广播字段和版本号；未取得控制段实施通知；未读取 ZED-F9P 真实 raw frames。
+
+因此本节把政策结论从“迁移政策完全未确认”细化为“国家规划已提出双尺度迁移/兼容路线，但信号级规范与运行实现未确认”。所有 GNSS-UTC-IF-017..020 仅为测试合同，未实现、未运行。
