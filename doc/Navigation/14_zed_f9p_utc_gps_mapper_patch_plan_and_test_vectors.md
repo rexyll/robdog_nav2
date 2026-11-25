@@ -36,7 +36,7 @@
 Pure core 不读取 system wall clock、不调用 ROS clock、不访问 USB；host receive time 由 adapter 传入 monotonic integer ns。所有时间计算用整数，禁止 float seconds 累积。
 
 建议输出结构至少包含：
-- `status`：`VALID_CONFIRMED`、`VALID_UNCONFIRMED`、`AMBIGUOUS_INVALID`；
+- `status`：统一采用 §4.12.4 的 `NO_FIX`、`UNCONFIRMED`、`VALID`、`DEGRADED`、`AMBIGUOUS_INVALID`、`STALE`、`RESETTING`；旧草案中的 `VALID_CONFIRMED` 对应 `VALID`，`VALID_UNCONFIRMED` 对应 `UNCONFIRMED`；
 - `gps_time_ns`、`gps_week`、`gps_tow_ns`；
 - `utc_civil`（保留 leap-second 标识，不强制转换成 POSIX timestamp）；
 - `leap_seconds`、`leap_source`、`leap_valid`；
@@ -218,8 +218,8 @@ GPS epoch：1980-01-06 00:00:00 UTC，GPS week 长度 604800 s。GPS-001 是纯�
 | VALID-006 | TIMEUTC valid_utc=false | reject |
 | VALID-007 | utc_std unavailable/unknown/not allowlisted | reject |
 | VALID-008 | PVT and TIMEUTC normalized UTC disagree | reject |
-| VALID-009 | valid_wkn=false but UTC anchor otherwise valid | do not infer week from flag; derive week only from validated UTC+LS and mark flag discrepancy per policy |
-| VALID-010 | NAV-STATUS tow_set/wkn_set false | do not treat iTOW/week status as valid; absolute UTC policy decides separately, but no protocol consistency claim |
+| VALID-009 | valid_wkn=false but UTC anchor otherwise valid | do not infer week from flag; record validity discrepancy and reject navigation-consumable absolute mapping as AMBIGUOUS_INVALID unless a separately approved policy explicitly changes the required-source contract |
+| VALID-010 | NAV-STATUS tow_set/wkn_set false | do not treat iTOW/week status as valid; reject navigation-consumable absolute mapping as AMBIGUOUS_INVALID (gpsFixOK=false is separately classified as NO_FIX) |
 
 ### 4.8 NAV-TIMEUTC valid-byte masks
 
@@ -411,15 +411,15 @@ PVT confirmation 是独立可信度维度：confirmedAvail=0 表示接收机未�
 
 | 状态 | 进入条件（概要） | 是否发布绝对 GPS week/TOW |
 |---|---|---|
-| NO_FIX | NAV-STATUS/PVT 明确表示当前无可用 GNSS fix，或必需 fix validity 不成立 | 否 |
+| NO_FIX | NAV-STATUS/PVT 明确表示当前无 GNSS fix（例如 gpsFixOK=false / no-fix fixType） | 否 |
 | UNCONFIRMED | PVT UTC 字段有效且可与 TIMEUTC 核验，但接收机未提供完整 confirmation metadata | 默认否；只允许发布显式标注为候选的诊断数据 |
 | VALID | PVT validity/confirmation 满足策略；TIMEUTC 同 iTOW 一致且标准获准；TIMELS 当前 offset 有效且来源获准；STATUS time flags 有效；所有 age/skew/accuracy 参数已配置并通过；generation fence 当前有效 | 是 |
-| DEGRADED | 可保留诊断候选，但某个非致命的可选交叉核验/质量来源缺失，且策略明确允许降级运行 | 默认否；只有策略逐项批准后才可发布带降级标志的数据 |
+| DEGRADED | 四类必需消息及其 validity/source/epoch 条件均满足，但可选的 NAV-TIMEGPS 等附加交叉核验缺失/不可用，且策略明确允许降级诊断 | 默认否；不得因 DEGRADED 发布导航消费的绝对 GPS 时间，除非单独 ADR 明确批准并定义独立接口 |
 | AMBIGUOUS_INVALID | 同历元冲突、UTC/日历非法、未知枚举、source 不可信、join 失败、无法判定 epoch 或输入组合矛盾 | 否 |
 | STALE | 任一必需源超过已批准 freshness/age，或 receive skew 超限 | 否 |
 | RESETTING | detach/attach、session/generation 变化或 reset transaction 尚未完成 | 否 |
 
-默认发布策略为 fail-closed：只有 VALID 可以进入导航消费的绝对 GPS 时间通道。UNCONFIRMED / DEGRADED 仅供诊断；其他状态不发布可被误认为有效的 week/TOW。每个输出同时携带稳定的 machine-readable reason_codes、source identity、generation、source uncertainty 和输入历元；状态恢复必须服从单独冻结的恢复滞回策略。状态转换不得隐式清除/重置其他 GNSS quality gate 或 estimator epoch。
+默认发布策略为 fail-closed：只有 VALID 可以进入导航消费的绝对 GPS 时间通道。NO_FIX 只表达接收机无 fix；towSet/wknSet 或 TIMEUTC validTOW/validWKN 等时间有效性标志缺失/为 false 时归入 AMBIGUOUS_INVALID，而不是 NO_FIX。DEGRADED 仅用于四类必需输入仍完整有效、但可选附加核验缺失的诊断情形；不得用它绕过 PVT/TIMEUTC/TIMELS/STATUS 的必需条件。UNCONFIRMED / DEGRADED 仅供诊断；其他状态不发布可被误认为有效的 week/TOW。每个输出同时携带稳定的 machine-readable reason_codes、source identity、generation、source uncertainty 和输入历元；状态恢复必须服从单独冻结的恢复滞回策略。状态转换不得隐式清除/重置其他 GNSS quality gate 或 estimator epoch。
 
 #### 4.12.5 纯算法属性测试矩阵（Hypothesis 尚未引入）
 
