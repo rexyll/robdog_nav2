@@ -493,7 +493,7 @@ LinuxPTP 的 ptp4l 支持 OC/BC/TC；LinuxPTP 文档给出的配置语义中，E
 5. phc2sys 的方向与 source/destination，建立 PHC→CLOCK_REALTIME 映射；测量 cross timestamp 和 host system clock offset，禁止把 PHC 与系统时钟当同一时钟；
 6. link flap、switch reboot、Jetson reboot、GM outage、PHC reset、主从切换后的 generation、重锁和时间 step。
 
-NVIDIA 官方平台资料证明的是平台接口与载板支持边界；论坛帖子只提供特定实测案例。当前未在本项目实际 64GB 目标开发套件、最终网口或未来定制载板上运行 ethtool / ptp4l / phc2sys，因此目标接口状态仍为 **需要实物/授权，未完成**。
+NVIDIA 官方平台资料证明的是平台接口与载板支持边界；论坛帖子只提供特定实测案例。当前未在本项目实际 64GB 目标开发套件、最终网口或未来定制载板上运行 ethtool / ptp4l / phc2sys，因此目标接口状态仍为 **需要实物/授权，未完成**。Orin 应作为强制 client-only PTP Ordinary Clock，而不是 Livox Wiki 附录中作为示例 master 的 PC；系统时钟映射应使用后续 §16 中的 phc2sys 自动模式，避免硬编码 UTC offset。
 
 ### 15.5 新增验证合同 TIME-041..046
 
@@ -514,3 +514,153 @@ NVIDIA 官方平台资料证明的是平台接口与载板支持边界；论坛�
 6. NVIDIA Developer Forum, AGX Orin 32GB hardware timestamp report：<https://forums.developer.nvidia.com/t/does-the-jetson-agx-orin-32gb-support-hardware-timestamping-for-ptp/337720>；AGX Orin 64GB ptp4l TX timestamp timeout report：<https://forums.developer.nvidia.com/t/jetson-agx-orin-64gb-ptp4l-service-timed-out-while-polling-for-tx-timestamp/316653>。
 
 本轮 Web 访问日期为 2026-11-25。Livox Wiki 源链接当前使用 master，本次未建立不可变 commit pin，后续必须保存源码 commit SHA/文件快照或供应商协议版本号。本节是上游规格与公开案例审计，不是目标板或网络实测；无设备抓包、无目标 Jetson 命令输出、无代码实现、无构建/测试/仿真/实机验证。
+
+
+## 16. LinuxPTP / Jetson 客户端配置、时钟域映射与可执行验证流程（2026-11-25）
+
+### 16.1 PTP 角色分离：外部唯一 GM，Orin 强制 client-only
+
+本项目方案 A 中的角色固定为：
+- **外部 GNSS-disciplined GM：** 提供可追溯的时间源与唯一活动 PTP Grandmaster；其 GNSS reference、oscillator、holdover、PTP profile、domain 与输出能力必须由具体设备 SKU 和实测确认。
+- **Jetson AGX Orin：** NIC PHC 作为 PTP Ordinary Clock；运行 `ptp4l` 的 `clientOnly=1`，只接收外部 GM，不参与争抢 GM 角色。即使外部 GM 暂时消失，也不能自动把 Orin 本地系统时间升格为网络主时钟。
+- **MID-360：** Livox 自身 PTP Slave；与 Orin 分别跟踪同一个 GM。Orin 不通过 ROS 或 DDS 再向 MID-360“转发时间”，除非未来明确设计并验证另一个 BC/GM 拓扑。
+- **交换机：** 初始台架先用单一物理交换路径，之后才比较普通 Forward、E2E TC 或 BC。不要在验证阶段同时引入多个活动 GM、PTP/gPTP 混跑或未审计的冗余路径。
+
+Livox 官方时间同步说明仍包含一段 Linux PC `ptp4l` master 的示例；这是用于说明如何搭建/检查 PTP 网络，不是本项目 Orin 的生产角色。该上游文件还推荐过 linuxptp v3.1.1，但当前 JetPack/L4T 仓库中的包版本尚未采集，不能据此直接覆盖系统包或强行编译旧版本。目标机必须记录 `ptp4l -v`、`phc2sys -v` 和发行版包版本。
+
+### 16.2 Orin PTP Slave 的配置基线
+
+根据 LinuxPTP 官方手册与默认配置，UDPv4、E2E、硬件 timestamp 是默认配置；`clientOnly` 默认值为 0，因此必须显式打开。建议在抓包确认目标 GM 的 domain 后，建立专用文件，例如 `jetson-ptp-slave.cfg`：
+
+```ini
+[global]
+clientOnly 1
+network_transport UDPv4
+delay_mechanism E2E
+time_stamping hardware
+
+# Domain must match the external GM.
+# LinuxPTP defaults to 0; set domainNumber only after packet capture
+# or the GM configuration confirms the actual value.
+```
+
+说明：
+1. `clientOnly 1` 是关键防护；不要配置 `serverOnly 1`，也不要让 Orin 成为 BMCA 中可被选为 GM 的时钟。
+2. `network_transport UDPv4`、`delay_mechanism E2E` 与 MID-360 当前已确认的 PTP v2.0 UDP/IP + E2E 合同一致；不要用 `delay_mechanism Auto`，因为 LinuxPTP 的 Auto 可在收到 peer-delay request 后切换到 P2P。
+3. `time_stamping hardware` 要求目标 NIC/driver/PHC 真正支持硬件 TX/RX timestamp；若 PHC 不存在或 TX timestamp polling timeout，必须判定该接口未通过高精度 PTP Gate，不能静默退化为 software timestamp。
+4. Domain number 不从示例或交换机默认配置推断。LinuxPTP 默认 domain 为 0，但若 GM 的 Announce/管理数据和配置确认的是其它值，必须使用实际值。
+5. `twoStepFlag` 是本机作为 PTP Server/GM 发出 Sync 时的模式配置。Orin 已被强制为 client-only，不应把该字段理解为“要求远端 GM 发 two-step”；远端 Sync 的 two-stepFlag 与 Follow_Up 必须通过抓包确认。
+6. 本配置没有擅自设定 PTP profile、priority、UTC offset、Announce/Sync interval、delay asymmetry 或 latency correction。只有当 GM/交换机配置和链路参考面已取得书面/实测证据后，才填入非默认值。
+
+运行前先确认接口与 PHC：
+
+```bash
+IFACE=enP2p1s0   # Replace with the actual target NIC interface.
+ip -brief link
+ip -details link show dev "$IFACE"
+sudo ethtool -i "$IFACE"
+sudo ethtool -T "$IFACE"
+ptp4l -v
+phc2sys -v
+ls -l /dev/ptp* 2>&1 || true
+systemctl is-active chrony systemd-timesyncd 2>/dev/null || true
+chronyc tracking 2>/dev/null || true
+```
+
+注意：`IFACE` 只是占位；不得将 `enP2p1s0` 写成项目固定网口。必须把 NIC 的 driver/firmware、PHY、实际 `/dev/ptpN`、载板 revision、JetPack/L4T、kernel 和 ethtool 完整能力一并归档。若 `chronyd` 或 `systemd-timesyncd` 正在独立调整 `CLOCK_REALTIME`，必须先明确唯一时钟纪律路径；不能让它们与直接调整系统时钟的 `phc2sys` 无协调地竞争。若决定由 chrony 统一纪律，应采用 LinuxPTP 提供的 SOCK/SHM reference-clock 集成方式，而不是两个 daemon 同时直接调系统时钟。
+
+### 16.3 可复现的启动与运行命令
+
+先在独立终端抓包，再启动 `ptp4l`。对 UDP PTPv2 和 IEEE 802.1AS/L2 分别捕获，避免把点云/IMU UDP 数据流误作 PTP：
+
+```bash
+sudo tcpdump -ni "$IFACE" -nn -s 0 -w ptp-udp.pcap \
+  '(udp port 319 or udp port 320)'
+
+sudo tcpdump -ni "$IFACE" -nn -s 0 -w ptp-l2.pcap \
+  'ether proto 0x88f7'
+```
+
+如交换机已启用 VLAN，还需记录 VLAN tag/PCP 并确保抓包过滤器覆盖 VLAN encapsulation；抓包中没有看到报文时，不能立即宣称网络无 PTP，先确认 NIC VLAN offload、mirror/SPAN、过滤器和采集位置。
+
+启动 Orin 为 client-only 的 PTPv2 UDPv4 E2E hardware-timestamp client：
+
+```bash
+sudo ptp4l -i "$IFACE" -f ./jetson-ptp-slave.cfg \
+  -H -4 -E -s -m
+```
+
+其中 `-s` 打开 client-only，`-H` 选择硬件 timestamp，`-4` 选择 UDPv4，`-E` 选择 E2E；配置文件中的 `clientOnly 1` 再提供持久化保护。不要使用 `-A` 自动 E2E/P2P 切换，也不要用 `-2` 切换为 Layer-2 transport 来“匹配” gPTP；MID-360 的 PTP v2.0 与 gPTP 是两种独立模式。
+
+当本地 `ptp4l` 服务已经运行后，使用 `pmc` 查询状态（将 DOMAIN 替换为实际 domain）：
+
+```bash
+PTP_DOMAIN=0   # Replace only after verifying the GM domain.
+sudo pmc -u -d "$PTP_DOMAIN" "GET DEFAULT_DATA_SET"
+sudo pmc -u -d "$PTP_DOMAIN" "GET PARENT_DATA_SET"
+sudo pmc -u -d "$PTP_DOMAIN" "GET PORT_DATA_SET"
+sudo pmc -u -d "$PTP_DOMAIN" "GET CURRENT_DATA_SET"
+sudo pmc -u -d "$PTP_DOMAIN" "GET TIME_PROPERTIES_DATA_SET"
+sudo pmc -u -d "$PTP_DOMAIN" "GET TIME_STATUS_NP"
+sudo pmc -u -d "$PTP_DOMAIN" "GET PORT_HWCLOCK_NP"
+```
+
+采集结果至少包括 port state、parent/GM identity、domain、stepsRemoved、offsetFromMaster、meanPathDelay、time/frequency traceability、timeProperties 与 PHC association。某些 `*_NP` 管理项为 LinuxPTP 扩展；若当前发行版不支持，应保存返回结果并记录版本，不把“不支持查询项”误判为同步失败。
+
+当 Orin 的 PTP port state 和 GM parent 数据符合预期后，再启动 PHC→系统时钟映射：
+
+```bash
+sudo phc2sys -a -r -m
+```
+
+LinuxPTP 的 `-a` 从正在运行的 `ptp4l` 读取时钟与 port state，并随状态变化自动选择同步方向；单个 `-r` 将 `CLOCK_REALTIME` 纳入同步目标。不要使用 `-rr`，因为双 `-r` 会允许系统时钟作为时间源；对于本项目 client-only Orin，不需要这个反向角色。也不要手工添加 `-O 0` 或硬编码 `-O 37`，应由 `ptp4l` 的 PTP time properties 与 `phc2sys` 自动获得正确 offset。给 `ptp4l` 和 `phc2sys` 使用不同配置文件/参数来源，避免共用文件时非预期的参数继承。
+
+### 16.4 PTP/PHC/UTC/ROS 时钟域映射约束
+
+LinuxPTP 文档明确区分 PTP timescale 与 UTC：硬件 timestamping 的 PHC 跟随 PTP timescale；主机 `CLOCK_REALTIME` 通常表达 UTC；`phc2sys` 根据 PTP time properties 维护两者偏移。因此：
+- NIC PHC、`CLOCK_REALTIME`、`CLOCK_MONOTONIC` 和 ROS Time 不能视作同一时钟。
+- `phc2sys` 只建立 PHC↔系统时间映射，不会自动证明 ROS use_sim_time、传感器 header.stamp 或 MCU 时间等于 UTC。
+- PTP time scale 与 UTC offset 必须作为显式属性存储；不要把 PTP timestamp 直接标注为 UTC/GPS，亦不要把 PTP 的连续时间尺度当作自动遵守历史闰秒/未来 continuous UTC 政策的 UTC realization。
+- `CLOCK_MONOTONIC` 仍作为本机超时、缓存龄期与执行时长的基准，禁止通过 NTP/PTP 的 wall-clock step 来回调 monotonic freshness 计时。
+- 任何 GM identity/domain、PTP time scale/UTC offset、PHC device/index、NIC、系统时间 step、设备重启或时间源切换都建立新的 `mapping_generation`；清空跨 generation 的 LiDAR deskew、GNSS epoch join、camera trigger pairing 和融合缓冲区。
+- 启动时优先让 ptp4l/phc2sys 达到受控同步状态，再启动依赖绝对时间的 ROS 传感器/定位节点。若在导航运行期间发生 clock step、GM identity 变化或 servo 失锁，则立即撤销高精度时间健康状态，并按上游状态机进入 DEGRADED/LOST/INVALID；在 generation 更新和重新收敛前不得跨界拼接历史数据。
+
+LinuxPTP 默认配置的 first-step threshold 为 20 μs；是否发生 startup step、何时校正 PHC 和系统时钟必须以实际启动日志及外部参考测量确认。不要未经风险评估就把 threshold 改为 0：禁用 step 可能增加初次收敛时间。项目验收需分别记录首次启动 step、运行中频率调整、GM 中断后的重锁 step，并证明 ROS 导航运行期间没有未管理的 wall-clock discontinuity。
+
+### 16.5 TIME-041..046 的测量步骤与结果字段
+
+| 测试 | 执行步骤 | 必须保存的证据 | 失败判据 |
+|---|---|---|---|
+| TIME-041 PTP address/profile | 双端同步抓包，解析 IPv4/IPv6、319/320 或 L2、multicast/unicast、domain、VLAN/PCP、TTL、GM identity、消息 interval | pcap、Wireshark decode、GM 配置、交换机配置、MID-360 firmware/status | 无法确认实际 PTP flow；GM 与 endpoint transport/domain 不匹配 |
+| TIME-042 two-step/E2E | 逐个验证 Sync/Follow_Up、Delay_Req/Delay_Resp、t1..t4 时间戳关联；确认无 Pdelay 取代 E2E | GM/Orin/MID-360 三方抓包、ptp4l state/log、offset/path-delay 时序 | 缺失 Follow_Up/Delay_Resp、错误 delay mechanism、持续 TX timestamp timeout 或非预期单步/双步 |
+| TIME-043 MID-360 HMS gate | 对 PTP stop/version mismatch/low precision/PTP+gPTP 并存和 powerup_cnt 变化分别采集设备状态 | 原始 HMS uint32、abnormal ID/level、time_sync_type、last_sync_time、time_offset、powerup_cnt、timestamp_type | 告警存在却仍报告 LOCKED；恢复后没有 generation 变化/确认 |
+| TIME-044 PTP/GPS transition | 分别运行 PTP only、GPS/PPS only、两者同时、PTP outage/recovery；不同时启用两个 master | GM/source identity、HMS、PTP pcap、PPS capture、phase offset、generation 日志 | 源优先级/切换未按设备观测；无记录 phase step；双 GM 同时 active |
+| TIME-045 Orin PHC qualification | 对目标 NIC 逐口跑 ethtool/driver/PHC 枚举，运行 ptp4l clientOnly，观察 hardware TX/RX timestamp 与 port state | 板卡/模块/JetPack/kernel/driver/PHY、ethtool -T、/dev/ptpN、ptp4l/pmc 日志 | 无硬件 timestamp/PHC；端口无法进入正确 client state；持续 timeout/Faulty；Orin 意外发出 GM Announce |
+| TIME-046 PHC-system stress | 运行 phc2sys -a -r；记录 cross timestamp/offset/drift，并叠加点云、DDS、高 CPU、链路 flap、交换机/GM reboot | phc2sys log、system clock offset、PHC data、CPU/IRQ/EEE、链路与重启事件、mapping_generation | 未协调的时钟 step、竞争式 system-clock discipline、失锁后仍 LOCKED、跨 generation 缓冲拼接 |
+
+所有测试的数值通过/失败阈值必须由时间误差预算和各消费模块（LIO deskew、stereo/VIO、GNSS fusion、ROS TF）允许的数据龄期反推。本轮不擅自填入纳秒/微秒门限。每次 run 使用唯一 run_id，并保存启动参数、配置文件 SHA-256、软件版本、原始 pcap、日志、温度/负载、设备序列号（不公开对外）和结论。
+
+### 16.6 新增验证合同 TIME-047..052
+
+- **TIME-047 — Orin client-only role fail-safe：** 无 GM、GM 被拔线、GM reboot 和另一 GM 出现时确认 Orin 始终不发出 Announce/Sync 作为 GM；port state 与 parent GM 变化必须可观测。
+- **TIME-048 — LinuxPTP config/packet conformance：** 在同一实际 domain/profile/transport 下，验证 clientOnly、UDPv4、E2E、hardware timestamp 与 Livox two-step/E2E 协议相容；显式证明配置文件中的 twoStepFlag 不是远端 two-step 证据。
+- **TIME-049 — PHC servo and management readback：** 使用 ptp4l/pmc 获取 Default/Parent/Port/Current Data Set、Time Status、PHC association；将日志中的 port state、GM identity、offset 与 pcap 时间对齐。
+- **TIME-050 — PHC↔UTC discipline ownership：** 验证 phc2sys -a -r 的方向与 PTP time properties 转换；审计 chrony/systemd-timesyncd，确保系统时钟只有一个直接 servo owner，或采用经过验证的 SOCK/SHM reference integration；禁止硬编码 UTC offset。
+- **TIME-051 — startup/step/re-lock generation：** 测量 ptp4l 与 phc2sys 初次 step、运行中调整、GM outage/recovery 的系统 wall-clock discontinuity；确保导航栈启动顺序正确，并在 step/GM identity/domain/PHC reset 后更新 mapping_generation、flush all temporal queues。
+- **TIME-052 — evidence reproducibility/version pin：** 每次目标板 run 保存 JetPack/L4T、kernel、linuxptp、ethtool、NIC/PHY firmware、完整 config、SHA-256、pcap 与原始日志；Livox upstream source fixed at commit and blob SHA，禁止只记录 mutable master URL。
+
+### 16.7 上游文件版本固定与参考来源
+
+本轮从 Livox-SDK 官方仓库读取并在 commit `6b030b73a7fa1e035e44bf1b262d7a9cbebe0728`（2026-09-21，add Mid 360L product information）回读确认以下文件 blob SHA 与当前 master 内容一致：
+- `source/tutorials/new_product/common/time_sync.rst` — blob `bbf34d60df4c2fbb83bca989b08dbfc50d6006ea`：IEEE 1588v2.0 two-step/E2E 交互与 master/slave 模型；同一文档单独描述 gPTP L2/AUTOSAR 变体；推荐单一 master；记录旧版 LinuxPTP 3.1.1 示例，应视为历史参考，不直接覆盖当前 Orin distro 包。
+- `source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md` — blob `d797ea8512ccdac6a6c1868b7b538f6c79dc4ec3`：MID-360 通信协议发布版本 v1.4.12（2026-09-21）。
+- `source/tutorials/new_product/mid360/hms_code_mid360.rst` — blob `0bc60df1bd8ba094cad2ebc256cc70c8120a1adf`：HMS 码组成、severity level 和 MID-360 时间同步告警表。
+  
+LinuxPTP 在线手册为滚动文档，目标 JetPack 上实际 linuxptp 版本必须用 `ptp4l -v` / `phc2sys -v` 与 dpkg 记录；本节只固定当前可访问手册的语义，不把滚动文档当成目标机安装版本：
+1. `ptp4l(8)`：<https://www.linuxptp.org/documentation/ptp4l/>。
+2. `phc2sys(8)`：<https://www.linuxptp.org/documentation/phc2sys/>。
+3. `pmc(8)`：<https://www.linuxptp.org/documentation/pmc/>。
+4. default configuration：<https://www.linuxptp.org/documentation/configs/default-cfg/>。
+5. default parameters：<https://www.linuxptp.org/documentation/default/>。
+
+本节为目标机配置与验证 runbook，不代表命令已在 AGX Orin 执行。实际 interface、PTP domain/profile、GM、PHC index、UTC offset、step/holdover 行为和精度阈值仍需实物/授权验证；无本项目设备操作、无生产代码、无构建/测试/仿真/实机结果。
