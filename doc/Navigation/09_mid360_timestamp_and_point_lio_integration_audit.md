@@ -12,7 +12,7 @@
 3. **Point-LIO CTU fork 的 IMU time lag 实现确实存在消费链不一致。** callback 计算 `msg.header.stamp - time_lag_imu_to_lidar`，该修正值用于 last_timestamp_imu 的回退/同步门控；但实际压入 imu_deque 的仍是原始 msg_in，sync_packages 和 IMU 处理再读取原始 header.stamp。结果是 gate 使用偏移时间，积分样本仍使用未偏移时间。除非该参数保持 0，否则这是应修复/验证的问题，不能视为完整时间补偿。
 4. Driver README 的 xfer_format：0=PointXYZRTLT PointCloud2，1=Livox CustomMsg，2=标准 PCL PointXYZI。Point-LIO 订阅 CustomMsg；MRS core 现有旧 launch 也显式传 `xfer_format:=1`。因此本项目驱动配置必须明确设置 1，不能依赖 Driver README 的默认示例 0。
 5. **MRS Point-LIO Core 的 ros2 分支是 ROS 2 metapackage，但其 gitman 清单将 Point-LIO、Livox Driver 2、Estimator Plugin 都指向浮动的 `ros2` branch，而非固定 commit。** 不能作为可复现锁定的 BOM，需将依赖 SHA 固定。
-6. MRS core 包自身是 ament_cmake，package.xml 依赖 point_lio 与 mrs_point_lio_estimator_plugin；Point-LIO CMake 仍依赖 mrs_lib、backward_ros、PCL、pcl_ros 等。MRS core 主要是集成/launch/config metapackage，不等于 Point-LIO 可脱离 MRS 的最小化版本。
+6. MRS core 包自身是 ament_cmake，package.xml 依赖 point_lio 与 mrs_point_lio_estimator_plugin；Estimator Plugin 的 package.xml/CMake 还依赖 `mrs_uav_managers`、`mrs_uav_state_estimators`、`mrs_lib`，插件以 MRS UAV estimator pluginlib 接口注册。Point-LIO CMake 另依赖 mrs_lib、backward_ros、PCL、pcl_ros 等。MRS core 主要是集成/launch/config metapackage，不是可直接脱离 MRS 的最小化版本。
 7. MRS core 仓库 README 当前简短说明其为 MRS UAV Point-LIO metapackage；较早的网页缓存/文档存在 ROS1 catkin 安装说明，不能把旧说明当成当前 ros2 分支证据。其 ros2 branch 有 ROS build workflow，但 workflow 委托外部 `ctu-mrs/ci_scripts@ros2`；必须进一步审查 reusable workflow 实际 distro/matrix 与结果，不能只凭存在 workflow 就宣称 Jazzy/ARM64 通过。
 8. 该 metapackage 有独立 BSD-3-Clause 许可，不会自动覆盖其 submodules 的许可证。Point-LIO 本体 GPL-2.0 与 package.xml BSD 声明冲突仍然存在；必须分开审查各 submodule 的 LICENSE。
 
@@ -108,9 +108,17 @@ MRS core 的旧 MID360 launch 明确设置 `xfer_format:=1`，这与 Point-LIO C
 - Point-LIO CMake 的依赖包含 `mrs_lib`、`backward_ros`、`livox_ros_driver2`、PCL/pcl_ros 等；本项目若不引入整个 MRS UAV System，需先评估替换/剥离 MRS 专属 timer、diagnostics、estimator plugin 和 launch integration 的工作量。
 - MRS core package 的 BSD-3-Clause 仅描述该 metapackage，不覆盖它下载的 submodules。
 
-### 6.1 CI 边界
+### 6.1 CI 证据与边界
 
-MRS core 的 workflow 在本仓库中委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.yml@ros2`。当前固定 workflow 文件未直接写出 ROS distro、Ubuntu、架构 matrix；需要继续追踪 reusable workflow 与实际 Actions runs。未拿到目标架构成功日志前，不宣称 Jazzy 或 ARM64/Orin 通过。
+MRS core workflow 委托 `ctu-mrs/ci_scripts/.github/workflows/ros_build_test.yml@ros2`，其下游 workflow 明确分为 `build_amd64` 与 `build_arm64`，均使用 `ctumrs/ros_jazzy:latest`。已核实的 Actions runs：
+
+| 仓库 | Commit | Run | AMD64 | ARM64 |
+|---|---|---:|---|---|
+| Point-LIO | `e7ff034328b263ab92b06252d91acba1dd969b6d` | [24843451862](https://github.com/ctu-mrs/point-lio/actions/runs/24843451862) | success | success |
+| Estimator Plugin | `b43af57300b43a29ab6bfa1c68a9442fb869cea1` | [21216131865](https://github.com/ctu-mrs/mrs_point_lio_estimator_plugin/actions/runs/21216131865) | success | success |
+| MRS core | `0f3e329bd33aeb25d7da67c3381f0ec645de5769` | [33400579110](https://github.com/ctu-mrs/mrs_point_lio_core/actions/runs/33400579110) | success | success |
+
+说明：Point-LIO 与 Plugin run 的 SHA 与本审计锁定 SHA 相同；MRS core run 成功的是较早提交 `0f3e329...`，不是当前审计分支头 `ef9de2a...`。因此当前已存在 Jazzy AMD64/ARM64 CI 成功证据，但仍需验证当前 core HEAD 的完整递归依赖树和最新 CI。ARM64 runner 是 GitHub `ubuntu-22.04-arm` 上通过 Jazzy 容器构建，并非 Jetson AGX Orin 硬件；不能替代 Orin GPU/内存/热/长时 soak test。
 
 ## 7. 本项目建议的时间戳标准
 
@@ -138,11 +146,11 @@ MRS core 的 workflow 在本仓库中委托 `ctu-mrs/ci_scripts/.github/workflow
 - [ ] 获取 MID-360 实际 CustomMsg + IMU rosbag，检查 header.stamp/timebase、point offset、IMU 时间差与时钟单调性。
 - [ ] 为 Point-LIO callback/sync 写最小单测，证明当前 lag 参数未贯穿 sample consumption；提出不改变算法主体的时间戳统一修复。
 - [ ] 固定 MRS core、Estimator Plugin、Point-LIO、Livox Driver 2、ikd-Tree、IKFoM 等全部依赖 commit，生成 SBOM/lock manifest。
-- [ ] 追踪 MRS reusable CI workflow 的 ROS distro、Ubuntu 和 ARM64 matrix，读取成功/失败运行日志。
+- [x] 追踪 MRS reusable CI workflow：确认 Jazzy 容器、AMD64/ARM64 jobs；Point-LIO 与 Estimator Plugin 固定审计 commit 的两架构 CI 成功，MRS core 较早 commit 的两架构 CI 成功。仍需验证当前 core HEAD 的 CI。
 - [ ] 审计 estimator plugin 是否为四足输出需求所必需，评估去除 MRS UAV 专属接口后的最小 ROS2 Point-LIO package。
 - [ ] 对比直接依赖 CTU fork、从算法层独立移植、采用其他 Jazzy LIO 的工程与许可证成本。
 - [ ] 在 Jazzy x86_64 与 Jetson Orin ARM64 分别构建；再做 MID360+IMU bag replay 与 soak test。
 
 ## 9. 证据边界
 
-固定源码仅能证明该版本的实现行为。尚未取得本项目真实 MID-360/IMU rosbag，未检查真实硬件时间域、偏差和丢包；未运行 MRS CI、未构建 Jazzy/ARM64、未验证 Orin；未完成 GPL/BSD 许可证冲突澄清。上游文档/源码审计不等于项目验证。
+固定源码仅能证明该版本的实现行为。尚未取得本项目真实 MID-360/IMU rosbag，未检查真实硬件时间域、偏差和丢包；已核实上游 Actions 在 Jazzy 容器中的 AMD64/ARM64 CI 成功（见 §6.1），但本项目未自行构建；MRS core 当前 HEAD 的完整依赖树仍需 CI 验证；未在 Jetson Orin 硬件验证；未完成 GPL/BSD 许可证冲突澄清。上游文档/源码审计不等于项目验证。
