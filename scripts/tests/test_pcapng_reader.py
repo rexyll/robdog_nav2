@@ -115,7 +115,7 @@ class TestPcapngReader(unittest.TestCase):
 
 
     def test_auto_detects_classic_pcap(self):
-        header = b"\\xd4\\xc3\\xb2\\xa1" + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
+        header = b"\xd4\xc3\xb2\xa1" + struct.pack("<HHIIII", 2, 4, 0, 0, 65535, 1)
         record = struct.pack("<IIII", 10, 0, 4, 4) + b"data"
         packet, = list(iter_capture_packets(io.BytesIO(header + record)))
         self.assertEqual(packet.data, b"data")
