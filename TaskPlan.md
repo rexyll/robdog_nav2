@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.98
+- 文档版本：v0.3.99
 - 更新日期：2026-11-25
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -9,7 +9,7 @@
 - **传感器预选：Livox MID-360；2 × e-con Systems See3CAM_50CUG_CXXCC_BX_H01R1（Color，无镜头）；ArduSimple simpleRTK2B Budget / u-blox ZED-F9P。**
 - **机载计算预选：NVIDIA Jetson AGX Orin Developer Kit。**
 - 当前专项阶段：**N1 — 端到端数据流与接口审计（仅 nav 分支）**；N0 范围/架构/术语/证据基线已冻结；硬件准备的阶段 A 仍保持原状态并行受 Gate 约束。
-- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同、ROS 2 集成依赖、ESEKF covariance 导出和 robot_localization/GNSS 融合接口开展上游审计；本轮进一步将定位 validity/epoch/TF age 与 Nav2 Costmap、Planner、Controller 的失效传播串成接口矩阵。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、本项目自身 Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成；上游固定 Point-LIO 与 Estimator Plugin 已有 Jazzy AMD64/ARM64 CI 成功证据。**
+- 当前状态：**N0 已完成；N1 已建立系统级数据流清单，并完成 Nav2 主链、Costmap 生产端与 Planner/Controller 消费端的首轮固定源码闭环；已对 MID-360 逐点时间数据、高程地图/四足地形层，以及 Point-LIO/FAST-LIO2 的算法时间补偿、驱动时间戳合同、ROS 2 集成依赖、ESEKF covariance 导出和 robot_localization/GNSS 融合接口开展上游审计；本轮进一步将定位 validity/epoch/TF age 与 Nav2 Costmap、Planner、Controller 的失效传播串成接口矩阵；新增 ZED-F9P UTC→GPS mapper 的分层补丁计划、NAV-TIMELS parser/lifecycle fence 设计及 deterministic synthetic test vectors（doc/Navigation/14...）。N1 的其余接口/运行证据仍在补齐；LIO 许可冲突、本项目自身 Jazzy/ARM64 构建、Orin 性能与实机验证均未通过/未完成；上游固定 Point-LIO 与 Estimator Plugin 已有 Jazzy AMD64/ARM64 CI 成功证据。**
 
 ---
 
@@ -303,6 +303,8 @@
 
 - 2026-11-25 / v0.3.70–v0.3.72：完成 N0 范围/架构/术语/证据基线并进入 N1。新增上游仓库基线登记（Nav2 Jazzy c7046550、robot_localization jazzy-devel fea7fc3d、slam_toolbox Jazzy f84dad92、image_pipeline Jazzy 6c3df309、grid_map ROS 2 0ece1b53、ros2_control Jazzy c3f7a299）；记录 elevation_mapping 仓库归档状态、traversability_estimation 404 等风险，不将未验证项目列为依赖。固定 common_interfaces Jazzy commit a941f14b，核验 Imu/Odometry/PointCloud2/TwistStamped，以及 Nav2 NavigateToPose/FollowPath Action 字段与语义。新增 doc/Navigation/02_subsystem_inventory_and_evidence_register.md、03_ros_interface_contracts.md；README 索引提交 8a06637e；TaskPlan 本轮更新提交 09d21408。以上是源码/接口研究证据，不代表节点运行、构建或硬件验证。
 
+
+- [~] N1 本轮新增 ZED-F9P UTC→GPS mapper 工程化设计（`doc/Navigation/14_zed_f9p_utc_gps_mapper_patch_plan_and_test_vectors.md`）：将实现拆分为纯算法层（UTC civil/nano、GPS epoch/week、NAV-TIMELS typed model、exact-epoch mapper、clock identity）与后续 ROS driver adapter；明确 NAV-TIMELS 24-byte parser/ROSIDL/dispatch/publisher 插入点、process session/connection generation/queue sequence 有序 lifecycle fence、跨 callback group 线程安全和 fail-closed 条件。定义 GPS epoch/week 边界、负 nano 跨日历借位、2016 正闰秒连续性、NAV-TIMELS validity/source、PVT/TIMEUTC flags、exact iTOW/session join、reconnect/sequence gap/monotonicity 等 synthetic test vectors。向量为规格，不是测试运行结果；未修改代码、未运行单测/CI、未读取真实接收机。目标 F9P MON-VER、NAV 输出配置、leap-second source allowlist/staleness 阈值和 package license/maintainer 仍为 Gate。
 ## 5. 文档索引
 
 - [TaskPlan Part 1 — 架构与硬件完整设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
