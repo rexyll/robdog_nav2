@@ -232,6 +232,11 @@ def decode_link_packet(packet, *, capture_timestamp_ns: int | None = None,
     """Decode one packet record or raw frame to a UDP datagram/disposition."""
     link_type = int(packet.link_type) if hasattr(packet, "link_type") else int(packet[0])
     frame = bytes(packet.data) if hasattr(packet, "data") else bytes(packet[1])
+    if hasattr(packet, "truncated") and packet.truncated:
+        return FrameDecodeResult(
+            "truncated_capture", link_type,
+            "capture record is shorter than its original packet length",
+        )
     if hasattr(packet, "capture_timestamp_ns") and capture_timestamp_ns is None:
         capture_timestamp_ns = packet.capture_timestamp_ns
     if hasattr(packet, "interface_id"):
@@ -258,11 +263,11 @@ def classify_mid360_datagram(datagram: UdpDatagram, *, lidar_ip: str | None = No
     and 56500 log. Host receive ports are configurable and must be supplied by
     the caller; discovery port 56000 is not a point-cloud/IMU stream.
     """
-    if lidar_ip is not None and datagram.source_ip != str(ipaddress.ip_address(lidar_ip)):
-        if datagram.destination_ip != str(ipaddress.ip_address(lidar_ip)):
-            return None
-    if datagram.source_port in MID360_LIDAR_PORTS:
-        return MID360_LIDAR_PORTS[datagram.source_port], "lidar_to_host"
-    if host_ports and datagram.destination_port in host_ports:
-        return host_ports[datagram.destination_port], "host_to_lidar"
+    normalized_lidar_ip = str(ipaddress.ip_address(lidar_ip)) if lidar_ip is not None else None
+    if normalized_lidar_ip is None or datagram.source_ip == normalized_lidar_ip:
+        if datagram.source_port in MID360_LIDAR_PORTS:
+            return MID360_LIDAR_PORTS[datagram.source_port], "lidar_to_host"
+    if normalized_lidar_ip is None or datagram.destination_ip == normalized_lidar_ip:
+        if host_ports and datagram.destination_port in host_ports:
+            return host_ports[datagram.destination_port], "host_to_lidar"
     return None
