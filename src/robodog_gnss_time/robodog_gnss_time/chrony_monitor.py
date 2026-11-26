@@ -55,12 +55,12 @@ def parse_chrony_tracking(output: str):
         raise ValueError("Chrony Stratum must be an integer") from exc
     if not 0 <= stratum <= 255:
         raise ValueError("Chrony Stratum outside uint8 range")
-    match = re.fullmatch(r"([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)) seconds (fast|slow) of NTP time", system_time)
+    match = re.fullmatch(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)) seconds (fast|slow) of NTP time", system_time)
     if not match:
         raise ValueError("unsupported Chrony System time format")
     offset_magnitude = _seconds_to_ns(match.group(1).lstrip("+").lstrip("-"))
     offset_ns = offset_magnitude if match.group(2) == "fast" else -offset_magnitude
-    dispersion_match = re.fullmatch(r"([+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)) seconds", root_dispersion)
+    dispersion_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_dispersion)
     if not dispersion_match:
         raise ValueError("unsupported Chrony Root dispersion format")
     uncertainty_ns = _seconds_to_ns(dispersion_match.group(1).lstrip("+"))
