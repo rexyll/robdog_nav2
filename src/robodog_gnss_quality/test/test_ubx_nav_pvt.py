@@ -138,6 +138,7 @@ def make_raw_pvt(**overrides):
     values = dict(
         process_session_id="legacy-ubx-test-session",
         connection_generation=0,
+        gps_week=2450,
         i_tow_ms=345_000,
         gnss_fix_ok=True,
         carrier_solution=CarrierSolution.FIXED,
