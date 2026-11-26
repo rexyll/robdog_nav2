@@ -460,3 +460,31 @@ sensor timestamp 与 capture timestamp 分开保存，不做相减，也不解�
 - 同一 capture interface/time window 的 PTP domain 只生成共观测候选，不宣称 domain binding。
 
 这些测试只验证解析器和报告逻辑。PTP capture windows、MID-360 sensor-time observations 与 PTP/sensor co-observation samples 均有数量上限，超限时报告 eviction/truncation 计数，避免流式审计因元数据无限增长。真实 MID-360 PTP/gPTP PCAP、目标 Orin PHC/ptp4l/pmc 状态、传感器实际 domain 绑定与时间精度仍未验证。
+
+
+## 17. MID-360 PTP/gPTP 混合传输与多 GM 风险检查
+
+### 17.1 厂商协议约束
+
+Livox 当前 MID-360 文档列出三种同步方式：IEEE 1588v2.0 UDP/IP PTP、二层 gPTP、GPS。厂商明确指出 PTP 不支持 IEEE 1588v2.1，不建议 IEEE 1588v2.0 与 gPTP 同时存在，并说明多 Master Clock 网络环境不受支持。MID-360 的 PTP 同步采用 Sync、Follow_Up、Delay_Req、Delay_Resp 的 two-step E2E 机制；设备作为 slave。<Cite refs={ ["turn526356search0","turn526356search1","turn526356search2"] } />
+
+### 17.2 抓包审计器新增风险指标
+
+`PtpCorrelationAudit` 新增有界 `ptp_transport_observations`，按 PCAP section/interface/传输方式统计消息数、domainNumber 集合和抓包时间范围：
+- `udp_ip_ptp`：PTP over UDP/IP（通常可由 319/320 端口识别）；
+- `ethernet_l2_ptp`：Ethernet L2 PTP（EtherType 0x88F7）。
+
+同一 section/interface 同时出现两类传输时，报告 `mixed_ptp_transport_interfaces`。这仅是与 MID-360 厂商警告相关的**共存风险指标**：Ethernet L2 PTP 报文不能仅凭 EtherType 就确认为特定 gPTP profile，也不能证明两种协议都已配置或 MID-360 正在使用其中任何一种。
+
+### 17.3 多 GM Announce 风险
+
+报告新增 `multiple_gm_candidates_by_domain`：当同一 domain 的 Announce 报文宣告了多个不同 grandmasterIdentity 时，输出身份集合和风险解释。该结果代表抓包观察到多个 GM 候选，不是 BMCA 选举结果，不证明任一接收端实际选择了哪个 GM，也不证明这些 GM 同时处于活动状态。需结合接收端 `ptp4l`/`pmc` 的 parent/port/current dataset、网络拓扑和设备同步状态继续判定。
+
+### 17.4 验收约束与测试
+
+新增合成测试覆盖：
+- 同一 PCAP interface 同时观察 UDP/IP PTP 与 Ethernet-L2 PTP 时报告混合传输风险；
+- 不同 interface 上的两类 PTP 不错误合并；
+- 同一 domain 多个 Announce GM identity 触发多 GM 候选风险，而不输出“已选 GM”结论。
+
+部署基线应优先明确选择一种与 MID-360 相符的时间同步模式，并确保网络中只有预期的单一 master 时钟体系；具体选择 IEEE 1588v2.0 UDP/IP 或 gPTP L2，需根据 Orin 网卡/交换机支持、其他传感器兼容性和实际拓扑验证后冻结。不能在没有硬件证据时预先宣称哪一种已可用。
