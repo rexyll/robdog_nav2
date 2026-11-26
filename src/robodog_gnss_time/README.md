@@ -258,3 +258,10 @@ recovery integration remain separate gates.
 The quality node publishes an identity-bearing decision for **every** observation, including consecutive samples whose quality state and metrics remain unchanged. Signature deduplication is limited to repeated watchdog states; otherwise a stable accepted state could starve the downstream exact identity joiner. The one startup `no_data` status has no epoch identity and is ignored only when every identity field and optional metric is at its exact default sentinel. A malformed or partially populated `no_data` message is rejected rather than silently ignored.
 
 Out-of-order observations also receive one identity-bearing rejection per input epoch; only repeated watchdog timer emissions are deduplicated. This preserves the exact message-pair contract for rejected samples as well as accepted/recovering samples.
+
+
+## ROS SystemTime / UTC policy gate
+
+`ros_clock_policy.py` adds a transport-independent, fail-closed policy check for a future NavSatFix publisher. It rejects `use_sim_time=true`, invalid or non-normalized mapped UTC, active leap-transition guard, missing/unknown host synchronization state, missing synchronization source, stale/future host-sync evidence, and host UTC offset plus uncertainty outside an explicitly configured timing budget. It also rejects UTC seconds outside the signed 32-bit `builtin_interfaces/Time.sec` range instead of allowing timestamp overflow.
+
+The gate does **not** discover or prove host clock synchronization. A separate trusted runtime monitor must provide a fresh synchronization state, source, signed offset, uncertainty, and host-monotonic sample time. Until that monitor exists and is validated against the robot's PHC/chrony/PTP configuration, callers must provide no evidence and the policy remains closed. Thresholds have no production defaults; they must come from the system timing/integrity budget. The policy gate is not yet connected to a NavSatFix publisher or robot_localization.
