@@ -46,7 +46,8 @@ def _decode_mount_path(value):
 
 def _read_text(path):
     try:
-        return {"status": "ok", "content": Path(path).read_text(encoding="utf-8")}
+        with open(path, "r", encoding="utf-8") as stream:
+            return {"status": "ok", "content": stream.read()}
     except FileNotFoundError:
         return {"status": "not_found", "content": ""}
     except PermissionError as exc:
@@ -74,7 +75,8 @@ def _read_config_source(path, compressed=False):
             with gzip.open(path, "rt", encoding="utf-8", errors="replace") as stream:
                 content = stream.read()
         else:
-            content = Path(path).read_text(encoding="utf-8")
+            with open(path, "r", encoding="utf-8") as stream:
+                content = stream.read()
         return {
             "status": "observed",
             "path": str(path),
@@ -108,7 +110,7 @@ def _btf_observation(path):
         return {"status": "read_error", "path": str(path), "error": str(exc)}
 
 
-def _mount_inventory(path, mountinfo):
+def _mount_inventory(path, mountinfo, root="/"):
     target = os.path.normpath(str(path))
     mounts = []
     if mountinfo["status"] == "ok":
@@ -119,7 +121,10 @@ def _mount_inventory(path, mountinfo):
             separator = fields.index("-")
             if separator + 1 >= len(fields):
                 continue
-            mountpoint = os.path.normpath(_decode_mount_path(fields[4]))
+            mountpoint_value = _decode_mount_path(fields[4])
+            mountpoint = os.path.normpath(
+                str(Path(root) / mountpoint_value.lstrip("/"))
+            )
             if mountpoint == target or (
                 mountpoint != os.sep
                 and target.startswith(mountpoint.rstrip(os.sep) + os.sep)
@@ -132,11 +137,11 @@ def _mount_inventory(path, mountinfo):
     return mounts
 
 
-def _tracefs_observation(path, mountinfo):
+def _tracefs_observation(path, mountinfo, root="/"):
     path = Path(path)
     available_path = path / "available_events"
     available = _read_text(available_path)
-    mounts = _mount_inventory(path, mountinfo)
+    mounts = _mount_inventory(path, mountinfo, root=root)
     event_results = {}
     available_names = set(available["content"].splitlines()) if available["status"] == "ok" else set()
     for event_name in _SYSCALL_EVENTS:
@@ -189,8 +194,8 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         "boot_config": _read_config_source(rooted(f"/boot/config-{release}")),
     }
     tracefs = [
-        _tracefs_observation(rooted("/sys/kernel/tracing"), mountinfo),
-        _tracefs_observation(rooted("/sys/kernel/debug/tracing"), mountinfo),
+        _tracefs_observation(rooted("/sys/kernel/tracing"), mountinfo, root=root),
+        _tracefs_observation(rooted("/sys/kernel/debug/tracing"), mountinfo, root=root),
     ]
     btf = _btf_observation(rooted("/sys/kernel/btf/vmlinux"))
     readable_tracefs = [
