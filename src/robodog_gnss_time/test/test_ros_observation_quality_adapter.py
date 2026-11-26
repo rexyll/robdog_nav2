@@ -1,9 +1,5 @@
-import time
-
 import pytest
 from robodog_gnss_interfaces.msg import GnssObservation, GnssQualityStatus
-from robodog_gnss_quality import RejectionReason
-
 from robodog_gnss_time.ros_observation_quality_adapter import (
     RosObservationQualityJoinAdapter,
     decision_from_quality_message,
@@ -123,3 +119,24 @@ def test_observation_clock_identity_is_strict():
     observation.source_clock_id = "wrong-clock"
     with pytest.raises(ValueError):
         identity_from_observation_message(observation)
+
+
+
+def test_identity_free_startup_no_data_status_is_ignored():
+    adapter = RosObservationQualityJoinAdapter(max_pending_epochs=4, max_pending_age_ns=1000)
+    startup = GnssQualityStatus()
+    startup.qualified = False
+    startup.reason = "no_data"
+    assert adapter.add_decision(startup, now_monotonic_ns=9_000_000_000) is None
+    assert adapter.stats().pending_decisions == 0
+    assert adapter.stats().emitted == 0
+
+
+def test_malformed_no_data_status_is_not_silently_ignored():
+    adapter = RosObservationQualityJoinAdapter(max_pending_epochs=4, max_pending_age_ns=1000)
+    startup = GnssQualityStatus()
+    startup.qualified = False
+    startup.reason = "no_data"
+    startup.process_session_id = "unexpected-session"
+    with pytest.raises(ValueError):
+        adapter.add_decision(startup, now_monotonic_ns=9_000_000_000)
