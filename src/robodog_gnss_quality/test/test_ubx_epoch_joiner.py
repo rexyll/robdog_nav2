@@ -11,11 +11,15 @@ from robodog_gnss_quality.ubx_nav_pvt import (
 )
 
 
+PROCESS_SESSION_ID = "joiner-test-session"
+CONNECTION_GENERATION = 0
 GENERATION = "zed_f9p_week_2450_receiver_generation_0"
 
 
 def make_pvt(i_tow=1000, receive=100):
     return UbxNavPvtEpoch(
+        process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
         i_tow_ms=i_tow,
         gnss_fix_ok=True,
         carrier_solution=CarrierSolution.FIXED,
@@ -25,6 +29,8 @@ def make_pvt(i_tow=1000, receive=100):
 
 def make_position(i_tow=1000, receive=110):
     return UbxNavHpPosLlhEpoch(
+        process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
         i_tow_ms=i_tow,
         lon=-1_220_000_000,
         lat=370_000_000,
@@ -44,6 +50,8 @@ def make_position(i_tow=1000, receive=110):
 
 def make_covariance(i_tow=1000, receive=120):
     return UbxNavCovEpoch(
+        process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
         i_tow_ms=i_tow,
         pos_cor_valid=True,
         pos_cov_nn=1.0,
@@ -58,6 +66,8 @@ def make_covariance(i_tow=1000, receive=120):
 
 def make_status(i_tow=1000, receive=130):
     return UbxNavStatusEpoch(
+        process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
         i_tow_ms=i_tow,
         gnss_fix_ok=True,
         carrier_solution_valid=True,
