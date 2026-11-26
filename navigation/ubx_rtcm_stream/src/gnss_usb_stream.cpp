@@ -1,11 +1,20 @@
 #include "robodog_protocol/gnss_usb_stream.hpp"
 
 #include <limits>
+#include <chrono>
 #include <exception>
 #include <stdexcept>
 #include <utility>
 
 namespace robodog_protocol {
+namespace {
+std::uint64_t steady_now_ns()
+{
+  const auto value = std::chrono::duration_cast<std::chrono::nanoseconds>(
+    std::chrono::steady_clock::now().time_since_epoch()).count();
+  return value < 0 ? 0U : static_cast<std::uint64_t>(value);
+}
+}  // namespace
 
 GnssUsbStream::GnssUsbStream(
   LibusbDeviceSession::Api device_api,
@@ -14,7 +23,8 @@ GnssUsbStream::GnssUsbStream(
 : config_(std::move(config)),
   decoder_(config_.max_ubx_payload, config_.max_decoder_buffer_bytes,
            config_.max_nmea_sentence, config_.require_nmea_checksum),
-  frame_queue_(config_.frame_queue_capacity, config_.queue_overflow_policy, 0),
+  ingress_queue_(config_.frame_queue_capacity, config_.queue_overflow_policy,
+                 config_.process_session_id),
   runtime_(std::move(device_api), std::move(transfer_api_factory))
 {
   if (config_.read_buffer_bytes == 0 ||
@@ -34,12 +44,16 @@ bool GnssUsbStream::start()
   std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
   if (running_.load(std::memory_order_acquire) || runtime_.is_open()) return false;
   if (!runtime_.open(config_.device, config_.event_poll_timeout_ms)) {
-    frame_queue_.close();
+    (void)ingress_queue_.close(steady_now_ns());
     return false;
   }
 
   const auto generation = generation_.fetch_add(1, std::memory_order_acq_rel) + 1;
-  frame_queue_.reset_generation(generation);
+  if (!ingress_queue_.begin_generation(generation, steady_now_ns())) {
+    running_.store(false, std::memory_order_release);
+    (void)runtime_.shutdown(5000);
+    return false;
+  }
   {
     std::lock_guard<std::mutex> lock(decoder_mutex_);
     decoder_.reset(generation);
@@ -55,7 +69,7 @@ bool GnssUsbStream::start()
         ++counters_.submit_failures;
       }
       if (!runtime_.shutdown(5000)) return false;
-      frame_queue_.close();
+      (void)ingress_queue_.close(steady_now_ns());
       return false;
     }
   }
@@ -73,7 +87,17 @@ bool GnssUsbStream::stop(std::uint32_t timeout_ms)
 
 std::optional<Frame> GnssUsbStream::try_pop_frame()
 {
-  return frame_queue_.try_pop();
+  while (auto event = ingress_queue_.try_pop()) {
+    if (event->type == GnssIngressEventType::Frame && event->frame) {
+      return std::move(event->frame);
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<GnssIngressEvent> GnssUsbStream::try_pop_event()
+{
+  return ingress_queue_.try_pop();
 }
 
 GnssUsbStreamStats GnssUsbStream::stats() const
@@ -90,7 +114,8 @@ GnssUsbStreamStats GnssUsbStream::stats() const
     std::lock_guard<std::mutex> lock(decoder_mutex_);
     snapshot.decoder = decoder_.stats();
   }
-  snapshot.queue = frame_queue_.stats();
+  snapshot.queue = ingress_queue_.frame_queue_stats();
+  snapshot.ingress = ingress_queue_.stats();
   return snapshot;
 }
 
@@ -122,6 +147,7 @@ void GnssUsbStream::on_completion(
   int actual_length)
 {
   (void)transfer_id;
+  const auto receive_monotonic_ns = steady_now_ns();
   {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     ++counters_.transfer_completions;
@@ -147,7 +173,7 @@ void GnssUsbStream::on_completion(
         std::uint64_t rejections = 0;
         for (auto & frame : frames) {
           ++decoded;
-          const auto result = frame_queue_.push(std::move(frame));
+          const auto result = ingress_queue_.push_frame(std::move(frame), receive_monotonic_ns);
           if (result == QueuePushResult::AcceptedAfterDroppingOldest) ++drops;
           else if (result == QueuePushResult::RejectedFull) ++rejections;
           else if (result == QueuePushResult::RejectedStaleGeneration ||
@@ -173,6 +199,7 @@ void GnssUsbStream::on_completion(
         std::lock_guard<std::mutex> lock(stats_mutex_);
         ++counters_.no_device_events;
       }
+      (void)ingress_queue_.mark_device_lost(generation, receive_monotonic_ns);
       cancel_remaining_transfers();
       break;
     }
@@ -182,6 +209,7 @@ void GnssUsbStream::on_completion(
         std::lock_guard<std::mutex> lock(stats_mutex_);
         ++counters_.transport_errors;
       }
+      (void)ingress_queue_.mark_transport_fault(generation, receive_monotonic_ns);
       cancel_remaining_transfers();
       break;
     }
@@ -193,6 +221,7 @@ void GnssUsbStream::on_completion(
         std::lock_guard<std::mutex> lock(stats_mutex_);
         ++counters_.submit_failures;
       }
+      (void)ingress_queue_.mark_transport_fault(generation, steady_now_ns());
       cancel_remaining_transfers();
     }
   }
