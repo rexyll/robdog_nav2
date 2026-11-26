@@ -269,7 +269,9 @@ class PtpAnnounceAudit:
                      "message_count": 0}
             self.sources[source_key] = state
         previous_sequence = state["last_sequence_id"]
-        if previous_sequence is not None:
+        if previous_sequence is None:
+            state["last_sequence_id"] = message.sequence_id
+        else:
             delta = (message.sequence_id - previous_sequence) & 0xFFFF
             if delta == 0:
                 self.counts["announce_sequence_duplicate"] += 1
@@ -279,9 +281,11 @@ class PtpAnnounceAudit:
                     self.counts["announce_sequence_gap_events"] += 1
                 else:
                     self.counts["announce_sequence_in_order"] += 1
+                # Keep the forward high-water mark; a late/reordered packet
+                # must not move it backwards and create a false later gap.
+                state["last_sequence_id"] = message.sequence_id
             else:
                 self.counts["announce_sequence_out_of_order_or_late"] += 1
-        state["last_sequence_id"] = message.sequence_id
         state["message_count"] += 1
 
         previous_gm = state["last_grandmaster_identity"]
