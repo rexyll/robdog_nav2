@@ -1,10 +1,9 @@
 #include "robodog_gnss_transport/gnss_ingress_message.hpp"
+#include "robodog_gnss_transport/gnss_ingress_publisher_pump.hpp"
 #include "robodog_protocol/gnss_usb_stream.hpp"
 #include "robodog_protocol/libusb_api_binding.hpp"
 #include <rclcpp/rclcpp.hpp>
 #include <libusb.h>
-#include <atomic>
-#include <chrono>
 #include <cstdint>
 #include <iomanip>
 #include <memory>
@@ -12,7 +11,6 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 namespace robodog_gnss_transport {
 namespace {
@@ -63,7 +61,21 @@ public:
           return robodog_protocol::make_libusb_api(static_cast<libusb_context *>(context));
         }, std::move(config));
     if (!stream_->start()) throw std::runtime_error("failed to open GNSS USB device or submit initial bulk-IN transfers");
-    publisher_thread_ = std::thread([this]() { publish_events(); });
+    pump_ = std::make_unique<GnssIngressPublisherPump>(
+        [this]() { return stream_->try_pop_event(); },
+        [this](const RosIngressEvent & message) { publisher_->publish(message); },
+        [this]() { return publisher_->get_subscription_count(); },
+        [this](std::exception_ptr error) {
+          try {
+            std::rethrow_exception(error);
+          } catch (const std::exception & exception) {
+            RCLCPP_FATAL(get_logger(), "GNSS ingress publisher worker failed: %s", exception.what());
+          } catch (...) {
+            RCLCPP_FATAL(get_logger(), "GNSS ingress publisher worker failed with an unknown exception");
+          }
+          rclcpp::shutdown();
+        });
+    if (!pump_->start()) throw std::runtime_error("failed to start GNSS ingress publisher worker");
     RCLCPP_INFO(get_logger(), "GNSS USB ingress publisher started: topic=%s VID=0x%04llx PID=0x%04llx",
         topic.c_str(), static_cast<unsigned long long>(vendor_id), static_cast<unsigned long long>(product_id));
   }
@@ -72,41 +84,13 @@ public:
       RCLCPP_FATAL(get_logger(),
           "GNSS USB shutdown did not complete cleanly (callback drain or lifecycle queue close); refusing unsafe transport teardown");
     }
-    stop_publisher_.store(true, std::memory_order_release);
-    if (publisher_thread_.joinable()) publisher_thread_.join();
+    if (pump_) pump_->stop_and_join();
   }
+
 private:
-  void publish_events() noexcept {
-    for (;;) {
-      // Keep the bounded ingress queue authoritative until at least one
-      // subscriber is matched. This preserves GenerationStarted for a
-      // late-starting consumer instead of publishing into an unobserved DDS
-      // writer history. During shutdown, drain regardless of match count.
-      if (!stop_publisher_.load(std::memory_order_acquire) &&
-          publisher_->get_subscription_count() == 0) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        continue;
-      }
-      auto event = stream_->try_pop_event();
-      if (event) {
-        try { publisher_->publish(to_ros_message(*event)); }
-        catch (const std::exception & error) {
-          RCLCPP_FATAL(get_logger(), "failed to publish ordered GNSS ingress event: %s", error.what());
-          rclcpp::shutdown(); return;
-        } catch (...) {
-          RCLCPP_FATAL(get_logger(), "unknown exception publishing GNSS ingress event");
-          rclcpp::shutdown(); return;
-        }
-        continue;
-      }
-      if (stop_publisher_.load(std::memory_order_acquire)) return;
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-  }
   std::unique_ptr<robodog_protocol::GnssUsbStream> stream_;
   rclcpp::Publisher<RosIngressEvent>::SharedPtr publisher_;
-  std::atomic<bool> stop_publisher_{false};
-  std::thread publisher_thread_;
+  std::unique_ptr<GnssIngressPublisherPump> pump_;
 };
 }  // namespace
 }  // namespace robodog_gnss_transport
