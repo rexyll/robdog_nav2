@@ -38,7 +38,12 @@ LibusbTransferTransport::Api make_libusb_api(libusb_context * context)
     return libusb_alloc_transfer(iso_packets);
   };
   api.free_transfer = [](void * native_transfer) {
-    libusb_free_transfer(static_cast<libusb_transfer *>(native_transfer));
+    auto * transfer = static_cast<libusb_transfer *>(native_transfer);
+    // Adapter calls free only before submit failure or after callback drain.
+    // In either safe state, any still-attached bridge can be reclaimed here.
+    delete static_cast<CallbackBridge *>(transfer->user_data);
+    transfer->user_data = nullptr;
+    libusb_free_transfer(transfer);
   };
   api.fill_bulk_transfer = [](
     void * native_transfer, void * device_handle, std::uint8_t endpoint,
