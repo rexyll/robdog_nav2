@@ -9,6 +9,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <optional>
+#include <utility>
 #include <vector>
 
 using robodog_protocol::GnssUsbStream;
@@ -140,6 +142,8 @@ int main() {
   assert(frame.has_value());
   assert(frame->protocol == Protocol::Ubx);
   assert(frame->connection_generation == 1);
+  for (int i = 0; i < 100 && fake.pending_count() != 2; ++i)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   assert(fake.pending_count() == 2);  // completion resubmitted one IN transfer
 
   const auto stats = stream.stats();
