@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.171
+- 文档版本：v0.3.172
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -947,3 +947,5 @@
 - 注入式 libusb adapter sanitizer CI 闭环与首轮失败修复（2026-11-26 / v0.3.170）：首轮 run `45746703263` 的 Clang libFuzzer 成功，但 ASan/UBSan 与 TSan 在编译 adapter 测试时失败；从 job logs 定位为 `valid() const` 试图锁定非 mutable `operation_mutex_`，不是 sanitizer 报告或运行时数据竞争。已将 mutex 标记为 mutable，修复提交 `c5765ea237dc1c62354650d9440934a3795a7b64`。修复后 Actions run `45746920823` 对应最终代码提交，三个 job 全部 completed/success：ASan/UBSan configure/build/CTest、Clang libFuzzer configure/build/20s smoke、TSan configure/build/CTest。新增测试覆盖 callback reentrancy（completion 中再次 submit）及 callback in-flight 时 close barrier。CI 仅验证无 libusb link 的 injected function table seam 和 synthetic fake API；不能证明生产 libusb wrapper、真实 USB callback 或 F9P 设备已通过。
 
 - libusb-1.0 生产 API function-table binding 首个实现（2026-11-26 / v0.3.171）：在注入式 adapter seam 上新增 `make_libusb_api(libusb_context*)`，映射 alloc/free/fill/submit/cancel/handle_events/close 到 libusb-1.0。为 native `void(libusb_transfer*)` callback 与 adapter 的 opaque callback 签名增加 heap-owned CallbackBridge；native callback 删除 Bridge 后只调用 adapter trampoline，adapter 仍在 handle_events 返回后才释放 native transfer 和 Context；同步 submit failure 由 binding 回收未被 callback 消费的 Bridge。新增可选 CMake target `ROBODOG_BUILD_LIBUSB_BINDING=ON`，通过 pkg-config 查找 `libusb-1.0`；默认 standalone tests 不增加 libusb 依赖。新增 Navigation 26，并增加 Actions job 安装 Ubuntu runner 的 `libusb-1.0-0-dev` 后只编译 binding target。当前 run 45747349543（head e2d8810473cd040c70e605a373416249fbfb1665）正在验证；无论编译通过与否，此阶段均未执行真实 USB transfer，未集成上游 GNSS ROS node，也未管理 libusb_context 生命周期、interface/hotplug 或设备断连重连。
+
+- libusb-1.0 production binding compile CI 验收（2026-11-26 / v0.3.172）：Actions run `45747349543` 对应提交 `e2d8810473cd040c70e605a373416249fbfb1665`，四个 job 全部 completed/success：ASan/UBSan parser+queue+lifecycle+fake transport+adapter CTest、TSan CTest、Clang libFuzzer 20 秒 smoke、生产 `robodog_libusb_binding` 编译。生产 binding job 安装 Ubuntu 24.04 runner 包 `libusb-1.0-0-dev 2:1.0.27-1`，pkg-config 报告 libusb 1.0.27；这只证明该 CI runner 上真实 libusb headers/link 编译成功，不等于目标 Orin/设备部署版本 pin。Navigation 26 记录了 native callback Bridge、同步 submit failure Bridge cleanup 和 context ownership。仍未执行真实 transfer、未把 adapter 接入固定版 ublox_dgnss ROS node，未实现/验证 event-loop owner thread、interface/hotplug 生命周期或 F9P 拔插重连。
