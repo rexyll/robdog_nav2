@@ -113,7 +113,7 @@ localization consumer remain subsequent stages.
 | `nav_cov_topic` | `/gnss/nav_cov` | Decoded NAV-COV stream |
 | `nav_status_topic` | `/gnss/nav_status` | Decoded NAV-STATUS stream |
 | `receiver_time_topic` | `/gnss/receiver_time` | Validated receiver-time mapping |
-| `observation_topic` | `/gnss/observation` | Joined observation |
+| `observation_topic` | `/gnss/observation_decoded` | Joined observation from normalized topics |
 | `qos_depth` | 256 | Reliable, volatile, KeepLast depth |
 | `max_pending_epochs` | 64 | Bounded iTOW cache, range 1..4096 |
 | `max_pair_receive_skew_ns` | 250000000 | Maximum 250 ms callback receive skew |
@@ -167,9 +167,11 @@ conflict retirement and generation reset.
 This raw-ingress path is preferred over the optional `gnss_observation_node`
 decoded-topic path because it has authoritative transport generation metadata.
 The decoded-topic node remains useful when an external driver supplies the
-normalized `GnssNav*` messages, but the pinned `ublox_dgnss` ROSIDL does not
-carry connection generation and therefore needs an independently trusted
-lifecycle bridge before reconnect safety can be claimed.
+normalized `GnssNav*` messages; it publishes to `/gnss/observation_decoded` by
+default so it cannot silently compete with the preferred raw-ingress
+`/gnss/observation` publisher. The pinned `ublox_dgnss` ROSIDL does not carry
+connection generation and therefore needs an independently trusted lifecycle
+bridge before reconnect safety can be claimed.
 
 ### Raw-path parameters
 
