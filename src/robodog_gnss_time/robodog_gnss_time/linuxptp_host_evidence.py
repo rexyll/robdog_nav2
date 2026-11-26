@@ -169,6 +169,7 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
             item.get("_BOOT_ID"), item.get("__MONOTONIC_TIMESTAMP"),
             item.get("__REALTIME_TIMESTAMP"), item.get("MESSAGE")
         )
+        message_id = item.get("MESSAGE_ID")
         if not isinstance(boot_id, str) or not boot_id:
             issues.append("journal_boot_id_missing:" + str(line_number))
             continue
@@ -198,7 +199,7 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
             "line_number": line_number, "boot_id": boot_id,
             "monotonic_timestamp_us": mono_us, "realtime_timestamp_us": real_us,
             "cursor": item.get("__CURSOR"), "systemd_unit": item.get("_SYSTEMD_UNIT"),
-            "message": message, "collection_window_relation": relation,
+            "message": message, "journal_command_execution_relation": relation,
         }
         entries.append(entry)
         event = None
@@ -230,11 +231,27 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
                 "type": "master_announce_transmit_timeout",
                 "interpretation": "ptp4l master announce transmit timer, not announce-receipt timeout",
             }
+        if event is None and message_id == "a596d6fe7bfa4994828e72309e95d61e":
+            suppressed = re.search(r"Suppressed\\s+(\\d+)\\s+messages from\\s+(.+)", message)
+            event = {
+                "type": "journal_rate_limit_suppression",
+                "message_id": message_id,
+                "suppressed_count": int(suppressed.group(1)) if suppressed else item.get("N_DROPPED"),
+                "affected_unit": suppressed.group(2) if suppressed else None,
+                "interpretation": "systemd-journald reports messages dropped by rate limiting",
+            }
+        if event is None and message_id == "e9bf28d037fff184e6ae669a370e694725":
+            event = {
+                "type": "journal_kernel_message_loss",
+                "message_id": message_id,
+                "dropped_count": item.get("N_DROPPED"),
+                "interpretation": "systemd journal reports missed kernel messages",
+            }
         if event is not None:
             event.update({
                 "boot_id": boot_id, "monotonic_timestamp_us": mono_us,
                 "realtime_timestamp_us": real_us, "cursor": item.get("__CURSOR"),
-                "message": message, "collection_window_relation": relation,
+                "message": message, "journal_command_execution_relation": relation,
             })
             events.append(event)
     if not entries:
@@ -254,6 +271,11 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
             "compared with collector CLOCK_MONOTONIC nanoseconds after multiplying "
             "by 1000, but only when _BOOT_ID matches. __REALTIME_TIMESTAMP is a "
             "separate CLOCK_REALTIME microsecond value."
+        ),
+        "coverage_note": (
+            "Returned journal entries are bounded by the configured --since expression "
+            "and the journalctl invocation time. This parser does not normalize the "
+            "human-readable --since expression into a monotonic boundary."
         ),
     }
 
@@ -326,6 +348,24 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
         for name, argv in commands
     ]
+    journal_context_commands = [
+        ("journal_config", ["systemd-analyze", "cat-config", "systemd/journald.conf"]),
+        ("journal_disk_usage", ["journalctl", "--disk-usage"]),
+        ("journal_boot_inventory", ["journalctl", "--list-boots", "--no-pager"]),
+        ("journal_suppression_events", [
+            "journalctl", "-u", "systemd-journald.service", "--since",
+            config.journal_since, "--no-pager", "--output=json", "--all",
+        ]),
+    ]
+    for service in (config.ptp4l_service, config.phc2sys_service, config.chrony_service):
+        if service:
+            journal_context_commands.append((
+                "unit_logging_config:" + service, ["systemctl", "cat", service],
+            ))
+    journal_context_results = [
+        _run_readonly_command(name, argv, config.timeout_s, runner=runner)
+        for name, argv in journal_context_commands
+    ]
     # TARGET, when configured, changes only pmc client-side destination
     # selection; it is not a remote SET/CMD management operation.
     pmc_result = _run_readonly_command(
@@ -363,7 +403,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     # inventory. The six GET responses are sequential observations returned
     # by one pmc process; the management protocol output carries no common
     # sample instant, so do not describe them as an atomic snapshot.
-    all_command_results = [pmc_boundary_before] + results + [pmc_result]
+    all_command_results = [pmc_boundary_before] + results + journal_context_results + [pmc_result]
     ptp_device_paths = sorted(glob.glob("/dev/ptp*"))
     sysfs_ptp_paths = sorted(glob.glob(
         f"/sys/class/net/{config.interface}/device/ptp/ptp*"
@@ -388,8 +428,19 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         service_name = command_result["name"].split(":", 1)[1]
         if command_result["status"] == "ok":
             journal_event_evidence[service_name] = parse_linuxptp_journal_evidence(
-                command_result["stdout"], boot_id, collection_start, collection_end,
+                command_result["stdout"], boot_id,
+                command_result["monotonic_start_ns"], command_result["monotonic_end_ns"],
             )
+            journal_event_evidence[service_name]["query_window"] = {
+                "since_argument": config.journal_since,
+                "until_argument": None,
+                "upper_bound": "journalctl invocation time",
+                "monotonic_query_start_ns": command_result["monotonic_start_ns"],
+                "monotonic_query_end_ns": command_result["monotonic_end_ns"],
+                "realtime_query_start_ns": command_result["realtime_start_ns"],
+                "realtime_query_end_ns": command_result["realtime_end_ns"],
+                "human_since_expression_normalized": False,
+            }
         else:
             journal_event_evidence[service_name] = {
                 "status": "unavailable", "entry_count": 0, "event_count": 0,
@@ -401,6 +452,37 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     realtime_minus_monotonic_elapsed_ns = (
         realtime_elapsed_ns - monotonic_elapsed_ns
     )
+    journal_suppression_command = next(
+        (item for item in journal_context_results
+         if item["name"] == "journal_suppression_events"), None,
+    )
+    journal_suppression_evidence = (
+        parse_linuxptp_journal_evidence(
+            journal_suppression_command["stdout"], boot_id,
+            journal_suppression_command["monotonic_start_ns"],
+            journal_suppression_command["monotonic_end_ns"],
+        )
+        if journal_suppression_command and journal_suppression_command["status"] == "ok"
+        else {
+            "status": "unavailable", "entry_count": 0, "event_count": 0,
+            "entries": [], "events": [], "issues": ["suppression_journal_query_not_ok"],
+            "coverage_status": "unknown",
+        }
+    )
+    journal_storage_context = {
+        "status": (
+            "observed" if all(item["status"] == "ok" for item in journal_context_results)
+            else "partial"
+        ),
+        "commands": journal_context_results,
+        "suppression_evidence": journal_suppression_evidence,
+        "coverage_status": "unknown",
+        "interpretation": (
+            "Configuration, disk usage, boot inventory and observed journald suppression "
+            "records are context only. They do not prove retention completeness or absence "
+            "of dropped/rotated/vacuumed entries in the requested time interval."
+        ),
+    }
 
     pmc_boundary_comparison = {"status": "unavailable"}
     if (
@@ -443,7 +525,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         collection_issues.append("host_boot_id_unavailable_after_collection")
     elif boot_id and boot_id_after != boot_id:
         collection_issues.append("host_boot_id_changed_during_collection")
-    for command_result in all_command_results:
+    for command_result in [pmc_boundary_before] + results + [pmc_result]:
         if command_result["status"] != "ok":
             collection_issues.append(
                 f"command_not_ok:{command_result['name']}:{command_result['status']}"
@@ -455,7 +537,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     collection_status = "complete" if not collection_issues else "partial"
 
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "evidence_kind": "read_only_linuxptp_host_inventory",
         "host_boot_id": boot_id,
         "host_boot_id_error": boot_id_error,
@@ -498,6 +580,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "pmc_identity_boundary_before_validation": pmc_boundary_before_validation,
         "pmc_identity_boundary_comparison": pmc_boundary_comparison,
         "journal_event_evidence": journal_event_evidence,
+        "journal_storage_context": journal_storage_context,
         "collection_status": collection_status,
         "collection_issues": collection_issues,
         "host_time_sync_claim": "not_evaluated",
