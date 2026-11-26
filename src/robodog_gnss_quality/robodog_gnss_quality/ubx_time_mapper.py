@@ -17,6 +17,8 @@ GPS_WEEK_NS = 604_800 * 1_000_000_000
 GPS_EPOCH_UNIX_SECONDS = 315_964_800
 GPS_EPOCH_UNIX_NS = GPS_EPOCH_UNIX_SECONDS * 1_000_000_000
 UINT64_MAX = (1 << 64) - 1
+# NAV-TIMELS reports BeiDou-UTC for source 4; GPS-UTC is 14 seconds ahead.
+LEAP_SOURCE_TO_GPS_UTC_ADJUSTMENT_SECONDS = {4: 14}
 
 
 @dataclass(frozen=True)
@@ -316,11 +318,15 @@ class UbxReceiverTimeMapper:
             self._invalid_gps_time += 1
             return None
 
+        source_adjustment = LEAP_SOURCE_TO_GPS_UTC_ADJUSTMENT_SECONDS.get(
+            leap.source_of_current_leap, 0
+        )
+        gps_utc_leap_seconds = leap.current_leap_seconds + source_adjustment
         utc_valid = (
             gps.leap_seconds_valid
             and leap.current_leap_valid
             and leap.source_of_current_leap in self.trusted_leap_sources
-            and gps.leap_seconds == leap.current_leap_seconds
+            and gps.leap_seconds == gps_utc_leap_seconds
         )
         utc_seconds = None
         utc_nanoseconds = None
@@ -328,7 +334,7 @@ class UbxReceiverTimeMapper:
         if utc_valid:
             utc_ns = (
                 GPS_EPOCH_UNIX_NS + source_timestamp_ns
-                - leap.current_leap_seconds * 1_000_000_000
+                - gps_utc_leap_seconds * 1_000_000_000
             )
             if utc_ns >= 0:
                 utc_seconds, utc_nanoseconds = divmod(utc_ns, 1_000_000_000)
@@ -342,8 +348,8 @@ class UbxReceiverTimeMapper:
             reason = "GPS week/TOW valid; NAV-TIMELS validCurrLs is false"
         elif leap.source_of_current_leap not in self.trusted_leap_sources:
             reason = "GPS week/TOW valid; NAV-TIMELS current leap source is not trusted"
-        elif gps.leap_seconds != leap.current_leap_seconds:
-            reason = "GPS week/TOW valid; TIMEGPS leapS differs from TIMELS currLs"
+        elif gps.leap_seconds != gps_utc_leap_seconds:
+            reason = "GPS week/TOW valid; TIMEGPS leapS differs from source-adjusted TIMELS currLs"
 
         if utc_valid:
             self._utc_valid_epochs += 1
@@ -365,8 +371,9 @@ class UbxReceiverTimeMapper:
             validity_reason=reason,
             gps_week=normalized_week,
             source_time_accuracy_ns=gps.time_accuracy_ns,
-            leap_seconds=leap.current_leap_seconds,
+            leap_seconds=gps_utc_leap_seconds,
             leap_source=leap.source_of_current_leap,
+            reported_leap_seconds=leap.current_leap_seconds,
         )
 
     def stats(self) -> UbxTimeMapperStats:
