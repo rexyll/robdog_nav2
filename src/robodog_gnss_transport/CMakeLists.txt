@@ -45,6 +45,8 @@ if(BUILD_TESTING)
 
   ament_add_gtest(test_gnss_ingress_ros_delivery
     test/test_gnss_ingress_ros_delivery.cpp)
+  target_include_directories(test_gnss_ingress_ros_delivery PRIVATE include)
+  target_compile_features(test_gnss_ingress_ros_delivery PRIVATE cxx_std_17)
   ament_target_dependencies(test_gnss_ingress_ros_delivery
     rclcpp
     robodog_gnss_interfaces)
