@@ -97,6 +97,9 @@ class UbxRosEpochAdapter:
         )
         self._lock = RLock()
         self._source_clock_id: Optional[str] = None
+        self._process_session_id: Optional[str] = None
+        self._connection_generation: Optional[int] = None
+        self._gps_week: Optional[int] = None
         self._pending: OrderedDict[int, _PendingEpoch] = OrderedDict()
         self._retired: OrderedDict[int, str] = OrderedDict()
         self._retired_limit = max(8, max_pending_epochs * 4)
@@ -142,14 +145,36 @@ class UbxRosEpochAdapter:
         while len(self._retired) > self._retired_limit:
             self._retired.popitem(last=False)
 
-    def begin_generation(self, source_clock_id: str) -> None:
+    def begin_generation(
+        self, source_clock_id: str, *, process_session_id: str,
+        connection_generation: int, gps_week: int
+    ) -> None:
         with self._lock:
-            self._begin_generation_locked(source_clock_id)
+            self._begin_generation_locked(
+                source_clock_id, process_session_id, connection_generation, gps_week
+            )
 
-    def _begin_generation_locked(self, source_clock_id: str) -> None:
-        if not isinstance(source_clock_id, str) or not source_clock_id.strip():
-            raise EpochPairingError("source_clock_id must be a non-empty generation ID")
+    def _begin_generation_locked(
+        self, source_clock_id: str, process_session_id: str,
+        connection_generation: int, gps_week: int
+    ) -> None:
+        if not isinstance(process_session_id, str) or not process_session_id.strip():
+            raise EpochPairingError("process_session_id must be a non-empty string")
+        if (isinstance(connection_generation, bool)
+                or not isinstance(connection_generation, int)
+                or connection_generation < 0):
+            raise EpochPairingError("connection_generation must be a non-negative integer")
+        if isinstance(gps_week, bool) or not isinstance(gps_week, int) or not 0 <= gps_week <= 32767:
+            raise EpochPairingError("gps_week must be a non-negative signed-16-bit integer")
+        expected_clock_id = (
+            f"{process_session_id}:connection:{connection_generation}:gps-week:{gps_week}"
+        )
+        if source_clock_id != expected_clock_id:
+            raise EpochPairingError("source_clock_id does not match generation context")
         self._source_clock_id = source_clock_id
+        self._process_session_id = process_session_id
+        self._connection_generation = connection_generation
+        self._gps_week = gps_week
         self._pending.clear()
         self._retired.clear()
         self._latest_receive_monotonic_ns = None
@@ -161,6 +186,9 @@ class UbxRosEpochAdapter:
 
     def _reset_locked(self) -> None:
         self._source_clock_id = None
+        self._process_session_id = None
+        self._connection_generation = None
+        self._gps_week = None
         self._pending.clear()
         self._retired.clear()
         self._latest_receive_monotonic_ns = None
@@ -236,6 +264,13 @@ class UbxRosEpochAdapter:
         expected = self._TYPES[kind]
         if not isinstance(message, expected):
             raise EpochPairingError(f"{kind} must use its matching immutable UBX epoch record")
+        if (
+            message.process_session_id != self._process_session_id
+            or message.connection_generation != self._connection_generation
+        ):
+            raise EpochPairingError(
+                "stale process_session_id/connection_generation; discard old ROS callback"
+            )
         i_tow = self._validate_i_tow(message.i_tow_ms)
         receive_ns = self._validate_receive_time(message.receive_monotonic_ns)
         entry = self._entry(i_tow, receive_ns)
@@ -285,24 +320,18 @@ class UbxRosEpochAdapter:
             raise EpochPairingError(
                 "source_clock_id changed; validate receiver week/reset and call begin_generation()"
             )
-        if any(value is not None for value in (
-            mapping.process_session_id, mapping.connection_generation, mapping.gps_week
-        )):
-            if (not isinstance(mapping.process_session_id, str)
-                    or not mapping.process_session_id.strip()
-                    or isinstance(mapping.connection_generation, bool)
-                    or not isinstance(mapping.connection_generation, int)
-                    or mapping.connection_generation < 0
-                    or isinstance(mapping.gps_week, bool)
-                    or not isinstance(mapping.gps_week, int)
-                    or mapping.gps_week < 0):
-                raise EpochPairingError("mapping session/generation/week context is incomplete")
-            expected_clock_id = (
-                f"{mapping.process_session_id}:connection:{mapping.connection_generation}"
-                f":gps-week:{mapping.gps_week}"
-            )
-            if mapping.source_clock_id != expected_clock_id:
-                raise EpochPairingError("source_clock_id does not match session/generation/week context")
+        if (
+            mapping.process_session_id != self._process_session_id
+            or mapping.connection_generation != self._connection_generation
+            or mapping.gps_week != self._gps_week
+        ):
+            raise EpochPairingError("time mapping session/generation/week context does not match active generation")
+        expected_clock_id = (
+            f"{self._process_session_id}:connection:{self._connection_generation}"
+            f":gps-week:{self._gps_week}"
+        )
+        if mapping.source_clock_id != expected_clock_id:
+            raise EpochPairingError("source_clock_id does not match active generation context")
         if not isinstance(mapping.valid, bool) or not isinstance(mapping.utc_stamp_valid, bool):
             raise EpochPairingError("time mapping validity fields must be booleans")
         if (
