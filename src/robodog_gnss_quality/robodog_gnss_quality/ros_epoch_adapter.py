@@ -325,7 +325,7 @@ class UbxRosEpochAdapter:
             or mapping.connection_generation != self._connection_generation
             or mapping.gps_week != self._gps_week
         ):
-            raise EpochPairingError("time mapping session/generation/week context does not match active generation")
+            raise EpochPairingError("time mapping does not match session/generation/week context")
         expected_clock_id = (
             f"{self._process_session_id}:connection:{self._connection_generation}"
             f":gps-week:{self._gps_week}"
