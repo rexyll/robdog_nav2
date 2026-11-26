@@ -322,9 +322,12 @@ integer/boolean/decimal types and leap-flag consistency. The
 number and management sequence ID; the backward-compatible
 `parse_pmc_response()` API still returns the dataset dictionary.
 `parse_pmc_snapshot()` accepts one combined pmc output containing exactly one
-response for each of the four datasets, rejects mixed responder clock
-identities and reused sequence IDs, and verifies PORT_DATA_SET port identity
-against its response header. The snapshot deliberately has no timestamp:
+response for each of six datasets: TIME_STATUS_NP, CURRENT_DATA_SET,
+PORT_DATA_SET, PARENT_DATA_SET, TIME_PROPERTIES_DATA_SET, and DEFAULT_DATA_SET.
+It rejects mixed responder clock identities and reused sequence IDs, verifies
+PORT_DATA_SET and DEFAULT_DATA_SET identities against their response headers,
+and cross-checks the parent grandmaster identity against TIME_STATUS_NP when
+`gmPresent` is true. Parent/default dataset hex fields are parsed as integers. The snapshot deliberately has no timestamp:
 the future collector must bracket the command with host monotonic samples and
 apply a separate freshness/uncertainty policy. It preserves `master_offset`
 as PTP clock-to-GM evidence and does not convert it into host
