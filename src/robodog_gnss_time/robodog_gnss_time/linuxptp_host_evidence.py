@@ -366,7 +366,13 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         ]
         for service in configured_services:
             journal_context_commands.append((
-                "unit_logging_config:" + service, ["systemctl", "cat", service],
+                "unit_logging_config:" + service, [
+                    "systemctl", "show", "--no-pager",
+                    "--property=Id,LogNamespace,LogRateLimitIntervalUSec,LogRateLimitBurst,"
+                    "LogLevelMax,LogFilterPatterns,StandardOutput,StandardError,"
+                    "FragmentPath,DropInPaths",
+                    service,
+                ],
             ))
     journal_context_results = [
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
