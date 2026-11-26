@@ -267,7 +267,7 @@ private:
   Api api_;
   void * device_handle_{};
   mutable std::mutex registry_mutex_;
-  std::mutex operation_mutex_;
+  mutable std::mutex operation_mutex_;
   std::map<std::uint64_t, std::unique_ptr<Context>> pending_;
   bool closed_{false};
   std::size_t callbacks_in_flight_{0};
