@@ -52,6 +52,8 @@ class LinuxPtpHostEvidenceConfig:
             raise ValueError("transport_specific must be an integer")
         if not 0 <= self.transport_specific <= 15:
             raise ValueError("transport_specific must fit the PTP four-bit field")
+        if not isinstance(self.target_port_identity, str):
+            raise ValueError("target_port_identity must be a string")
         if self.target_port_identity:
             match = re.fullmatch(
                 r"([0-9A-Fa-f]{6}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{6})-([0-9]+)",
