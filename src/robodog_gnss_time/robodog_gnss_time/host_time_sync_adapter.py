@@ -94,7 +94,7 @@ class HostTimeSyncStatusAdapter:
                 raise ValueError("synchronized Chrony evidence requires stratum in [1, 15]")
             if leap_status.lower() != "normal":
                 raise ValueError("synchronized Chrony evidence requires Leap status Normal")
-            if reference_id in {"00000000", "0000000000000000", "0.0.0.0", "::"}:
+            if reference_id in {"00000000", "0000000000000000", "0.0.0.0", "::", "7F7F0101"}:
                 raise ValueError("synchronized Chrony evidence requires a valid reference ID")
         sample = HostTimeSyncSample(
             state=self._STATE_MAP[message.state],
