@@ -149,7 +149,7 @@ class UbxReceiverTimeMapper:
         max_pending_epochs: int = 8,
         max_pair_receive_skew_ns: int = 500_000_000,
         max_pending_age_ns: int = 2_000_000_000,
-        leap_event_guard_seconds: int = 2,
+        leap_event_guard_seconds: int = 1,
     ) -> None:
         for name, value in (
             ("max_pending_epochs", max_pending_epochs),
@@ -386,7 +386,7 @@ class UbxReceiverTimeMapper:
         elif gps.leap_seconds != gps_utc_leap_seconds:
             reason = "GPS week/TOW valid; TIMEGPS leapS differs from source-adjusted TIMELS currLs"
         elif leap_event_near:
-            reason = "GPS week/TOW valid; UTC stamp withheld near a scheduled leap-second event"
+            reason = "GPS week/TOW valid; UTC stamp withheld inside leap-second transition guard window"
 
         if utc_valid:
             self._utc_valid_epochs += 1
