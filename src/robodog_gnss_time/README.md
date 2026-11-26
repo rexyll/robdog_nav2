@@ -373,7 +373,12 @@ ros2 run robodog_gnss_time robodog_linuxptp_host_evidence \
 
 The collector invokes `pmc` once with six fixed GET requests only, passing
 the explicitly configured domain and transportSpecific value, and uses
-argv-based subprocess calls with `shell=False`. It records raw stdout/stderr,
+argv-based subprocess calls with `shell=False`. LinuxPTP `pmc` addresses all
+ports by default; this snapshot parser requires exactly one response per
+dataset. If a multi-port clock returns multiple PORT_DATA_SET responses, the
+collector records the raw output but marks snapshot validation invalid rather
+than silently choosing a port. A target-port selection option is intentionally
+not guessed before the target topology is known. It records raw stdout/stderr,
 exit status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot
 ID, NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
 PHC paths, plus explicitly requested service status/journal output. It validates
