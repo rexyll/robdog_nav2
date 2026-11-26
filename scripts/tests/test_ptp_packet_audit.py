@@ -149,6 +149,43 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(report["correlations"]["pdelay_req_resp_pairs"], 1)
         self.assertEqual(report["correlations"]["pdelay_resp_follow_up_pairs"], 1)
 
+    def test_timestamp_exchange_samples_preserve_origin_and_correction_fields(self):
+        sync = ptp_message(0, flags=0x0200, sequence=44,
+                           body=timestamp(0, 0), correction=65536)
+        follow = ptp_message(8, sequence=44,
+                             body=timestamp(500, 123456789), correction=-32768)
+        delay_req = ptp_message(1, source=PORT_A, sequence=45,
+                                body=timestamp(501, 111), correction=16384)
+        delay_resp = ptp_message(9, source=PORT_B, sequence=45,
+                                 body=timestamp(502, 222) + PORT_A,
+                                 correction=-16384)
+        packets = [
+            packet(101, raw_ipv4_udp(sync, 319, 319), 1_000),
+            packet(101, raw_ipv4_udp(follow, 320, 320), 2_000),
+            packet(101, raw_ipv4_udp(delay_req, 319, 319), 3_000),
+            packet(101, raw_ipv4_udp(delay_resp, 319, 319), 4_000),
+        ]
+        report = audit_ptp_records(packets)
+        samples = report["timestamp_exchange_samples"]
+        sync_sample = next(x for x in samples
+                           if x["exchange"] == "two_step_sync_follow_up")
+        self.assertEqual(sync_sample["messages"]["sync"]["timestamp_ns"], 0)
+        self.assertEqual(sync_sample["messages"]["follow_up"]["timestamp_ns"],
+                         500_123_456_789)
+        self.assertEqual(sync_sample["messages"]["sync"]["correction_field_raw"],
+                         65536)
+        self.assertEqual(sync_sample["messages"]["follow_up"]["correction_field_raw"],
+                         -32768)
+        delay_sample = next(x for x in samples
+                            if x["exchange"] == "end_to_end_delay_req_resp")
+        self.assertEqual(delay_sample["messages"]["delay_req"]["timestamp_ns"],
+                         501_000_000_111)
+        self.assertEqual(delay_sample["messages"]["delay_resp"]["timestamp_ns"],
+                         502_000_000_222)
+        self.assertEqual(delay_sample["messages"]["delay_req"]["capture_timestamp_ns"],
+                         3_000)
+        self.assertIn("no offset", sync_sample["interpretation"])
+
     def test_port_mismatch_and_orphan_follow_up(self):
         follow = ptp_message(8, sequence=99, body=timestamp())
         report = audit_ptp_records([packet(101, raw_ipv4_udp(follow, 319, 319))])
