@@ -604,3 +604,35 @@ HMS 码是设备报告的诊断线索，不是独立的时钟精度测量，也�
 新增合成测试覆盖 8 槽位、空槽过滤、ID/等级拆解、时间同步码目录、未知 ID/等级保留和错误长度拒绝；PCAP 集成测试覆盖 HMS 与时间诊断字段同一快照输出。
 
 当前没有真实 MID-360 原始 HMS push、故障注入或厂商诊断工具输出。代码表匹配仅证明对官方公开表的静态编码实现，不证明具体硬件故障已被复现或建议已在设备上验证。真实设备抓包、故障触发和各型号固件差异仍为“需要实物/授权，未完成”。
+
+
+## 20. MID-360 HMS 连续快照生命周期审计（HMS-011..016）
+
+### 20.1 官方合同与未定义项
+
+Livox 官方 HMS 文档规定 HMS 码为 4-byte uint32，包含异常 ID、保留字节和等级；官方控制协议定义 0x0102 为设备主动信息推送，key 0x8011 为 32-byte HMS 数组。官方资料说明周期性推送，但未规定槽位分配/回收算法、同一异常能否重复占槽、清除时刻、故障码消失是否代表故障恢复，也未定义 HMS 与工作状态事件之间的因果顺序。来源：[Livox HMS 官方表](https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/hms_code_mid360.rst)、[MID-360 通信协议](https://github.com/Livox-SDK/livox_wiki_en/blob/master/source/tutorials/new_product/mid360/livox_eth_protocol_mid360.md)。
+
+### 20.2 第三方实现与单机观察（非厂商保证）
+
+第三方 livox-mid360-core 文档记录：其实现接收约每秒一次的 0x0102 push，合并状态 key；HMS 集合变化时比较活动码集合并产生事件，忽略槽位顺序。其 protocol notes 对一台 MID-360、固件 13.18.0244 的观测称：健康 push 携带 8 个零槽；同一原因可占多个槽；新码占第一个空槽；部分 HMS 码在特定条件下出现/消失；未观察到槽位释放后其他码是否上移。该文档还记录 0x0102 可能在工作状态变化后额外推送、sequence counter 跳号不等同于 push 丢失。
+
+这些信息只可作为实现线索和单机经验，不得推广为全部型号/固件的协议保证。来源：[第三方 API push handling](https://atinfinity.github.io/livox-mid360-core/api/)、[第三方 protocol notes](https://atinfinity.github.io/livox-mid360-core/protocol_notes/)。
+
+### 20.3 本项目生命周期审计语义
+
+PCAP 审计器现按 capture section/interface 与 UDP 源/目的 tuple 隔离 HMS 流，并只对有效的设备 0x0102 REQ push 且明确包含完整 0x8011 key 的快照执行比较：
+- 活动故障身份以完整 raw uint32 code 为键，不以 slot 为键；
+- 每个 raw code 记录当前槽位集合及 multiplicity，允许同一 raw code 同时占多个槽；
+- 输出 appeared_in_snapshot、no_longer_observed_in_snapshot、slot_or_multiplicity_changes；
+- key 缺失时不生成空快照、不更新上一快照，因此不能误报清除；
+- code 从完整 8 槽 HMS key 消失只表述为“本快照不再观测到”，不表述为 cleared/recovered；
+- 每个快照同时附带同一 0x0102 消息中的 local_time_now、last_sync_time、time_offset、time_sync_type（若存在），便于时间同步 HMS 与设备自报时间字段按同一捕获时刻关联；
+- 生命周期输出最多保留 4096 条，超出后计入 truncation；比较状态仅保留每条流最近一次快照。
+
+该工具不补插丢失 push，不用序号差推断丢包，不假设固定推送周期，也不把 HMS 消失与 cur_work_state 变化解释为因果关系。
+
+### 20.4 合成测试与验证边界
+
+新增 PCAP 合成测试覆盖：同一异常码多槽位重复、槽位移动/重复数变化、异常码在后续完整快照中消失，以及 push 中缺少 HMS key 时不产生清除事件。测试只验证快照差分逻辑，不验证真实设备生命周期。
+
+实机 Gate 仍需对目标 MID-360 型号和固件采集完整连续 0x0102 push，至少覆盖：正常状态、可安全触发的窗口遮挡/温度/时间同步异常、解除异常、工作状态转换、重启与重新连接；保存原始 PCAP、固件/型号、设备时钟与主机抓包时钟信息。未经这些证据，不把 no_longer_observed_in_snapshot 升级为“故障已恢复”，也不将 HMS 事件用于自主重启、切换时钟源或机器人运动安全控制。
