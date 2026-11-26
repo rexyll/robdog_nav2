@@ -311,10 +311,19 @@ class UbxRosEpochRuntime:
     def handle_receiver_time(self, message):
         mapping = receiver_time_from_ros(message)
         if not mapping.valid:
-            if self._active_context is not None:
-                result = self.adapter.add_time_mapping(mapping)
-                self._publish(result)
-                return result
+            # Without a valid GPS week there is no safe epoch/generation key.
+            # Invalid mappings with a complete active context can retire only
+            # their exact iTOW; incomplete context is discarded, not guessed.
+            if self._active_context is not None and mapping.gps_week is not None:
+                context = (
+                    mapping.process_session_id,
+                    mapping.connection_generation,
+                    mapping.gps_week,
+                )
+                if context == self._active_context:
+                    result = self.adapter.add_time_mapping(mapping)
+                    self._publish(result)
+                    return result
             return None
         if mapping.gps_week is None:
             raise EpochPairingError("valid receiver-time mapping requires gps_week")
