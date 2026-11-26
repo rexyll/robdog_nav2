@@ -289,8 +289,10 @@ schema v3 将 journal query 的时间语义与 collector 命令执行时间分�
   它不是 --since 查询窗口内/外判断，更不是 collector 全部任务的窗口。
 - journal_storage_context 另行保留只读诊断命令原始输出：合并后的
   systemd/journald.conf（systemd-analyze cat-config）、journalctl
-  --disk-usage、journalctl --list-boots，以及每个显式目标 service 的
-  systemctl cat。这些诊断命令为可选上下文；不可用会令该 context 标为
+  --disk-usage、journalctl --list-boots，以及每个显式目标 service 的 systemctl show logging-specific properties（LogNamespace、
+  LogRateLimitIntervalUSec、LogRateLimitBurst、LogLevelMax、LogFilterPatterns、
+  StandardOutput/StandardError 和 unit path/drop-in metadata；不读取完整 unit 文件，
+  避免为此诊断额外采集 Environment 等可能包含敏感值的配置）。这些诊断命令为可选上下文；不可用会令该 context 标为
   partial，但不单独使核心 PTP inventory 失败。若没有显式配置任何目标 service，
   不执行这些 journald 诊断命令，journal_storage_context.status=not_requested。
 
