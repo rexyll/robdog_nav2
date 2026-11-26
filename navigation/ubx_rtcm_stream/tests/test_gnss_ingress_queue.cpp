@@ -149,6 +149,20 @@ int main() {
   }
 
   {
+    GnssIngressQueue queue(4, OverflowPolicy::DropOldest, "process-I");
+    assert(queue.begin_generation(1, 10));
+    assert(queue.close(11));
+    assert(!queue.mark_device_lost(1, 12));
+    assert(!queue.mark_transport_fault(1, 13));
+    auto started = queue.try_pop();
+    auto stopped = queue.try_pop();
+    assert(started && started->type == GnssIngressEventType::GenerationStarted);
+    assert(stopped && stopped->type == GnssIngressEventType::Stopped);
+    assert(!queue.try_pop());
+    assert(queue.stats().accepted_control_events == 2);
+  }
+
+  {
     GnssIngressQueue queue(2, OverflowPolicy::RejectNewest, "process-D");
     assert(queue.begin_generation(1, 1));
     assert(queue.push_frame(frame(0, 1), 2) == GnssIngressPushResult::Accepted);
