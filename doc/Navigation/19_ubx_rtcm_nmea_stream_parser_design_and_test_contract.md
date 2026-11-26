@@ -1,12 +1,12 @@
 # UBX / RTCM3 / NMEA 增量字节流解析器设计与测试合同
 
-- 状态：设计合同（未实现、未构建、未测试）
+- 状态：总体设计合同；UBX/RTCM3 第一实现切片已落地并完成本地 ASan/UBSan 测试；NMEA、property/fuzz、ROS/libusb 集成仍未实现/验证
 - 审计对象：aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e
 - 关联审计：18_ublox_dgnss_fixed_revision_time_message_driver_audit.md
 - 项目分支：nav
 - 目标：定义可独立单测的 USB byte-stream decoder，替换“一个 libusb transfer 就是一条协议消息”的假设。
 
-## 1. 设计约束
+## 0. 当前实现状态（2026-11-26）\n\n已新增 `navigation/ubx_rtcm_stream/`，当前实现仅覆盖 UBX 与 RTCM3 的纯 C++17 增量解析，不依赖 ROS/libusb。支持分片/拼接、checksum/CRC24Q、noise resync、generation reset 和基础统计。独立 CMake/CTest 的 8 组测试已在本地 GCC 14.2 + ASan/UBSan 下通过；CI workflow 已添加，实际 Actions 结果待核验。NMEA 仍未实现；本实现不包含 USB callback、ROS publisher、线程安全队列或 transfer lifecycle 修复。实现与测试路径见仓库 `navigation/ubx_rtcm_stream/`。\n\n## 1. 设计约束
 
 1. libusb transfer 是传输层交付单元，不是 UBX/RTCM/NMEA 消息边界。
 2. parser 输入为任意长度 byte span；允许空输入、单字节输入、任意分片和任意拼接。
