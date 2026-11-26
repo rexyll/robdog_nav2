@@ -373,11 +373,50 @@ class PtpCorrelationAudit:
         self.pending_delay_req = {}
         self.pending_pdelay_req = {}
         self.pending_pdelay_resp = {}
+        self.exchange_samples = []
+        self.max_exchange_samples = 32
 
-    def _store(self, table: dict, key: tuple, label: str) -> None:
+    @staticmethod
+    def _timestamp_fields(message: PtpMessage) -> dict:
+        return {
+            "timestamp_seconds": message.timestamp_seconds,
+            "timestamp_nanoseconds": message.timestamp_nanoseconds,
+            "timestamp_ns": message.timestamp_ns,
+            "correction_field_raw": message.correction_field_raw,
+            "correction_field_ns": message.correction_field_ns,
+            "capture_timestamp_ns": message.capture_timestamp_ns,
+            "source_port_identity": message.source_port_identity,
+            "sequence_id": message.sequence_id,
+            "transport": message.transport,
+            "interface_id": message.interface_id,
+            "section_index": message.section_index,
+        }
+
+    def _record_exchange(self, kind: str, messages: dict[str, PtpMessage],
+                         *, domain_number: int, sequence_id: int) -> None:
+        self.counts[f"{kind}_timestamp_exchanges"] += 1
+        if len(self.exchange_samples) >= self.max_exchange_samples:
+            self.counts["evicted_timestamp_exchange_samples"] += 1
+            return
+        self.exchange_samples.append({
+            "exchange": kind,
+            "domain_number": domain_number,
+            "sequence_id": sequence_id,
+            "messages": {
+                name: self._timestamp_fields(message)
+                for name, message in messages.items()
+            },
+            "interpretation": (
+                "Raw message timestamps and correctionField values only; no offset, "
+                "mean path delay, asymmetry, or clock accuracy is calculated."
+            ),
+        })
+
+    def _store(self, table: dict, key: tuple, label: str,
+               message: PtpMessage) -> None:
         if key in table:
             self.counts[f"duplicate_{label}"] += 1
-        table[key] = True
+        table[key] = message
         if len(table) > self.max_pending:
             table.pop(next(iter(table)))
             self.counts[f"expired_pending_{label}"] += 1
@@ -404,38 +443,68 @@ class PtpCorrelationAudit:
                message.sequence_id)
         if message.message_type == 0:
             if message.two_step:
-                self._store(self.pending_sync, key, "sync")
+                self._store(self.pending_sync, key, "sync", message)
             else:
                 self.counts["one_step_sync"] += 1
         elif message.message_type == 8:
-            if self.pending_sync.pop(key, None) is not None:
+            sync_message = self.pending_sync.pop(key, None)
+            if sync_message is not None:
                 self.counts["sync_follow_up_pairs"] += 1
+                self._record_exchange(
+                    "two_step_sync_follow_up",
+                    {"sync": sync_message, "follow_up": message},
+                    domain_number=message.domain_number,
+                    sequence_id=message.sequence_id,
+                )
             else:
                 self.counts["orphan_follow_up"] += 1
         elif message.message_type == 1:
-            self._store(self.pending_delay_req, key, "delay_req")
+            self._store(self.pending_delay_req, key, "delay_req", message)
         elif message.message_type == 9 and message.requesting_port_identity:
             request_key = (message.domain_number,
                            message.requesting_port_identity, message.sequence_id)
-            if self.pending_delay_req.pop(request_key, None) is not None:
+            request_message = self.pending_delay_req.pop(request_key, None)
+            if request_message is not None:
                 self.counts["delay_req_resp_pairs"] += 1
+                self._record_exchange(
+                    "end_to_end_delay_req_resp",
+                    {"delay_req": request_message, "delay_resp": message},
+                    domain_number=message.domain_number,
+                    sequence_id=message.sequence_id,
+                )
             else:
                 self.counts["orphan_delay_resp"] += 1
         elif message.message_type == 2:
-            self._store(self.pending_pdelay_req, key, "pdelay_req")
+            self._store(self.pending_pdelay_req, key, "pdelay_req", message)
         elif message.message_type == 3 and message.requesting_port_identity:
             request_key = (message.domain_number,
                            message.requesting_port_identity, message.sequence_id)
-            if self.pending_pdelay_req.pop(request_key, None) is not None:
+            request_message = self.pending_pdelay_req.pop(request_key, None)
+            if request_message is not None:
                 self.counts["pdelay_req_resp_pairs"] += 1
-                self._store(self.pending_pdelay_resp, request_key, "pdelay_resp")
+                self._store(self.pending_pdelay_resp, request_key,
+                            "pdelay_resp", message)
+                self._record_exchange(
+                    "peer_delay_req_resp",
+                    {"pdelay_req": request_message, "pdelay_resp": message},
+                    domain_number=message.domain_number,
+                    sequence_id=message.sequence_id,
+                )
             else:
                 self.counts["orphan_pdelay_resp"] += 1
         elif message.message_type == 10 and message.requesting_port_identity:
             request_key = (message.domain_number,
                            message.requesting_port_identity, message.sequence_id)
-            if self.pending_pdelay_resp.pop(request_key, None) is not None:
+            response_message = self.pending_pdelay_resp.pop(request_key, None)
+            if response_message is not None:
                 self.counts["pdelay_resp_follow_up_pairs"] += 1
+                self._record_exchange(
+                    "peer_delay_response_follow_up",
+                    {"pdelay_resp": response_message,
+                     "pdelay_resp_follow_up": message},
+                    domain_number=message.domain_number,
+                    sequence_id=message.sequence_id,
+                )
             else:
                 self.counts["orphan_pdelay_resp_follow_up"] += 1
 
@@ -448,6 +517,8 @@ class PtpCorrelationAudit:
             "grandmaster_identity_counts": dict(self.grandmasters),
             "announce_audit": self.announce_audit.report(),
             "correlations": dict(self.counts),
+            "timestamp_exchange_samples": list(self.exchange_samples),
+            "timestamp_exchange_sample_limit": self.max_exchange_samples,
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
                 "delay_req_waiting_delay_resp": len(self.pending_delay_req),
@@ -455,9 +526,11 @@ class PtpCorrelationAudit:
                 "pdelay_resp_waiting_follow_up": len(self.pending_pdelay_resp),
             },
             "interpretation": (
-                "PTP message presence and sequence-ID pairing only; not proof of "
-                "PTP lock, GM selection, PHC timestamping, offset, path delay, "
-                "clock accuracy, or end-to-end synchronization"
+                "PTP message presence and sequence-ID pairing with raw timestamp/"
+                "correctionField evidence only; capture timestamps are not event "
+                "timestamps and no offset, path delay, asymmetry, or clock accuracy "
+                "is calculated; not proof of PTP lock, GM selection, PHC timestamping, "
+                "or end-to-end synchronization"
             ),
         }
 
