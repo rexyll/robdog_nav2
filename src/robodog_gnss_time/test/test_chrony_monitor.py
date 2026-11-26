@@ -105,7 +105,7 @@ def test_monitor_faults_closed_when_chronyc_unavailable(tmp_path):
     sample = monitor.sample()
     assert sample["state"] == "fault"
     assert "chronyc missing" in sample["fault"]
-    assert sample["host_boot_id"] == ""
+    assert sample["host_boot_id"] == "boot-test"
 
 
 def test_monitor_requires_explicit_error_budget():
