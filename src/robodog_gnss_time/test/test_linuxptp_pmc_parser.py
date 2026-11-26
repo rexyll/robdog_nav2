@@ -4,6 +4,7 @@ from robodog_gnss_time.linuxptp_pmc_parser import (
     parse_pmc_response,
     parse_pmc_response_envelope,
     parse_pmc_snapshot,
+    validate_pmc_snapshot_domain,
 )
 
 
@@ -369,3 +370,38 @@ def test_parent_dataset_rejects_malformed_hex_field():
     )
     with pytest.raises(ValueError, match="hexadecimal integer"):
         parse_pmc_response(output, "PARENT_DATA_SET")
+
+
+def test_snapshot_port_number_must_be_within_default_dataset_port_count():
+    output = _snapshot_output().replace(
+        "numberPorts 1",
+        "numberPorts 0",
+    )
+    with pytest.raises(ValueError, match="outside DEFAULT_DATA_SET.numberPorts"):
+        parse_pmc_snapshot(output)
+
+
+def test_snapshot_rejects_port_number_above_declared_port_count():
+    output = _snapshot_output().replace(
+        "080027.fffe.7f327b-1 seq 12 RESPONSE MANAGEMENT PORT_DATA_SET",
+        "080027.fffe.7f327b-2 seq 12 RESPONSE MANAGEMENT PORT_DATA_SET",
+    ).replace(
+        "portIdentity 080027.fffe.7f327b-1",
+        "portIdentity 080027.fffe.7f327b-2",
+    )
+    with pytest.raises(ValueError, match="outside DEFAULT_DATA_SET.numberPorts"):
+        parse_pmc_snapshot(output)
+
+
+def test_snapshot_domain_requires_explicit_matching_deployment_value():
+    snapshot = parse_pmc_snapshot(_snapshot_output())
+    assert validate_pmc_snapshot_domain(snapshot, 0) is None
+    with pytest.raises(ValueError, match="domain mismatch"):
+        validate_pmc_snapshot_domain(snapshot, 1)
+
+
+@pytest.mark.parametrize("expected_domain", [True, -1, 256, "0"])
+def test_snapshot_domain_rejects_invalid_expected_value(expected_domain):
+    snapshot = parse_pmc_snapshot(_snapshot_output())
+    with pytest.raises(ValueError):
+        validate_pmc_snapshot_domain(snapshot, expected_domain)
