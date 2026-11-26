@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.224
+- 文档版本：v0.3.225
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1100,3 +1100,6 @@
 
 
 - NavSatFix handoff 前置 exact observation/quality identity joiner 第一实现（2026-11-26 / v0.3.224）：在 transport-independent `robodog_gnss_quality` 新增 `GnssObservationIdentity` 与 `GnssObservationQualityJoiner`，把 session、connection generation、GPS week、iTOW、GPST source timestamp、canonical source_clock_id、host monotonic receive timestamp 作为完整 key；只有 observation 与 `qualified=true` 的 `QualityDecision` 全字段 identity 完全一致才输出 `GnssQualifiedObservation`。支持 observation/decision 任意到达顺序；unqualified decision 立即 retire，不会由后续 observation 复活；相同重复忽略、冲突重复 retire；双侧 pending 总量有界、按 host monotonic age 过期，retired tombstones 有界；验证 embedded observation source timestamp/source clock/receive time 与 identity 一致，拒绝 monotonic watermark 回退。新增 11 项单测（到达顺序、exact key、unqualified retire、generation mismatch、conflicting/identical duplicates、capacity/expiry、monotonic regression、canonical clock ID、embedded identity mismatch）。代码 commits：joiner `0d0c0764471b6bac6b0aa82e231e1dcd49eb2954`、strict identity/conflict hardening `9b23afccb2ca2b9e85aef2791c79d797b3e2acc8`、package exports `d300854286f2fc95bfea930877cf7af0bf907f8a`、tests `10ae664cfe92f3041eb8d60c75b52c1df65ade86`、README `49dc479e42d6c4141d82e907c12a7bc47cd83288`。最终 head `49dc479e42d6c4141d82e907c12a7bc47cd83288` 的 GNSS quality gate CI run `45812322052`（Humble/Jammy + Jazzy/Noble）已排队，尚未验收。该 joiner 仍未接入 NavSatFix ROS publisher；下一步在 `robodog_gnss_time` 中添加 ROS adapter，把 observation 与 GnssQualityStatus 转换成 canonical identity，使用 joiner 后仅允许 qualified + utc_stamp_valid + SystemTime guard + antenna frame/TF ready 的观测发布 NavSatFix。仿真 use_sim_time 无 /clock 映射时抑制 NavSatFix。真实 ZED-F9P、PPS/UTC 校时、RTK service、antenna extrinsics、EKF/TF 与设备导航仍未验证；根 LICENSE/UNSPECIFIED 授权治理不变。
+
+
+- Exact observation/quality joiner Humble/Jazzy CI 验收（2026-11-26 / v0.3.225）：最终代码/测试 head `49dc479e42d6c4141d82e907c12a7bc47cd83288` 对应 GNSS quality gate CI run `45812322052`，Humble/Jammy 与 Jazzy/Noble 两 job 全部 success，每个环境 208 tests passed（0 failures）。其中新增 `test_observation_quality_joiner.py` 11/11 passed，验证 arbitrary arrival order、完整 exact identity、unqualified retire、generation mismatch 不配对、conflicting/identical duplicate、capacity/expiry、monotonic watermark、canonical clock ID 和 observation embedded identity。该证据仅覆盖纯 Python joiner，不代表 ROS publisher、ROS clock guard、NavSatFix、TF/EKF 或实机验证。下一步将 joiner 接入 ROS 2 adapter，先实现 bounded message pair/cache 与 fail-closed clock mode policy，再发布 NavSatFix。
