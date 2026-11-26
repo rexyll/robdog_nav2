@@ -296,7 +296,7 @@ The collector accepts only the documented `System time` fast/slow phrase,
 `Root delay`, `Root dispersion`, `Stratum`, `Reference ID`, and
 `Leap status` fields. Positive offset means SystemTime is ahead of NTP/UTC;
 negative means behind. Its uncertainty field is a conservative NTP root-distance
-estimate: root dispersion plus half root delay, rounded upward to nanoseconds.
+estimate: root dispersion plus half the absolute root delay, rounded upward to nanoseconds. The local-mode Chrony Reference ID `7F7F0101` is explicitly rejected; the parser accepts the current hexadecimal reference-ID form and older dotted-quad form.
 A sample is synchronized only when leap status is Normal, stratum is 1..15,
 reference ID is nonzero, and absolute offset plus that uncertainty is within
 the explicitly supplied error budget. Missing/malformed output, command errors,
