@@ -65,3 +65,61 @@ leap transitions, DDS overload/resource limits, or downstream localization.
 
 The package license is `UNSPECIFIED` because the repository root has no
 LICENSE declaration. This is a governance blocker, not a redistribution grant.
+
+
+## Four-stream receiver-time observation join
+
+A second executable, `gnss_observation_node`, subscribes to decoded receiver
+navigation topics and the independently validated `GnssReceiverTime` stream:
+
+```text
+/gnss/nav_pvt -----------\
+/gnss/nav_hp_pos_llh -----+--> exact iTOW + session/generation/week join
+/gnss/nav_cov -----------+        + valid receiver-time mapping
+/gnss/nav_status --------/        -> /gnss/observation
+/gnss/receiver_time -----/
+```
+
+The input wire contracts are `GnssNavPvt`, `GnssNavHpPosLlh`,
+`GnssNavCov`, and `GnssNavStatus`. They carry decoded UBX fields plus
+process session, connection generation and GPS week. They intentionally omit
+ROS Header stamps; the node samples `time.monotonic_ns()` at callback receipt
+for transport freshness and skew checks.
+
+A valid receiver-time mapping is the only authority that activates a changed
+session/generation/week. Before the first mapping, raw navigation records may
+be held in the bounded epoch cache but cannot produce an observation. Raw
+records from a different generation are dropped until a matching valid mapping
+activates that generation. The join requires exact iTOW equality across all
+four streams and a valid mapping for that same iTOW. It cross-checks PVT and
+STATUS fix/carrier state, requires HPPOSLLH LLH validity and NAV-COV
+position-covariance validity, and converts the NAV-COV NED covariance into
+row-major ENU with the correct sign changes for Down cross-terms.
+
+The output `GnssObservation` carries GPST source time and clock identity,
+host monotonic receive time, position, RTK state, ENU covariance, and optional
+UTC/leap metadata. GPST validity does not imply UTC validity. This node only
+assembles and publishes the observation; the separate RTK quality gate and
+localization consumer remain subsequent stages.
+
+### Parameters
+
+| Parameter | Default | Contract |
+|---|---:|---|
+| `nav_pvt_topic` | `/gnss/nav_pvt` | Decoded NAV-PVT stream |
+| `nav_hp_pos_llh_topic` | `/gnss/nav_hp_pos_llh` | Decoded HPPOSLLH stream |
+| `nav_cov_topic` | `/gnss/nav_cov` | Decoded NAV-COV stream |
+| `nav_status_topic` | `/gnss/nav_status` | Decoded NAV-STATUS stream |
+| `receiver_time_topic` | `/gnss/receiver_time` | Validated receiver-time mapping |
+| `observation_topic` | `/gnss/observation` | Joined observation |
+| `qos_depth` | 256 | Reliable, volatile, KeepLast depth |
+| `max_pending_epochs` | 64 | Bounded iTOW cache, range 1..4096 |
+| `max_pair_receive_skew_ns` | 250000000 | Maximum 250 ms callback receive skew |
+| `max_pending_age_ns` | 1000000000 | Maximum 1 s incomplete-epoch age |
+
+The decoded-topic publishers must populate the documented raw UBX flags and
+session/generation/week fields from the same receiver connection. No concrete
+upstream driver has yet been certified to publish these custom contracts.
+The new CI validates synthetic ROS messages and the software join path only;
+it does not establish real driver compatibility, physical ZED-F9P behavior,
+or localization performance.
