@@ -73,6 +73,10 @@ class TestUbxTimeMapper(unittest.TestCase):
             decode_nav_timegps(timegps(i_tow=604_800_000))
         with self.assertRaises(EpochPairingError):
             decode_nav_timegps(timegps(f_tow=500_001))
+        invalid_timels = bytearray(timels())
+        invalid_timels[11] = 2
+        with self.assertRaisesRegex(EpochPairingError, "lsChange"):
+            decode_nav_timels(bytes(invalid_timels))
 
     def test_pair_in_either_order_and_convert_utc_only_with_trusted_source(self):
         m = mapper(trusted_leap_sources={2})
