@@ -22,7 +22,7 @@ def timegps(i_tow=1000, f_tow=250_000, week=2450, leap=18, valid=0x07, tacc=50):
     )
 
 
-def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0):
+def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0, time_to_event=86_400):
     payload = bytearray(24)
     payload[0:4] = i_tow.to_bytes(4, "little")
     payload[4] = version
@@ -30,7 +30,7 @@ def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0):
     payload[9:10] = leap.to_bytes(1, "little", signed=True)
     payload[10] = 2
     payload[11:12] = (1).to_bytes(1, "little", signed=True)
-    payload[12:16] = (86_400).to_bytes(4, "little", signed=True)
+    payload[12:16] = time_to_event.to_bytes(4, "little", signed=True)
     payload[16:18] = (2451).to_bytes(2, "little")
     payload[18:20] = (7).to_bytes(2, "little")
     payload[23] = valid
@@ -116,6 +116,31 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertTrue(result.utc_stamp_valid)
         self.assertEqual(result.leap_seconds, 18)
         self.assertEqual(result.reported_leap_seconds, 4)
+
+    def test_utc_stamp_requires_valid_event_timing_and_guards_leap_transition(self):
+        m = mapper(trusted_leap_sources={2})
+        m.add_timegps(timegps(), 100)
+        no_event_time = m.add_timels(timels(valid=0x01), 110)
+        self.assertTrue(no_event_time.valid)
+        self.assertFalse(no_event_time.utc_stamp_valid)
+        self.assertIn("event timing is unavailable", no_event_time.validity_reason)
+
+        for offset in (-1, 0, 1):
+            guarded = mapper(trusted_leap_sources={2})
+            guarded.add_timegps(timegps(), 100)
+            result = guarded.add_timels(timels(time_to_event=offset), 110)
+            self.assertTrue(result.valid)
+            self.assertFalse(result.utc_stamp_valid)
+            self.assertIn("transition guard window", result.validity_reason)
+
+        outside = mapper(trusted_leap_sources={2})
+        outside.add_timegps(timegps(), 100)
+        result = outside.add_timels(timels(time_to_event=2), 110)
+        self.assertTrue(result.utc_stamp_valid)
+
+    def test_firmware_default_leap_source_cannot_be_allowlisted(self):
+        with self.assertRaisesRegex(ValueError, "source 0 is firmware default"):
+            UbxReceiverTimeMapper(trusted_leap_sources={0})
 
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
