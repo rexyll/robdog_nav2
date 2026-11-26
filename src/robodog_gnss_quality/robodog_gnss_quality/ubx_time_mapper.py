@@ -381,8 +381,6 @@ class UbxReceiverTimeMapper:
             reason = "GPS week/TOW valid; NAV-TIMEGPS leapSValid is false"
         elif not leap.current_leap_valid:
             reason = "GPS week/TOW valid; NAV-TIMELS validCurrLs is false"
-        elif not leap.leap_event_valid:
-            reason = "GPS week/TOW valid; NAV-TIMELS leap-event timing is unavailable"
         elif leap.source_of_current_leap not in self.trusted_leap_sources:
             reason = "GPS week/TOW valid; NAV-TIMELS current leap source is not trusted"
         elif gps.leap_seconds != gps_utc_leap_seconds:
