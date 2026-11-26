@@ -83,3 +83,8 @@ A generation has at most one terminal cause: the first `DeviceLost` or `Transpor
 ## 10. Reject terminal callbacks after a committed stop
 
 Once `Stopped` has been successfully recorded, later `DeviceLost` or `TransportFault` notifications for that generation are rejected. A terminal callback whose earlier event enqueue failed remains retryable because its terminal type is retained; a queue closed by `close()` without a pending terminal cause does not accept a new terminal cause afterward. This prevents late or duplicate callback paths from appending a contradictory lifecycle event after `Stopped`. The synthetic regression test checks both late terminal event types and confirms the event stream remains `GenerationStarted → Stopped` only.
+
+
+## 11. Same-object stop/restart integration
+
+`test_gnss_usb_stream` now restarts the same `GnssUsbStream` instance after a fully drained stop. It checks that the next `GenerationStarted` carries generation 2 and an ingress sequence greater than the previous generation's `Stopped`; the next frame and second `Stopped` remain generation 2 and preserve global event ordering. The fake DeviceSession must reopen and close its device/context a second time. The new integration test commit is `f09ccb359160b9a40bcd9f020e25b552bd8e6b00`; Actions run `45764761179` is in progress and has not yet been accepted.
