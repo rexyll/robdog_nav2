@@ -201,6 +201,8 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "conflicting duplicate"):
             joiner.add_pvt(
                 make_pvt(receive=101).__class__(
+                    process_session_id=PROCESS_SESSION_ID,
+                    connection_generation=CONNECTION_GENERATION,
                     i_tow_ms=1000,
                     gnss_fix_ok=False,
                     carrier_solution=CarrierSolution.FIXED,
