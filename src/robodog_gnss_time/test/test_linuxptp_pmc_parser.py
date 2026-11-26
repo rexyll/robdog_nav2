@@ -231,7 +231,7 @@ def test_snapshot_rejects_mixed_responder_clock_identities():
 
 @pytest.mark.parametrize("mutation", [
     lambda output: output.replace(
-        "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
+        "080027.fffe.7f327b-0 seq 14 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
         "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT UNKNOWN_DATA_SET",
     ),
     lambda output: output.split("sending: GET TIME_PROPERTIES_DATA_SET", 1)[0],
@@ -271,7 +271,7 @@ def test_port_dataset_identity_must_match_response_header():
 
 def test_snapshot_rejects_reused_management_sequence_id():
     output = _snapshot_output().replace(
-        "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
+        "080027.fffe.7f327b-0 seq 14 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
         "080027.fffe.7f327b-0 seq 12 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
     )
     with pytest.raises(ValueError, match="sequence IDs are not unique"):
