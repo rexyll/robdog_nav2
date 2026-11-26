@@ -193,8 +193,8 @@ properties、ExecStart 和 journal 仍是各自命令执行时的单次只读观
 ## 10. ptp4l journald 事件证据与覆盖性边界
 
 采集器对显式配置的服务单元改用 journalctl -u <unit> --since <window>
---no-pager --output=json --all，保留原始 stdout/stderr，并额外生成
-journal_event_evidence。--output=json 让每条日志成为独立 JSON 对象；
+--no-pager --output=json --all，保留原始 stdout/stderr。由于新增结构化事件证据字段，报告 schema_version
+提升为 2，并额外生成 journal_event_evidence。--output=json 让每条日志成为独立 JSON 对象；
 --all 请求完整字段值，避免 journalctl 默认将超过 4096 字节的字段输出为
 null。解析器保留 _BOOT_ID、__MONOTONIC_TIMESTAMP、
 __REALTIME_TIMESTAMP、__CURSOR、_SYSTEMD_UNIT 和 MESSAGE。
