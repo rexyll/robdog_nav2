@@ -10,7 +10,7 @@ if(ROBODOG_ENABLE_TSAN AND ROBODOG_ENABLE_SANITIZERS)
   message(FATAL_ERROR "ThreadSanitizer cannot be combined with AddressSanitizer")
 endif()
 
-add_library(robodog_ubx_rtcm_stream src/stream_decoder.cpp src/libusb_device_session.cpp src/libusb_event_loop.cpp src/libusb_device_runtime.cpp)
+add_library(robodog_ubx_rtcm_stream src/stream_decoder.cpp src/libusb_device_session.cpp src/libusb_event_loop.cpp src/libusb_device_runtime.cpp src/gnss_usb_stream.cpp)
 target_include_directories(robodog_ubx_rtcm_stream PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_compile_features(robodog_ubx_rtcm_stream PUBLIC cxx_std_17)
@@ -75,6 +75,11 @@ add_executable(test_libusb_device_runtime tests/test_libusb_device_runtime.cpp)
 target_link_libraries(test_libusb_device_runtime PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
 target_compile_options(test_libusb_device_runtime PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME libusb_device_runtime_tests COMMAND test_libusb_device_runtime)
+
+add_executable(test_gnss_usb_stream tests/test_gnss_usb_stream.cpp)
+target_link_libraries(test_gnss_usb_stream PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
+target_compile_options(test_gnss_usb_stream PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME gnss_usb_stream_tests COMMAND test_gnss_usb_stream)
 
 if(ROBODOG_BUILD_LIBUSB_BINDING)
   add_executable(test_libusb_api_binding tests/test_libusb_api_binding.cpp)
