@@ -413,7 +413,7 @@ class PtpCorrelationAudit:
         })
 
     def _store(self, table: dict, key: tuple, label: str,
-               message: PtpMessage) -> None:
+               message: object) -> None:
         if key in table:
             self.counts[f"duplicate_{label}"] += 1
         table[key] = message
