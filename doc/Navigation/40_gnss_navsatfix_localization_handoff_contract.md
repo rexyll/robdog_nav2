@@ -124,10 +124,14 @@ Next implementation slice:
    run `45812322052` on Humble/Jammy and Jazzy/Noble (208 tests in each job).
 2. Add a ROS adapter that converts both ROS messages into that canonical
    identity and rejects mismatches without nearest-time pairing.
-3. Add a ROS clock mode guard and explicit SystemTime/UTC mapping policy.
+3. Implement and validate a trusted HostTimeSyncStatus producer/ROS interface
+   for live SystemTime-to-UTC state, source, offset, uncertainty and freshness;
+   the pure policy gate is already Humble/Jazzy CI-validated (run 45817485449,
+   49 tests per distro), but has no real host-time evidence source.
 4. Require antenna frame and verified static extrinsic before publishing.
-5. Publish NavSatFix only for qualified exact epochs with valid UTC, and test
-   diagnostics/status propagation plus EKF timeout/recovery behavior.
+5. Combine exact observation/quality join, UTC/leap policy, host clock evidence
+   and antenna readiness; only then publish NavSatFix and test diagnostics/status
+   propagation plus EKF timeout/recovery behavior.
 6. Test Humble/Jazzy software integration with synthetic data, then obtain
    physical F9P/antenna/RTK/clock evidence.
 
