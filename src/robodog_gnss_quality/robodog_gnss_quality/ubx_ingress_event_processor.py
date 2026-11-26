@@ -43,26 +43,62 @@ class GnssIngressEvent:
     frame_connection_generation: Optional[int] = None
     frame_bytes: Optional[bytes] = None
 
+    @staticmethod
+    def _ros_uint(name: str, value: object, maximum: int = (1 << 64) - 1) -> int:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not 0 <= value <= maximum
+        ):
+            raise EpochPairingError(f"ROS ingress {name} must be an unsigned integer")
+        return value
+
     @classmethod
     def from_ros_message(cls, message: object) -> "GnssIngressEvent":
         """Convert generated ROSIDL message without importing its package."""
-        event_type = getattr(message, "event_type", None)
-        if isinstance(event_type, bool) or event_type not in _EVENT_ID_TO_NAME:
+        event_type = cls._ros_uint("event_type", getattr(message, "event_type", None), 0xFF)
+        if event_type not in _EVENT_ID_TO_NAME:
             raise EpochPairingError("ROS ingress message has unknown event_type")
         kind = _EVENT_ID_TO_NAME[event_type]
-        protocol = getattr(message, "protocol", None)
-        checksum_status = getattr(message, "checksum_status", None)
-        frame_sequence = getattr(message, "frame_sequence", None)
-        frame_generation = getattr(message, "frame_connection_generation", None)
-        frame_bytes = bytes(getattr(message, "frame_bytes", b""))
+        process_session_id = getattr(message, "process_session_id", None)
+        if not isinstance(process_session_id, str) or not process_session_id.strip():
+            raise EpochPairingError("ROS ingress process_session_id must be a non-empty string")
+        connection_generation = cls._ros_uint(
+            "connection_generation", getattr(message, "connection_generation", None)
+        )
+        ingress_sequence = cls._ros_uint(
+            "ingress_sequence", getattr(message, "ingress_sequence", None)
+        )
+        receive_monotonic_ns = cls._ros_uint(
+            "receive_monotonic_ns", getattr(message, "receive_monotonic_ns", None)
+        )
+        dropped_frame_events_total = cls._ros_uint(
+            "dropped_frame_events_total",
+            getattr(message, "dropped_frame_events_total", None),
+        )
+        protocol = cls._ros_uint("protocol", getattr(message, "protocol", None), 0xFF)
+        checksum_status = cls._ros_uint(
+            "checksum_status", getattr(message, "checksum_status", None), 0xFF
+        )
+        frame_sequence = cls._ros_uint(
+            "frame_sequence", getattr(message, "frame_sequence", None)
+        )
+        frame_generation = cls._ros_uint(
+            "frame_connection_generation",
+            getattr(message, "frame_connection_generation", None),
+        )
+        try:
+            frame_bytes = bytes(getattr(message, "frame_bytes", b""))
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise EpochPairingError("ROS ingress frame_bytes must be a uint8 sequence") from exc
         if kind == "Frame":
             return cls(
                 event_type=kind,
-                process_session_id=message.process_session_id,
-                connection_generation=message.connection_generation,
-                ingress_sequence=message.ingress_sequence,
-                receive_monotonic_ns=message.receive_monotonic_ns,
-                dropped_frame_events_total=message.dropped_frame_events_total,
+                process_session_id=process_session_id,
+                connection_generation=connection_generation,
+                ingress_sequence=ingress_sequence,
+                receive_monotonic_ns=receive_monotonic_ns,
+                dropped_frame_events_total=dropped_frame_events_total,
                 protocol=protocol,
                 checksum_status=checksum_status,
                 frame_sequence=frame_sequence,
@@ -78,11 +114,11 @@ class GnssIngressEvent:
             )
         return cls(
             event_type=kind,
-            process_session_id=message.process_session_id,
-            connection_generation=message.connection_generation,
-            ingress_sequence=message.ingress_sequence,
-            receive_monotonic_ns=message.receive_monotonic_ns,
-            dropped_frame_events_total=message.dropped_frame_events_total,
+            process_session_id=process_session_id,
+            connection_generation=connection_generation,
+            ingress_sequence=ingress_sequence,
+            receive_monotonic_ns=receive_monotonic_ns,
+            dropped_frame_events_total=dropped_frame_events_total,
         )
 
 
@@ -153,12 +189,22 @@ class GnssIngressEventProcessor:
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise EpochPairingError(f"{name} must be a non-negative integer")
         if kind == "Frame":
-            if isinstance(event.protocol, bool) or event.protocol not in (0, 1, 2, "ubx", "rtcm3", "nmea"):
+            if (
+                isinstance(event.protocol, bool)
+                or not (
+                    (isinstance(event.protocol, int) and event.protocol in (0, 1, 2))
+                    or (isinstance(event.protocol, str) and event.protocol in ("ubx", "rtcm3", "nmea"))
+                )
+            ):
                 raise EpochPairingError("Frame event requires a supported protocol")
             if not isinstance(event.frame_bytes, (bytes, bytearray, memoryview)):
                 raise EpochPairingError("Frame event requires bytes-like frame_bytes")
-            if event.checksum_status not in (1, 2):
-                raise EpochPairingError("Frame event requires a valid/absent checksum status")
+            if (
+                isinstance(event.checksum_status, bool)
+                or not isinstance(event.checksum_status, int)
+                or event.checksum_status not in (1, 2)
+            ):
+                raise EpochPairingError("Frame event requires an integer valid/absent checksum status")
             if event.protocol in (0, 1, "ubx", "rtcm3") and event.checksum_status != 1:
                 raise EpochPairingError("UBX/RTCM3 frames must have a valid checksum")
             if isinstance(event.frame_sequence, bool) or not isinstance(event.frame_sequence, int) or event.frame_sequence < 0:
