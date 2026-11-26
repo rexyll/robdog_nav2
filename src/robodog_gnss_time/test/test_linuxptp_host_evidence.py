@@ -257,3 +257,53 @@ def test_collector_rejects_response_not_matching_explicit_target_port():
     assert report["expected_target_port_identity"] == configured_target
     assert report["host_time_sync_claim"] == "not_evaluated"
 
+
+
+def test_collector_marks_inventory_complete_only_when_all_evidence_is_present():
+    def runner(argv, **kwargs):
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["collection_status"] == "complete"
+    assert report["collection_issues"] == []
+    assert report["pmc_snapshot_validation"]["status"] == "valid"
+
+
+def test_collector_marks_partial_when_any_requested_host_command_fails():
+    def runner(argv, **kwargs):
+        if argv[0] == "chronyc":
+            return subprocess.CompletedProcess(argv, 2, stdout="", stderr="chronyd unavailable")
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["pmc_snapshot_validation"]["status"] == "valid"
+    assert report["collection_status"] == "partial"
+    assert "command_not_ok:chrony_tracking:exit_error" in report["collection_issues"]
+    assert "command_not_ok:chrony_sources:exit_error" in report["collection_issues"]
+
+
+def test_collector_marks_partial_when_pmc_command_or_snapshot_is_invalid():
+    def runner(argv, **kwargs):
+        if argv[0] == "pmc":
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="socket unavailable")
+        return subprocess.CompletedProcess(argv, 0, stdout="read-only sample", stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["pmc_snapshot_validation"]["status"] == "not_run"
+    assert report["collection_status"] == "partial"
+    assert "command_not_ok:pmc_get_snapshot:exit_error" in report["collection_issues"]
+    assert "pmc_snapshot_not_valid:not_run" in report["collection_issues"]
+
+
+def test_collector_marks_partial_when_pmc_output_is_malformed():
+    def runner(argv, **kwargs):
+        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["commands"][-1]["status"] == "ok"
+    assert report["pmc_snapshot_validation"]["status"] == "invalid"
+    assert report["collection_status"] == "partial"
+    assert "pmc_snapshot_not_valid:invalid" in report["collection_issues"]
