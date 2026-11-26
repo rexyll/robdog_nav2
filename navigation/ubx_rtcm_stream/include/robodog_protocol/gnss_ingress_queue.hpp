@@ -52,6 +52,7 @@ struct GnssIngressQueueStats {
   bool accepting_frames{false};
   bool device_lost{false};
   bool closed{false};
+  bool stopped_event_recorded{false};
 };
 
 enum class GnssIngressPushResult : std::uint8_t {
@@ -90,6 +91,7 @@ class GnssIngressQueue {
     accepting_frames_ = true;
     device_lost_ = false;
     closed_ = false;
+    stopped_event_recorded_ = false;
     return push_control_locked(
         GnssIngressEventType::GenerationStarted, generation,
         receive_monotonic_ns);
@@ -161,13 +163,14 @@ class GnssIngressQueue {
 
   bool close(std::uint64_t receive_monotonic_ns) {
     std::lock_guard<std::mutex> lock(mutex_);
-    if (closed_) return true;
+    if (stopped_event_recorded_) return true;
     accepting_frames_ = false;
     const bool recorded = has_generation_
         ? push_control_locked(GnssIngressEventType::Stopped,
                               current_generation_, receive_monotonic_ns)
         : true;
     closed_ = true;
+    stopped_event_recorded_ = recorded;
     return recorded;
   }
 
@@ -195,6 +198,7 @@ class GnssIngressQueue {
     snapshot.accepting_frames = accepting_frames_;
     snapshot.device_lost = device_lost_;
     snapshot.closed = closed_;
+    snapshot.stopped_event_recorded = stopped_event_recorded_;
     return snapshot;
   }
 
@@ -271,6 +275,7 @@ class GnssIngressQueue {
   bool accepting_frames_{false};
   bool device_lost_{false};
   bool closed_{false};
+  bool stopped_event_recorded_{false};
 };
 
 }  // namespace robodog_protocol
