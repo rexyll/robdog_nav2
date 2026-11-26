@@ -1,6 +1,8 @@
 # ROS 2 source workspace
 
-The first ROS 2 package has been scaffolded:
+The first ROS 2 packages have been scaffolded:
+
+- `robodog_gnss_interfaces`: ordered GNSS transport ingress event message (`GnssIngressEvent`). It defines a wire contract only; publisher, DDS QoS and executor barriers remain pending.
 
 - robodog_lite3_bridge: read-only state topic mock publisher and topic freshness diagnostics. It does not connect to the vendor SDK and never publishes cmd_vel.
 
