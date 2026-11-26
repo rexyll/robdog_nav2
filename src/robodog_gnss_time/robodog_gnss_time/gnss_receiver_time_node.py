@@ -8,7 +8,6 @@ from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from robodog_gnss_interfaces.msg import GnssIngressEvent, GnssReceiverTime
 from robodog_gnss_quality.ubx_ingress_event_processor import GnssIngressEventProcessor
-from robodog_gnss_quality.ubx_nav_pvt import EpochPairingError
 from robodog_gnss_quality.ubx_time_mapper import UbxReceiverTimeMapper
 
 from .ingress_consumer import GnssIngressConsumer
@@ -16,8 +15,8 @@ from .receiver_time_message_adapter import populate_receiver_time_message
 
 
 class GnssReceiverTimeNode(Node):
-    def __init__(self):
-        super().__init__("gnss_receiver_time")
+    def __init__(self, *, parameter_overrides=None):
+        super().__init__("gnss_receiver_time", parameter_overrides=parameter_overrides)
         ingress_topic = self.declare_parameter("ingress_topic", "/gnss/ingress").value
         mapping_topic = self.declare_parameter("mapping_topic", "/gnss/receiver_time").value
         qos_depth = self.declare_parameter("qos_depth", 256).value
