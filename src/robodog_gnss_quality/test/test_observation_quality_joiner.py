@@ -21,11 +21,11 @@ def identity(i_tow=100, generation=2, week=2450, receive_ns=1000):
     )
 
 
-def observation():
+def observation(i_tow=100, receive_ns=1000, generation=2, week=2450):
     return GnssObservation(
-        source_timestamp_ns=1_000_000_100,
-        source_clock_id="join-test:connection:2:gps-week:2450",
-        receive_monotonic_ns=1000,
+        source_timestamp_ns=1_000_000_000 + i_tow,
+        source_clock_id=f"join-test:connection:{generation}:gps-week:{week}",
+        receive_monotonic_ns=receive_ns,
         latitude_deg=37.0,
         longitude_deg=-122.0,
         altitude_m=10.0,
@@ -119,7 +119,7 @@ def test_identical_duplicate_records_are_ignored():
 def test_capacity_and_expiry_retire_incomplete_pairs():
     j = joiner(max_pending_epochs=1, max_pending_age_ns=100)
     j.add_observation(identity(i_tow=100), observation(), now_monotonic_ns=1000)
-    j.add_observation(identity(i_tow=101), observation(), now_monotonic_ns=1010)
+    j.add_observation(identity(i_tow=101), observation(i_tow=101), now_monotonic_ns=1010)
     assert j.stats().capacity_evictions == 1
     j.expire_stale(1200)
     assert j.stats().expired_observations >= 1
@@ -144,3 +144,31 @@ def test_identity_rejects_noncanonical_source_clock():
             source_clock_id="not-canonical",
             receive_monotonic_ns=1,
         )
+
+
+def test_conflicting_qualified_decisions_retire_pending_epoch():
+    j = joiner()
+    key = identity()
+    j.add_decision(key, decision(), now_monotonic_ns=1000)
+    changed = QualityDecision(
+        qualified=True,
+        reason=RejectionReason.ACCEPTED,
+        consecutive_fixed_samples=4,
+        horizontal_std_m=0.1,
+        vertical_std_m=0.2,
+    )
+    assert j.add_decision(key, changed, now_monotonic_ns=1010) is None
+    assert j.add_observation(key, observation(), now_monotonic_ns=1020) is None
+    assert j.stats().conflicting_decisions == 1
+    assert j.stats().emitted == 0
+
+
+def test_observation_identity_must_match_embedded_source_clock_and_time():
+    j = joiner()
+    key = identity()
+    changed = GnssObservation(**{
+        **observation().__dict__,
+        "source_timestamp_ns": 99,
+    })
+    with pytest.raises(EpochPairingError, match="do not match"):
+        j.add_observation(key, changed, now_monotonic_ns=1000)
