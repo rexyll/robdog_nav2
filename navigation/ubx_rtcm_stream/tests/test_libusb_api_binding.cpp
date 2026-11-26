@@ -25,6 +25,10 @@ int main()
   libusb_context * context = nullptr;
   assert(libusb_init(&context) == LIBUSB_SUCCESS);
 
+  auto device_api = robodog_protocol::make_libusb_device_api();
+  assert(device_api.init_context && device_api.exit_context && device_api.open_device);
+  assert(device_api.get_bulk_endpoints && device_api.claim_interface && device_api.release_interface);
+
   auto api = robodog_protocol::make_libusb_api(context);
   assert(api.alloc_transfer && api.free_transfer && api.fill_bulk_transfer);
   assert(api.submit_transfer && api.cancel_transfer && api.handle_events && api.close_device);
