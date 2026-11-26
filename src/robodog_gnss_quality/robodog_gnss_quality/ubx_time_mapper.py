@@ -175,6 +175,7 @@ class UbxReceiverTimeMapper:
         self.max_pending_age_ns = max_pending_age_ns
         self._lock = RLock()
         self._session_id: Optional[str] = None
+        self._connection_generation: Optional[int] = None
         self._pending: OrderedDict[int, _PendingTimePair] = OrderedDict()
         self._retired: OrderedDict[int, str] = OrderedDict()
         self._retired_limit = max(8, max_pending_epochs * 4)
@@ -188,14 +189,23 @@ class UbxReceiverTimeMapper:
         self._conflicting_duplicates = 0
         self._pair_skew_rejections = 0
 
-    def begin_session(self, receiver_session_id: str) -> None:
+    def begin_session(
+        self, receiver_session_id: str, connection_generation: int = 0
+    ) -> None:
         with self._lock:
-            self._begin_session_locked(receiver_session_id)
+            self._begin_session_locked(receiver_session_id, connection_generation)
 
-    def _begin_session_locked(self, receiver_session_id: str) -> None:
+    def _begin_session_locked(
+        self, receiver_session_id: str, connection_generation: int
+    ) -> None:
         if not isinstance(receiver_session_id, str) or not receiver_session_id.strip():
             raise EpochPairingError("receiver_session_id must be non-empty")
+        if (isinstance(connection_generation, bool)
+                or not isinstance(connection_generation, int)
+                or connection_generation < 0):
+            raise EpochPairingError("connection_generation must be a non-negative integer")
         self._session_id = receiver_session_id
+        self._connection_generation = connection_generation
         self._pending.clear()
         self._retired.clear()
         self._latest_receive_ns = None
@@ -206,6 +216,7 @@ class UbxReceiverTimeMapper:
 
     def _reset_locked(self) -> None:
         self._session_id = None
+        self._connection_generation = None
         self._pending.clear()
         self._retired.clear()
         self._latest_receive_ns = None
@@ -401,7 +412,7 @@ class UbxReceiverTimeMapper:
         else:
             self._utc_untrusted_epochs += 1
         self._paired_epochs += 1
-        source_clock_id = f"{self._session_id}:gps-week:{normalized_week}"
+        source_clock_id = (\n            f"{self._session_id}:connection:{self._connection_generation}"\n            f":gps-week:{normalized_week}"\n        )
         return UbxSourceTimeMapping(
             i_tow_ms=gps.i_tow_ms,
             source_timestamp_ns=source_timestamp_ns,
