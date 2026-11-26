@@ -46,3 +46,9 @@ UbxSourceTimeMapping 包含：
 ## 5. 未完成项
 
 此模块不产生 time mapping，也不实现 rclpy subscriptions、NavSatFix publisher 或 diagnostics node。固定 driver 当前没有 NAV-TIMEGPS/NAV-TIMELS，因此真实 mapper 仍缺 GPS week/leap-second source。必须先实现/接入有效 NAV-TIMEGPS 与 NAV-TIMELS 数据源，并通过 week rollover、leap-second、receiver reset 与 monotonicity tests，才能将 valid mapping 输入本 adapter。
+
+## 6. CI 与缺陷修复记录
+
+Actions run 45755029444 与 45755029355 对应 nav head 4fbbf078bb0f83b657c78c0b87365282769d831e，Humble/Jammy 与 Jazzy/Noble 两个矩阵均全部 success。测试覆盖 10 个 epoch-adapter 场景与并发回调。
+
+较早 run 45754968219 / 45754972709 暴露 stale expiry 测试语义不一致；分析确认 adapter 在 watermark 推进时过期 epoch 后，可能在同一 _entry 调用中重新创建相同 iTOW 的 pending entry。修复为 stale retire 后再次检查 tombstone，拒绝同一 iTOW resurrection；同时按最大 monotonic watermark 计算 expiry，并把 epoch first_receive 设为 mapping/record 中最早 callback 时间。修复后的 Humble/Jazzy 测试全部通过。
