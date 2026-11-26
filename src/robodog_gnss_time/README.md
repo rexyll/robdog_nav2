@@ -256,3 +256,5 @@ recovery integration remain separate gates.
 ### Per-epoch quality publication and startup sentinel
 
 The quality node publishes an identity-bearing decision for **every** observation, including consecutive samples whose quality state and metrics remain unchanged. Signature deduplication is limited to repeated watchdog states; otherwise a stable accepted state could starve the downstream exact identity joiner. The one startup `no_data` status has no epoch identity and is ignored only when every identity field and optional metric is at its exact default sentinel. A malformed or partially populated `no_data` message is rejected rather than silently ignored.
+
+Out-of-order observations also receive one identity-bearing rejection per input epoch; only repeated watchdog timer emissions are deduplicated. This preserves the exact message-pair contract for rejected samples as well as accepted/recovering samples.
