@@ -225,7 +225,7 @@ class TestUbxTimeMapper(unittest.TestCase):
         add_gps(m, i_tow=604_799_999, f_tow=500_000, week=2450)
         result = add_ls(m, i_tow=604_799_999)
         self.assertEqual(result.gps_week, 2450)
-        self.assertEqual(result.source_timestamp_ns, 2450 * GPS_WEEK_NS - 500_000)
+        self.assertEqual(result.source_timestamp_ns, 2451 * GPS_WEEK_NS - 500_000)
 
     def test_negative_fractional_tow_borrows_into_previous_week(self):
         m = mapper(trusted_leap_sources={2})
