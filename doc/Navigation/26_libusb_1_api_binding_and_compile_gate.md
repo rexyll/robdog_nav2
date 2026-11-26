@@ -58,4 +58,4 @@ libusb callback 签名是 `void(libusb_transfer*)`，而 transport-neutral adapt
 - 未 pin 目标系统 libusb runtime/development package 版本。
 - 未完成 F9P 设备连续读写、拔插、断连/重连和长时间压力测试。
 
-**验收状态：生产 libusb API function-table binding 已实现；独立编译 CI 门禁运行结果待确认；真实 ROS 节点和硬件集成仍未开始。**
+**验收状态：生产 libusb API function-table binding 已实现；Actions run `45747349543`（head `e2d8810473cd040c70e605a373416249fbfb1665`）四个 job 全部成功，包括 ASan/UBSan、TSan、Clang libFuzzer 和生产 binding compile。binding compile job 使用 Ubuntu 24.04 runner 的 `libusb-1.0-0-dev 2:1.0.27-1`（pkg-config 报告 libusb 1.0.27），仅作为该 runner 的构建证据，不构成目标部署版本 pin。真实 ROS 节点和硬件集成仍未开始。**
