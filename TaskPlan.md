@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.202
+- 文档版本：v0.3.203
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1037,3 +1037,6 @@
 
 
 - GNSS USB frame/lifecycle ordered ingress event stream（2026-11-26 / v0.3.201）：新增 `GnssIngressQueue`，将 `GenerationStarted`、`Frame`、`DeviceLost`、`TransportFault`、`Stopped` 放入同一 bounded event deque；每个 event 带显式 process_session_id、connection_generation、在 queue mutex 内分配且跨 generation 不重置的 ingress_sequence，以及 USB completion callback entry 的 host steady_clock receive_monotonic_ns。`GnssUsbStreamConfig.process_session_id` 现在必填，由上层按 process lifetime 提供；start 在提交首个 IN transfer 前发布 GenerationStarted；每帧由 ingress queue 统一打序；NO_DEVICE/transport fault 先关闭当前 generation 的 frame-ingress gate，再 cancel remaining transfers；成功 drain/shutdown 后追加 Stopped。旧 generation callback 拒绝；frame overflow 按 DropOldest/RejectNewest；control events 优先，可驱逐最旧 frame；若 queue 已满且只剩 control events，拒绝新增 control、fail-closed 并统计 control_event_overflow_failures。新增 `try_pop_event()`；旧 `try_pop_frame()` 保留但会消费并丢弃 control events，只允许 legacy frame-only consumers 使用。新增 CTest `test_gnss_ingress_queue` 覆盖全局 sequence、generation transition、stale frame、DeviceLost ordering、control priority eviction、control-only overflow fail-closed、RejectNewest；扩展 `test_gnss_usb_stream` 验证真实 stream→event queue 的 synthetic integration、session metadata、generation event 先于 frame、Stopped 在 shutdown drain 后出现。早期 CI failures `45760503800`（错误预期 control eviction 计数）、`45760626534`（GnssUsbStream initializer/member 尚未完整替换）、`45760634535`（旧 QueuePushResult 比较和 stop 处遗留 frame_queue_）均已定位并修复；后续 `45760726094`、`45760916265` 四个 job 全 success，ASan/UBSan 与 TSan 各运行 10 个 CTest tests、0 failures。最新 warning-cleanup head `4ed27fb20afd35f08d819078606395a7f6b34e03` 对应 run `45761176296` 正在验证，尚未最终标记通过。该实现仅为 C++ synthetic/fake USB stream；process_session_id 的唯一性由调用方负责；仍未实现 ROSIDL/rclcpp bridge、真实 DDS callback queue barrier、物理 NO_DEVICE/reconnect 或 ZED-F9P 实测。
+
+
+- Ordered GNSS ingress queue 最终 CI 验收（2026-11-26 / v0.3.203）：warning-cleanup 代码 head `4ed27fb20afd35f08d819078606395a7f6b34e03` 对应 Actions run `45761176296`，四个 job 全部 success：GCC C++17 + ASan/UBSan CTest（10/10）、ThreadSanitizer CTest（10/10）、Clang libFuzzer smoke、production libusb 1.0 binding compile + native bridge smoke。最终日志无 multi-character literal warning。前序 run `45760916265` 也全 success，但 `4ed27f` 为当前无警告最终验收 head。该证据覆盖 standalone parser/queue/fake USB stream，不覆盖物理 USB、ROS 2 executor/DDS barrier 或目标 F9P。
