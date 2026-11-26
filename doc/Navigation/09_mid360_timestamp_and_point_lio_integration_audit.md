@@ -365,6 +365,23 @@ Livox MID-360 v1.4.12 明确支持：
 
 Announce 的 grandmasterIdentity / priority / clockClass 只统计报文宣告内容，不代表设备已经选定该 GM。未解析 BMCA 全状态机、foreign-master announce receipt timeout、port state、profile-specific TLV 或设备 vendor-specific TLV。
 
+
+### 15.4 Announce 候选、来源变化与序号连续性观测
+
+`PtpAnnounceAudit` 对每个 `(domainNumber, sourcePortIdentity)` 独立跟踪 Announce sequenceId，并按 16-bit 模数差值报告：
+- 连续递增；
+- 前向缺口（仅记录 capture 遍历顺序观察到的缺失序号数量和 gap event）；
+- 重复 sequenceId；
+- 大幅回退/迟到/乱序候选（不尝试重排 PCAP）。
+
+按 `(domainNumber, grandmasterIdentity)` 汇总观察到的候选声明，保留 priority1、clockClass、clockAccuracy、offsetScaledLogVariance、priority2、stepsRemoved、timeSource、Announce 数量和宣告该候选的 sourcePortIdentity。对同一个宣告源观察到的 grandmasterIdentity 改变，记录前后 identity、domain、sequenceId 与 capture timestamp。source/candidate 状态和 change sample 均有界；被淘汰计数显式输出。
+
+**该功能不执行 BMCA，也不推断 active GM。** 标准默认 BMCA 的数据集比较字段包括 priority1、clockClass、clockAccuracy、offsetScaledLogVariance、priority2、grandmasterIdentity 等；但 profile 可能改变选择规则。IEEE 802.1AS gPTP 还涉及每端口状态机与 profile 约束；电信 Alternate BMCA 又可引入 localPriority 等额外规则。当前 MID-360 资料只表明支持 IEEE 1588v2.0 UDP/IP 与 gPTP L2，未能从受控设备资料确定其 gPTP profile/version。因此本工具只提供 Announce observation，不以通用字段排序冒充设备 BMCA。
+
+Announce sequence gap 同样可能来自 capture drop、过滤、镜像口丢包、接口切换或乱序；没有配置已知 announce interval 和有效 capture coverage 时，不判定 announce timeout。没有 receiver 的 foreign-master records、portDS/parentDS/currentDS、port state 或 `ptp4l`/ `pmc` 输出时，不宣称某个候选已被选中或锁定。
+
+新增合成测试覆盖：同一 domain 的竞争 GM 声明、不同 domain 隔离、单一 announcing source 的 GM identity 变化、sequence gap/late observation、bounded source/candidate state。合成测试不等于真实 GM failover 或 gPTP profile 互操作测试。
+
 ### 15.3 解释边界
 
 PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmaster，均**不证明**：
