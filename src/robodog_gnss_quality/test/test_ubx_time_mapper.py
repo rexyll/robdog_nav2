@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from robodog_gnss_quality.ubx_time_mapper import (
     GPS_EPOCH_UNIX_NS,
@@ -171,6 +172,20 @@ class TestUbxTimeMapper(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "conflicting NAV-TIMEGPS"):
             m.add_timegps(timegps(leap=17), 101)
         self.assertEqual(m.stats().conflicting_duplicates, 1)
+
+    def test_concurrent_timegps_and_timels_callbacks_emit_one_mapping(self):
+        m = mapper(trusted_leap_sources={2})
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(
+                lambda item: item[0](*item[1]),
+                (
+                    (m.add_timegps, (timegps(), 100)),
+                    (m.add_timels, (timels(), 110)),
+                ),
+            ))
+        mappings = [result for result in results if result is not None]
+        self.assertEqual(len(mappings), 1)
+        self.assertTrue(mappings[0].utc_stamp_valid)
 
     def test_session_reset_clears_pending_and_requires_begin(self):
         m = mapper()
