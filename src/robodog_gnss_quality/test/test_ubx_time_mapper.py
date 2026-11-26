@@ -142,6 +142,16 @@ class TestUbxTimeMapper(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "source 0 is firmware default"):
             UbxReceiverTimeMapper(trusted_leap_sources={0})
 
+    def test_utc_stamp_is_withheld_near_valid_leap_event(self):
+        m = mapper(trusted_leap_sources={2})
+        m.add_timegps(timegps(), 100)
+        result = m.add_timels(timels(time_to_event=1), 110)
+        self.assertTrue(result.valid)
+        self.assertFalse(result.utc_stamp_valid)
+        self.assertTrue(result.leap_event_valid)
+        self.assertEqual(result.time_to_leap_event_seconds, 1)
+        self.assertIn("near a scheduled leap-second", result.validity_reason)
+
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(valid=0x03), 100)
