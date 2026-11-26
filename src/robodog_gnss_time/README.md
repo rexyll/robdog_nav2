@@ -184,3 +184,43 @@ bridge before reconnect safety can be claimed.
 The four-stream raw path is synthetic-CI validated; physical ZED-F9P message
 availability, NAV-COV firmware support, output rates, reconnect behavior and
 USB/DDS overload handling remain unverified on target hardware.
+
+
+## RTK quality gate ROS runtime
+
+The `gnss_rtk_quality_node` executable subscribes to the preferred raw-path
+`/gnss/observation` output and publishes one `GnssQualityStatus` decision
+per observation on `/gnss/quality`. The pure `RtkQualityGate` remains in
+`robodog_gnss_quality`; this ROS adapter does not add ROS dependencies to the
+algorithm package.
+
+The node uses Reliable/Volatile/KeepLast QoS and a SingleThreadedExecutor.
+It checks the canonical `source_clock_id` against
+`process_session_id/connection_generation/gps_week`, rejects receive-time
+regression and stale generation/week rollback, resets recovery hysteresis on
+a forward clock-context transition, and has a host-monotonic watchdog that
+withdraws qualification when observations stop arriving. The output is a
+decision/status interface, not a NavSatFix, TF, localization measurement, or
+motion authorization.
+
+Run:
+
+```bash
+ros2 run robodog_gnss_time gnss_rtk_quality_node --ros-args \\
+  -p max_fix_age_ns:=200000000 \\
+  -p max_horizontal_std_m:=0.25 \\
+  -p max_vertical_std_m:=0.5 \\
+  -p max_plausible_speed_mps:=5.0 \\
+  -p required_consecutive_fixed_samples:=3
+```
+
+The current parameter defaults are development/test placeholders, not
+ZED-F9P accuracy claims or deployment thresholds. Select production values
+only from measured receiver output, expected dynamics, antenna installation,
+and the system-level integrity/risk analysis. The node's `qualified` result
+must not directly command robot motion.
+
+Dedicated Humble/Jazzy CI is required for the ROS message generation, runtime
+node, recovery hysteresis, generation rollback, and stale watchdog. No physical
+receiver, RTK correction link, DDS overload, or localization consumer has been
+validated by these synthetic tests.
