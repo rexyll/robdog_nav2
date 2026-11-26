@@ -166,6 +166,18 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertFalse(result.utc_stamp_valid)
         self.assertIn("outside 0..127", result.validity_reason)
 
+    def test_invalid_future_event_fields_do_not_invalidate_current_leap(self):
+        payload = bytearray(timels(valid=0x01))
+        payload[11] = 2  # invalid lsChange, but validTimeToLsEvent is clear
+        decoded = decode_nav_timels(bytes(payload))
+        self.assertTrue(decoded.current_leap_valid)
+        self.assertFalse(decoded.leap_event_valid)
+        m = mapper(trusted_leap_sources={2})
+        m.add_timegps(timegps(), 100)
+        result = m.add_timels(bytes(payload), 110)
+        self.assertTrue(result.utc_stamp_valid)
+        self.assertIsNone(result.time_to_leap_event_seconds)
+
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(valid=0x03), 100)
