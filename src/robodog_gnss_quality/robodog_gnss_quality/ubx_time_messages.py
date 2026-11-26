@@ -118,7 +118,7 @@ def decode_nav_timegps_payload(
 ) -> UbxNavTimeGpsEpoch:
     """Decode the 16-byte UBX-NAV-TIMEGPS payload (class 0x01, ID 0x20).
 
-    This is the u-blox 9 / protocol 27.1 layout. week and leap seconds are
+    This is the u-blox 9 / protocol 27.10 layout documented in UBX-18010854 R06; field layout is cross-checked against the F9 HPG 1.32 Interface Description UBX-22008968. week and leap seconds are
     signed fields; validity is independent for TOW, week and leap seconds.
     """
     data = _validate_payload(payload, NAV_TIMEGPS_PAYLOAD_LENGTH, "NAV-TIMEGPS")
