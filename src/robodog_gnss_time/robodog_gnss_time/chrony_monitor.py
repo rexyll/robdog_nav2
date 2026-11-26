@@ -100,6 +100,7 @@ class ChronyHostTimeMonitor:
         self._sequence = 0
 
     def sample(self):
+        boot_id = ""
         try:
             boot_id = self._boot_id_path.read_text(encoding="ascii").strip()
             if not boot_id:
