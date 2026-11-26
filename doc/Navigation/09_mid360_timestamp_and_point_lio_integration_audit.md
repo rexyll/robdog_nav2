@@ -427,3 +427,36 @@ Pdelay 的完整计算同样需要本地请求发送和响应接收/发送事件
 - PTP/MID-360 原始 PCAP、网卡/PHC 映射、host inventory 与 ptp4l/phc2sys/pmc 结果需带同一 UTC 采集时间，才能进行交叉关联。
 
 仓库的 `tools/collect_ptp_host_inventory.sh` 是只读盘点工具，不启动或配置 PTP 服务。实机证据仍待用户在目标 Orin/载板上运行后提供。
+
+## 16. PTP exchange responder 校验与 MID-360 timebase 共观测
+
+### 16.1 Pdelay_Resp_Follow_Up 的 responder identity 校验
+
+Pdelay 三消息关联除 domainNumber、requestingPortIdentity 和 sequenceId 外，还必须确认 `Pdelay_Resp_Follow_Up.sourcePortIdentity` 与先前 `Pdelay_Resp.sourcePortIdentity` 相同。Follow_Up 若来自不同 responder，不得与该 Resp 合并；本审计器计数 `pdelay_resp_follow_up_responder_mismatch`，并保留原 pending response，允许后续正确 responder 的 Follow_Up 完成关联。这样可避免同一 requester/sequence 下来自另一 PTP port 的报文被误配。
+
+Sync / Follow_Up 仍以 domain + sourcePortIdentity + sequenceId 关联；Delay_Resp 通过 requestingPortIdentity + domain + sequenceId 对应 Delay_Req。关联结果只表示捕获报文的身份字段一致，不等于时钟状态机已接受该交换。IEEE 1588-2008 消息字段与 PTP sequence/source identity 语义参见标准文本。<Cite refs={["turn644617search12","turn644617search0"]} />
+
+### 16.2 MID-360 time_type 与传感器时间范围
+
+`audit_mid360_pcap.py` 对每个 PCAP section/interface、UDP stream、source/destination endpoint 和 `time_type` 独立汇总：
+- 有效 payload 数量；
+- MID-360 sensor timestamp 的 min/max；
+- PCAP capture timestamp 的 min/max。
+
+sensor timestamp 与 capture timestamp 分开保存，不做相减，也不解释为网络延迟。不同 `time_type` 的数据不会混合汇总，避免将 PTP/GPTP 时间、GPS 时间和设备本地时间当成同一时间域。
+
+### 16.3 PTP 与 MID-360 的共观测候选
+
+报告新增 `ptp_sensor_timebase_co_observations`：仅当 MID-360 UDP 数据与 PTP 报文出现在同一 PCAP section/interface，且两者的 capture-file 时间窗口重叠时，记录传感器流的 `time_type` 与同期观察到的 PTP domainNumber。
+
+**该结果只叫“共观测候选”，不表示 sensor clock 已绑定该 PTP domain。** MID-360 的 `time_type=1` 表示传感器声明使用 PTP/gPTP master time，但单份 PCAP 中出现某个 PTP domain 的报文，不足以证明该 domain 就是 MID-360 实际锁定的 domain，也不能证明 PTP servo/lock、PHC hardware timestamp 或两者的 epoch/误差关系。必须再结合 MID-360 配置/状态、ptp4l/pmc 的 port/parent/current dataset、Orin PHC 映射和同一时段的硬件时间戳证据。
+
+### 16.4 新增测试与验证边界
+
+新增合成测试：
+- Pdelay Follow_Up responder 不匹配时拒绝配对，且不消费 pending response；随后正确 responder 报文可成功配对；
+- PTP capture windows 按 section/interface/domain 隔离；
+- MID-360 time_type 1/2 分别汇总；
+- 同一 capture interface/time window 的 PTP domain 只生成共观测候选，不宣称 domain binding。
+
+这些测试只验证解析器和报告逻辑。真实 MID-360 PTP/gPTP PCAP、目标 Orin PHC/ptp4l/pmc 状态、传感器实际 domain 绑定与时间精度仍未验证。
