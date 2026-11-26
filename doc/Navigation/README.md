@@ -251,3 +251,7 @@
 - [25 — 注入式 libusb transfer adapter 第一实现切片与测试合同](25_injectable_libusb_transfer_adapter_first_slice.md)
 - [LibusbTransferTransport API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_transfer_transport.hpp)
 - [Fake libusb API adapter tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_transfer_transport.cpp)
+
+- [26 — libusb-1.0 生产 API function-table binding 与编译门禁](26_libusb_1_api_binding_and_compile_gate.md)
+- [libusb-1.0 API binding header](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_api_binding.hpp)
+- [libusb-1.0 API binding implementation](../../navigation/ubx_rtcm_stream/src/libusb_api_binding.cpp)
