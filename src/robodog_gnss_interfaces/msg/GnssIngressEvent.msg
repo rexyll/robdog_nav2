@@ -29,5 +29,6 @@ uint64 frame_sequence
 uint64 frame_connection_generation
 uint8[] frame_bytes
 
-# Cumulative DropOldest frame evictions observed when this event is popped.
+# Prefix count of DropOldest frame evictions whose dropped frame sequence
+# precedes this event's ingress_sequence. Later drops never rewrite earlier events.
 uint64 dropped_frame_events_total
