@@ -160,11 +160,49 @@ def _tracefs_observation(path, mountinfo, root="/"):
             _FIELD_RE.findall(format_result["content"])
             if format_result["status"] == "ok" else []
         )
+        enable_result = _read_text(
+            path / "events" / "syscalls" / event_name / "enable"
+        )
+        enable_value = enable_result["content"].strip()
+        if enable_result["status"] == "ok" and enable_value in {"0", "1", "X", "?"}:
+            enable_observation = {
+                "status": "observed",
+                "value": enable_value,
+                "meaning": {
+                    "0": "all_affected_events_disabled",
+                    "1": "all_affected_events_enabled",
+                    "X": "mixed_enabled_and_disabled",
+                    "?": "does_not_affect_any_event",
+                }[enable_value],
+            }
+        else:
+            enable_observation = {
+                "status": enable_result["status"] if enable_result["status"] != "ok" else "unknown_value",
+                "value": None,
+            }
         event_results[event_name] = {
             "status": "available" if format_result["status"] == "ok" else "format_unreadable",
             "format_status": format_result["status"],
             "format_fields": fields,
             "format": format_result["content"] if format_result["status"] == "ok" else None,
+            "enable_observation": enable_observation,
+        }
+    pairs = {}
+    for syscall_name in ("clock_adjtime", "adjtimex", "clock_settime", "settimeofday"):
+        entry = event_results["sys_enter_" + syscall_name]["status"]
+        exit_status = event_results["sys_exit_" + syscall_name]["status"]
+        if entry == "available" and exit_status == "available":
+            pair_status = "complete"
+        elif entry == "available" or exit_status == "available":
+            pair_status = "partial"
+        elif entry == "not_listed" and exit_status == "not_listed":
+            pair_status = "not_listed"
+        else:
+            pair_status = "unknown"
+        pairs[syscall_name] = {
+            "entry_status": entry,
+            "exit_status": exit_status,
+            "pair_status": pair_status,
         }
     return {
         "path": str(path),
@@ -172,9 +210,11 @@ def _tracefs_observation(path, mountinfo, root="/"):
         "mounts": mounts,
         "available_events_status": available["status"],
         "syscall_events": event_results,
+        "syscall_event_pairs": pairs,
         "interpretation": (
             "Event availability is taken from this kernel's available_events and each event's "
-            "format file. No event was enabled and no trace buffer was read."
+            "format file. Event enable files were read only; their state may belong to another "
+            "process. No event was enabled and no trace buffer was read."
         ),
     }
 
