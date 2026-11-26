@@ -21,7 +21,8 @@ bool LibusbDeviceSession::select_bulk_pair(
       if ((out.address & 0x80u) != 0u) continue;
       if (in.interface_number != out.interface_number ||
           in.alternate_setting != out.alternate_setting ||
-          (in.address & 0x0fu) == 0u || (out.address & 0x0fu) == 0u) continue;
+          (in.address & 0x0fu) == 0u || (out.address & 0x0fu) == 0u ||
+          in.max_packet_size == 0u || out.max_packet_size == 0u) continue;
       bulk_in_ = in;
       bulk_out_ = out;
       claimed_interface_ = in.interface_number;
