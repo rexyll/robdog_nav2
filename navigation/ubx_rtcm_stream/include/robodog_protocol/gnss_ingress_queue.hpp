@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cctype>
 #include <cstdint>
 #include <deque>
 #include <mutex>
