@@ -1,5 +1,11 @@
 """RTK quality gating primitives for the RobDog Nav2 project."""
 
+from .observation_quality_joiner import (
+    GnssObservationIdentity,
+    GnssObservationQualityJoiner,
+    GnssObservationQualityJoinerStats,
+    GnssQualifiedObservation,
+)
 from .quality_gate import (
     CarrierSolution,
     CovarianceType,
@@ -44,6 +50,10 @@ from .ubx_time_messages import (
 )
 
 __all__ = [
+    "GnssObservationIdentity",
+    "GnssObservationQualityJoiner",
+    "GnssObservationQualityJoinerStats",
+    "GnssQualifiedObservation",
     "CarrierSolution",
     "CovarianceType",
     "GnssObservation",
