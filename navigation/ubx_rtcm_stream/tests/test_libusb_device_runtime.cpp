@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <utility>
 
 using robodog_protocol::LibusbDeviceRuntime;
 using robodog_protocol::LibusbTransferTransport;
