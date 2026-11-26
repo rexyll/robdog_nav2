@@ -88,7 +88,7 @@ private:
   mutable std::mutex stats_mutex_;
   GnssUsbStreamStats counters_;
   // Declared last so it is destroyed first; its shutdown drains callbacks
-  // while decoder_, frame_queue_, and counters_ are still alive.
+  // while decoder_, ingress_queue_, and counters_ are still alive.
   LibusbDeviceRuntime runtime_;
 };
 
