@@ -145,7 +145,7 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertTrue(result.utc_stamp_valid)
 
     def test_firmware_default_leap_source_cannot_be_allowlisted(self):
-        with self.assertRaisesRegex(ValueError, "source 0 is firmware default"):
+        with self.assertRaisesRegex(ValueError, "firmware default 0 is never trusted"):
             UbxReceiverTimeMapper(trusted_leap_sources={0})
 
     def test_utc_stamp_is_withheld_near_valid_leap_event(self):
