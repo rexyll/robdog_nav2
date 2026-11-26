@@ -28,6 +28,7 @@ struct FakeLibusb {
   int cancel_result{0};
   int close_count{0};
   int free_count{0};
+  std::uint8_t last_transfer_flags{0};
   std::deque<FakeTransfer *> events;
   std::vector<FakeTransfer *> allocated;
 
@@ -40,8 +41,9 @@ struct FakeLibusb {
       allocated.erase(std::remove(allocated.begin(), allocated.end(), transfer), allocated.end());
       delete transfer;
     };
-    a.fill_bulk_transfer = [](void * p, void *, std::uint8_t, std::uint8_t * buffer,
-      int length, unsigned int, LibusbTransferTransport::NativeCallback cb, void * user) {
+    a.fill_bulk_transfer = [this](void * p, void *, std::uint8_t, std::uint8_t * buffer,
+      int length, unsigned int, std::uint8_t flags, LibusbTransferTransport::NativeCallback cb, void * user) {
+      last_transfer_flags = flags;
       auto * t = static_cast<FakeTransfer *>(p);
       t->buffer = buffer; t->length = length; t->callback = cb; t->user_data = user;
       return 0;
@@ -125,12 +127,14 @@ int main() {
     request.direction = UsbTransferDirection::Out;
     request.endpoint = 0x02;
     request.buffer = {1, 2, 3};
+    request.transfer_flags = 0x01;
     bool called = false;
     assert(transport.submit(3, 2, request,
       [&](auto, auto, LibusbCompletionStatus status, auto, auto) {
         called = true;
         assert(status == LibusbCompletionStatus::NoDevice);
       }));
+    assert(fake.last_transfer_flags == 0x01);
     assert(!transport.cancel(3));
     assert(transport.pending_count() == 1);
     // A failed cancel does not free ownership; the eventual NO_DEVICE callback does.
