@@ -270,3 +270,7 @@
 - [32 — libusb 单一 event-loop owner 与 shutdown callback drain 第一切片](32_libusb_single_owner_event_loop_and_shutdown_drain.md)
 - [LibusbEventLoop API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_event_loop.hpp)
 - [LibusbEventLoop tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_event_loop.cpp)
+
+- [33 — libusb DeviceRuntime 顶层统一所有权第一切片](33_libusb_device_runtime_unified_ownership.md)
+- [LibusbDeviceRuntime API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_device_runtime.hpp)
+- [LibusbDeviceRuntime tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_device_runtime.cpp)
