@@ -164,19 +164,19 @@ public:
     }
 
     // User callbacks run outside operation_mutex_: they may submit new work.
+    std::exception_ptr callback_error;
     for (auto & context : drained) {
       try {
         context->completion(
           context->id, context->generation, map_status(context->native_status),
           std::move(context->buffer), context->actual_length);
       } catch (...) {
-        std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-        --callbacks_in_flight_;
-        throw;
+        if (!callback_error) callback_error = std::current_exception();
       }
       std::lock_guard<std::mutex> operation_lock(operation_mutex_);
       --callbacks_in_flight_;
     }
+    if (callback_error) std::rethrow_exception(callback_error);
     return rc;
   }
 
