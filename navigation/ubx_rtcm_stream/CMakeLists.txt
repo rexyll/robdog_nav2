@@ -61,6 +61,13 @@ target_link_libraries(test_libusb_transfer_transport PRIVATE robodog_ubx_rtcm_st
 target_compile_options(test_libusb_transfer_transport PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME libusb_transfer_transport_tests COMMAND test_libusb_transfer_transport)
 
+if(ROBODOG_BUILD_LIBUSB_BINDING)
+  add_executable(test_libusb_api_binding tests/test_libusb_api_binding.cpp)
+  target_link_libraries(test_libusb_api_binding PRIVATE robodog_libusb_binding)
+  target_compile_options(test_libusb_api_binding PRIVATE -Wall -Wextra -Wpedantic)
+  add_test(NAME libusb_api_binding_tests COMMAND test_libusb_api_binding)
+endif()
+
 add_executable(stream_decoder_tests tests/test_stream_decoder.cpp)
 target_link_libraries(stream_decoder_tests PRIVATE robodog_ubx_rtcm_stream)
 target_compile_options(stream_decoder_tests PRIVATE -Wall -Wextra -Wpedantic)
