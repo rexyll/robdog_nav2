@@ -31,7 +31,8 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     _write(tmp_path / f"boot/config-{release}", "CONFIG_PERF_EVENTS=y\n")
     _write(
         tmp_path / "proc/self/mountinfo",
-        "36 25 0:32 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw\n",
+        "36 25 0:32 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw\n"
+        "40 25 0:33 / /sys/kernel/debug rw,nosuid,nodev,noexec,relatime - debugfs debugfs rw\n",
     )
     _write(
         tmp_path / "sys/kernel/tracing/available_events",
