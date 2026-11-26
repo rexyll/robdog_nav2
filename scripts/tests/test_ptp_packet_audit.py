@@ -148,6 +148,22 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(report["correlations"]["delay_req_resp_pairs"], 1)
         self.assertEqual(report["correlations"]["pdelay_req_resp_pairs"], 1)
         self.assertEqual(report["correlations"]["pdelay_resp_follow_up_pairs"], 1)
+        pdelay_exchange = next(
+            item for item in report["timestamp_exchange_samples"]
+            if item["exchange"] == "peer_delay_response_follow_up"
+        )
+        self.assertEqual(
+            set(pdelay_exchange["messages"]),
+            {"pdelay_req", "pdelay_resp", "pdelay_resp_follow_up"},
+        )
+        self.assertEqual(
+            pdelay_exchange["messages"]["pdelay_resp"]["timestamp_ns"],
+            102_000_000_789,
+        )
+        self.assertEqual(
+            pdelay_exchange["messages"]["pdelay_resp_follow_up"]["timestamp_ns"],
+            102_000_000_999,
+        )
 
     def test_timestamp_exchange_samples_preserve_origin_and_correction_fields(self):
         sync = ptp_message(0, flags=0x0200, sequence=44,
