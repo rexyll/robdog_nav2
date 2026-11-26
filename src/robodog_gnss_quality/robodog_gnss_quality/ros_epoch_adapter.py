@@ -285,7 +285,9 @@ class UbxRosEpochAdapter:
             raise EpochPairingError(
                 "source_clock_id changed; validate receiver week/reset and call begin_generation()"
             )
-        if mapping.process_session_id is not None or mapping.connection_generation is not None:
+        if any(value is not None for value in (
+            mapping.process_session_id, mapping.connection_generation, mapping.gps_week
+        )):
             if (not isinstance(mapping.process_session_id, str)
                     or not mapping.process_session_id.strip()
                     or isinstance(mapping.connection_generation, bool)
