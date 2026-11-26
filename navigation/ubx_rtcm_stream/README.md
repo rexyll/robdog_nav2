@@ -6,7 +6,8 @@ This is a transport- and ROS-independent C++17 first implementation slice for th
 
 - Incremental UBX framing (`B5 62`), declared payload length, configurable deployment payload ceiling, and CK_A/CK_B validation.
 - Incremental RTCM3 framing (`D3`), reserved-bit validation, full 10-bit payload length, and CRC24Q validation.
-- Arbitrary chunk boundaries, concatenated frames, noise skipping, checksum-failure resynchronization, connection-generation reset, frame sequence metadata, and bounded decoder storage.
+- Arbitrary chunk boundaries, concatenated UBX/RTCM3/NMEA frames, noise skipping, checksum-failure resynchronization, connection-generation reset, frame sequence metadata, and bounded decoder storage.
+- NMEA CR, LF and CRLF termination; XOR checksum validation; explicit `Valid` / `Absent` status; optional policy requiring a checksum; configurable sentence length ceiling.
 - No ROS 2, libusb, or external test-framework dependency.
 
 NMEA, property/fuzz tests, ROS/libusb integration, queue synchronization, and USB transfer lifecycle handling are not implemented in this slice.
