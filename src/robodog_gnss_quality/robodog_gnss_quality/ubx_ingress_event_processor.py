@@ -211,10 +211,18 @@ class GnssIngressEventProcessor:
             if event.dropped_frame_events_total < self._last_dropped_frame_events_total:
                 raise EpochPairingError("dropped_frame_events_total moved backwards")
 
+            if event.dropped_frame_events_total > event.ingress_sequence:
+                raise EpochPairingError(
+                    "dropped-frame watermark exceeds the event sequence"
+                )
             if self._last_ingress_sequence is None:
                 if kind != "GenerationStarted" or event.ingress_sequence != 0:
                     raise EpochPairingError(
                         "first ingress event must be GenerationStarted with sequence 0"
+                    )
+                if event.dropped_frame_events_total != 0:
+                    raise EpochPairingError(
+                        "first GenerationStarted event cannot report prior frame drops"
                     )
                 missing_sequences = 0
             else:
