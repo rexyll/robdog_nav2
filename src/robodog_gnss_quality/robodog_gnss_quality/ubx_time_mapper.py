@@ -128,6 +128,8 @@ def decode_nav_timels(payload: bytes) -> UbxNavTimeLs:
         raise EpochPairingError("NAV-TIMELS iTOW is outside GPS week")
     if version != 0:
         raise EpochPairingError(f"unsupported NAV-TIMELS version {version}")
+    if leap_change not in (-1, 0, 1):
+        raise EpochPairingError("NAV-TIMELS lsChange must be -1, 0, or +1")
     return UbxNavTimeLs(
         i_tow, version, source_current, current_leap, source_change,
         leap_change, time_to_event, event_week, event_day, valid_flags
