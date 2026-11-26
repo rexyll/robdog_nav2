@@ -455,7 +455,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     collection_status = "complete" if not collection_issues else "partial"
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "evidence_kind": "read_only_linuxptp_host_inventory",
         "host_boot_id": boot_id,
         "host_boot_id_error": boot_id_error,
