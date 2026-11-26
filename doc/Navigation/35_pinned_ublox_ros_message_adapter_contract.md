@@ -33,3 +33,9 @@ Carrier solution 数值映射按固定消息定义：0=NO_CARRIER_RANGE_SOLUTION
 - NaN covariance 和缺失 nested field 拒绝。
 
 这些是 ROS message-shaped SimpleNamespace fixtures，不是 rclpy subscription/executor 集成测试。没有订阅真实 driver topic，也没有 NavSatFix publisher。
+
+## 4. CI 与分支校验
+
+Actions run 45754335767 对应 nav head 518e0efff52d1785052501e620a0a2b0fa42e721，Humble/Jammy 与 Jazzy/Noble 两个 job 全部 success。该 run 包含 package export、四类 ROS message-shaped fixtures、bool covariance fail-closed 测试。测试并非实际 rclpy 节点运行。
+
+本轮创建测试文件时曾遗漏 create_file 的 branch 参数，导致测试文件短暂写入默认分支；随后已将同一测试文件复制到 nav，并通过默认分支删除提交 89823552ea3283af71c1e17953995f003eb17243 清理。已回读 main 与 nav 的完整 tree：main 不再包含该测试路径，nav 保留测试文件。除该文件的短暂创建/删除外，没有改动 main 的其他文件。
