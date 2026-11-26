@@ -81,8 +81,10 @@ navigation topics and the independently validated `GnssReceiverTime` stream:
 ```
 
 The input wire contracts are `GnssNavPvt`, `GnssNavHpPosLlh`,
-`GnssNavCov`, and `GnssNavStatus`. They carry decoded UBX fields plus
-process session, connection generation and GPS week. They intentionally omit
+`GnssNavCov`, and `GnssNavStatus`. They carry the decoded semantic UBX fields
+plus process session, connection generation and GPS week. The pinned
+`ublox_dgnss` ROSIDL exposes decoded flags (not the original full flag bytes),
+so these adapters do not claim raw-byte preservation. They intentionally omit
 ROS Header stamps; the node samples `time.monotonic_ns()` at callback receipt
 for transport freshness and skew checks.
 
@@ -117,9 +119,13 @@ localization consumer remain subsequent stages.
 | `max_pair_receive_skew_ns` | 250000000 | Maximum 250 ms callback receive skew |
 | `max_pending_age_ns` | 1000000000 | Maximum 1 s incomplete-epoch age |
 
-The decoded-topic publishers must populate the documented raw UBX flags and
-session/generation/week fields from the same receiver connection. No concrete
-upstream driver has yet been certified to publish these custom contracts.
+The decoded-topic publishers must populate the documented semantic fields and
+session/generation/week fields from the same receiver connection. A tested
+field-level adapter now maps the pinned upstream `ublox_ubx_msgs` message shapes
+into the normalized records; however, the upstream ROS messages themselves do
+not carry session/generation/week. A reconnect-safe bridge still requires a
+trusted lifecycle/generation signal. No concrete upstream driver has yet been
+certified to publish these normalized custom contracts.
 The new CI validates synthetic ROS messages and the software join path only;
 it does not establish real driver compatibility, physical ZED-F9P behavior,
 or localization performance.
