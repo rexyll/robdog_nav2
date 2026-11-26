@@ -39,7 +39,7 @@ def test_consumer_latches_invalid_event_and_rejects_every_later_event():
     with pytest.raises(Exception):
         consumer.handle_ros_message(lifecycle_message(4, 0))
     assert consumer.faulted is True
-    with pytest.raises(RuntimeError, match="latched fail-closed"):
+    with pytest.raises(RuntimeError, match="consumer is faulted"):
         consumer.handle_ros_message(lifecycle_message(0, 0))
 
 
