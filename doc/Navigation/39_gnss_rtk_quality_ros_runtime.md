@@ -90,11 +90,11 @@ integrity analysis and system-level safety approval.
 
 ## 6. Validation status
 
-The dedicated `gnss-time-node-ci.yml` workflow builds/tests the interface and
-runtime package on ROS 2 Humble/Jammy and Jazzy/Noble. Integration tests cover
+The dedicated `gnss-time-node-ci.yml` run `45811368885` on head
+`3ce7e49ecb10278351fcb41bb4db4f3f5d42245e` passed on ROS 2 Humble/Jammy and
+Jazzy/Noble; each matrix job reports 25 tests passed. Integration tests cover
 recovery hysteresis, generation rollback rejection and stale watchdog
-withdrawal using synthetic messages. CI results are pending for this first
-implementation.
+withdrawal using synthetic messages.
 
 Physical ZED-F9P USB, MON-VER/firmware and CFG readback, NAV-COV support,
 RTK correction service, output rate/jitter, DDS resource exhaustion, and
