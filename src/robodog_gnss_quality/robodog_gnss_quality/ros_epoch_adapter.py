@@ -183,6 +183,8 @@ class UbxRosEpochAdapter:
         if latest is None or receive_ns > latest:
             self._latest_receive_monotonic_ns = receive_ns
         self.expire_stale(self._latest_receive_monotonic_ns)
+        if i_tow_ms in self._retired:
+            return None
 
         entry = self._pending.get(i_tow_ms)
         if entry is None:
