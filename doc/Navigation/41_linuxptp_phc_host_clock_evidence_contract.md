@@ -129,3 +129,34 @@ LinuxPTP `pmc(8)` 文档说明默认 management command 会发往所有 port，`
 - LinuxPTP `pmc.c` response field formatting: https://github.com/richardcochran/linuxptp/blob/master/pmc.c
 
 本文件是上游接口审计与待实机证据合同，不构成目标 Orin 已安装 LinuxPTP、NIC 支持 PHC、PTP GM 已锁定或 UTC 准确度验收。
+
+## 8. 采集窗口、主机时钟连续性与快照原子性
+
+主机证据采集报告同时记录整体采集窗口，以及每条子命令的
+`CLOCK_MONOTONIC` / `CLOCK_REALTIME` 起止读数。采集结束时再次读取
+`/proc/sys/kernel/random/boot_id`，并与开始时的 boot ID 比较；开始或结束
+boot ID 不可读、或两者不同，均使 `collection_status=partial`。boot ID
+变化表示采集期间主机身份连续性无法成立，不应拼接为同一次启动周期的证据。
+
+`collection_clock_consistency` 暴露以下原始量：
+
+- monotonic elapsed：整体窗口的单调时钟耗时；
+- realtime elapsed：整体窗口的墙钟耗时；
+- realtime-minus-monotonic elapsed：两者耗时差。
+
+当前状态固定为 `measured_no_threshold`，不设未经 timing budget 论证的
+step/slew 阈值，也不自动分类为 step 或 slew。该差值会受到采样调用开销影响；
+系统时钟 slew、step 或其他墙钟调整都可能影响观测。它不是当前
+CLOCK_REALTIME−UTC offset，不是 PHC offset，也不构成 PTP lock 或 host UTC
+同步结论。采集完整性、采集期间时钟连续性诊断与时间同步质量必须分别解释。
+
+六类 `pmc GET` 在一个 pmc 进程中按顺序请求并返回。每条 response 保留
+自身 management sequence / clock / port identity，但标准输出没有为每个
+dataset 提供可供本采集器验证的共同 sample timestamp。因此报告将
+`pmc_snapshot_observation.atomicity` 标记为 `not_guaranteed`，
+`simultaneity` 标记为 `not_proven`，并只用该 pmc 命令自身的
+monotonic 起止时间界定整体观测窗口。不得把六类 dataset 描述为同一时刻的
+原子快照；也不得仅凭 response sequence 连续就推断采样同时或间隔有界。
+若未来需要逐 dataset freshness / GM 切换时刻审计，必须引入可验证的逐响应
+时间戳或独立采样方案，再定义明确的窗口和一致性策略。
+
