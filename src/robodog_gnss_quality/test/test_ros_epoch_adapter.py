@@ -231,6 +231,7 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         )
         with self.assertRaisesRegex(EpochPairingError, "stale process_session_id/connection_generation"):
             a.add_pvt(old_record)
+        self.assertEqual(a.stale_context_rejections, 1)
         new_record = UbxNavPvtEpoch(
             PROCESS_SESSION_ID, new_generation, 1000, True,
             CarrierSolution.FIXED, 101
