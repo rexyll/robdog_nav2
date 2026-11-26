@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.151
+- 文档版本：v0.3.152
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -903,3 +903,4 @@
 - 审计补充：在固定驱动 `ubx.hpp::get_polled_frame()` 的 poll-response checksum 校验中，条件为 `ck_a != received_a && ck_b != received_b`，仅当两个 checksum byte 同时错误才拒绝；单 byte mismatch 会放行。已在 §18 记录，需修正为任一 byte mismatch 即失败并覆盖 A-only/B-only/both 测试。该发现只确认 poll-response 路径，异步接收路径仍待审计。
 - USB receive/queue 继续审计补充：`ublox_in_callback()` 把单个 libusb transfer 当作一个完整 UBX frame，只检查 `len>2) 和起始 sync，未在入口检查最小 8-byte frame、declared payload length 与 actual_length 一致性，也未见 transfer 跨片缓存/单 transfer 多帧拆分；`Frame::from_buf_build()` 会读固定 header 与末尾 checksum。普通 async receive 的 checksum 检查在 `ubx_queue_frame_in()` 使用 OR，逻辑正确；与 poll-response `get_polled_frame()` 的 AND 缺陷区分。另 `ubx_timer_callback()` 的 deque size/index 读取未持有 queue mutex，而 push/pop 使用 mutex，需确认 executor 线程保证或通过 TSAN/压力测试验证。以上为静态审计风险，尚未运行时复现。详见 doc/Navigation/18 §5.1–5.2。
 - USB 审计第二轮（2026-11-26）：固定 `usb.hpp` 的 `IN_BUFFER_SIZE=12800`；NMEA callback 在 `len>0` 时写 `buf[len]=0)，未 guard `len<capacity`，actual_length=12800 时形成 1-byte 越界写风险。UBX/RTCM ingress 与 UBX OUT callback 只检查 `len>2`；UBX `Frame::from_buf_build()` 无条件读 header [0..5] 与末尾 checksum，因此 3–7 byte transfer 可触发越界读取；未验证 declared payload length 与 actual_length 一致。一次 libusb bulk transfer 不能被假定为恰好一条 UBX frame，需按 stream 增量解析（sync、length、partial/multiple frames、max frame size、checksum）。队列风险定级修正：UBX timer 与 USB-events timer 属不同 MutuallyExclusive callback groups；SingleThreadedExecutor 下串行，MultiThreadedExecutor 下可能并发，启动 executor 类型未确认，故为 executor-dependent unresolved risk，不宣称已复现。usb.cpp transfer_queue 另有 size() 锁外检查及 completed 普通 bool 的跨线程访问疑点，需线程模型/TSAN 核实。详见 doc/Navigation/18 §5.3–5.5。未运行构建、测试、TSAN 或设备实测。
+- Executor 证据补充：固定 commit 的 `ublox_dgnss/launch/ublox_rover_hpposllh.launch.py` 明确使用 `rclcpp_components/component_container_mt`。该标准 launch 下，USB-events timer 与 UBX timer 属不同 MutuallyExclusive callback groups，可由 MultiThreadedExecutor 并行调度；因此 USB callback push 与 UBX timer 无锁 size/index read 构成部署配置可触发的 node-level queue 并发缺陷（静态确认），但尚无 TSAN/压力测试运行时复现。详见 doc/Navigation/18 §5.6。
