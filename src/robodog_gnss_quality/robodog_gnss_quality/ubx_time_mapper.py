@@ -63,6 +63,7 @@ class UbxReceiverTimeMapper:
         max_pair_receive_skew_ns: int = 500_000_000,
         max_pending_age_ns: int = 2_000_000_000,
         leap_event_guard_seconds: int = 1,
+        require_ingress_sequence: bool = False,
     ) -> None:
         for name, value in (
             ("max_pending_epochs", max_pending_epochs),
@@ -85,6 +86,10 @@ class UbxReceiverTimeMapper:
         ):
             raise ValueError("leap_event_guard_seconds must be a non-negative integer")
 
+        if not isinstance(require_ingress_sequence, bool):
+            raise ValueError("require_ingress_sequence must be a boolean")
+        self.require_ingress_sequence = require_ingress_sequence
+        self._last_ingress_sequence: Optional[int] = None
         self.leap_event_guard_seconds = leap_event_guard_seconds
         self.trusted_leap_sources = frozenset(trusted_leap_sources)
         self.max_pending_epochs = max_pending_epochs
@@ -130,6 +135,8 @@ class UbxReceiverTimeMapper:
             or connection_generation < 0
         ):
             raise EpochPairingError("connection_generation must be a non-negative integer")
+        if self._process_session_id != process_session_id:
+            self._last_ingress_sequence = None
         self._process_session_id = process_session_id
         self._connection_generation = connection_generation
         self._pending.clear()
@@ -140,6 +147,7 @@ class UbxReceiverTimeMapper:
         with self._lock:
             self._process_session_id = None
             self._connection_generation = None
+            self._last_ingress_sequence = None
             self._pending.clear()
             self._retired.clear()
             self._latest_receive_ns = None
@@ -161,6 +169,21 @@ class UbxReceiverTimeMapper:
             raise EpochPairingError(
                 "stale process_session_id/connection_generation; discard callback from old device generation"
             )
+        sequence = getattr(message, "ingress_sequence", None)
+        if self.require_ingress_sequence and sequence is None:
+            self._stale_context_rejections += 1
+            raise EpochPairingError("raw ingress message is missing ingress_sequence")
+        if sequence is not None:
+            if isinstance(sequence, bool) or not isinstance(sequence, int) or sequence < 0:
+                self._stale_context_rejections += 1
+                raise EpochPairingError("ingress_sequence must be a non-negative integer")
+            if (self._last_ingress_sequence is not None
+                    and sequence <= self._last_ingress_sequence):
+                self._stale_context_rejections += 1
+                raise EpochPairingError(
+                    "stale or reordered ingress_sequence; serialize raw ingress events"
+                )
+            self._last_ingress_sequence = sequence
 
     def _retire(self, i_tow: int, reason: str) -> None:
         self._retired[i_tow] = reason
@@ -219,12 +242,14 @@ class UbxReceiverTimeMapper:
         *,
         process_session_id: str,
         connection_generation: int,
+        ingress_sequence: Optional[int] = None,
     ) -> Optional[UbxSourceTimeMapping]:
         message = decode_nav_timegps_payload(
             payload,
             receive_monotonic_ns=receive_monotonic_ns,
             process_session_id=process_session_id,
             connection_generation=connection_generation,
+            ingress_sequence=ingress_sequence,
         )
         return self.add_timegps(message)
 
@@ -259,12 +284,14 @@ class UbxReceiverTimeMapper:
         *,
         process_session_id: str,
         connection_generation: int,
+        ingress_sequence: Optional[int] = None,
     ) -> Optional[UbxSourceTimeMapping]:
         message = decode_nav_timels_payload(
             payload,
             receive_monotonic_ns=receive_monotonic_ns,
             process_session_id=process_session_id,
             connection_generation=connection_generation,
+            ingress_sequence=ingress_sequence,
         )
         return self.add_timels(message)
 
