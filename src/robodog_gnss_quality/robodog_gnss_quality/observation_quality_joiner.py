@@ -8,7 +8,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Optional
 
-from .quality_gate import GnssObservation, QualityDecision
+from .quality_gate import GnssObservation, QualityDecision, RejectionReason
 from .ubx_nav_pvt import EpochPairingError
 
 
@@ -158,6 +158,14 @@ class GnssObservationQualityJoiner:
             raise EpochPairingError("observation must be a GnssObservation")
         self._advance(now_monotonic_ns)
         key = self._key(identity)
+        if now_monotonic_ns < identity.receive_monotonic_ns:
+            raise EpochPairingError("join time precedes observation receive time")
+        if (
+            observation.source_timestamp_ns != identity.source_timestamp_ns
+            or observation.source_clock_id != identity.source_clock_id
+            or observation.receive_monotonic_ns != identity.receive_monotonic_ns
+        ):
+            raise EpochPairingError("observation fields do not match exact epoch identity")
         if key in self._retired:
             self._retired_drops += 1
             return None
@@ -194,14 +202,10 @@ class GnssObservationQualityJoiner:
             raise EpochPairingError("decision.qualified must be bool")
         self._advance(now_monotonic_ns)
         key = self._key(identity)
+        if now_monotonic_ns < identity.receive_monotonic_ns:
+            raise EpochPairingError("join time precedes observation receive time")
         if key in self._retired:
             self._retired_drops += 1
-            return None
-        if not decision.qualified:
-            self._observations.pop(key, None)
-            self._decisions.pop(key, None)
-            self._retire(key)
-            self._rejected_unqualified += 1
             return None
         existing = self._decisions.get(key)
         if existing is not None:
@@ -213,6 +217,14 @@ class GnssObservationQualityJoiner:
             self._retire(key)
             self._conflicting_decisions += 1
             return None
+        if decision.qualified and decision.reason != RejectionReason.ACCEPTED:
+            raise EpochPairingError("qualified decision must have ACCEPTED reason")
+        if not decision.qualified:
+            self._observations.pop(key, None)
+            self._decisions.pop(key, None)
+            self._retire(key)
+            self._rejected_unqualified += 1
+            return None
         observation_entry = self._observations.pop(key, None)
         if observation_entry is not None:
             self._retire(key)
@@ -221,6 +233,9 @@ class GnssObservationQualityJoiner:
         self._decisions[key] = (now_monotonic_ns, decision)
         self._enforce_capacity()
         return None
+
+    def expire_stale(self, now_monotonic_ns: int):
+        self._advance(now_monotonic_ns)
 
     def stats(self):
         return GnssObservationQualityJoinerStats(
