@@ -228,3 +228,8 @@
 - [17 — ZED-F9P NAV-TIMEGPS：UTC→GPS Mapper 可选同历元交叉核验](17_zed_f9p_nav_timegps_crosscheck_audit.md)
 - [18 — 固定版 ublox_dgnss 时间消息驱动实现审计](18_ublox_dgnss_fixed_revision_time_message_driver_audit.md)
 - [19 — UBX / RTCM3 / NMEA 增量字节流解析器设计与测试合同](19_ubx_rtcm_nmea_stream_parser_design_and_test_contract.md)
+
+- [独立 UBX/RTCM3 C++ stream parser（第一实现切片）](../../navigation/ubx_rtcm_stream/README.md)
+- [UBX/RTCM3 parser public API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/stream_decoder.hpp)
+- [UBX/RTCM3 parser implementation](../../navigation/ubx_rtcm_stream/src/stream_decoder.cpp)
+- [UBX/RTCM3 parser tests](../../navigation/ubx_rtcm_stream/tests/test_stream_decoder.cpp)
