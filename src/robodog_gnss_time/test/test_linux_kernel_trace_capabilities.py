@@ -75,6 +75,12 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     ]
     assert tracefs["syscall_events"]["sys_exit_clock_adjtime"]["status"] == "available"
     assert tracefs["syscall_events"]["sys_enter_adjtimex"]["status"] == "not_listed"
+    assert tracefs["syscall_event_pairs"]["clock_adjtime"]["pair_status"] == "complete"
+    assert tracefs["syscall_event_pairs"]["adjtimex"]["pair_status"] == "not_listed"
+    assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["enable_observation"] == {
+        "status": "not_found", "value": None,
+    }
+    assert "read only" in tracefs["interpretation"]
     assert "No event was enabled" in tracefs["interpretation"]
 
 
@@ -111,3 +117,47 @@ def test_standalone_cli_writes_json_report_without_ptp_arguments(tmp_path, capsy
     assert main(["--root", str(tmp_path)]) == 0
     printed = capsys.readouterr().out
     assert __import__("json").loads(printed) == expected
+
+
+
+def test_tracepoint_pair_reports_partial_and_enable_states_without_writing(tmp_path):
+    _write(
+        tmp_path / "proc/self/mountinfo",
+        "36 25 0:32 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw\n",
+    )
+    _write(
+        tmp_path / "sys/kernel/tracing/available_events",
+        "syscalls:sys_enter_clock_adjtime\nsyscalls:sys_exit_adjtimex\n",
+    )
+    _write(
+        tmp_path / "sys/kernel/tracing/events/syscalls/sys_enter_clock_adjtime/format",
+        "name: sys_enter_clock_adjtime\nformat:\n\tfield:struct timex * tx; offset:8; size:8;\n",
+    )
+    _write(
+        tmp_path / "sys/kernel/tracing/events/syscalls/sys_exit_adjtimex/format",
+        "name: sys_exit_adjtimex\nformat:\n\tfield:long ret; offset:8; size:8;\n",
+    )
+    _write(
+        tmp_path / "sys/kernel/tracing/events/syscalls/sys_enter_clock_adjtime/enable",
+        "1\n",
+    )
+    _write(
+        tmp_path / "sys/kernel/tracing/events/syscalls/sys_exit_adjtimex/enable",
+        "X\n",
+    )
+
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+    tracefs = report["tracefs"][0]
+    assert tracefs["syscall_event_pairs"]["clock_adjtime"]["pair_status"] == "partial"
+    assert tracefs["syscall_event_pairs"]["adjtimex"]["pair_status"] == "partial"
+    assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["enable_observation"] == {
+        "status": "observed",
+        "value": "1",
+        "meaning": "all_affected_events_enabled",
+    }
+    assert tracefs["syscall_events"]["sys_exit_adjtimex"]["enable_observation"] == {
+        "status": "observed",
+        "value": "X",
+        "meaning": "mixed_enabled_and_disabled",
+    }
+    assert not (tmp_path / "sys/kernel/tracing/set_event").exists()
