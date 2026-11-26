@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.156
+- 文档版本：v0.3.157
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -908,3 +908,5 @@
 - libusb transfer 生命周期审计补充（2026-11-26）：`transfer_queue_` 的 cleanup/count 函数在 mutex 外先读 `size()`，仍构成 deque 并发访问风险；`transfer_t::completed` 为普通 bool，callback 写入与队列锁内读取未使用同一同步协议。`callback_in/out()` 对 `LIBUSB_TRANSFER_NO_DEVICE` 提前 return，跳过 user_data delete/completed 标记，存在资源泄漏/队列状态不一致路径。shutdown 当前为 stop event processing → cancel transfers → clear queue → close handle/context，未看到 cancel callback drain/barrier；需设计 stop-submit/cancel/pump events/drain/release/close 生命周期屏障。取消期间锁竞争风险依赖 libusb callback 线程调度，未确认死锁。详见 doc/Navigation/18 §5.9。未构建/测试。
 - 新增设计合同 `doc/Navigation/19_ubx_rtcm_nmea_stream_parser_design_and_test_contract.md`，定义纯 C++ bounded incremental stream decoder 的 UBX/RTCM3/NMEA framing、length/checksum、resync、connection generation、队列边界、统计指标和单元/ASan/UBSan/fuzz/TSAN/断连测试合同；新增 `doc/Navigation/README.md` 索引。该文档为设计合同，尚未实现或测试。当前已确认：UBX/RTCM 两个队列均有 MT executor 下的无锁读取问题；RTCM header length high bits 被错误限制为 0，且 CRC24Q 未在发布前验证；USB transfer lifecycle 仍需修复。详见 Navigation/18 §5.7–5.9 与 Navigation/19。
 - CI 触发范围修正：`.github/workflows/ublox-dgnss-driver-ci.yml` 原 push trigger 仅包含 main，且仅监听旧路径 `docs/implementation/zed_f9p_driver_evaluation.md`；N1 当前在 nav 与 `doc/Navigation/18/19` 下推进，自动构建不会触发。已将 push branches 扩展为 main/nav，并把 Navigation 18/19 审计与设计合同加入 paths（保留旧路径）；本次工作流变更应触发 nav 分支的 pinned u-blox driver compatibility build。此 workflow 仍只验证固定上游构建/ROSIDL interfaces，不代表 parser tests 或设备验收。
+
+- UBX/RTCM3 独立解析器首个实现切片（2026-11-26 / v0.3.157）：根据 Navigation/19 合同，在 `navigation/ubx_rtcm_stream/` 新增无 ROS/libusb 依赖的 C++17 standalone library。当前实现 UBX B5 62 framing、little-endian payload length、可配置部署 payload ceiling、CK_A/CK_B 验证；RTCM3 D3 framing、reserved bits、完整 10-bit payload length（含 256–1023）、CRC24Q 验证；支持任意 chunk 分片、逐字节输入、多帧连续输入、噪声跳过、坏校验后重新扫描、connection generation reset、frame sequence 和基础统计。新增独立 CMake/CTest 工程及 8 组测试：CRC24Q 标准 check value、UBX 所有 split point、混合协议/噪声/损坏帧恢复、CK_A 与 CK_B 单独损坏、RTCM payload 长度 0/1/255/256/511/1023、reserved bits/CRC 拒绝、generation reset、截断/超 ceiling。当前未实现 NMEA；尚未接入上游 ROS/libusb 驱动，队列并发和 USB transfer lifecycle 也未修复。代码提交：CMake `cdb76f1f45aa05e08644be31d0f59c1ac1219b59`；API `1c827b68d1a00f4f11e5ded35b50b2a0043c5349`；实现 `d8753db2471041e1367ef84118fd7d7e4e985ebf`；测试 `64df0233998adf0622b127acb4c827bf205885dd`；ASan/UBSan CI workflow `dc9872ff458aa0ab5473bfd1076b5bb94d952810`。本地容器以 GCC 14.2、CMake、C++17、ASan+UBSan 构建并运行 CTest：1/1 test executable passed，8 组测试全部通过；无 sanitizer 报告。GitHub Actions run 尚待触发/确认，不将本地结果表述为 CI 通过。解析器目前仅为第一实现切片：NMEA、property/fuzz、随机 segmentation 等合同仍未实现；部署 payload ceiling 尚未依据 F9P 实际输出白名单冻结。下一步先确认该 CI 在 nav 的实际结果，再补 NMEA 与 property/fuzz，再进入 ROS/libusb 集成前的接口评审。
