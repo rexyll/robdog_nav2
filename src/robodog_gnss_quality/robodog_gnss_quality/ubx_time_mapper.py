@@ -7,6 +7,7 @@ that agrees with NAV-TIMEGPS.leapS. No NAV-TIMEUTC fallback is used.
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
+from threading import RLock
 from typing import Dict, Optional, Set
 
 from .ros_epoch_adapter import UbxSourceTimeMapping
@@ -165,6 +166,7 @@ class UbxReceiverTimeMapper:
         self.max_pending_epochs = max_pending_epochs
         self.max_pair_receive_skew_ns = max_pair_receive_skew_ns
         self.max_pending_age_ns = max_pending_age_ns
+        self._lock = RLock()
         self._session_id: Optional[str] = None
         self._pending: OrderedDict[int, _PendingTimePair] = OrderedDict()
         self._retired: OrderedDict[int, str] = OrderedDict()
@@ -180,6 +182,10 @@ class UbxReceiverTimeMapper:
         self._pair_skew_rejections = 0
 
     def begin_session(self, receiver_session_id: str) -> None:
+        with self._lock:
+            self._begin_session_locked(receiver_session_id)
+
+    def _begin_session_locked(self, receiver_session_id: str) -> None:
         if not isinstance(receiver_session_id, str) or not receiver_session_id.strip():
             raise EpochPairingError("receiver_session_id must be non-empty")
         self._session_id = receiver_session_id
@@ -188,6 +194,10 @@ class UbxReceiverTimeMapper:
         self._latest_receive_ns = None
 
     def reset(self) -> None:
+        with self._lock:
+            self._reset_locked()
+
+    def _reset_locked(self) -> None:
         self._session_id = None
         self._pending.clear()
         self._retired.clear()
@@ -206,6 +216,10 @@ class UbxReceiverTimeMapper:
             self._retired.popitem(last=False)
 
     def expire_stale(self, now_monotonic_ns: int) -> int:
+        with self._lock:
+            return self._expire_stale_locked(now_monotonic_ns)
+
+    def _expire_stale_locked(self, now_monotonic_ns: int) -> int:
         now = self._receive_time(now_monotonic_ns)
         if self._latest_receive_ns is None or now > self._latest_receive_ns:
             self._latest_receive_ns = now
@@ -247,6 +261,12 @@ class UbxReceiverTimeMapper:
     def add_timegps(
         self, payload: bytes, receive_monotonic_ns: int
     ) -> Optional[UbxSourceTimeMapping]:
+        with self._lock:
+            return self._add_timegps_locked(payload, receive_monotonic_ns)
+
+    def _add_timegps_locked(
+        self, payload: bytes, receive_monotonic_ns: int
+    ) -> Optional[UbxSourceTimeMapping]:
         if self._session_id is None:
             raise EpochPairingError("begin_session() is required before TIMEGPS")
         message = decode_nav_timegps(payload)
@@ -266,6 +286,12 @@ class UbxReceiverTimeMapper:
         return self._try_map(message.i_tow_ms, entry)
 
     def add_timels(
+        self, payload: bytes, receive_monotonic_ns: int
+    ) -> Optional[UbxSourceTimeMapping]:
+        with self._lock:
+            return self._add_timels_locked(payload, receive_monotonic_ns)
+
+    def _add_timels_locked(
         self, payload: bytes, receive_monotonic_ns: int
     ) -> Optional[UbxSourceTimeMapping]:
         if self._session_id is None:
@@ -377,6 +403,10 @@ class UbxReceiverTimeMapper:
         )
 
     def stats(self) -> UbxTimeMapperStats:
+        with self._lock:
+            return self._stats_locked()
+
+    def _stats_locked(self) -> UbxTimeMapperStats:
         return UbxTimeMapperStats(
             self._paired_epochs, self._invalid_gps_time, self._utc_valid_epochs,
             self._utc_untrusted_epochs, self._expired_epochs, self._capacity_evictions,
