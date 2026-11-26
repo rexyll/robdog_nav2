@@ -266,3 +266,7 @@
 - [31 — libusb DeviceSession RAII 与动态 endpoint discovery 第一切片](31_libusb_device_session_raii_and_descriptor_discovery.md)
 - [LibusbDeviceSession API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_device_session.hpp)
 - [LibusbDeviceSession tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_device_session.cpp)
+
+- [32 — libusb 单一 event-loop owner 与 shutdown callback drain 第一切片](32_libusb_single_owner_event_loop_and_shutdown_drain.md)
+- [LibusbEventLoop API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_event_loop.hpp)
+- [LibusbEventLoop tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_event_loop.cpp)
