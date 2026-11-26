@@ -232,7 +232,7 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
                 "interpretation": "ptp4l master announce transmit timer, not announce-receipt timeout",
             }
         if event is None and message_id == "a596d6fe7bfa4994828e72309e95d61e":
-            suppressed = re.search(r"Suppressed\\s+(\\d+)\\s+messages from\\s+(.+)", message)
+            suppressed = re.search(r"Suppressed\s+(\d+)\s+messages from\s+(.+)", message)
             event = {
                 "type": "journal_rate_limit_suppression",
                 "message_id": message_id,
