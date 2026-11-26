@@ -118,7 +118,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
 
     def runner(argv, **kwargs):
         calls.append((argv, kwargs))
-        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "read-only sample")
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -151,7 +151,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
 
 def test_collector_rejects_snapshot_domain_mismatch_without_claiming_sync():
     def runner(argv, **kwargs):
-        stdout = _pmc_output(domain_number=4) if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "")
+        stdout = _pmc_output(domain_number=4) if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -250,7 +250,7 @@ def test_collector_preserves_multi_port_snapshot_as_invalid_without_selecting_on
     )
 
     def runner(argv, **kwargs):
-        stdout = output if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "")
+        stdout = output if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -317,7 +317,7 @@ def test_collector_marks_partial_when_pmc_command_or_snapshot_is_invalid():
 
 def test_collector_marks_partial_when_pmc_output_is_malformed():
     def runner(argv, **kwargs):
-        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "read-only sample")
+        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -412,7 +412,7 @@ def test_collector_marks_changed_gm_identity_between_boundaries_partial():
                     "080027.fffe.d9e453", "080027.fffe.d9e454"
                 )
         elif argv[0] == "journalctl":
-            stdout = _journal_output("boot-before")
+            stdout = _journal_output()
         else:
             stdout = "read-only sample"
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
@@ -487,8 +487,9 @@ def test_journal_parser_fails_closed_on_wrong_boot_or_missing_monotonic():
 
 
 def test_journal_parser_does_not_claim_stability_when_no_event_is_present():
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
     evidence = parse_linuxptp_journal_evidence(
-        _journal_output(message="ptp4l: port 1: periodic status"), "boot-before"
+        _journal_output(message="ptp4l: port 1: periodic status"), boot
     )
     assert evidence["status"] == "parsed"
     assert evidence["event_count"] == 0
