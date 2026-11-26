@@ -13,7 +13,7 @@ This is a transport- and ROS-independent C++17 incremental parser for the parser
 - A libusb DeviceSession RAII slice for context/device/interface ownership, serial-filtered VID/PID enumeration, and dynamic same-interface bulk IN/OUT endpoint discovery. Fake API tests cover open/close rollback; real hardware and event-loop ownership remain pending.
 - No ROS 2, libusb, or external test-framework dependency.
 
-NMEA framing, deterministic randomized segmentation tests, bounded queue tests, and the independent transfer lifecycle tracker are implemented. ROS/libusb integration and production transfer ownership/callback draining are not implemented. The fake transport validates the adapter contract only.
+NMEA framing, deterministic randomized segmentation tests, bounded queue tests, the independent transfer lifecycle tracker, an injectable libusb transfer adapter, the optional production libusb-1.0 binding, and a first RAII DeviceSession slice are implemented. The production binding and DeviceSession are not yet integrated with the upstream GNSS ROS node; unique event-loop ownership, automatic IN resubmission, hotplug/reconnect, ROS 2 lifecycle integration, and physical receiver validation remain pending. Fake API tests validate the ownership and descriptor-selection contracts, not real USB bus behavior.
 
 ## Build and test
 
