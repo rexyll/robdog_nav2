@@ -23,6 +23,8 @@ def test_parse_time_status_np_keeps_ptp_master_offset_as_separate_clock_domain()
     assert parsed["master_offset"] == -98434
     assert parsed["gmPresent"] is True
     assert parsed["gmIdentity"] == "080027.fffe.d9e453"
+    assert str(parsed["cumulativeScaledRateOffset"]) == "1.000000000"
+    assert parsed["scaledLastGmPhaseChange"] == 0
 
 
 def test_parse_current_data_set_decimal_values_as_exact_decimal():
@@ -44,7 +46,7 @@ def test_parse_port_data_set_without_guessing_port_state():
     portIdentity 080027.fffe.7f327b-0
     portState SLAVE
     logMinDelayReqInterval 0
-    peerMeanPathDelay 0.0
+    peerMeanPathDelay 0
     logAnnounceInterval 1
     announceReceiptTimeout 3
     logSyncInterval 0
@@ -55,6 +57,12 @@ def test_parse_port_data_set_without_guessing_port_state():
     parsed = parse_pmc_response(output, "PORT_DATA_SET")
     assert parsed["portState"] == "SLAVE"
     assert parsed["announceReceiptTimeout"] == 3
+    assert parsed["logMinDelayReqInterval"] == 0
+    assert parsed["logAnnounceInterval"] == 1
+    assert parsed["logSyncInterval"] == 0
+    assert parsed["delayMechanism"] == 1
+    assert parsed["peerMeanPathDelay"] == 0
+    assert parsed["versionNumber"] == 2
 
 
 def test_parse_time_properties_preserves_utc_traceability_flags():
@@ -250,3 +258,30 @@ def test_snapshot_compares_clock_identity_case_insensitively():
     )
     snapshot = parse_pmc_snapshot(output)
     assert snapshot.clock_identity == "080027.fffe.7f327b"
+
+
+def test_port_data_set_parses_signed_log_intervals_as_integers():
+    output = _snapshot_output().replace(
+        "portState SLAVE",
+        "portState SLAVE\\n    logMinDelayReqInterval -3\\n"
+        "    logAnnounceInterval 2\\n    logSyncInterval -1\\n"
+        "    logMinPdelayReqInterval -4\\n    delayMechanism 2\\n"
+        "    peerMeanPathDelay -125\\n    announceReceiptTimeout 3\\n"
+        "    versionNumber 2",
+    )
+    parsed = parse_pmc_response(output, "PORT_DATA_SET")
+    assert parsed["logMinDelayReqInterval"] == -3
+    assert parsed["logAnnounceInterval"] == 2
+    assert parsed["logSyncInterval"] == -1
+    assert parsed["logMinPdelayReqInterval"] == -4
+    assert parsed["delayMechanism"] == 2
+    assert parsed["peerMeanPathDelay"] == -125
+
+
+def test_port_data_set_rejects_non_integer_log_interval():
+    output = _snapshot_output().replace(
+        "portState SLAVE",
+        "portState SLAVE\\n    logSyncInterval unknown",
+    )
+    with pytest.raises(ValueError, match="logSyncInterval"):
+        parse_pmc_response(output, "PORT_DATA_SET")
