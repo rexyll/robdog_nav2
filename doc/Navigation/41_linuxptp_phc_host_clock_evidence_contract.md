@@ -477,3 +477,19 @@ format 得到指针指向的 `modes`、offset 或其他 timex 内容。后续若
 
 测试仅使用合成 procfs/sysfs fixture，覆盖完整/部分/未列出 pair、enable
 读取状态与只读行为；Orin 实机报告仍待用户提供。
+
+
+### 12.6 tracefs/debugfs 挂载路径解释补充（v0.3.252）
+
+挂载盘点仅保留与候选 tracing 路径相交的 tracefs/debugfs 挂载，不再把
+`/`、`/sys` 等无关祖先文件系统（例如 ext4、sysfs）混入 tracing mount
+inventory。每项同时标记 `mount_relation=exact|ancestor`：
+- exact：挂载点就是被检查的 tracing 目录；
+- ancestor：tracefs/debugfs 挂载点是被检查目录的父目录，例如
+  debugfs 挂载于 `/sys/kernel/debug`，实际 tracing 目录位于其下。
+
+这只描述 mountinfo 中可见的挂载拓扑，不证明候选目录可读、事件已启用或
+trace buffer 正在采集。新增 fixture 将 sysfs 父挂载与 tracefs/debugfs
+挂载同时放入 mountinfo，验证不会把 sysfs 误列为 tracing filesystem。
+依据 Linux kernel Event Tracing 文档：tracefs 的事件目录及 enable 文件位于
+tracing filesystem 层级，事件列表由 `available_events` 提供。
