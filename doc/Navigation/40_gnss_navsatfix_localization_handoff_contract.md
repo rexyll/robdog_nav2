@@ -160,7 +160,7 @@ The first read-only producer now exists as `host_time_sync_node`. It reads the
 Linux boot ID and `CLOCK_MONOTONIC` sample time locally and executes
 `chronyc -n tracking` without a shell. It reports source ID, signed
 SystemTime-minus-NTP offset, a conservative uncertainty estimate (root
-dispersion + half root delay), reference ID, stratum, leap status and a
+dispersion + half the absolute root delay), reference ID, stratum, leap status and a
 per-process sequence. It does not change clock state.
 
 The producer reports `synchronized` only for Chrony Leap status `Normal`,
