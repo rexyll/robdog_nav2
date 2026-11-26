@@ -123,6 +123,7 @@ class UbxNavPvtEpoch:
     """Fields required from one decoded UBX-NAV-PVT ROS message."""
     process_session_id: str
     connection_generation: int
+    gps_week: int
 
     i_tow_ms: int
     gnss_fix_ok: bool
@@ -135,6 +136,7 @@ class UbxNavHpPosLlhEpoch:
     """High-precision position fields from one UBX-NAV-HPPOSLLH message."""
     process_session_id: str
     connection_generation: int
+    gps_week: int
 
     i_tow_ms: int
     lon: int
@@ -157,6 +159,7 @@ class UbxNavCovEpoch:
     """Position covariance fields from one UBX-NAV-COV message (NED frame)."""
     process_session_id: str
     connection_generation: int
+    gps_week: int
 
     i_tow_ms: int
     pos_cor_valid: bool
@@ -174,6 +177,7 @@ class UbxNavStatusEpoch:
     """Quality cross-check fields from one UBX-NAV-STATUS message."""
     process_session_id: str
     connection_generation: int
+    gps_week: int
 
     i_tow_ms: int
     gnss_fix_ok: bool
