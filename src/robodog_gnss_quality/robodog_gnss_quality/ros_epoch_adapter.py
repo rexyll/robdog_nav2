@@ -37,6 +37,7 @@ class UbxSourceTimeMapping:
     source_time_accuracy_ns: Optional[int] = None
     leap_seconds: Optional[int] = None
     leap_source: Optional[int] = None
+    reported_leap_seconds: Optional[int] = None
 
 
 @dataclass(frozen=True)
