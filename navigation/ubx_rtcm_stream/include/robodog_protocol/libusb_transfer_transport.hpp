@@ -80,6 +80,8 @@ public:
     int overflow_status{6};
     int cancel_not_found_code{-5};
     int cancel_no_device_code{-4};
+    // false when a higher-level DeviceSession owns the native device handle.
+    bool close_device_on_close{true};
   };
 
   LibusbTransferTransport(Api api, void * device_handle)
@@ -262,7 +264,7 @@ public:
       std::lock_guard<std::mutex> lock(registry_mutex_);
       if (!pending_.empty()) return false;
     }
-    if (api_.close_device && device_handle_) api_.close_device(device_handle_);
+    if (api_.close_device_on_close && api_.close_device && device_handle_) api_.close_device(device_handle_);
     device_handle_ = nullptr;
     closed_ = true;
     return true;
