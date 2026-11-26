@@ -20,6 +20,7 @@ setup(
     entry_points={
         "console_scripts": [
             "gnss_receiver_time_node = robodog_gnss_time.gnss_receiver_time_node:main",
+            "gnss_observation_node = robodog_gnss_time.gnss_observation_node:main",
         ],
     },
 )
