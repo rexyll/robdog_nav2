@@ -1,8 +1,11 @@
-# Decoded UBX-NAV-PVT epoch. Time is keyed by receiver iTOW, never Header.stamp.
+# Decoded UBX-NAV-PVT fields; raw UBX flag bytes are not exposed by the pinned driver ROSIDL.
 uint64 i_tow_ms
 uint16 gps_week
 string process_session_id
 uint64 connection_generation
 
-# Raw NAV-PVT flags byte; gnssFixOK=bit0, carrSoln=bits7:6.
-uint8 raw_flags
+uint8 gps_fix_type
+bool gnss_fix_ok
+bool diff_soln
+uint8 carrier_solution
+bool invalid_llh
