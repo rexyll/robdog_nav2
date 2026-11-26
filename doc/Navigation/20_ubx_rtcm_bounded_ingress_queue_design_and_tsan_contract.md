@@ -1,6 +1,6 @@
 # UBX / RTCM3 bounded ingress queue 与 generation fence 合同
 
-- 状态：独立 C++17 queue 已实现；本地 ASan/UBSan 与 ThreadSanitizer 测试通过；GitHub Actions TSan job 已配置，运行结果待确认
+- 状态：独立 C++17 queue 已实现；本地 ASan/UBSan 与 ThreadSanitizer 测试通过；GitHub Actions parser CI run 45742626968 success，ASan/UBSan、ThreadSanitizer、Clang libFuzzer 三个 job 全部通过
 - 分支：`nav`
 - 适用范围：stream decoder 输出与 ROS/USB 驱动业务消费之间的内存队列；不替代 libusb transfer 生命周期管理。
 
