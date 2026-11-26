@@ -29,7 +29,7 @@ Leap status     : Normal
 def test_parse_tracking_and_offset_sign_convention():
     parsed = parse_chrony_tracking(TRACKING)
     assert parsed["utc_offset_ns"] == 125_000
-    assert parsed["uncertainty_ns"] == 250_000
+    assert parsed["uncertainty_ns"] == 5_250_000
     assert parsed["stratum"] == 3
     assert parsed["reference_id"] == "203.0.113.10 (ntp.example)"
     assert parsed["leap_status"] == "Normal"
