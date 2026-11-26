@@ -378,6 +378,7 @@ class PtpCorrelationAudit:
         self.exchange_samples = []
         self.max_exchange_samples = 32
         self.capture_windows = {}
+        self.transport_windows = {}
 
     @staticmethod
     def _timestamp_fields(message: PtpMessage) -> dict:
@@ -456,6 +457,40 @@ class PtpCorrelationAudit:
                 window["capture_timestamp_max_ns"] = max(
                     window["capture_timestamp_max_ns"], message.capture_timestamp_ns
                 )
+        transport_key = (message.section_index, message.interface_id,
+                         message.transport)
+        transport_window = self.transport_windows.get(transport_key)
+        if transport_window is None:
+            if len(self.transport_windows) >= self.max_capture_windows:
+                self.transport_windows.pop(next(iter(self.transport_windows)))
+                self.counts["evicted_ptp_transport_windows"] += 1
+            transport_window = {
+                "section_index": message.section_index,
+                "interface_id": message.interface_id,
+                "transport": message.transport,
+                "transport_family": (
+                    "udp_ip_ptp" if message.transport.startswith("udp/")
+                    else "ethernet_l2_ptp"
+                ),
+                "ptp_messages": 0,
+                "domain_numbers": set(),
+                "capture_timestamp_min_ns": None,
+                "capture_timestamp_max_ns": None,
+            }
+            self.transport_windows[transport_key] = transport_window
+        transport_window["ptp_messages"] += 1
+        transport_window["domain_numbers"].add(message.domain_number)
+        if message.capture_timestamp_ns is not None:
+            old_min = transport_window["capture_timestamp_min_ns"]
+            old_max = transport_window["capture_timestamp_max_ns"]
+            transport_window["capture_timestamp_min_ns"] = (
+                message.capture_timestamp_ns if old_min is None
+                else min(old_min, message.capture_timestamp_ns)
+            )
+            transport_window["capture_timestamp_max_ns"] = (
+                message.capture_timestamp_ns if old_max is None
+                else max(old_max, message.capture_timestamp_ns)
+            )
         if message.transport.startswith("udp/"):
             expected = (
                 PTP_EVENT_PORT if message.message_type in EVENT_MESSAGE_TYPES
@@ -542,6 +577,52 @@ class PtpCorrelationAudit:
                 self.counts["orphan_pdelay_resp_follow_up"] += 1
 
     def report(self) -> dict:
+        transport_observations = []
+        by_interface = {}
+        for key, value in sorted(self.transport_windows.items()):
+            item = dict(value)
+            item["domain_numbers"] = sorted(item["domain_numbers"])
+            transport_observations.append(item)
+            interface_key = (item["section_index"], item["interface_id"])
+            by_interface.setdefault(interface_key, set()).add(item["transport_family"])
+        mixed_transport_interfaces = [
+            {
+                "section_index": section_index,
+                "interface_id": interface_id,
+                "transport_families": sorted(families),
+                "interpretation": (
+                    "Both UDP/IP PTP and Ethernet-L2 PTP were observed on this "
+                    "capture interface. Livox does not recommend IEEE 1588v2.0 "
+                    "and gPTP coexistence; this is a coexistence risk indicator, "
+                    "not proof that both protocols are configured or that either "
+                    "is the sensor's active time source."
+                ),
+            }
+            for (section_index, interface_id), families in sorted(by_interface.items())
+            if {"udp_ip_ptp", "ethernet_l2_ptp"}.issubset(families)
+        ]
+        announce_candidates = self.announce_audit.report()["observed_candidates"]
+        candidates_by_domain = {}
+        for candidate in announce_candidates:
+            candidates_by_domain.setdefault(candidate["domain_number"], []).append(
+                candidate["grandmaster_identity"]
+            )
+        multiple_gm_domains = [
+            {
+                "domain_number": domain,
+                "grandmaster_identities": sorted(set(identities)),
+                "candidate_count": len(set(identities)),
+                "interpretation": (
+                    "Multiple distinct GM identities were advertised by Announce "
+                    "messages in this domain. This is a network/configuration risk "
+                    "for MID-360, whose vendor documentation says multiple master "
+                    "clocks are unsupported; packet observations do not establish "
+                    "which GM any receiver selected."
+                ),
+            }
+            for domain, identities in sorted(candidates_by_domain.items())
+            if len(set(identities)) > 1
+        ]
         return {
             "message_count": self.counts["messages"],
             "message_types": dict(self.message_types),
@@ -556,6 +637,10 @@ class PtpCorrelationAudit:
                 dict(value) for _, value in sorted(self.capture_windows.items())
             ],
             "ptp_capture_window_limit": self.max_capture_windows,
+            "ptp_transport_observations": transport_observations,
+            "ptp_transport_observation_limit": self.max_capture_windows,
+            "mixed_ptp_transport_interfaces": mixed_transport_interfaces,
+            "multiple_gm_candidates_by_domain": multiple_gm_domains,
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
                 "delay_req_waiting_delay_resp": len(self.pending_delay_req),
