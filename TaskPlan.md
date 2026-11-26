@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.241
+- 文档版本：v0.3.242
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1141,3 +1141,5 @@
 - N1 LinuxPTP 只读主机证据采集器首版（2026-11-26 / v0.3.241）：新增 `linuxptp_host_evidence.py` 与 `robodog_linuxptp_host_evidence` CLI。部署期必须显式提供 interface、domain、pmc UDS socket 和 transportSpecific；service unit 名称仅在显式提供时才查询。采集器用 argv + `shell=False` 执行 `timedatectl show`、`ethtool -T`、`chronyc -n tracking/sources -v`，并可选执行明确配置的 `systemctl status` / `journalctl`；pmc 只发送固定六条 GET，保存原始 stdout/stderr、return code、每条命令 CLOCK_MONOTONIC/CLOCK_REALTIME 起止样本、host boot ID、`/dev/ptp*` 与 interface sysfs PHC 映射。报告始终设置 `host_time_sync_claim=not_evaluated`，不将 PTP master offset 转换为 host UTC，不发布 HostTimeSyncStatus，不调整 CLOCK_REALTIME/PHC。LinuxPTP `pmc(8)` 文档说明 GET/SET/CMD 区别以及 `-d`、`-s`、`-t` 的默认值；本项目显式覆盖 domain/socket/transportSpecific，避免默认值造成错连。上游文档对 transportSpecific 范围写 0..255，但当前 `pmc.c` 将配置值左移 4 位写入 header byte（`transport_specific = ... << 4`），项目因此按 PTP header 4-bit nibble 约束 0..15，避免超范围值被移位截断；此为基于实现的保守约束，后续锁定目标 LinuxPTP 版本后复核。官方资料：https://www.linuxptp.org/documentation/pmc/；源码：https://github.com/richardcochran/linuxptp/blob/master/pmc.c 。
 
   首轮 collector/配置测试最终 head `ffef03d95ba0` 对应 GNSS runtime CI run `45826859585`：Humble/Jammy 与 Jazzy/Noble 均 success，各 **124/124 tests passed**（0 errors/failures/skipped）；同 head ROS 2 package CI run `45826859551` success。后续文档 head `61e8c48ba572` 明确 LinuxPTP pmc 默认向所有 port 发送管理请求；当前 snapshot parser 对每个 dataset 只接受唯一 response，多 port 出现多个 PORT_DATA_SET 时会保留原始输出但将 snapshot 标记 invalid，不静默挑选端口；目标拓扑未确认前不猜测 TARGET 语法或 port selection。LinuxPTP runtime CI run `45826766752` 曾因临时重复测试文件引用已移除的试验性重复模块而在 collection 阶段失败；已删除重复文件，后续 run `45826784563` 恢复为 124/124 passed。后续文档更新 `ddfbecc724e9` 已将采集器能力与 parser/UTC 边界写入 Navigation 41。以上均为 mock subprocess 与 CI 合成证据，不是 Orin 实机证据；真实 interface/socket/domain/transportSpecific/port topology/PTP profile/PHC mapping/phc2sys sink/Chrony 冲突/UTC traceability 仍待目标机只读取证。保持仅 `nav` 分支，不合并 `main`。
+
+- N1 LinuxPTP collector 最终文档 head 的 CI 复核（2026-11-26 / v0.3.242）：在 v0.3.241 记录的代码/测试 head ffef03d95ba004e1fbc25a64452073c2ab2f541c 与文档 head 61e8c48ba572f58e80db1d6210456651cb6fa034 基础上，最终文档 head 61e8 对应 runtime CI run 45826942105 和 ROS 2 package CI run 45826942104 均 success；Humble/Jammy 与 Jazzy/Noble 各 124/124 tests passed（0 errors/failures/skipped）。这一复核覆盖 collector 文档中的显式 transportSpecific、默认 all-ports 行为及多端口 fail-closed 说明；无代码行为变化，无 Orin 实机取证。保持 nav 分支，不合并 main。
