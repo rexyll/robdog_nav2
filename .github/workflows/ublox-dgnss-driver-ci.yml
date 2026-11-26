@@ -2,9 +2,11 @@ name: u-blox ZED-F9P Driver Compatibility Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, nav]
     paths:
       - "docs/implementation/zed_f9p_driver_evaluation.md"
+      - "doc/Navigation/18_ublox_dgnss_fixed_revision_time_message_driver_audit.md"
+      - "doc/Navigation/19_ubx_rtcm_nmea_stream_parser_design_and_test_contract.md"
       - ".github/workflows/ublox-dgnss-driver-ci.yml"
   pull_request:
     paths:
