@@ -98,7 +98,33 @@ class RosObservationQualityJoinAdapter:
             identity, observation, now_monotonic_ns=now_monotonic_ns
         )
 
+    @staticmethod
+    def _is_unbound_startup_status(message):
+        """Recognize only the quality node's identity-free startup sentinel."""
+        return (
+            message.reason == "no_data"
+            and message.qualified is False
+            and message.consecutive_fixed_samples == 0
+            and message.process_session_id == ""
+            and message.connection_generation == 0
+            and message.gps_week == 0
+            and message.i_tow_ms == 0
+            and message.source_timestamp_ns == 0
+            and message.source_clock_id == ""
+            and message.receive_monotonic_ns == 0
+            and message.horizontal_std_valid is False
+            and message.horizontal_std_m == 0.0
+            and message.vertical_std_valid is False
+            and message.vertical_std_m == 0.0
+            and message.estimated_speed_valid is False
+            and message.estimated_speed_mps == 0.0
+        )
+
     def add_decision(self, message, *, now_monotonic_ns):
+        # The quality node publishes this one unbound sentinel at startup.
+        # It has no epoch identity and must not enter the exact-identity join.
+        if self._is_unbound_startup_status(message):
+            return None
         identity, decision = decision_from_quality_message(message)
         return self._joiner.add_decision(
             identity, decision, now_monotonic_ns=now_monotonic_ns
