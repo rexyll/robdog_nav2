@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.176
+- 文档版本：v0.3.177
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -959,3 +959,6 @@
 
 
 - libusb cancel 锁耦合与错误语义修正（2026-11-26 / v0.3.176）：进一步检查 `LibusbTransferTransport` 的锁范围，发现 `cancel()` 虽已补上 registry mutex，但 native `libusb_cancel_transfer()` 仍在 registry 临界区内执行。现改为 operation mutex 串行化 adapter 操作，在 registry 锁内取得稳定 transfer 指针后释放 registry 锁，再调用 native cancel；transfer 在 callback/event-pump drain 前仍留在 pending registry。新增 `LibusbCancelResult` 与 `cancel_detailed()`，区分 Requested、NotPending、LIBUSB_ERROR_NOT_FOUND、LIBUSB_ERROR_NO_DEVICE 和普通 Failed；bool `cancel()` 保留兼容，仅 Requested 返回 true。测试新增 native cancel hook 重入 `pending_count()`（验证 native API 调用不持 registry mutex）、20,000 次并发读取、NOT_FOUND/NO_DEVICE 分类与 pending ownership 保留。代码提交：adapter `a067981d483be400c065a46a309c982b53fdb7e4`；测试 `cde5741de651155c4fb1ff085417d116cdb95f03`；Navigation 30 文档与 README 索引已更新。该指针稳定性依赖同一 libusb context 的 event handling 不得绕过 adapter 并发执行；生产 DeviceSession 必须强制唯一 event-loop owner thread。最新代码对应 Actions 尚待确认，不能提前标记 sanitizer 或 libusb binding CI 通过。真实设备、hotplug/reconnect、ROS 2 executor 与 F9P 测试仍未完成。
+
+
+- libusb DeviceSession RAII 与 endpoint discovery 第一切片（2026-11-26 / v0.3.177）：新增 `LibusbDeviceSession` 与生产 `make_libusb_device_api()`，覆盖 libusb context/device handle/interface 的 RAII 生命周期、VID/PID + 可选 serial descriptor 设备筛选、active configuration descriptor 枚举、同 interface + alternate setting 的 bulk IN/OUT pair 动态发现、kernel driver detach/reattach、claim/release 与 alternate setting。新增 fake API 测试覆盖正常打开关闭、endpoint pair 选择、接口不匹配、descriptor 失败回滚、claim 失败回滚，以及 kernel-driver query 不受支持的平台路径；生产 binding smoke test 检查 function table。README 与 Navigation 31 文档已更新。实现提交：session header `adcfc4c3eb611a0f4280c87ee2c405d844168e8d`、session source `1114803ef0cb7402ff547dc0822a16ea8a65ded3`、fake tests `a582861904499f2d2b293248b49ec1ec7a3065b4`、production binding `3ded015f6c4b982357097ec22b229852c9deda3d`、CMake `c9a0bd3be9baf5c3a823ee16b80070cac1e449b8`；后续修正包含 `LIBUSB_ERROR_NOT_SUPPORTED` 平台路径、测试 import、zero max-packet endpoint 拒绝和 binding smoke 检查。首次 CI build 暴露测试遗漏 `LibusbCancelResult` using，已修复于 `9225e9d789cf116534fc0b01c777639c01ae4890`；修复后最新 head 的 sanitizer / binding CI 仍待结果。Workflow concurrency 已设为不取消同分支前序运行，避免每次 push 把前一提交的 CI 结果取消。该切片尚未实现唯一 event-loop owner thread、command queue、hotplug/reconnect、transport/session 联合 owner、ROS 2 Lifecycle 或真实 F9P 测试。
