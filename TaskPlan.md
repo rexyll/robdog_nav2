@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.184
+- 文档版本：v0.3.185
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -983,3 +983,6 @@
 
 
 - GNSS USB stream bridge CI 验收（2026-11-26 / v0.3.184）：Actions run 45753314359，head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4，ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding 四项全部 success。该 head 包含 GnssUsbStream bulk-IN 自动重提交、协议解析/帧队列、generation fence、start/stop lifecycle mutex 与 fake USB 数据注入测试。当前 TaskPlan 最新 head 仅有文档更新；真实 F9P/USB、ROS 2 GNSS component、message decoding/time mapping 与 hotplug/reconnect 仍未完成。
+
+
+- GNSS USB stream 最终 head CI 验收（2026-11-26 / v0.3.185）：最终 README 集成提交 head d6be44a868c49efc0ef16160e52a632293a37c27 对应 Actions run 45753542957 四项全部 success。该 head 包含 GnssUsbStream、lifecycle mutex、UBX test vector 修正、README/文档索引；ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile 均成功。该结果仍是 synthetic/fake USB API 证据，未连接 ZED-F9P，未验证实际 output config、NAV-TIMELS/TIMEGPS、ROS 2 publisher 或时间映射。
