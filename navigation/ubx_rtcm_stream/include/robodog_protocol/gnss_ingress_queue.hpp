@@ -91,6 +91,14 @@ class GnssIngressQueue {
         !(terminal_event_type_.has_value() && terminal_event_recorded_)) {
       return false;
     }
+    // Reserve room (or an evictable frame) before mutating the active
+    // generation, so a rejected GenerationStarted event cannot advance state.
+    if (events_.size() >= capacity_ && frame_event_count_locked() == 0) {
+      ++stats_.control_event_overflow_failures;
+      accepting_frames_ = false;
+      closed_ = true;
+      return false;
+    }
     current_generation_ = generation;
     has_generation_ = true;
     accepting_frames_ = true;
