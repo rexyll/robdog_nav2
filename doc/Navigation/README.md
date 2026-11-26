@@ -225,3 +225,4 @@
 - [09 §19 — MID-360 HMS 故障诊断码与时间同步异常关联](09_mid360_timestamp_and_point_lio_integration_audit.md#19-mid-360-hms-故障诊断码与时间同步异常关联hms-001010)
 
 - [09 §20 — MID-360 HMS 连续快照生命周期审计](09_mid360_timestamp_and_point_lio_integration_audit.md#20-mid-360-hms-连续快照生命周期审计hms-011016)
+- [17 — ZED-F9P NAV-TIMEGPS：UTC→GPS Mapper 可选同历元交叉核验](17_zed_f9p_nav_timegps_crosscheck_audit.md)
