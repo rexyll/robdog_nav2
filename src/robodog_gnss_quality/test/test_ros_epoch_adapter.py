@@ -1,0 +1,157 @@
+import unittest
+
+from robodog_gnss_quality import CarrierSolution
+from robodog_gnss_quality.ros_epoch_adapter import (
+    UbxRosEpochAdapter,
+    UbxSourceTimeMapping,
+)
+from robodog_gnss_quality.ubx_nav_pvt import (
+    EpochPairingError,
+    UbxNavCovEpoch,
+    UbxNavHpPosLlhEpoch,
+    UbxNavPvtEpoch,
+    UbxNavStatusEpoch,
+)
+
+
+GENERATION = "f9p-week-2450-boot-3"
+
+
+def pvt(i_tow=1000, receive=100):
+    return UbxNavPvtEpoch(i_tow, True, CarrierSolution.FIXED, receive)
+
+
+def position(i_tow=1000, receive=105):
+    return UbxNavHpPosLlhEpoch(
+        i_tow, -1220000000, 370000000, 15000, 0, 0, 0,
+        False, False, False, False, False, False, receive,
+    )
+
+
+def covariance(i_tow=1000, receive=110):
+    return UbxNavCovEpoch(i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
+
+
+def status(i_tow=1000, receive=115):
+    return UbxNavStatusEpoch(i_tow, True, True, CarrierSolution.FIXED, receive)
+
+
+def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
+            utc_valid=True, clock_id=GENERATION):
+    return UbxSourceTimeMapping(
+        i_tow_ms=i_tow,
+        source_timestamp_ns=source_time,
+        source_clock_id=clock_id,
+        receive_monotonic_ns=receive,
+        valid=valid,
+        utc_stamp_valid=utc_valid,
+        utc_seconds=1_800_000_000 if utc_valid else None,
+        utc_nanoseconds=123 if utc_valid else None,
+        validity_reason="valid" if valid else "time source invalid",
+    )
+
+
+def adapter(**overrides):
+    values = dict(
+        max_pending_epochs=4,
+        max_pair_receive_skew_ns=50,
+        max_pending_age_ns=1000,
+    )
+    values.update(overrides)
+    result = UbxRosEpochAdapter(**values)
+    result.begin_generation(GENERATION)
+    return result
+
+
+class TestUbxRosEpochAdapter(unittest.TestCase):
+    def test_records_wait_until_mapping_arrives(self):
+        a = adapter()
+        self.assertIsNone(a.add_pvt(pvt()))
+        self.assertIsNone(a.add_position(position()))
+        self.assertIsNone(a.add_covariance(covariance()))
+        self.assertIsNone(a.add_status(status()))
+        self.assertEqual(a.pending_count, 1)
+        result = a.add_time_mapping(mapping())
+        self.assertIsNotNone(result)
+        self.assertEqual(result.observation.source_timestamp_ns, 10_000_000)
+        self.assertEqual(result.observation.source_clock_id, GENERATION)
+        self.assertTrue(result.time_mapping.utc_stamp_valid)
+        self.assertEqual(a.pending_count, 0)
+
+    def test_mapping_may_arrive_before_messages(self):
+        a = adapter()
+        self.assertIsNone(a.add_time_mapping(mapping()))
+        self.assertIsNone(a.add_status(status()))
+        self.assertIsNone(a.add_covariance(covariance()))
+        self.assertIsNone(a.add_position(position()))
+        result = a.add_pvt(pvt())
+        self.assertIsNotNone(result)
+        self.assertEqual(result.observation.latitude_deg, 37.0)
+
+    def test_invalid_time_mapping_retires_epoch(self):
+        a = adapter()
+        a.add_pvt(pvt())
+        self.assertIsNone(a.add_time_mapping(mapping(valid=False)))
+        self.assertEqual(a.invalid_mappings, 1)
+        self.assertIsNone(a.add_position(position()))
+        self.assertEqual(a.pending_count, 0)
+
+    def test_source_clock_change_requires_explicit_generation(self):
+        a = adapter()
+        with self.assertRaisesRegex(EpochPairingError, "call begin_generation"):
+            a.add_time_mapping(mapping(clock_id="week-2451-boot-3"))
+        a.begin_generation("week-2451-boot-3")
+        result = a.add_time_mapping(mapping(clock_id="week-2451-boot-3"))
+        self.assertIsNone(result)
+
+    def test_conflicting_duplicate_retires_epoch(self):
+        a = adapter()
+        a.add_pvt(pvt())
+        with self.assertRaisesRegex(EpochPairingError, "conflicting duplicate"):
+            a.add_pvt(UbxNavPvtEpoch(1000, False, CarrierSolution.FIXED, 101))
+        self.assertEqual(a.pending_count, 0)
+        self.assertEqual(a.rejected_conflict, 1)
+
+    def test_capacity_and_stale_expiry_are_bounded(self):
+        a = adapter(max_pending_epochs=1, max_pending_age_ns=20)
+        a.add_pvt(pvt(1000, 100))
+        a.add_pvt(pvt(1001, 110))
+        self.assertEqual(a.pending_count, 1)
+        self.assertEqual(a.evicted_capacity, 1)
+        self.assertEqual(a.expire_stale(131), 1)
+        self.assertEqual(a.pending_count, 0)
+        self.assertEqual(a.evicted_stale, 1)
+
+    def test_utc_stamp_may_remain_unavailable_even_with_valid_gps_mapping(self):
+        a = adapter()
+        for record, add in (
+            (pvt(), a.add_pvt),
+            (position(), a.add_position),
+            (covariance(), a.add_covariance),
+            (status(), a.add_status),
+        ):
+            add(record)
+        result = a.add_time_mapping(mapping(utc_valid=False))
+        self.assertIsNotNone(result)
+        self.assertFalse(result.time_mapping.utc_stamp_valid)
+        self.assertIsNone(result.time_mapping.utc_seconds)
+
+    def test_mapping_conflict_is_rejected(self):
+        a = adapter()
+        a.add_pvt(pvt())
+        a.add_time_mapping(mapping())
+        with self.assertRaisesRegex(EpochPairingError, "conflicting receiver-time"):
+            a.add_time_mapping(mapping(source_time=10_000_001))
+        self.assertEqual(a.pending_count, 0)
+
+    def test_reset_requires_explicit_new_generation(self):
+        a = adapter()
+        a.reset()
+        with self.assertRaisesRegex(EpochPairingError, "begin_generation"):
+            a.add_pvt(pvt())
+        a.begin_generation(GENERATION)
+        self.assertIsNone(a.add_pvt(pvt()))
+
+
+if __name__ == "__main__":
+    unittest.main()
