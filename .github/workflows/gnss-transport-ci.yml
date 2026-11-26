@@ -1,0 +1,45 @@
+name: GNSS ROS 2 transport CI
+
+on:
+  push:
+    paths:
+      - "src/robodog_gnss_transport/**"
+      - "src/robodog_gnss_interfaces/**"
+      - "navigation/ubx_rtcm_stream/**"
+      - ".github/workflows/gnss-transport-ci.yml"
+  pull_request:
+    paths:
+      - "src/robodog_gnss_transport/**"
+      - "src/robodog_gnss_interfaces/**"
+      - "navigation/ubx_rtcm_stream/**"
+      - ".github/workflows/gnss-transport-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.ros_distro }} on ${{ matrix.ubuntu }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ros_distro: humble
+            ubuntu: jammy
+            container_image: rostooling/setup-ros-docker:ubuntu-jammy-latest
+          - ros_distro: jazzy
+            ubuntu: noble
+            container_image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    container:
+      image: ${{ matrix.container_image }}
+
+    steps:
+      - name: Install libusb development headers
+        run: |
+          apt-get update
+          apt-get install -y libusb-1.0-0-dev
+      - name: Build and test GNSS ROS 2 transport package
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: robodog_gnss_transport
+          target-ros2-distro: ${{ matrix.ros_distro }}
+          coverage-result: false
