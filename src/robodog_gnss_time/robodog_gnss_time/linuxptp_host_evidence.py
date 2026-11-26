@@ -149,6 +149,115 @@ def _ptp_boundary_identity(snapshot):
     }
 
 
+
+def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=None, window_end_ns=None):
+    """Parse JSON journal records; absence of events never proves stability."""
+    entries, events, issues = [], [], []
+    previous_mono = None
+    for line_number, line in enumerate(_text(stdout).splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            item = json.loads(line)
+        except (TypeError, ValueError):
+            issues.append("journal_json_invalid_line:" + str(line_number))
+            continue
+        if not isinstance(item, dict):
+            issues.append("journal_entry_not_object:" + str(line_number))
+            continue
+        boot_id, mono, real, message = (
+            item.get("_BOOT_ID"), item.get("__MONOTONIC_TIMESTAMP"),
+            item.get("__REALTIME_TIMESTAMP"), item.get("MESSAGE")
+        )
+        if not isinstance(boot_id, str) or not boot_id:
+            issues.append("journal_boot_id_missing:" + str(line_number))
+            continue
+        if expected_boot_id and boot_id != expected_boot_id:
+            issues.append("journal_boot_id_mismatch:" + str(line_number))
+            continue
+        if not isinstance(mono, str) or not mono.isdigit():
+            issues.append("journal_monotonic_timestamp_invalid:" + str(line_number))
+            continue
+        if not isinstance(real, str) or not real.isdigit():
+            issues.append("journal_realtime_timestamp_invalid:" + str(line_number))
+            continue
+        if not isinstance(message, str):
+            issues.append("journal_message_invalid:" + str(line_number))
+            continue
+        mono_us, real_us = int(mono), int(real)
+        if previous_mono is not None and mono_us < previous_mono:
+            issues.append("journal_monotonic_order_regressed:" + str(line_number))
+        previous_mono = mono_us
+        mono_ns = mono_us * 1000
+        if window_start_ns is not None and window_end_ns is not None:
+            relation = ("inside_collection_window" if window_start_ns <= mono_ns <= window_end_ns
+                        else "outside_collection_window")
+        else:
+            relation = "not_comparable"
+        entry = {
+            "line_number": line_number, "boot_id": boot_id,
+            "monotonic_timestamp_us": mono_us, "realtime_timestamp_us": real_us,
+            "cursor": item.get("__CURSOR"), "systemd_unit": item.get("_SYSTEMD_UNIT"),
+            "message": message, "collection_window_relation": relation,
+        }
+        entries.append(entry)
+        event = None
+        match = re.search(r"new foreign master ([0-9A-Fa-f.]+-[0-9]+)", message)
+        if match:
+            event = {"type": "gm_candidate_observed", "identity": match.group(1).lower()}
+        else:
+            match = re.search(r"selected best master clock ([0-9A-Fa-f.]+)", message)
+            if match:
+                event = {"type": "gm_selected", "identity": match.group(1).lower()}
+            else:
+                match = re.search(r"selected local clock ([0-9A-Fa-f.]+) as best master", message)
+                if match:
+                    event = {"type": "local_clock_selected_as_best_master", "identity": match.group(1).lower()}
+        if event is None:
+            match = re.search(
+                r"(?:^|\s)([^\s:]+):\s+"
+                r"(INITIALIZING|LISTENING|UNCALIBRATED|SLAVE|MASTER|PASSIVE|FAULTY|DISABLED|PRE_MASTER)"
+                r"\s+to\s+"
+                r"(INITIALIZING|LISTENING|UNCALIBRATED|SLAVE|MASTER|PASSIVE|FAULTY|DISABLED|PRE_MASTER)"
+                r"\s+on\s+([A-Z_]+)", message,
+            )
+            if match:
+                event = {"type": "port_state_transition", "port": match.group(1),
+                         "from_state": match.group(2), "to_state": match.group(3),
+                         "trigger": match.group(4)}
+        if event is None and "master tx announce timeout" in message:
+            event = {
+                "type": "master_announce_transmit_timeout",
+                "interpretation": "ptp4l master announce transmit timer, not announce-receipt timeout",
+            }
+        if event is not None:
+            event.update({
+                "boot_id": boot_id, "monotonic_timestamp_us": mono_us,
+                "realtime_timestamp_us": real_us, "cursor": item.get("__CURSOR"),
+                "message": message, "collection_window_relation": relation,
+            })
+            events.append(event)
+    if not entries:
+        issues.append("journal_no_valid_entries")
+    return {
+        "status": "parsed" if not issues else "partial",
+        "entry_count": len(entries), "event_count": len(events),
+        "entries": entries, "events": events, "issues": issues,
+        "coverage_status": "unknown",
+        "absence_interpretation": (
+            "No matching event in returned entries does not prove that no event occurred; "
+            "journal retention, rotation, vacuum, query bounds and collection completeness "
+            "are not established by this parser."
+        ),
+        "clock_domain_note": (
+            "__MONOTONIC_TIMESTAMP is microseconds since boot and must be paired with _BOOT_ID; "
+            "__REALTIME_TIMESTAMP is CLOCK_REALTIME microseconds. Neither is directly "
+            "interchangeable with collector CLOCK_MONOTONIC absolute nanoseconds."
+        ),
+    }
+
+
+
 def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=None):
     """Collect raw read-only host/PTP evidence; never claim host UTC synchronized."""
     if not isinstance(config, LinuxPtpHostEvidenceConfig):
@@ -208,13 +317,32 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
                 service,
             ]))
             commands.append((f"journal:{service}", [
-                "journalctl", "-u", service, "--since", config.journal_since, "--no-pager",
+                "journalctl", "-u", service, "--since", config.journal_since,
+                "--no-pager", "--output=json", "--all",
             ]))
 
     results = [
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
         for name, argv in commands
     ]
+    journal_event_evidence = {}
+    for command_result in results:
+        if not command_result["name"].startswith("journal:"):
+            continue
+        service_name = command_result["name"].split(":", 1)[1]
+        if command_result["status"] == "ok":
+            journal_event_evidence[service_name] = parse_linuxptp_journal_evidence(
+                command_result["stdout"], boot_id,
+                command_result["monotonic_start_ns"], command_result["monotonic_end_ns"],
+            )
+        else:
+            journal_event_evidence[service_name] = {
+                "status": "unavailable", "entry_count": 0, "event_count": 0,
+                "entries": [], "events": [], "issues": ["journal_command_not_ok"],
+                "coverage_status": "unknown",
+                "absence_interpretation": "Journal command unavailable; no absence or stability claim is possible.",
+            }
+
     # TARGET, when configured, changes only pmc client-side destination
     # selection; it is not a remote SET/CMD management operation.
     pmc_result = _run_readonly_command(
@@ -304,6 +432,11 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         )
     if pmc_boundary_comparison["status"] == "changed":
         collection_issues.append("ptp_identity_changed_between_collection_boundaries")
+    for service_name, journal_evidence in journal_event_evidence.items():
+        if journal_evidence["status"] != "parsed":
+            collection_issues.append(
+                "journal_evidence_not_parsed:" + service_name + ":" + journal_evidence["status"]
+            )
     if not boot_id:
         collection_issues.append("host_boot_id_unavailable")
     if not boot_id_after:
@@ -364,6 +497,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "pmc_snapshot_validation": pmc_validation,
         "pmc_identity_boundary_before_validation": pmc_boundary_before_validation,
         "pmc_identity_boundary_comparison": pmc_boundary_comparison,
+        "journal_event_evidence": journal_event_evidence,
         "collection_status": collection_status,
         "collection_issues": collection_issues,
         "host_time_sync_claim": "not_evaluated",
