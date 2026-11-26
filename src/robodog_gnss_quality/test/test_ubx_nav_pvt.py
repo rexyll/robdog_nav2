@@ -152,6 +152,7 @@ def make_hpposllh(**overrides):
     values = dict(
         process_session_id="legacy-ubx-test-session",
         connection_generation=0,
+        gps_week=2450,
         i_tow_ms=345_000,
         lon=-1_220_000_000,
         lat=370_000_000,
@@ -210,7 +211,7 @@ def make_raw_observation(**overrides):
         covariance=make_nav_cov(),
         status=make_nav_status(),
         source_timestamp_ns=1_234_500_000_000,
-        source_clock_id="gps_week_2450_receiver_generation_0",
+        source_clock_id="legacy-ubx-test-session:connection:0:gps-week:2450",
         max_pair_receive_skew_ns=5_000_000,
     )
     values.update(overrides)
@@ -239,7 +240,7 @@ class TestRawUbxEpochJoin(unittest.TestCase):
         self.assertEqual(observation.source_timestamp_ns, 1_234_500_000_000)
         self.assertEqual(
             observation.source_clock_id,
-            "gps_week_2450_receiver_generation_0",
+            "legacy-ubx-test-session:connection:0:gps-week:2450",
         )
         self.assertEqual(observation.receive_monotonic_ns, 10_003_000_000)
         self.assertAlmostEqual(observation.latitude_deg, 37.0)
