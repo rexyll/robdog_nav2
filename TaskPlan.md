@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.148
+- 文档版本：v0.3.149
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -900,3 +900,4 @@
 - 本轮增量（2026-11-26 / NAV-TIMEGPS 同历元交叉核验设计）：依据 u-blox ZED-F9P Interface Description UBX-18010854 R07 §5.14.21 审计 `UBX-NAV-TIMEGPS`（01/20，16-byte payload）：iTOW U4、signed fTOW I4（±500000 ns）、signed week I2、signed leapS I1、validity bits towValid/weekValid/leapSValid 与 tAcc U4。新增 `doc/Navigation/17_zed_f9p_nav_timegps_crosscheck_audit.md`，明确 TIMEGPS 仅作同 session/generation/iTOW 的可选 GPS week/TOW/leapS 交叉核验，不替代 NAV-PVT/TIMEUTC/TIMELS/STATUS，不得绕过 TIMELS source allowlist；补充 signed fTOW 整数规范化、周边界处理、validity 独立性、冲突 fail-closed 与 17 组确定性测试合同。R07 的 TIMEGPS tAcc 与 PVT/TIMEUTC tAcc 误差相关性未知，不自行合成；TIMEGPS 与 TIMELS 同属接收机输出，不作为独立外部时间源。仅完成协议/设计审计，未实现 parser/driver/ROSIDL、未运行测试、未进行 F9P/Orin 实测；固定驱动是否已有 TIMEGPS 输出仍需逐文件审计。新增文档索引于 `doc/Navigation/README.md`。
 
 - 本轮增量（2026-11-26 / 固定版 ublox_dgnss 时间消息驱动审计）：对 `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` 的 `ubx_msg.hpp`、`ubx_nav.hpp`、NAV-TIMEUTC/PVT/STATUS payload、ROSIDL、publisher、F9P TOML 配置逐文件审计。确认该固定版本实现并发布 NAV-PVT、NAV-STATUS、NAV-TIMEUTC；**未实现 NAV-TIMEGPS (01/20) 与 NAV-TIMELS (01/26)**，F9P config 也无对应输出配置。因此 §17 TIMEGPS 文档只能视为未来扩展设计，当前 Mapper 缺少 TIMELS leap-offset/source 输入，生产 VALID gate 继续关闭。另确认 TIMEUTC raw validity byte 仅内部 union 持有、ROS message 只发布拆解字段；PVT/STATUS flags 同样未完整保留 raw byte。发现 payload constructors 依据传入 size memcpy 后固定 offset 读取，`buf_offset` 无边界检查；尚未完整审计 USB stream parser 上游是否拦截短帧，故列为高优先级待验证风险，不声称已复现。新增 `doc/Navigation/18_ublox_dgnss_fixed_revision_time_message_driver_audit.md` 并更新索引。未修改上游驱动，未构建/运行测试，未做硬件实测。下一步审计 USB stream parser 的 declared/actual length、checksum、接收队列、线程/锁与 reconnect generation，再决定是否提交最小 parser hardening patch。
+- 审计补充：在固定驱动 `ubx.hpp::get_polled_frame()` 的 poll-response checksum 校验中，条件为 `ck_a != received_a && ck_b != received_b`，仅当两个 checksum byte 同时错误才拒绝；单 byte mismatch 会放行。已在 §18 记录，需修正为任一 byte mismatch 即失败并覆盖 A-only/B-only/both 测试。该发现只确认 poll-response 路径，异步接收路径仍待审计。
