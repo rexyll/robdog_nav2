@@ -292,7 +292,10 @@ schema v3 将 journal query 的时间语义与 collector 命令执行时间分�
   --disk-usage、journalctl --list-boots，以及每个显式目标 service 的 systemctl show logging-specific properties（LogNamespace、
   LogRateLimitIntervalUSec、LogRateLimitBurst、LogLevelMax、LogFilterPatterns、
   StandardOutput/StandardError 和 unit path/drop-in metadata；不读取完整 unit 文件，
-  避免为此诊断额外采集 Environment 等可能包含敏感值的配置）。这些诊断命令为可选上下文；不可用会令该 context 标为
+  避免为此诊断额外采集 Environment 等可能包含敏感值的配置）。
+  若 LogNamespace 非空，当前 service journal query 仍未自动附加 --namespace，
+  因此该 service 的日志命名空间尚未被完整覆盖；必须把它标为 namespace evidence
+  gap，后续按该 namespace 查询 systemd-journald@NAMESPACE.service。这些诊断命令为可选上下文；不可用会令该 context 标为
   partial，但不单独使核心 PTP inventory 失败。若没有显式配置任何目标 service，
   不执行这些 journald 诊断命令，journal_storage_context.status=not_requested。
 
@@ -353,6 +356,8 @@ eBPF 程序；不改变主机状态，只记录证据设计和后续验收条件
 - systemd exec：service 级 LogRateLimitIntervalSec /
   LogRateLimitBurst 覆盖规则：
   https://freedesktop.org/software/systemd/man/latest/systemd.exec.html
+- systemd D-Bus Service properties（LogNamespace、LogRateLimitIntervalUSec、LogRateLimitBurst 等）：
+  https://www.freedesktop.org/software/systemd/man/latest/org.freedesktop.systemd1.html
 - systemd catalog：rate-limit suppression 与 missed kernel message 的 MESSAGE_ID：
   https://github.com/systemd/systemd/blob/main/catalog/systemd.catalog.in
 - LinuxPTP phc2sys.c 与 clockadj.c：
