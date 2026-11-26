@@ -23,7 +23,7 @@ _PMC_GET_COMMANDS = (
     "GET TIME_PROPERTIES_DATA_SET",
     "GET DEFAULT_DATA_SET",
 )
-_SERVICE_NAME = re.compile(r"^[A-Za-z0-9_.@-]+$")
+_SERVICE_NAME = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.@-]*$")
 
 
 @dataclass(frozen=True)
@@ -39,7 +39,7 @@ class LinuxPtpHostEvidenceConfig:
 
     def __post_init__(self):
         if not isinstance(self.interface, str) or not re.fullmatch(
-            r"[A-Za-z0-9_.:-]{1,64}", self.interface
+            r"[A-Za-z0-9_][A-Za-z0-9_.:-]{0,63}", self.interface
         ):
             raise ValueError("interface must be an explicit Linux interface name")
         if isinstance(self.domain_number, bool) or not isinstance(self.domain_number, int):
