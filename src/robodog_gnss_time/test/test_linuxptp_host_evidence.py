@@ -203,6 +203,12 @@ def test_collector_targets_only_explicit_port_before_fixed_get_requests():
     assert report["host_time_sync_claim"] == "not_evaluated"
 
 
+@pytest.mark.parametrize("target", [None, 1, True])
+def test_config_rejects_non_string_target_port_identity(target):
+    with pytest.raises(ValueError, match="target_port_identity must be a string"):
+        _config(target_port_identity=target)
+
+
 @pytest.mark.parametrize("target", [
     "080027.fffe.7f327b",
     "080027.fffe.7f327b-0",
