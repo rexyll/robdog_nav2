@@ -238,6 +238,120 @@ def extract_ptp_message(packet) -> PtpMessage | None:
     )
 
 
+class PtpAnnounceAudit:
+    """Observe Announce candidates and per-source sequence continuity.
+
+    This deliberately does not run BMCA: packet captures alone do not expose
+    the receiver's complete foreign-master records, profile rules, or port state.
+    """
+
+    def __init__(self, *, max_sources: int = 4096, max_changes: int = 32):
+        if max_sources < 1 or max_changes < 1:
+            raise ValueError("Announce audit bounds must be positive")
+        self.max_sources = max_sources
+        self.max_changes = max_changes
+        self.counts = Counter()
+        self.sources = {}
+        self.candidates = {}
+        self.gm_changes = []
+
+    def observe(self, message: PtpMessage) -> None:
+        if message.message_type != 11 or message.grandmaster_identity is None:
+            return
+        self.counts["announce_messages"] += 1
+        source_key = (message.domain_number, message.source_port_identity)
+        state = self.sources.get(source_key)
+        if state is None:
+            if len(self.sources) >= self.max_sources:
+                self.sources.pop(next(iter(self.sources)))
+                self.counts["evicted_announce_sources"] += 1
+            state = {"last_sequence_id": None, "last_grandmaster_identity": None,
+                     "message_count": 0}
+            self.sources[source_key] = state
+        previous_sequence = state["last_sequence_id"]
+        if previous_sequence is not None:
+            delta = (message.sequence_id - previous_sequence) & 0xFFFF
+            if delta == 0:
+                self.counts["announce_sequence_duplicate"] += 1
+            elif delta < 0x8000:
+                if delta > 1:
+                    self.counts["announce_sequence_gap_observed"] += delta - 1
+                    self.counts["announce_sequence_gap_events"] += 1
+                else:
+                    self.counts["announce_sequence_in_order"] += 1
+            else:
+                self.counts["announce_sequence_out_of_order_or_late"] += 1
+        state["last_sequence_id"] = message.sequence_id
+        state["message_count"] += 1
+
+        previous_gm = state["last_grandmaster_identity"]
+        if previous_gm is not None and previous_gm != message.grandmaster_identity:
+            self.counts["announcing_source_gm_identity_changes"] += 1
+            if len(self.gm_changes) < self.max_changes:
+                self.gm_changes.append({
+                    "domain_number": message.domain_number,
+                    "source_port_identity": message.source_port_identity,
+                    "previous_grandmaster_identity": previous_gm,
+                    "new_grandmaster_identity": message.grandmaster_identity,
+                    "sequence_id": message.sequence_id,
+                    "capture_timestamp_ns": message.capture_timestamp_ns,
+                })
+        state["last_grandmaster_identity"] = message.grandmaster_identity
+
+        candidate_key = (message.domain_number, message.grandmaster_identity)
+        candidate = self.candidates.get(candidate_key)
+        if candidate is None:
+            if len(self.candidates) >= self.max_sources:
+                self.candidates.pop(next(iter(self.candidates)))
+                self.counts["evicted_announce_candidates"] += 1
+            candidate = {
+                "domain_number": message.domain_number,
+                "grandmaster_identity": message.grandmaster_identity,
+                "announce_count": 0,
+                "announcing_sources": set(),
+            }
+            self.candidates[candidate_key] = candidate
+        candidate["announce_count"] += 1
+        candidate["announcing_sources"].add(message.source_port_identity)
+        candidate.update({
+            "priority1": message.grandmaster_priority1,
+            "clock_class": message.grandmaster_clock_class,
+            "clock_accuracy": message.grandmaster_clock_accuracy,
+            "offset_scaled_log_variance": message.grandmaster_offset_scaled_log_variance,
+            "priority2": message.grandmaster_priority2,
+            "steps_removed": message.steps_removed,
+            "time_source": message.time_source,
+            "last_sequence_id": message.sequence_id,
+            "last_capture_timestamp_ns": message.capture_timestamp_ns,
+        })
+
+    def report(self) -> dict:
+        candidates = []
+        for candidate in self.candidates.values():
+            item = dict(candidate)
+            item["announcing_sources"] = sorted(item["announcing_sources"])
+            candidates.append(item)
+        candidates.sort(key=lambda item: (item["domain_number"],
+                                          item["grandmaster_identity"]))
+        sources = [{
+            "domain_number": domain,
+            "source_port_identity": source,
+            **state,
+        } for (domain, source), state in sorted(self.sources.items())]
+        return {
+            "counts": dict(self.counts),
+            "observed_candidates": candidates,
+            "announcing_sources": sources,
+            "observed_source_gm_identity_changes": list(self.gm_changes),
+            "selection_status": "NOT_INFERRED_FROM_PACKET_CAPTURE",
+            "interpretation": (
+                "Announce candidate declarations and capture-order sequence observations only; "
+                "not BMCA execution, active GM selection, port state, or PTP lock. "
+                "Sequence gaps may reflect capture loss/filtering/reordering."
+            ),
+        }
+
+
 class PtpCorrelationAudit:
     """Bounded message-pair correlator; reports presence/pairing, not clock accuracy."""
 
@@ -250,6 +364,7 @@ class PtpCorrelationAudit:
         self.domains = Counter()
         self.transports = Counter()
         self.grandmasters = Counter()
+        self.announce_audit = PtpAnnounceAudit(max_sources=max_pending)
         self.pending_sync = {}
         self.pending_delay_req = {}
         self.pending_pdelay_req = {}
@@ -270,6 +385,7 @@ class PtpCorrelationAudit:
         self.transports[message.transport] += 1
         if message.grandmaster_identity is not None:
             self.grandmasters[message.grandmaster_identity] += 1
+        self.announce_audit.observe(message)
         if message.transport.startswith("udp/"):
             expected = (
                 PTP_EVENT_PORT if message.message_type in EVENT_MESSAGE_TYPES
@@ -326,6 +442,7 @@ class PtpCorrelationAudit:
             "domain_counts": dict(self.domains),
             "transport_counts": dict(self.transports),
             "grandmaster_identity_counts": dict(self.grandmasters),
+            "announce_audit": self.announce_audit.report(),
             "correlations": dict(self.counts),
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
