@@ -120,6 +120,7 @@ int main() {
   FakeGnssUsb fake;
   GnssUsbStreamConfig config;
   config.device = UsbDeviceSessionConfig{0x1546, 0x01a9, ""};
+  config.process_session_id = "gnss-usb-stream-test-session";
   config.read_buffer_bytes = 128;
   config.in_flight_reads = 2;
   config.frame_queue_capacity = 8;
@@ -130,18 +131,29 @@ int main() {
   assert(stream.start());
   assert(fake.pending_count() == 2);
 
+  auto started = stream.try_pop_event();
+  assert(started.has_value());
+  assert(started->type == robodog_protocol::GnssIngressEventType::GenerationStarted);
+  assert(started->connection_generation == 1);
+  assert(started->process_session_id == "gnss-usb-stream-test-session");
+
   // Generic zero-payload UBX frame with a valid Fletcher checksum.
   const std::vector<std::uint8_t> ubx{0xB5, 0x62, 0x01, 0x07, 0x00, 0x00, 0x08, 0x19};
   assert(fake.inject(ubx));
 
-  std::optional<robodog_protocol::Frame> frame;
-  for (int i = 0; i < 200 && !frame; ++i) {
-    frame = stream.try_pop_frame();
-    if (!frame) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  std::optional<robodog_protocol::GnssIngressEvent> frame_event;
+  for (int i = 0; i < 200 && !frame_event; ++i) {
+    frame_event = stream.try_pop_event();
+    if (!frame_event) std::this_thread::sleep_for(std::chrono::milliseconds(2));
   }
-  assert(frame.has_value());
-  assert(frame->protocol == Protocol::Ubx);
-  assert(frame->connection_generation == 1);
+  assert(frame_event.has_value());
+  assert(frame_event->type == robodog_protocol::GnssIngressEventType::Frame);
+  assert(frame_event->frame.has_value());
+  assert(frame_event->frame->protocol == Protocol::Ubx);
+  assert(frame_event->frame->connection_generation == 1);
+  assert(frame_event->process_session_id == "gnss-usb-stream-test-session");
+  assert(frame_event->ingress_sequence > started->ingress_sequence);
+  assert(frame_event->receive_monotonic_ns >= started->receive_monotonic_ns);
   for (int i = 0; i < 100 && fake.pending_count() != 2; ++i)
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   assert(fake.pending_count() == 2);  // completion resubmitted one IN transfer
@@ -154,5 +166,9 @@ int main() {
   assert(fake.pending_count() == 0);
   assert(fake.device_closes == 1);
   assert(fake.context_exits == 1);
+  auto stopped = stream.try_pop_event();
+  assert(stopped.has_value());
+  assert(stopped->type == robodog_protocol::GnssIngressEventType::Stopped);
+  assert(stopped->ingress_sequence > frame_event->ingress_sequence);
   return 0;
 }
