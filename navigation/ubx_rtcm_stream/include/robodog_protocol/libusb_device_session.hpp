@@ -35,6 +35,7 @@ public:
     std::function<int(void *, int)> release_interface;
     std::function<int(void *, int, int)> set_alternate_setting;
     int success_code{0};
+    int kernel_driver_not_supported_code{-12};
   };
 
   explicit LibusbDeviceSession(Api api);
