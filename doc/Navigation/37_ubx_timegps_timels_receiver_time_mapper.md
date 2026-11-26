@@ -39,7 +39,7 @@ UTC stamp 只有在以下条件全部成立时才生成：
 1. TIMEGPS.leapSValid = true；
 2. TIMELS.validCurrLs = true；
 3. srcOfCurrLs 在应用显式 trusted_leap_sources allowlist 中；
-6. TIMEGPS.leapS 与按来源归一化后的 TIMELS.currLs 一致。
+4. TIMEGPS.leapS 与按来源归一化后的 TIMELS.currLs 一致。
 
 默认 trusted_leap_sources 为空；来源 0 是 firmware hardcoded default，官方文档明确提示可能过时，因此代码禁止将其加入 allowlist；255 Unknown 永不允许加入 allowlist。来源 4 BeiDou 报告 BDS-UTC，官方文档说明其比 GPS-UTC 少 14 秒，因此比较/UTC 换算前加 14 秒。其他来源不自动加入 allowlist，必须由设备配置和系统验证决定。
 
