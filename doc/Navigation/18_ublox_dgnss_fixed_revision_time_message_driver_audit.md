@@ -78,6 +78,27 @@ parser 将 status flags 拆为 gpsFixOK、diffSoln、wknSet、towSet 等字段�
 
 其中第 4 项是进一步审计目标；本轮没有对完整 USB frame parser 做到足以确认其实际运行时行为。
 
+
+### 5.1 普通异步 USB receive 路径：边界与 framing 缺口
+
+进一步追踪 `ublox_in_callback(libusb_transfer *transfer_in)`（固定 commit 的 `ublox_dgnss_node.cpp`）发现：
+
+- 以 `transfer_in->actual_length` 作为当前输入长度；
+- 仅在 `len > 2` 且当前 transfer 的前两个字节恰好为 UBX sync 时，直接将整个 transfer 复制成一个 `Frame`；
+- 随即调用 `Frame::from_buf_build()`，其读取固定 header bytes [0..5]，并将 buffer 最后两个 byte 当作 checksum；
+- 未见跨 USB transfer 的残帧缓存/重组，也未见单个 transfer 内连续多个 UBX frame 的逐帧拆分；
+- 未见在入队前验证 `actual_length >= 8` 或 `actual_length == declared_payload_length + 8`；
+- 因而短于 6 bytes 的 transfer 可能在 `from_buf_build()` 读取 header 时越界；6/7 bytes 及 declared length 与 actual length 不一致的输入也没有在该入口被明确拒绝；
+- 接收路径随后在 `ubx_queue_frame_in()` 做 checksum 检查，且该处条件为 `ck_a != received_a || ck_b != received_b`，逻辑正确；这与 `get_polled_frame()` 中已发现的 `&&` 缺陷是两条不同路径，不能混为一谈。
+
+该入口结构意味着：若 libusb transfer 边界不保证一帧一 transfer，则合法帧被拆分、合并时可能丢失或错误解释。必须通过 libusb transfer 实测/USB API 语义证据确认边界假设，不能仅凭常见设备当前输出形态认定 framing 安全。
+
+### 5.2 UBX queue 并发访问
+
+`ubx_timer_callback()` 读取 `ubx_queue_.size()`、复制 `ubx_queue_[0]` 时未持有 `ubx_queue_mutex_`；USB callback 则在持锁时 push_back，timer 在稍后持锁 pop_front。若 callback 与 timer 可并发运行，则 deque 的 size/index 与 push/pop 存在未同步访问风险。需要确认 executor/libusb callback 的线程归属与互斥关系；若无严格单线程保证，应在同一锁临界区内完成 front-copy/pop 或改用受控线程安全队列。RTCM queue 也应同样审计。
+
+这属于静态源码暴露的并发风险，尚未通过 TSAN 或压力测试复现。
+
 ## 6. 同历元与接收时序
 
 当前发布函数使用 `f->ts` 填充 ROS Header stamp，消息本身包含 iTOW（PVT、STATUS、TIMEUTC）。这给消费者提供了接收/采集时间戳与 GNSS epoch tag 两种信息，但源码中未发现为跨 topic 组帧提供的统一 `process_session_id`、`connection_generation`、`queue_sequence` 身份字段。
@@ -112,13 +133,13 @@ parser 将 status flags 拆为 gpsFixOK、diffSoln、wknSet、towSet 等字段�
 - 确认 PVT/STATUS/TIMEUTC 通过 iTOW 和 ROS header stamp 输出，但未发现统一跨重连 generation identity。
 
 未完成：
-- USB stream parser 完整帧边界/校验顺序审计；
-- 精确定位 receive queue 的线程、锁、生命周期及 reconnect generation；
+- USB receive callback 的 transfer 边界/残帧重组/多帧拆分与 declared-vs-actual length 审计；poll-response 与 async receive checksum 路径差异审计；
+- 精确定位 receive queue 的线程、锁、生命周期及 reconnect generation；静态发现 UBX queue 的 size/index 读取未持锁，需 executor 线程归属或 TSAN/压力测试确认；
 - 对上游驱动做构建/测试；
 - ZED-F9P MON-VER、TIMEGPS/TIMELS 原始帧与固件实测；
 - 对 payload 长度风险做最小复现或 fuzz。
 
-下一项任务应是审计 USB stream parser 与 receive queue 的边界、校验和线程模型；在这之前不动时间消息生产实现。若确认长度防护确实缺失，先提交最小、可独立测试的 parser hardening patch，再扩展时间消息。
+下一项任务应是基于 libusb transfer 实际边界确认/修复 UBX framing（增量缓存、按 declared length 拆帧、校验 actual length）、poll checksum 条件与 queue 互斥；在这之前不动时间消息生产实现。若确认长度防护确实缺失，先提交最小、可独立测试的 parser hardening patch，再扩展时间消息。
 
 ## 9. 固定源码引用
 
