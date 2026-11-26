@@ -255,3 +255,5 @@
 - [26 — libusb-1.0 生产 API function-table binding 与编译门禁](26_libusb_1_api_binding_and_compile_gate.md)
 - [libusb-1.0 API binding header](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_api_binding.hpp)
 - [libusb-1.0 API binding implementation](../../navigation/ubx_rtcm_stream/src/libusb_api_binding.cpp)
+
+- [27 — 固定版 ublox_dgnss USB bulk endpoint 与 transfer 参数映射](27_fixed_ublox_dgnss_usb_endpoint_and_transfer_mapping.md)
