@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.166
+- 文档版本：v0.3.167
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -935,3 +935,6 @@
 
 
 - Fake USB transport 并发边界与 generation event 固化（2026-11-26 / v0.3.166）：在上一轮修复后 CI run `45744564081` 三个 job 全部成功（ASan/UBSan CTest、TSan CTest、Clang libFuzzer smoke），对应修复前 run `45744404049` 的两个编译失败 job 已被纠正。进一步审查发现 session 的 submit 与 shutdown 若并发可形成 shutdown cancellation snapshot 后仍提交的竞态；已在 `TransferSession` 对 submit/cancel/poll/shutdown 加操作序列化。Fake pending transfer 增加 event_queued，避免 complete event 与 shutdown cancel 重复入队；事件携带 submit 时捕获的 generation，不再依赖当前代次。新增测试：generation 快照、完成事件已排队时 shutdown 不产生双 callback、100 轮 submit-vs-shutdown 并发竞争。新增测试代码及 TSan/ASan/UBSan CI 待本轮实际运行确认。此仍为 fake transport 层合成验证，不是 libusb event thread 或 ROS executor 集成。
+
+
+- Fake USB transport 并发与 sanitizer CI 验证闭环（2026-11-26 / v0.3.167）：Actions run `45744875124` success，三个 job 全部通过：ThreadSanitizer bounded queue + transfer lifecycle + fake transport CTest、ASan/UBSan parser+queue+lifecycle+fake transport CTest、Clang libFuzzer smoke。该轮包含 100 轮 submit-vs-shutdown 并发竞态、event generation snapshot、terminal event deduplication。新增 Navigation 23，依据 libusb 官方异步 I/O 文档确认：cancel_transfer 是异步请求，callback 在后续 event handling 中执行；cancel 返回不代表 cancellation complete；callback 被调用前 free transfer 属于 undefined behavior；callback 运行于 event-handling context，不得调用会尝试处理事件的阻塞/重入 API；应用必须持续调用 libusb event handling 才能推进 transfer completion。由此把真实 adapter 设计收敛为单一 event-loop owner、pending registration-before-submit、callback-only finalizer、cancel→event-pump→callback-drain→join→free/close。以上为 API contract 设计依据，真实 libusb adapter、ROS 2 component_container_mt 与设备断连验证仍未实施。

@@ -243,3 +243,5 @@
 - [22 — Fake USB transport seam 与 submit/cancel/shutdown 测试合同](22_ubx_dgnss_fake_usb_transport_seam_and_test_contract.md)
 - [Fake USB transport API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/fake_usb_transport.hpp)
 - [Fake USB transport tests](../../navigation/ubx_rtcm_stream/tests/test_fake_usb_transport.cpp)
+
+- [23 — libusb asynchronous I/O 官方语义核对与真实 adapter 接入合同](23_libusb_async_io_contract_and_adapter_integration_gate.md)
