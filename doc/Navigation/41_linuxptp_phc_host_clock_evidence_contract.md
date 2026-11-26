@@ -385,12 +385,12 @@ collector 输出 `clock_step_trace_capabilities`。盘点器仅读取现有 proc
 - 记录运行内核 release、machine、system，以及盘点自身的
   CLOCK_MONOTONIC / CLOCK_REALTIME 起止时间。
 - 读取 `/proc/config.gz` 与 `/boot/config-<uname -r>`（若存在），仅摘录
-  FTRACE、TRACEPOINTS、HAVE_SYSCALL_TRACEPOINTS、BPF、BPF_SYSCALL、
-  DEBUG_INFO_BTF、IKCONFIG、IKCONFIG_PROC、PERF_EVENTS、KPROBE_EVENTS 等
+  FTRACE、FTRACE_SYSCALLS、TRACEPOINTS、HAVE_SYSCALL_TRACEPOINTS、BPF、
+  BPF_SYSCALL、BPF_EVENTS、DEBUG_INFO_BTF、IKCONFIG、IKCONFIG_PROC、PERF_EVENTS、KPROBE_EVENTS 等
   相关配置。配置文件缺失、权限不足和读取错误分别保留状态。
 - 读取 `/proc/self/mountinfo`，识别
   `/sys/kernel/tracing` 与 `/sys/kernel/debug/tracing` 的挂载信息。
-- 读取每个候选 tracefs 的 `available_events`，仅针对实际列出的
+- 识别 tracefs 或 debugfs 的父挂载关系；读取每个候选 tracefs 的 `available_events`，仅针对实际列出的
   `syscalls:sys_enter/exit_clock_adjtime`、`adjtimex`、
   `clock_settime`、`settimeofday` 读取各自 `format` 文件；报告实际字段
   名和原始 format，不把不同内核/架构的字段布局写死。
