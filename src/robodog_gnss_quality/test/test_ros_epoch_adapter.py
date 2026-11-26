@@ -42,8 +42,8 @@ def status(i_tow=1000, receive=115):
 
 
 def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
-            utc_valid=True, clock_id=GENERATION, session_id=None,
-            generation=None, gps_week=None):
+            utc_valid=True, clock_id=GENERATION, session_id=PROCESS_SESSION_ID,
+            generation=CONNECTION_GENERATION, gps_week=GPS_WEEK):
     return UbxSourceTimeMapping(
         i_tow_ms=i_tow,
         source_timestamp_ns=source_time,
@@ -68,7 +68,10 @@ def adapter(**overrides):
     )
     values.update(overrides)
     result = UbxRosEpochAdapter(**values)
-    result.begin_generation(\n        GENERATION, process_session_id=PROCESS_SESSION_ID,\n        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK\n    )
+    result.begin_generation(
+        GENERATION, process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK
+    )
     return result
 
 
