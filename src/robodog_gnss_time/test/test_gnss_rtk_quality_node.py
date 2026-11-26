@@ -136,6 +136,16 @@ def test_quality_node_rejects_old_generation_without_resetting_active_gate():
         spin_until(executor, lambda: any(item.reason == "recovering" for item in received))
         publisher.publish(make_observation(time.monotonic_ns(), 2_000_000_000, generation=1))
         spin_until(executor, lambda: any(item.reason == "out_of_order" for item in received))
+        publisher.publish(make_observation(time.monotonic_ns(), 2_500_000_000, generation=1))
+        spin_until(
+            executor,
+            lambda: len([item for item in received if item.reason == "out_of_order"]) >= 2,
+        )
+        rejected_epochs = [
+            item.source_timestamp_ns for item in received if item.reason == "out_of_order"
+        ]
+        assert 2_000_000_000 in rejected_epochs
+        assert 2_500_000_000 in rejected_epochs
         publisher.publish(make_observation(time.monotonic_ns(), 3_000_000_000, generation=2))
         spin_until(
             executor,
