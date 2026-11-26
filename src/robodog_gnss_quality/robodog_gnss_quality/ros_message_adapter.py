@@ -58,15 +58,16 @@ def _carrier_solution(status: object) -> CarrierSolution:
 
 def decode_nav_pvt_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int, gps_week: int) -> UbxNavPvtEpoch:
     """Decode only the NAV-PVT fields required by the fail-closed quality core."""
+    context = _context(process_session_id, connection_generation, gps_week)
     try:
         return UbxNavPvtEpoch(
             i_tow_ms=_i_tow(message.itow),
             gnss_fix_ok=_boolean("NAV-PVT gnss_fix_ok", message.gnss_fix_ok),
             carrier_solution=_carrier_solution(message.carr_soln.status),
             receive_monotonic_ns=_receive_time(receive_monotonic_ns),
-            process_session_id=_context(process_session_id, connection_generation, gps_week)[0],
-            connection_generation=_context(process_session_id, connection_generation, gps_week)[1],
-            gps_week=_context(process_session_id, connection_generation, gps_week)[2],
+            process_session_id=context[0],
+            connection_generation=context[1],
+            gps_week=context[2],
         )
     except AttributeError as exc:
         raise EpochPairingError("NAV-PVT ROS message is missing a required field") from exc
@@ -77,6 +78,7 @@ def decode_nav_hp_pos_llh_message(
     process_session_id: str, connection_generation: int, gps_week: int
 ) -> UbxNavHpPosLlhEpoch:
     """Decode HPPOSLLH raw integer and validity fields without using Header.stamp."""
+    context = _context(process_session_id, connection_generation, gps_week)
     try:
         return UbxNavHpPosLlhEpoch(
             i_tow_ms=_i_tow(message.itow),
@@ -93,8 +95,9 @@ def decode_nav_hp_pos_llh_message(
             invalid_lat_hp=_boolean("HPPOSLLH invalid_lat_hp", message.invalid_lat_hp),
             invalid_height_hp=_boolean("HPPOSLLH invalid_height_hp", message.invalid_height_hp),
             receive_monotonic_ns=_receive_time(receive_monotonic_ns),
-            process_session_id=_context(process_session_id, connection_generation)[0],
-            connection_generation=_context(process_session_id, connection_generation)[1],
+            process_session_id=context[0],
+            connection_generation=context[1],
+            gps_week=context[2],
         )
     except AttributeError as exc:
         raise EpochPairingError("NAV-HPPOSLLH ROS message is missing a required field") from exc
@@ -114,6 +117,7 @@ def _finite_float(name: str, value: object) -> float:
 
 def decode_nav_cov_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int, gps_week: int) -> UbxNavCovEpoch:
     """Decode the six NED position covariance terms and validity bit."""
+    context = _context(process_session_id, connection_generation, gps_week)
     try:
         return UbxNavCovEpoch(
             i_tow_ms=_i_tow(message.itow),
@@ -125,8 +129,9 @@ def decode_nav_cov_message(message: object, receive_monotonic_ns: int, *, proces
             pos_cov_ed=_finite_float("NAV-COV pos_cov_ed", message.pos_cov_ed),
             pos_cov_dd=_finite_float("NAV-COV pos_cov_dd", message.pos_cov_dd),
             receive_monotonic_ns=_receive_time(receive_monotonic_ns),
-            process_session_id=_context(process_session_id, connection_generation)[0],
-            connection_generation=_context(process_session_id, connection_generation)[1],
+            process_session_id=context[0],
+            connection_generation=context[1],
+            gps_week=context[2],
         )
     except AttributeError as exc:
         raise EpochPairingError("NAV-COV ROS message is missing a required field") from exc
@@ -137,6 +142,7 @@ def decode_nav_status_message(
     process_session_id: str, connection_generation: int, gps_week: int
 ) -> UbxNavStatusEpoch:
     """Decode NAV-STATUS cross-check fields required by the four-message joiner."""
+    context = _context(process_session_id, connection_generation, gps_week)
     try:
         return UbxNavStatusEpoch(
             i_tow_ms=_i_tow(message.itow),
@@ -146,8 +152,9 @@ def decode_nav_status_message(
             ),
             carrier_solution=_carrier_solution(message.carr_soln.status),
             receive_monotonic_ns=_receive_time(receive_monotonic_ns),
-            process_session_id=_context(process_session_id, connection_generation)[0],
-            connection_generation=_context(process_session_id, connection_generation)[1],
+            process_session_id=context[0],
+            connection_generation=context[1],
+            gps_week=context[2],
         )
     except AttributeError as exc:
         raise EpochPairingError("NAV-STATUS ROS message is missing a required field") from exc
