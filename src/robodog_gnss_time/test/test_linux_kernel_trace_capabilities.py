@@ -33,6 +33,7 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     _write(tmp_path / f"boot/config-{release}", "CONFIG_PERF_EVENTS=y\n")
     _write(
         tmp_path / "proc/self/mountinfo",
+        "25 1 0:20 / /sys rw,nosuid,nodev,noexec,relatime - sysfs sysfs rw\n"
         "36 25 0:32 / /sys/kernel/tracing rw,nosuid,nodev,noexec,relatime - tracefs tracefs rw\n"
         "40 25 0:33 / /sys/kernel/debug rw,nosuid,nodev,noexec,relatime - debugfs debugfs rw\n",
     )
@@ -67,8 +68,18 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     assert report["kernel_config_sources"]["boot_config"]["settings"]["CONFIG_PERF_EVENTS"] == "y"
     assert report["btf"]["status"] == "present_readable"
     tracefs = report["tracefs"][0]
-    assert tracefs["mounts"][0]["filesystem_type"] == "tracefs"
-    assert report["tracefs"][1]["mounts"][0]["filesystem_type"] == "debugfs"
+    assert tracefs["mounts"] == [{
+        "mountpoint": str(tmp_path / "sys/kernel/tracing"),
+        "filesystem_type": "tracefs",
+        "mount_relation": "exact",
+        "mount_options": "rw,nosuid,nodev,noexec,relatime",
+    }]
+    assert report["tracefs"][1]["mounts"] == [{
+        "mountpoint": str(tmp_path / "sys/kernel/debug"),
+        "filesystem_type": "debugfs",
+        "mount_relation": "ancestor",
+        "mount_options": "rw,nosuid,nodev,noexec,relatime",
+    }]
     assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["status"] == "available"
     assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["format_fields"] == [
         "common_type", "__syscall_nr", "which_clock", "tx",
@@ -161,3 +172,26 @@ def test_tracepoint_pair_reports_partial_and_enable_states_without_writing(tmp_p
         "meaning": "mixed_enabled_and_disabled",
     }
     assert not (tmp_path / "sys/kernel/tracing/set_event").exists()
+
+
+
+def test_mount_inventory_ignores_unrelated_ancestor_filesystems(tmp_path):
+    mountinfo = {
+        "status": "ok",
+        "content": (
+            "20 1 0:10 / / rw,relatime - ext4 /dev/root rw\n"
+            "21 20 0:11 / /sys rw,nosuid,nodev,noexec,relatime - sysfs sysfs rw\n"
+            "22 21 0:12 / /sys/kernel/debug rw,nosuid,nodev,noexec,relatime - debugfs debugfs rw\n"
+        ),
+    }
+    mounts = capability_module._mount_inventory(
+        tmp_path / "sys/kernel/debug/tracing",
+        mountinfo,
+        root=tmp_path,
+    )
+    assert mounts == [{
+        "mountpoint": str(tmp_path / "sys/kernel/debug"),
+        "filesystem_type": "debugfs",
+        "mount_relation": "ancestor",
+        "mount_options": "rw,nosuid,nodev,noexec,relatime",
+    }]
