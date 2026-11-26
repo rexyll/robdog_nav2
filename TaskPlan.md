@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.205
+- 文档版本：v0.3.206
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1046,3 +1046,6 @@
 
 
 - GNSS ingress terminal Stopped event 修复 CI 验收（2026-11-26 / v0.3.205）：最终代码 head `1a7d2436e427f8c7e48247343e49d501c26ec8a4` 对应 Actions run `45763754376`，四个 job 全部 success：GCC C++17 + ASan/UBSan CTest 10/10、ThreadSanitizer CTest 10/10、Clang libFuzzer smoke、production libusb 1.0 binding compile/CTest 1/1。该 head 验证 queue terminal-state retry、capacity-1 `Stopped` overflow→drain→retry、close 幂等以及 GnssUsbStream::stop() 传播失败；之前仅 queue header 的 run `45763745597` 全部 success，但最终以包含 test 与 stream propagation 的 `45763754376` 为准。文档 `doc/Navigation/34_gnss_usb_stream_decoder_bridge.md` 已记录语义。证据仍限于 synthetic/fake USB 和 standalone C++ 测试，不代表物理 F9P USB、ROS 2 executor/DDS ingress barrier 或自动重连验收。下一步审计同一 generation 多个 pending IN transfer 同时返回 NO_DEVICE/fatal status 时是否重复发布 DeviceLost/TransportFault，并设计首个终态事件胜出、失败可重试、重复 callback 幂等的状态合同；随后推进真正 C++→ROS 2 ingress bridge 和旧 DDS callback drain barrier，保持 nav 分支。
+
+
+- GNSS ingress per-generation terminal event 幂等与 generation transition 原子性（2026-11-26 / v0.3.206）：继续审计多个并发 IN transfer 在同一 generation 上相继报告 NO_DEVICE/fatal status 的路径，发现旧 `mark_device_lost()` / `mark_transport_fault()` 可重复追加终态控制事件，且首个终态事件因控制队列满而入队失败时，没有保存其类型供重试；`begin_generation()` 也会先修改 active generation，再尝试追加 GenerationStarted，可能出现 generation 已切换但生命周期事件缺失。已实现每代 first-terminal-cause-wins：DeviceLost 与 TransportFault 互斥，重复同类 callback 幂等，不同类后续事件拒绝；终态控制事件入队失败保留 type，允许同类重试，close() 会先 flush pending terminal event 再写 Stopped；新 generation 只能在上一代 terminal event 已记录或 Stopped 已记录后启动；GenerationStarted 容量准入先检查，失败时不修改 current_generation。新增测试覆盖终态 callback 重复/冲突、终态事件满队列重试、active generation 禁止替换、GenerationStarted 入队失败不改变 generation。代码 commits：header `6d21bfb9ff458d6fd3f4f80142c1b6a5328df1a2`、terminal tests `2a6b3f96c412caa1bb513c837508003376c28244`、atomic generation admission `5e92191ac58578c34f7fdba8ba7416f0a7482180`、generation atomicity tests `525087e5c9b6ce7ceaf7980323b9055f1b6b7a28`；doc/Navigation/34 §9 已更新。CI run `45764222163` 对 header commit 已 success；run `45764230311` 的 tests commit 仍在运行；generation admission commit run `45764302116` 因后续 push 取消；最终 tests commit run `45764307051` pending。最终 head 完整 ASan/UBSan、TSan、Clang fuzzer、libusb binding 矩阵尚未通过验收。下一步检查最终 run 的失败/结果，再审查事件队列 restart/terminal semantics 与真实 ROS bridge 边界；继续只在 nav 分支。
