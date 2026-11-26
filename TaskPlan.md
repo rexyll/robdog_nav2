@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.159
+- 文档版本：v0.3.160
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -915,3 +915,6 @@
 
 
 - UBX/RTCM3/NMEA parser 完整协议切片（2026-11-26 / v0.3.159）：在 `navigation/ubx_rtcm_stream/` 扩展 NMEA 增量解析，支持 `$` 起始、CR/LF/CRLF 结束、XOR checksum 校验、Valid/Absent 状态、可选 checksum-required gate 与可配置句长上限；错误 checksum 与错误语法不作为有效句子发布。新增 100 组确定性随机 chunk segmentation property-style 对照，比较混合 UBX/RTCM3/NMEA 流在单次输入与随机分片输入下的逐帧结果；测试组从 8 增至 10。新增 Clang/libFuzzer harness 和可选 CMake target，parser library 本体启用 fuzzer-no-link + ASan/UBSan instrumentation，并在 parser CI 加入 20 秒 bounded fuzz smoke job。验证：本地 GCC 14.2 + ASan/UBSan 构建与 CTest 通过（1/1 executable，10 组测试）；本地 Clang 17 fuzzer 构建成功，20 秒运行约 405,298 次变异，无崩溃/sanitizer 报告。GitHub Actions 对本轮新代码/新 fuzz job 的结果尚待实际运行确认。更新 parser README 与 doc/Navigation/19；同时修复 Navigation/19 §0 状态段先前写入的字面 `\\n` 转义，恢复为正常 Markdown 换行。尚未 ROS/libusb 集成、未修复 USB transfer lifecycle/queue race、未做真实 F9P capture 或设备验证。下一步：核对 Actions fuzz smoke；进行 parser API/复杂度审查及独立 fuzz 长跑；然后设计 fake transport seam 和有界线程安全 ingress queue，再接 ROS 2。
+
+
+- UBX/RTCM3/NMEA parser CI 验证闭环（2026-11-26 / v0.3.160）：确认 GitHub Actions run `45742342783` success（head `c97eb494ab4f9b60dd5d2fc207b4be94b6d639ad`，workflow `.github/workflows/ubx-rtcm-stream-parser-ci.yml`）。两个 job 均完成：C++17 UBX/RTCM3 parser with ASan and UBSan（Configure/Build/CTest 全部 success）；Clang libFuzzer smoke test（Configure/Build/20 秒 bounded fuzz run 全部 success）。run 页面：https://github.com/rexyll/robdog_nav2/actions/runs/45742342783。该 CI 证明独立 parser 在合成测试和有界 fuzz smoke 下通过，不代表 ROS/libusb、真实 GNSS receiver、设备时间同步或 USB 生命周期验收。当前 nav 分支继续保持隔离；下一步进入线程安全有界 ingress queue 与 fake transport seam 设计/实现，再接 ROS 2。
