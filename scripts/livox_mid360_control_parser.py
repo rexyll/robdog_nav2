@@ -17,7 +17,48 @@ TIME_KEYS = {
     0x800B: ("time_offset", 8, "int64", "ns"),
     0x800C: ("time_sync_type", 1, "uint8", None),
 }
+
 DIAG_KEY = 0x800E
+HMS_KEY = 0x8011
+HMS_LEVELS = {1: "info", 2: "warning", 3: "error", 4: "fatal"}
+HMS_CATALOG = {
+    0x0102: ("Environment temperature is slightly high", "Check ambient temperature and heat dissipation."),
+    0x0103: ("Environment temperature is relatively high", "Check ambient temperature and heat dissipation."),
+    0x0104: ("Window is dirty and point-cloud reliability may be affected", "Inspect and clean the optical window."),
+    0x0105: ("Device upgrade process error", "Inspect upgrade state and retry only under the vendor procedure."),
+    0x0111: ("Abnormal temperature of internal device components", "Check ambient temperature and heat dissipation."),
+    0x0112: ("Abnormal temperature of internal device components", "Check ambient temperature and heat dissipation."),
+    0x0113: ("IMU stopped working", "Follow vendor recovery guidance; restart only when safe."),
+    0x0114: ("Environment temperature is high", "Check ambient temperature and heat dissipation."),
+    0x0115: ("Environment temperature exceeded limit; device stopped", "Check ambient temperature and power/thermal conditions."),
+    0x0116: ("Abnormal external voltage", "Check the specified external supply voltage."),
+    0x0117: ("Abnormal LiDAR parameters", "Inspect configuration and consult vendor recovery guidance."),
+    0x0118: ("Internal device component damage", "Stop relying on the sensor and contact vendor service."),
+    0x0201: ("Scan module is heating", "Wait for scan-module heating to complete."),
+    0x0210: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0211: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0212: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0213: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0214: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0215: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0216: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0217: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0218: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x0219: ("Scan module abnormality", "Allow recovery; if persistent, follow vendor restart/service guidance."),
+    0x021C: ("Scan code disk dirty / abnormal rotation speed (MID-360L)", "Inspect and clean/service according to the MID-360L vendor procedure."),
+    0x0304: ("TIA DC abnormal; ranging point cloud may be abnormal", "Follow vendor troubleshooting and recovery guidance."),
+    0x0401: ("Communication link recovered after link-down (MID-360S)", "Inspect Ethernet link and switch/host interface logs."),
+    0x0402: ("PTP synchronization stopped or time gap too large", "Check PTP source, profile, network path and device sync status."),
+    0x0403: ("Unsupported IEEE 1588v2.1 detected", "Use the supported IEEE 1588v2.0 mode; verify network configuration."),
+    0x0404: ("PPS time synchronization abnormal", "Check PPS wiring, electrical levels and GPS timing source."),
+    0x0405: ("Time synchronization exception", "Correlate device HMS, PTP/GPS logs and network capture."),
+    0x0406: ("Time synchronization accuracy is low", "Check time source quality, PHC timestamping and network path."),
+    0x0407: ("GPS signal lost during PPS synchronization", "Check GNSS antenna, sky view and receiver status."),
+    0x0408: ("PPS signal lost during PPS synchronization", "Check PPS wiring, pulse integrity and receiver output."),
+    0x0409: ("GPS signal abnormal", "Check GNSS receiver status and time-source validity."),
+    0x040A: ("PTP and gPTP signals detected simultaneously", "Inspect topology and use only the intended synchronization mode."),
+}
+
 DIAG_STATUS = {
     0: "normal", 1: "warning", 2: "error", 3: "safety_err",
 }
@@ -62,6 +103,36 @@ def _decode_key_value(key: int, value: bytes) -> dict:
             item["meaning"] = {
                 0: "no_sync", 1: "ptp_ieee1588v2_0", 2: "gps"
             }.get(item["value"], "unknown")
+    elif key == HMS_KEY:
+        if len(value) != 32:
+            raise Mid360ControlPacketError("hms_code key 0x8011 must be 32 bytes")
+        codes = []
+        for slot in range(8):
+            raw = struct.unpack_from("<I", value, slot * 4)[0]
+            if raw == 0:
+                continue
+            abnormal_id = (raw >> 16) & 0xFFFF
+            reserved = (raw >> 8) & 0xFF
+            level = raw & 0xFF
+            description, recommendation = HMS_CATALOG.get(
+                abnormal_id, (None, None)
+            )
+            entry = {
+                "slot": slot, "raw": raw, "raw_hex": f"0x{raw:08x}",
+                "abnormal_id": abnormal_id,
+                "abnormal_id_hex": f"0x{abnormal_id:04x}",
+                "reserved": reserved, "level": level,
+                "level_name": HMS_LEVELS.get(level, "unknown"),
+                "description": description,
+                "recommendation": recommendation,
+            }
+            if abnormal_id == 0x021C:
+                entry["model_scope"] = "MID-360L only per vendor table"
+            elif abnormal_id == 0x0401:
+                entry["model_scope"] = "MID-360S only per vendor table"
+            codes.append(entry)
+        item.update(name="hms_code", value=codes, slot_count=8,
+                    active_count=len(codes), raw_hex=value.hex())
     elif key == DIAG_KEY:
         if len(value) != 2:
             raise Mid360ControlPacketError("lidar diagnostic status must be 2 bytes")
