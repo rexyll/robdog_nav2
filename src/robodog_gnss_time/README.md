@@ -224,3 +224,30 @@ Dedicated Humble/Jazzy CI is required for the ROS message generation, runtime
 node, recovery hysteresis, generation rollback, and stale watchdog. No physical
 receiver, RTK correction link, DDS overload, or localization consumer has been
 validated by these synthetic tests.
+
+
+
+## Exact observation / quality ROS adapter
+
+`RosObservationQualityJoinAdapter` converts `GnssObservation` and
+`GnssQualityStatus` messages into the transport-independent canonical
+identity and `QualityDecision`, then delegates pairing to
+`GnssObservationQualityJoiner`.
+
+The identity includes process session, connection generation, GPS week,
+iTOW, GPST source timestamp, canonical source clock ID and host monotonic
+receive timestamp. No nearest-time or approximate pairing is allowed.
+Observation and decision may arrive in either order; only an exact matching
+`qualified=true` / `accepted` pair is emitted. Unqualified decisions retire
+the matching identity. Pending entries and expiry remain bounded by the core
+joiner.
+
+The adapter rejects unknown reason strings, inconsistent qualified/reason
+pairs, bool-as-integer aliases, invalid optional metric sentinels, non-finite
+metrics, and source-clock IDs inconsistent with session/generation/week.
+The new adapter tests run under the dedicated Humble/Jazzy GNSS runtime CI.
+
+This slice only creates the strict message-to-core adapter and its tests. It
+does not yet publish NavSatFix. ROS clock policy, host UTC synchronization,
+antenna static-extrinsic readiness, NavSatFix publication and EKF timeout /
+recovery integration remain separate gates.
