@@ -262,3 +262,7 @@
 
 - [29 — libusb transfer registry 并发审计与修复记录](29_libusb_transfer_registry_concurrency_audit.md)
 - [30 — libusb cancel 锁耦合与错误语义审计](30_libusb_cancel_locking_and_error_semantics.md)
+
+- [31 — libusb DeviceSession RAII 与动态 endpoint discovery 第一切片](31_libusb_device_session_raii_and_descriptor_discovery.md)
+- [LibusbDeviceSession API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_device_session.hpp)
+- [LibusbDeviceSession tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_device_session.cpp)
