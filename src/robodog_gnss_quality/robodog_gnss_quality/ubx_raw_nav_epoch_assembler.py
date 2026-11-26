@@ -182,7 +182,19 @@ class UbxRawNavEpochAssembler:
             mapping.gps_week,
         )
         if time_context != self._time_context:
-            keep = self._raw_pending.pop(mapping.i_tow_ms, None)
+            if self._time_context is None:
+                # First trusted week mapping: keep pre-mapping raw records from
+                # this already-fenced transport generation. Exact iTOW and
+                # receive-skew checks below decide which records can join.
+                keep_all = self._raw_pending
+                self._raw_pending = OrderedDict()
+            else:
+                # A GPS-week transition makes all previously buffered raw
+                # records ambiguous except the iTOW of this mapping.
+                keep = self._raw_pending.pop(mapping.i_tow_ms, None)
+                keep_all = OrderedDict()
+                if keep is not None:
+                    keep_all[mapping.i_tow_ms] = keep
             self.adapter.begin_generation(
                 mapping.source_clock_id,
                 process_session_id=mapping.process_session_id,
@@ -191,8 +203,7 @@ class UbxRawNavEpochAssembler:
             )
             self._time_context = time_context
             self._raw_pending.clear()
-            if keep is not None:
-                self._raw_pending[mapping.i_tow_ms] = keep
+            self._raw_pending.update(keep_all)
             self._mapping_pending.clear()
             self._retired.clear()
 
