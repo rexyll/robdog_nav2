@@ -44,3 +44,18 @@ fail-closed condition.
 Package license metadata is currently `UNSPECIFIED` because the repository
 has no declared root license; public redistribution is not approved by this
 placeholder.
+
+
+## Decoded navigation epochs
+
+The navigation observation path uses five additional messages:
+
+- `GnssNavPvt`: raw NAV-PVT flags, iTOW and process/connection/GPS-week context.
+- `GnssNavHpPosLlh`: integer LLH and high-precision residual fields plus raw invalid-LLH flags.
+- `GnssNavCov`: raw validity flags and NED covariance upper-triangle terms in m².
+- `GnssNavStatus`: raw NAV-STATUS flags and fixStat bytes for an independent quality cross-check.
+- `GnssObservation`: one joined observation with GPST source timestamp/clock identity, host monotonic receive time, ENU covariance, RTK state and optional UTC/leap metadata.
+
+All four input messages carry exact receiver iTOW, GPS week, process session ID and connection generation. They deliberately omit ROS Header timestamps: callback adapters sample host monotonic time locally. The runtime rejects stale session/generation/week data, requires an exact iTOW match across all four inputs and a valid receiver-time mapping, and does not infer receiver time from iTOW or wall clock. HPPOSLLH invalidLlh and NAV-COV posCovValid are preserved as raw validity gates; NAV-COV NED cross terms are transformed to ENU with the correct Down-axis sign changes.
+
+These contracts describe decoded fields and do not themselves provide a UBX hardware driver or prove that a particular upstream publisher populates them correctly. Package licensing remains `UNSPECIFIED` pending repository-level license governance.
