@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.180
+- 文档版本：v0.3.181
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -971,3 +971,6 @@
 
 
 - 单一 event-loop owner CI 验收（2026-11-26 / v0.3.180）：Actions run `45751870160`，head `e1816a6f00cc2a47586485cff723104a4ce580c0`，四个 job 全部 success。该结果证明新增 fake API 测试及当前 standalone / sanitizer / fuzz / binding 编译门禁通过；不证明真实 USB 断连 callback、热插拔、ROS 2 executor 或 ZED-F9P 行为。
+
+
+- libusb DeviceRuntime 顶层统一所有权第一切片（2026-11-26 / v0.3.181）：新增 `LibusbDeviceRuntime`，统一拥有 DeviceSession、TransferTransport、EventLoop，按 callback drain → transport close → interface/device/context teardown 顺序关闭。审查时发现 DeviceSession 与 TransferTransport 都可能关闭同一个 native device handle 的 double-close 风险；新增 `Api::close_device_on_close`，独立 adapter 默认仍拥有 handle，Runtime 强制将 transfer adapter 设为 borrowed-handle 模式，由 DeviceSession 唯一 close。Runtime open 时验证 transfer API、创建 event loop 并等待 owner thread ready；shutdown 先停止提交、cancel all、等待 drain、join，再释放 transport 与 DeviceSession。新增 fake runtime test 验证 pending callback 在设备关闭前完成、transport 不重复 close handle、context 退出一次。实现提交：runtime header `8113287d820c9913708b7fdc96301bceda622ee1`、source `ee5aadbd74ef1840319515b8b9368f9c9e25ac55`、test `c0f764683d2a3778cf7db90148ebd60ec980697d`；borrowed-handle 修正 `540681f0441f5a39d589f30eee092a485ec7c057`、runtime wiring `4fb721424cbde3fc6e4de9ad9a4de7353ae4410d`、测试 `f391b5ab2a93d54c5502c6cbd0639b75b5484eb3`、CMake `05a50d6afe70250c930ff1d67535f667e55f80c3`，后续修正 `f49d6ef348320156fe0b948db005c5871cebda12`、`c27f1ed157f02924342b1e4a2b9fea32621d60b1`。最新代码对应 CI 仍待执行；此前 event-loop-only run `45751870160` 四项成功不能替代本 Runtime head 验证。真实 USB/ROS 2/F9P 实测仍未完成。
