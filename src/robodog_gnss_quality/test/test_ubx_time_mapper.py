@@ -113,6 +113,7 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertEqual(result.utc_nanoseconds, expected_utc_ns % 1_000_000_000)
         self.assertEqual(result.process_session_id, SESSION_ID)
         self.assertEqual(result.connection_generation, 0)
+        self.assertEqual(result.source_time_accuracy_ns, 50)
 
         m2 = mapper(trusted_leap_sources={2})
         self.assertIsNone(add_ls(m2, receive=1_100))
@@ -218,6 +219,25 @@ class TestUbxTimeMapper(unittest.TestCase):
         result = add_ls(m, i_tow=0)
         self.assertEqual(result.gps_week, 2449)
         self.assertEqual(result.source_timestamp_ns, 2450 * GPS_WEEK_NS - 100_000)
+
+    def test_fractional_tow_carry_normalizes_into_next_week(self):
+        m = mapper(trusted_leap_sources={2})
+        add_gps(m, i_tow=604_799_999, f_tow=500_000, week=2450)
+        result = add_ls(m, i_tow=604_799_999)
+        self.assertEqual(result.gps_week, 2451)
+        self.assertEqual(result.source_timestamp_ns, 2451 * GPS_WEEK_NS)
+
+    def test_invalid_week_with_valid_flag_fails_closed(self):
+        m = mapper(trusted_leap_sources={2})
+        add_gps(m, week=-1, valid=0x07)
+        self.assertIsNone(add_ls(m))
+        self.assertEqual(m.stats().invalid_gps_time, 1)
+
+    def test_uint64_source_time_overflow_fails_closed(self):
+        m = mapper(trusted_leap_sources={2})
+        add_gps(m, i_tow=604_799_999, f_tow=500_000, week=32767)
+        self.assertIsNone(add_ls(m, i_tow=604_799_999))
+        self.assertEqual(m.stats().invalid_gps_time, 1)
 
     def test_generation_clock_id_changes_on_week_rollover(self):
         m = mapper(trusted_leap_sources={2})
