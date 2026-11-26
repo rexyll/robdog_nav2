@@ -13,7 +13,7 @@ class HostTimeSyncNode(Node):
         source_id = self.declare_parameter("source_id", "").value
         max_error_ns = self.declare_parameter("max_host_utc_error_ns", 0).value
         poll_period_s = self.declare_parameter("poll_period_s", 1.0).value
-        command_timeout_s = self.declare_parameter("command_timeout_s", 1.0).value
+        command_timeout_s = self.declare_parameter("command_timeout_s", 0.5).value
         if isinstance(poll_period_s, bool) or not isinstance(poll_period_s, (int, float)) or poll_period_s <= 0:
             raise ValueError("poll_period_s must be positive")
         if command_timeout_s >= poll_period_s:
