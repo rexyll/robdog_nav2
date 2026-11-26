@@ -38,6 +38,11 @@ target_link_libraries(test_transfer_lifecycle PRIVATE robodog_ubx_rtcm_stream Th
 target_compile_options(test_transfer_lifecycle PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME transfer_lifecycle_tests COMMAND test_transfer_lifecycle)
 
+add_executable(test_fake_usb_transport tests/test_fake_usb_transport.cpp)
+target_link_libraries(test_fake_usb_transport PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
+target_compile_options(test_fake_usb_transport PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME fake_usb_transport_tests COMMAND test_fake_usb_transport)
+
 add_executable(stream_decoder_tests tests/test_stream_decoder.cpp)
 target_link_libraries(stream_decoder_tests PRIVATE robodog_ubx_rtcm_stream)
 target_compile_options(stream_decoder_tests PRIVATE -Wall -Wextra -Wpedantic)

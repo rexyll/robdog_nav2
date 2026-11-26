@@ -239,3 +239,7 @@
 - [21 — libusb transfer 生命周期状态机与 fake-transport 验收合同](21_ubx_dgnss_libusb_transfer_lifecycle_and_fake_transport_contract.md)
 - [Transfer lifecycle tracker](../../navigation/ubx_rtcm_stream/include/robodog_protocol/transfer_lifecycle.hpp)
 - [Transfer lifecycle synthetic tests](../../navigation/ubx_rtcm_stream/tests/test_transfer_lifecycle.cpp)
+
+- [22 — Fake USB transport seam 与 submit/cancel/shutdown 测试合同](22_ubx_dgnss_fake_usb_transport_seam_and_test_contract.md)
+- [Fake USB transport API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/fake_usb_transport.hpp)
+- [Fake USB transport tests](../../navigation/ubx_rtcm_stream/tests/test_fake_usb_transport.cpp)

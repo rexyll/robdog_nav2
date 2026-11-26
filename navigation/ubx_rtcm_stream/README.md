@@ -9,10 +9,10 @@ This is a transport- and ROS-independent C++17 incremental parser for the parser
 - Arbitrary chunk boundaries, concatenated UBX/RTCM3/NMEA frames, noise skipping, checksum-failure resynchronization, connection-generation reset, frame sequence metadata, and bounded decoder storage.
 - NMEA CR, LF and CRLF termination; XOR checksum validation; explicit `Valid` / `Absent` status; optional policy requiring a checksum; configurable sentence length ceiling.
 - A non-blocking bounded frame queue with explicit DropOldest / RejectNewest policy, connection-generation fencing, close/drain semantics, and synchronized counters.
-- A transport-neutral USB transfer lifecycle tracker with cancel-request, callback-drain, release gating, shutdown barrier, and generation rollover.
+- A transport-neutral USB transfer lifecycle tracker and deterministic fake USB transport/session seam for submit, completion, cancellation, and shutdown-drain testing.
 - No ROS 2, libusb, or external test-framework dependency.
 
-NMEA framing, deterministic randomized segmentation tests, bounded queue tests, and the independent transfer lifecycle tracker are implemented. ROS/libusb integration and production transfer ownership/callback draining are not implemented.
+NMEA framing, deterministic randomized segmentation tests, bounded queue tests, and the independent transfer lifecycle tracker are implemented. ROS/libusb integration and production transfer ownership/callback draining are not implemented. The fake transport validates the adapter contract only.
 
 ## Build and test
 

@@ -15,6 +15,7 @@ enum class TransferState {
   Submitted,
   CancelRequested,
   CallbackDrained,
+  SubmitFailed,
   Released
 };
 
@@ -75,7 +76,7 @@ public:
     return stale ? CallbackDisposition::StaleGeneration : CallbackDisposition::Drained;
   }
 
-  bool release(std::uint64_t id) {
+  bool submission_failed(std::uint64_t id) {\n    std::lock_guard<std::mutex> lock(mutex_);\n    auto it = records_.find(id);\n    if (it == records_.end() || it->second.state != TransferState::Submitted) return false;\n    it->second.state = TransferState::SubmitFailed;\n    cv_.notify_all();\n    return true;\n  }\n\n  bool release(std::uint64_t id) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = records_.find(id);
     if (it == records_.end()) return false;

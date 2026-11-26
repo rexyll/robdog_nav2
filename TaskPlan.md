@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.163
+- 文档版本：v0.3.164
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -927,3 +927,6 @@
 
 
 - libusb transfer 生命周期状态机首个实现切片（2026-11-26 / v0.3.163）：复核固定上游 `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` 的 `usb.hpp` / `usb.cpp` / `ublox_dgnss_node.cpp`。确认 IN/OUT `NO_DEVICE` callback 提前 return、普通 bool completed 跨线程访问、transfer queue 锁外 size 读取、持队列锁 cancel 后立即 clear、shutdown 缺少可见 callback drain barrier，以及 submit 成功后才登记 queue 的竞态窗口。新增独立 transport-neutral `TransferLifecycle` 状态机：Allocated→Submitted→CancelRequested→CallbackDrained→Released；禁止 callback drain 前释放；shutdown 停止新登记并返回需 cancel 的 transfer；generation rollover 要求旧代全部 released；stale callback 仍必须完成 drain。新增 4 组测试，覆盖 premature release、cancel 幂等、shutdown gate/drain/generation rollover、stale/duplicate callback，以及 200 轮 cancel-vs-callback 并发竞态。扩展 standalone CMake/CTest。GCC C++17 本地 ASan/UBSan 测试通过；GCC ThreadSanitizer 测试通过（无 race 报告）。新增 `doc/Navigation/21_ubx_dgnss_libusb_transfer_lifecycle_and_fake_transport_contract.md`，记录上游静态证据、状态机和后续 fake transport 适配要求。代码与文档均仅提交到 `nav`；本轮尚未实现完整 fake libusb transport、RAII libusb adapter、ROS 2 component integration，也未修改上游驱动。GitHub Actions 对新 CTest target 的运行结果待确认；不将本地合成状态机测试表述为真实 libusb/设备验收。
+
+
+- Fake USB transport seam 首个实现切片（2026-11-26 / v0.3.164）：新增 `IUsbTransferTransport`、确定性 `FakeUsbTransport` 与 `TransferSession`，实现先登记/置为 Submitted 再调用 transport submit、submit failure 使用独立 SubmitFailed terminal state 并释放、所有 Completed/Cancelled/NoDevice/Error callback 共用 completion finalizer、cancel failure 不错误地当作 transfer 已完成、shutdown stop-submit→cancel→poll callback→drain→close。fake transport 只在 `poll_events()` 派发 callback，且不持内部 mutex 调用外部 callback；close 在 pending/event 未清空时拒绝。新增 `test_fake_usb_transport.cpp` 覆盖正常完成、取消、NO_DEVICE/error/cancelled、submit failure rollback、cancel failure 后自然完成、shutdown 自动 drain。新增 Navigation 22 合同并更新 CMake/README/索引。此实现仍是 fake transport，不代表真实 libusb、ROS 2 executor 或物理设备行为；下一步需修复并验证 generation event 快照，增加多线程 callback/shutdown stress 与 TSan，再实现 libusb adapter。
