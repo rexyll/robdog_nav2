@@ -196,6 +196,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "host_boot_id_error": boot_id_error,
         "interface": config.interface,
         "expected_ptp_domain_number": config.domain_number,
+        "expected_transport_specific": config.transport_specific,
         "pmc_socket": config.pmc_socket,
         "collection_monotonic_start_ns": collection_start,
         "collection_realtime_start_ns": realtime_start,
