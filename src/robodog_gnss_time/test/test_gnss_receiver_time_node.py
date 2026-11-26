@@ -65,10 +65,9 @@ def test_ros_node_publishes_generation_fenced_receiver_time_mapping():
     suffix = str(time.monotonic_ns())
     ingress_topic = f"/test/gnss_time_ingress_{suffix}"
     mapping_topic = f"/test/gnss_time_mapping_{suffix}"
-    node = GnssReceiverTimeNode()
-    node.set_parameters([
+    node = GnssReceiverTimeNode(parameter_overrides=[
         Parameter("ingress_topic", value=ingress_topic),
-        rclpy.parameter.Parameter("mapping_topic", value=mapping_topic),
+        Parameter("mapping_topic", value=mapping_topic),
     ])
     harness = rclpy.create_node("gnss_time_node_test_harness")
     qos = QoSProfile(
