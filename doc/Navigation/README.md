@@ -247,3 +247,7 @@
 - [23 — libusb asynchronous I/O 官方语义核对与真实 adapter 接入合同](23_libusb_async_io_contract_and_adapter_integration_gate.md)
 
 - [24 — 固定版 ublox_dgnss 真实 libusb adapter 源码映射与集成设计](24_fixed_ublox_dgnss_libusb_adapter_source_audit_and_design.md)
+
+- [25 — 注入式 libusb transfer adapter 第一实现切片与测试合同](25_injectable_libusb_transfer_adapter_first_slice.md)
+- [LibusbTransferTransport API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_transfer_transport.hpp)
+- [Fake libusb API adapter tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_transfer_transport.cpp)
