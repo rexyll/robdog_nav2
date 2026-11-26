@@ -93,6 +93,23 @@ def _journal_output(boot_id=None, message="port 1 (eth0): LISTENING to SLAVE on 
 
 
 
+
+def _journald_suppression_output(boot_id=None):
+    if boot_id is None:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+    import json
+    return json.dumps({
+        "_BOOT_ID": boot_id,
+        "__MONOTONIC_TIMESTAMP": "1000001",
+        "__REALTIME_TIMESTAMP": "1795700000000001",
+        "__CURSOR": "s=suppression",
+        "_SYSTEMD_UNIT": "systemd-journald.service",
+        "MESSAGE_ID": "a596d6fe7bfa4994828e72309e95d61e",
+        "MESSAGE": "Suppressed 17 messages from /system.slice/ptp4l.service",
+    }) + "\\n"
+
+
+
 def test_config_requires_explicit_interface_domain_and_socket():
     with pytest.raises(ValueError):
         LinuxPtpHostEvidenceConfig("", 0, "/run/ptp4l", 0)
@@ -137,7 +154,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert all(command.startswith("GET ") for command in commands)
     assert pmc_kwargs["shell"] is False
     assert report["pmc_snapshot_validation"]["status"] == "valid"
-    assert report["schema_version"] == 2
+    assert report["schema_version"] == 3
     assert report["pmc_snapshot_validation"]["clock_identity"] == "080027.fffe.7f327b"
     assert report["expected_transport_specific"] == 0
     assert report["expected_target_port_identity"] is None
@@ -520,3 +537,84 @@ def test_journal_parser_does_not_infer_clock_step_from_unverified_message():
     assert evidence["status"] == "parsed"
     assert evidence["event_count"] == 0
     assert evidence["coverage_status"] == "unknown"
+
+def test_journal_parser_extracts_systemd_rate_limit_and_kernel_loss_events():
+    import json
+    boot = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+    records = [
+        {
+            "_BOOT_ID": boot, "__MONOTONIC_TIMESTAMP": "1000000",
+            "__REALTIME_TIMESTAMP": "1795700000000000",
+            "MESSAGE_ID": "a596d6fe7bfa4994828e72309e95d61e",
+            "MESSAGE": "Suppressed 17 messages from /system.slice/ptp4l.service",
+        },
+        {
+            "_BOOT_ID": boot, "__MONOTONIC_TIMESTAMP": "1000001",
+            "__REALTIME_TIMESTAMP": "1795700000000001",
+            "MESSAGE_ID": "e9bf28d037fff184e6ae669a370e694725",
+            "N_DROPPED": "9",
+            "MESSAGE": "Missed 9 kernel messages",
+        },
+    ]
+    evidence = parse_linuxptp_journal_evidence(
+        "\\n".join(json.dumps(record) for record in records), boot
+    )
+    assert evidence["status"] == "parsed"
+    assert [event["type"] for event in evidence["events"]] == [
+        "journal_rate_limit_suppression", "journal_kernel_message_loss",
+    ]
+    assert evidence["events"][0]["suppressed_count"] == 17
+    assert evidence["events"][0]["affected_unit"] == "/system.slice/ptp4l.service"
+    assert evidence["events"][1]["dropped_count"] == "9"
+
+
+def test_collector_records_journal_storage_context_without_claiming_coverage():
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        if argv[0] == "pmc":
+            stdout = _pmc_output()
+        elif argv[0] == "journalctl" and "-u" in argv and "systemd-journald.service" in argv:
+            stdout = _journald_suppression_output()
+        elif argv[0] == "journalctl" and "-u" in argv:
+            stdout = _journal_output()
+        else:
+            stdout = "read-only context sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    context = report["journal_storage_context"]
+    assert report["schema_version"] == 3
+    assert context["status"] == "observed"
+    assert context["coverage_status"] == "unknown"
+    assert context["suppression_evidence"]["events"][0]["type"] == "journal_rate_limit_suppression"
+    names = {item["name"] for item in context["commands"]}
+    assert {"journal_config", "journal_disk_usage", "journal_boot_inventory",
+            "journal_suppression_events", "unit_logging_config:ptp4l.service"} <= names
+    event_evidence = report["journal_event_evidence"]["ptp4l.service"]
+    assert event_evidence["query_window"]["since_argument"] == "15 min ago"
+    assert event_evidence["query_window"]["until_argument"] is None
+    assert event_evidence["query_window"]["human_since_expression_normalized"] is False
+    assert "journal_command_execution_relation" in event_evidence["entries"][0]
+    assert "collection_window_relation" not in event_evidence["entries"][0]
+    assert report["collection_status"] == "complete"
+
+
+def test_optional_journal_context_failure_does_not_claim_or_break_core_inventory():
+    def runner(argv, **kwargs):
+        if argv[0] == "pmc":
+            stdout = _pmc_output()
+        elif argv[0] == "journalctl" and "-u" in argv:
+            stdout = _journal_output()
+        elif argv[0] == "systemd-analyze":
+            raise FileNotFoundError("systemd-analyze missing")
+        else:
+            stdout = "read-only context sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["journal_storage_context"]["status"] == "partial"
+    assert report["journal_storage_context"]["coverage_status"] == "unknown"
+    assert report["collection_status"] == "complete"
+
