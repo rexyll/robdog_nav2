@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.197
+- 文档版本：v0.3.198
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1024,3 +1024,6 @@
 
 
 - Canonical session-fenced UBX time epoch API（2026-11-26 / v0.3.197）：统一 UbxReceiverTimeMapper 只消费 `UbxNavTimeGpsEpoch` / `UbxNavTimeLsEpoch` typed records；payload bytes 解码集中在 `ubx_time_messages.py`，typed records 必须携带 process_session_id、connection_generation、receive_monotonic_ns。新增 `add_timegps_payload` / `add_timels_payload` convenience API 仅负责解码并委托 typed API；mapper 在配对前校验 session/generation，拒绝旧进程/旧 USB generation callback，并统计 stale_context_rejections。`begin_session(process_session_id, connection_generation)` 清空 pending/retired caches，source_clock_id 包含 process session + connection generation + GPS week。新增 old process callback、old connection generation callback、reconnect cache flush 等测试。最终 canonical API head `beefbebb915136f82da525129ef2adb57e104831` 对应 Actions run `45756871899`，Humble/Jammy、Jazzy/Noble 两项全部 success，每项 124 tests、0 errors、0 failures、0 skipped。该层仍要求 ROS callback 在 ingress 处传入正确的 process/generation identity；固定驱动的 UBX ROS messages 本身没有这些字段，旧 DDS queued callback 的有序 barrier 仍需真实 ROS runtime 实现。
+
+
+- 四路 UBX ROS 消息的 process/connection generation fence（2026-11-26 / v0.3.198）：UbxNavPvtEpoch、UbxNavHpPosLlhEpoch、UbxNavCovEpoch、UbxNavStatusEpoch 现在都携带 process_session_id 与 connection_generation；ros_message_adapter 的四个 decoder 必须显式接收并验证这两个上下文；UbxRosEpochAdapter.begin_generation 要求明确 process/session、connection_generation、gps_week，消息和 time mapping 进入 pending cache 前都必须匹配 active session/generation/week；stale_context_rejections 可观测；UbxFourMessageEpochJoiner 对每条记录检查其 process/generation 与 source_clock_id 前缀一致。旧连接回调被拒绝测试已加入。Actions run `45757990351`，head `3a65c214245ce85258d233e8683159fd40c8c8ab`，Humble/Jammy、Jazzy/Noble 两项全部 success，每项 133 tests、0 failures。注意：本版本消息记录还没有独立 gps_week 字段，joiner 当前只检查 process/generation 前缀；GPS week rollover 时的旧 callback 仍需下一切片补齐 gps_week context 与有序 barrier。
