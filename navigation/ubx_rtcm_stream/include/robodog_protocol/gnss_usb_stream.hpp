@@ -2,6 +2,7 @@
 
 #include "robodog_protocol/bounded_frame_queue.hpp"
 #include "robodog_protocol/libusb_device_runtime.hpp"
+#include "robodog_protocol/gnss_ingress_queue.hpp"
 #include "robodog_protocol/stream_decoder.hpp"
 
 #include <atomic>
@@ -9,11 +10,13 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <string>
 
 namespace robodog_protocol {
 
 struct GnssUsbStreamConfig {
   UsbDeviceSessionConfig device;
+  std::string process_session_id;
   std::size_t read_buffer_bytes{12800};
   std::size_t in_flight_reads{4};
   std::size_t frame_queue_capacity{256};
@@ -41,6 +44,7 @@ struct GnssUsbStreamStats {
   std::uint64_t queue_rejections{0};
   DecoderStats decoder;
   QueueStats queue;
+  GnssIngressQueueStats ingress;
 };
 
 // Bridges asynchronous USB bulk-IN reads into the incremental UBX/RTCM3/NMEA
@@ -57,7 +61,10 @@ public:
 
   bool start();
   bool stop(std::uint32_t timeout_ms = 5000);
+  // Legacy frame-only API: consumes and discards lifecycle control events.
+  // Generation-aware consumers must use try_pop_event().
   std::optional<Frame> try_pop_frame();
+  std::optional<GnssIngressEvent> try_pop_event();
   GnssUsbStreamStats stats() const;
   bool is_running() const noexcept { return running_.load(std::memory_order_acquire); }
 
@@ -71,7 +78,7 @@ private:
 
   GnssUsbStreamConfig config_;
   StreamDecoder decoder_;
-  BoundedFrameQueue frame_queue_;
+  GnssIngressQueue ingress_queue_;
   std::atomic<bool> running_{false};
   std::atomic<bool> device_lost_{false};
   std::atomic<std::uint64_t> generation_{0};
