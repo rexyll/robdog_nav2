@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <sys/types.h>
 #include <sys/time.h>
 
 namespace robodog_protocol {
