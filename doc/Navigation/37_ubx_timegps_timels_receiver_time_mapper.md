@@ -52,8 +52,8 @@ UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 ci
 - TIMEGPS/TIMELS 可任意先后到达；
 - exact iTOW pair、pair receive skew、pending age、LRU capacity 均受限；
 - conflicting duplicate retire 整个 iTOW；
-- receiver_session_id 由 DeviceSession generation 提供，设备重启必须 begin_session；
-- source_clock_id 包含 GPS week；week 变化要求 ROS epoch adapter 显式 begin_generation；
+- receiver_session_id 与 connection_generation 由上游 DeviceRuntime/DeviceSession lifecycle event 提供，设备重启/USB reconnect 必须 begin_session(receiver_session_id, connection_generation)；
+- source_clock_id 包含 receiver session、connection_generation 与 GPS week；任何连接代际或 GPS week 变化要求 ROS epoch adapter 显式 begin_generation；
 - time mapper 使用 RLock 串行化并发 callbacks。
 
 ## 5. 测试
