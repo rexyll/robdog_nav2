@@ -291,7 +291,8 @@ schema v3 将 journal query 的时间语义与 collector 命令执行时间分�
   systemd/journald.conf（systemd-analyze cat-config）、journalctl
   --disk-usage、journalctl --list-boots，以及每个显式目标 service 的
   systemctl cat。这些诊断命令为可选上下文；不可用会令该 context 标为
-  partial，但不单独使核心 PTP inventory 失败。
+  partial，但不单独使核心 PTP inventory 失败。若没有显式配置任何目标 service，
+  不执行这些 journald 诊断命令，journal_storage_context.status=not_requested。
 
 ### 11.1 丢失与限流通知
 
