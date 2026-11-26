@@ -136,6 +136,8 @@ class TestEpochPairing(unittest.TestCase):
 
 def make_raw_pvt(**overrides):
     values = dict(
+        process_session_id="legacy-ubx-test-session",
+        connection_generation=0,
         i_tow_ms=345_000,
         gnss_fix_ok=True,
         carrier_solution=CarrierSolution.FIXED,
@@ -147,6 +149,8 @@ def make_raw_pvt(**overrides):
 
 def make_hpposllh(**overrides):
     values = dict(
+        process_session_id="legacy-ubx-test-session",
+        connection_generation=0,
         i_tow_ms=345_000,
         lon=-1_220_000_000,
         lat=370_000_000,
@@ -168,6 +172,8 @@ def make_hpposllh(**overrides):
 
 def make_nav_cov(**overrides):
     values = dict(
+        process_session_id="legacy-ubx-test-session",
+        connection_generation=0,
         i_tow_ms=345_000,
         pos_cor_valid=True,
         pos_cov_nn=1.0,
@@ -184,6 +190,8 @@ def make_nav_cov(**overrides):
 
 def make_nav_status(**overrides):
     values = dict(
+        process_session_id="legacy-ubx-test-session",
+        connection_generation=0,
         i_tow_ms=345_000,
         gnss_fix_ok=True,
         carrier_solution_valid=True,
