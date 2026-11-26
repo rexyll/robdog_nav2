@@ -1,6 +1,7 @@
 #include "robodog_protocol/libusb_transfer_transport.hpp"
 
 #include <cassert>
+#include <algorithm>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -35,7 +36,9 @@ struct FakeLibusb {
     a.alloc_transfer = [this](int) -> void * { auto * p = new FakeTransfer(); allocated.push_back(p); return p; };
     a.free_transfer = [this](void * p) {
       ++free_count;
-      delete static_cast<FakeTransfer *>(p);
+      auto * transfer = static_cast<FakeTransfer *>(p);
+      allocated.erase(std::remove(allocated.begin(), allocated.end(), transfer), allocated.end());
+      delete transfer;
     };
     a.fill_bulk_transfer = [](void * p, void *, std::uint8_t, std::uint8_t * buffer,
       int length, unsigned int, LibusbTransferTransport::NativeCallback cb, void * user) {
