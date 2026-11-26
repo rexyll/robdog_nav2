@@ -165,6 +165,57 @@ class TestPtpPacketAudit(unittest.TestCase):
             102_000_000_999,
         )
 
+    def test_pdelay_follow_up_requires_same_responder_as_response(self):
+        request = ptp_message(2, source=PORT_A, sequence=77, body=timestamp())
+        response = ptp_message(3, source=PORT_B, sequence=77,
+                               body=timestamp(700, 1) + PORT_A)
+        wrong_responder = bytes.fromhex("1020304050607080") + struct.pack("!H", 3)
+        wrong_follow = ptp_message(10, source=wrong_responder, sequence=77,
+                                   body=timestamp(700, 2) + PORT_A)
+        correct_follow = ptp_message(10, source=PORT_B, sequence=77,
+                                     body=timestamp(700, 3) + PORT_A)
+        audit = PtpCorrelationAudit()
+        for raw, port in [
+            (request, 319), (response, 319), (wrong_follow, 320),
+            (correct_follow, 320),
+        ]:
+            from ptp_packet_audit import extract_ptp_message
+            audit.observe(extract_ptp_message(packet(
+                101, raw_ipv4_udp(raw, port, port)
+            )))
+        report = audit.report()
+        self.assertEqual(
+            report["correlations"]["pdelay_resp_follow_up_responder_mismatch"], 1
+        )
+        self.assertEqual(report["correlations"]["pdelay_resp_follow_up_pairs"], 1)
+        self.assertEqual(report["unmatched_at_end"]["pdelay_resp_waiting_follow_up"], 0)
+
+    def test_ptp_capture_windows_are_partitioned_by_domain_and_interface(self):
+        audit = PtpCorrelationAudit()
+        first = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp(), domain=2),
+            transport="udp/319", capture_timestamp_ns=100,
+            interface_id=1, section_index=0,
+        )
+        second = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp(), domain=3),
+            transport="udp/319", capture_timestamp_ns=250,
+            interface_id=1, section_index=0,
+        )
+        third = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp(), domain=2),
+            transport="udp/319", capture_timestamp_ns=300,
+            interface_id=2, section_index=0,
+        )
+        for message in (first, second, third):
+            audit.observe(message)
+        windows = audit.report()["ptp_capture_windows"]
+        self.assertEqual(len(windows), 3)
+        self.assertEqual(
+            {(w["domain_number"], w["interface_id"]) for w in windows},
+            {(2, 1), (3, 1), (2, 2)},
+        )
+
     def test_timestamp_exchange_samples_preserve_origin_and_correction_fields(self):
         sync = ptp_message(0, flags=0x0200, sequence=44,
                            body=timestamp(0, 0), correction=65536)
