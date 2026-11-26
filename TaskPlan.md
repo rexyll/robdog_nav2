@@ -1195,3 +1195,32 @@
   `/sys/kernel/debug` debugfs，验证只输出实际 tracing filesystem。新增独立
   测试覆盖 ext4/sysfs 无关祖先挂载过滤。
 - 此增量仍为代码/合成测试审查，不是 Orin 实机验证；不启用或修改 tracing。
+
+
+## 本轮增量（2026-11-26 / v0.3.253）
+
+- 在 v0.3.252 的 Orin kernel trace capability inventory 基础上，新增
+  `doc/Navigation/42_linux_clock_step_event_capture_contract.md`，定义
+  CLOCK_REALTIME / PHC 调整事件的分层证据模型 E0–E5：能力、syscall 尝试、
+  用户请求内容、syscall 结果、clock target 身份和独立时钟效果观测；禁止
+  将 syscall entry/exit 或成功返回直接解释为已证实的时钟 step。
+- 明确四类 syscall（clock_adjtime、adjtimex、clock_settime、settimeofday）
+  的参数/返回值与只读查询边界；entry/exit 必须按 pid_tgid（线程）配对，
+  处理 orphan exit、重复 entry、map overflow 与遗留 in-flight 项。
+- 新增 timex 用户内存安全读取与 ABI gate：首版只允许读取经过目标 ABI
+  验证的 modes；BTF/CO-RE 不自动解决任意用户态 UAPI 结构布局；32-bit
+  compat、字段 offset 未确认或读取失败均 fail-closed 为 unknown。raw user
+  pointer 不输出。
+- 明确 dynamic clock ID 不可直接推断 /dev/ptpN；若要映射 PHC，必须覆盖
+  fd 生命周期、dup/fork/exec/reuse 等路径，否则保持 unresolved。
+- 建立 per-CPU sequence、ringbuf reserve failure、map update failure、用户态
+  decode/write failure、entry/exit 配对和 stop/drain reconciliation 计量合同；
+  任何不可读计数、sequence gap 或无法 drain 均使 capture 状态为 partial。
+- 明确 BPF 时间戳使用 boot-relative monotonic 并绑定 boot ID；CLOCK_REALTIME
+  配对样本仅为区间关联观测，不构造原子 UTC 映射；suspend/resume 与跨 CPU
+  顺序另设边界。
+- 文档已加入 Navigation README。此轮为上游资料审计与设计合同，不实现、不加载
+  eBPF，不启用 tracing/audit，不修改系统时钟；没有新增代码测试或 CI 结果。
+  下一步仍先取得用户目标 Orin 的只读 capability JSON，再固定 kernel/ARM64
+  ABI/tracepoint format/helper/权限后决定最小实现切片。保持仅 nav 分支，
+  N1/N9 未验收，不合并 main。
