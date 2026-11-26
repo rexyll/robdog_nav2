@@ -80,6 +80,8 @@ capture_shell "17_irq_summary" 'cat /proc/interrupts 2>/dev/null | grep -Ei "mgb
 capture_shell "18_network_offloads" 'for p in /sys/class/net/*; do [ -e "$p" ] || continue; i="${p##*/}"; [ "$i" = lo ] && continue; echo "===== $i ====="; ethtool -k "$i" 2>&1 | grep -Ei "timestamp|vlan|gro|gso|tso|rx-checksum|tx-checksum" || true; done'
 capture_shell "19_processes" 'ps -eo pid,comm,args 2>/dev/null | grep -E "[p]tp4l|[p]hc2sys|[c]hronyd|[n]tpd|[s]ystemd-timesyncd" || true'
 capture_shell "20_limits_and_permissions" 'printf "CAP_NET_ADMIN/CAP_SYS_TIME are not modified by this script.\n"; id; ls -l /dev/ptp* 2>&1 || true'
+capture_shell "21_pmc_read_only_datasets" 'if command -v pmc >/dev/null 2>&1; then d="${PTP_DOMAIN:-0}"; echo "domain=$d"; for ds in PORT_DATA_SET PARENT_DATA_SET CURRENT_DATA_SET TIME_PROPERTIES_DATA_SET TIME_STATUS_NP; do echo "===== GET $ds ====="; pmc -u -b 0 -d "$d" "GET $ds" 2>&1 || echo "[pmc_get_failed=$ds]"; done; else echo "pmc unavailable"; fi'
+capture_shell "22_ptp_service_journal" 'if command -v journalctl >/dev/null 2>&1; then journalctl -u ptp4l -u phc2sys -n 300 --no-pager 2>&1 || true; else echo "journalctl unavailable"; fi'
 (
   cd "$out" || exit 1
   find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 |
