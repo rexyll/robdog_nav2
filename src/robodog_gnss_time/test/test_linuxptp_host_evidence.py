@@ -360,3 +360,62 @@ def test_collector_declares_pmc_dataset_snapshot_non_atomic():
     pmc_command = report["commands"][-1]
     assert observation["monotonic_start_ns"] == pmc_command["monotonic_start_ns"]
     assert observation["monotonic_end_ns"] == pmc_command["monotonic_end_ns"]
+
+
+def test_collector_compares_ptp_identity_at_collection_boundaries():
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    pmc_calls = [argv for argv in calls if argv[0] == "pmc"]
+    assert len(pmc_calls) == 2
+    assert calls.index(pmc_calls[0]) < calls.index(["timedatectl", "show"])
+    assert report["pmc_identity_boundary_before_validation"]["status"] == "valid"
+    comparison = report["pmc_identity_boundary_comparison"]
+    assert comparison["status"] == "unchanged"
+    assert comparison["changed_fields"] == []
+    assert report["collection_status"] == "complete"
+    assert "transient" in comparison["interpretation"]
+
+
+def test_collector_marks_changed_gm_identity_between_boundaries_partial():
+    pmc_count = 0
+
+    def runner(argv, **kwargs):
+        nonlocal pmc_count
+        if argv[0] == "pmc":
+            pmc_count += 1
+            stdout = _pmc_output()
+            if pmc_count == 2:
+                stdout = stdout.replace(
+                    "080027.fffe.d9e453", "080027.fffe.d9e454"
+                )
+        else:
+            stdout = "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    comparison = report["pmc_identity_boundary_comparison"]
+    assert comparison["status"] == "changed"
+    assert "gm_identity" in comparison["changed_fields"]
+    assert "parent_grandmaster_identity" in comparison["changed_fields"]
+    assert report["collection_status"] == "partial"
+    assert "ptp_identity_changed_between_collection_boundaries" in (
+        report["collection_issues"]
+    )
+
+
+def test_collector_marks_unavailable_ptp_identity_baseline_partial():
+    def runner(argv, **kwargs):
+        if argv[0] == "pmc":
+            return subprocess.CompletedProcess(argv, 1, stdout="", stderr="socket unavailable")
+        return subprocess.CompletedProcess(argv, 0, stdout="read-only sample", stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["pmc_identity_boundary_before_validation"]["status"] == "not_run"
+    assert report["pmc_identity_boundary_comparison"]["status"] == "unavailable"
+    assert report["collection_status"] == "partial"
