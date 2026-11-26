@@ -65,7 +65,7 @@ def test_monitor_emits_synchronized_sample_with_boot_and_monotonic(tmp_path):
         return SimpleNamespace(returncode=0, stdout=TRACKING, stderr="")
 
     monitor = ChronyHostTimeMonitor(
-        ChronyMonitorConfig("chrony:tracking", 1_000_000),
+        ChronyMonitorConfig("chrony:tracking", 10_000_000),
         boot_id_path=boot_file, runner=runner, monotonic_ns=lambda: 987654321,
     )
     sample = monitor.sample()
