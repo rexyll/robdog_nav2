@@ -140,5 +140,28 @@ int main() {
     assert(fake.free_count == 1);
     assert(transport.close());
   }
+
+  {
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.direction = UsbTransferDirection::In;
+    request.endpoint = 0x83;
+    request.buffer.resize(32);
+    bool called = false;
+    assert(transport.submit(4, 3, request,
+      [&](auto, auto, LibusbCompletionStatus status, auto, auto) {
+        called = true;
+        assert(status == LibusbCompletionStatus::Cancelled);
+      }));
+    assert(transport.cancel(4));
+    // cancel success is asynchronous: transfer ownership remains until callback drain.
+    assert(transport.pending_count() == 1);
+    assert(!transport.close());
+    assert(transport.poll_events() == 0);
+    assert(called && transport.pending_count() == 0);
+    assert(fake.free_count == 1);
+    assert(transport.close());
+  }
   return 0;
 }
