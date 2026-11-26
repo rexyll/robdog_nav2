@@ -896,3 +896,5 @@
 - [双目 RGB 深度感知](docs/perception/stereo_obstacle_perception.md)
 
 - [TaskPlan v0.3.66 基线快照](docs/history/TaskPlan-Snapshot-v0.3.66-2026-11-25.md)
+
+- 本轮增量（2026-11-26 / NAV-TIMEGPS 同历元交叉核验设计）：依据 u-blox ZED-F9P Interface Description UBX-18010854 R07 §5.14.21 审计 `UBX-NAV-TIMEGPS`（01/20，16-byte payload）：iTOW U4、signed fTOW I4（±500000 ns）、signed week I2、signed leapS I1、validity bits towValid/weekValid/leapSValid 与 tAcc U4。新增 `doc/Navigation/17_zed_f9p_nav_timegps_crosscheck_audit.md`，明确 TIMEGPS 仅作同 session/generation/iTOW 的可选 GPS week/TOW/leapS 交叉核验，不替代 NAV-PVT/TIMEUTC/TIMELS/STATUS，不得绕过 TIMELS source allowlist；补充 signed fTOW 整数规范化、周边界处理、validity 独立性、冲突 fail-closed 与 17 组确定性测试合同。R07 的 TIMEGPS tAcc 与 PVT/TIMEUTC tAcc 误差相关性未知，不自行合成；TIMEGPS 与 TIMELS 同属接收机输出，不作为独立外部时间源。仅完成协议/设计审计，未实现 parser/driver/ROSIDL、未运行测试、未进行 F9P/Orin 实测；固定驱动是否已有 TIMEGPS 输出仍需逐文件审计。新增文档索引于 `doc/Navigation/README.md`。
