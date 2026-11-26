@@ -501,3 +501,42 @@ Livox 的 gPTP 说明进一步限定其实现遵循 AUTOSAR Time Sync over Ether
 - 当前 PTPv2.0 Announce audit 与 gPTP L2 Sync source audit 分开呈现；不得将 PTPv2.0 的 BMCA/foreign-master timeout 测试直接当作 gPTP profile 验收。
 
 新增合成测试覆盖 L2 Sync/Follow_Up source identity 汇总、多 source 风险边界，以及 Announce 多 GM 报告明确排除 gPTP BMCA 结论。真实 domain controller / gPTP profile 状态仍未验证。
+
+
+## 18. MID-360 控制协议时间同步诊断字段解码（TIME-DIAG-001..008）
+
+### 18.1 官方协议合同
+
+Livox MID-360 官方通信协议 v1.4.12（修订历史标注 2026-09-21）规定：控制协议使用 UDP、小端序，24-byte 固定头；头字段含 SOF 0xAA、version、length、seq_num、cmd_id、cmd_type、sender_type、CRC16 header 和 CRC32 data。设备侧端口为 56100 控制、56200 状态推送、56300 点云、56400 IMU、56500 LOG；56000 仅用于广播发现。
+
+0x0101 是雷达信息查询，ACK data 为 ret_code:uint8 + key_num:uint16 + key/value 列表；每项为 key:uint16 + length:uint16 + value。0x0102 是设备主动状态推送，data 为 key_num:uint16 + reserved:uint16 + key/value 列表。CRC16 为 CRC-16/CCITT-FALSE；CRC32 为标准 CRC-32/ISO-HDLC。
+
+官方来源：https://livox-wiki-cn.readthedocs.io/zh-cn/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html
+
+### 18.2 时间同步诊断 key
+
+| Key | 字段 | 编码 | 语义 |
+|---|---|---|---|
+| 0x8009 | local_time_now | uint64 little-endian | 设备本地时间，ns |
+| 0x800A | last_sync_time | uint64 little-endian | 最近一次同步 master 时间；PTP 时为 Follow_Up 中的 t1，GPS 时为同步命令携带的 PPS 上升沿时间 |
+| 0x800B | time_offset | int64 little-endian | 有符号偏移，ns；定义为设备本地 t0 − 同步源 t1 |
+| 0x800C | time_sync_type | uint8 | 0=无同步，1=IEEE 1588v2.0 PTP，2=GPS |
+| 0x800E | lidar_diag_status | uint16 little-endian | 四个 4-bit 模块等级：system、scan、ranging、communication；0 normal、1 warning、2 error、3 safety_err |
+
+### 18.3 实现与审计输出
+
+新增 scripts/livox_mid360_control_parser.py：严格验证控制头、协议版本、声明长度、CRC16、CRC32；解码 0x0101 ACK 与 0x0102 状态推送中的 TLV；对已知时间 key 与 0x800E 执行精确长度检查；未知 key 保留原始 hex，不猜测语义。
+
+新增 scripts/tests/test_livox_mid360_control_parser.py，覆盖查询 ACK 时间字段、负 time_offset、状态等级 nibble、未知 key、CRC 和长度错误。network_packet_decoder.py 将设备侧 UDP 56100 识别为 control stream；audit_mid360_pcap.py 从 56100 control 和 56200 push stream 提取 0x0101/0x0102 时间/状态诊断，每份 capture 最多保留 4096 个诊断快照，并输出 parse error 与截断计数。
+
+### 18.4 关键语义边界
+
+1. **点云头 time_type=1 与控制诊断 time_sync_type=1 不是同一枚举合同。** 官方点云协议把 time_type=1 定义为 PTP/gPTP master clock time；控制 key 0x800C 的值 1 则明确写作 IEEE 1588v2.0 PTP。不能把控制字段的值 1 解读成 gPTP，也不能因点云 time_type=1 就推断控制诊断字段必然为 1。
+2. 官方 key 0x800C 没有单独的 gPTP 枚举值。若点云时间声明为 PTP/gPTP，而控制诊断未给出 PTPv2.0，抓包只能保留信息差异；不能自行归类为 gPTP，也不能据此判定配置错误。
+3. time_offset=t0−t1 是设备报告的快照值，不是独立参考时钟验证的误差；不能与 PTP correctionField、PHC offset 或 PCAP capture timestamp 混为一谈。
+4. last_sync_time 是最近一次同步源时间样本，不证明当前仍锁定、同步更新持续发生或端到端精度合格。必须结合连续快照、设备时间戳、PTP/gPTP profile 与主机 PHC/ptp4l/pmc 运行态证据。
+5. 解析器仅处理控制协议中 0x0101 ACK 与 0x0102 推送的已知诊断 key；不发送查询命令、不配置设备、不实现控制面网络会话。真实固件对推送频率/字段完整性、CRC golden capture、设备时钟值和 gPTP 诊断表达仍需实机抓包核验。
+
+### 18.5 合成测试与验证边界
+
+本轮测试向量为人工构造的 UDP payload，不是 Livox 设备原始抓包。CI 仅能证明 parser 对协议合同内的合成字节序列正确拒绝/解码，不能证明设备实际推送了这些字段，也不能证明 PTP 锁定、offset 精度或 gPTP 状态。设备/交换机/Orin 联合抓包和真实 0x0101 查询 ACK 仍为“需要实物/授权，未完成”。
