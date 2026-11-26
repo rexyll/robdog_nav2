@@ -106,3 +106,9 @@ def test_synchronized_state_requires_healthy_chrony_diagnostics():
         adapter.decode(message(leap_status="Not synchronised"))
     with pytest.raises(ValueError):
         adapter.decode(message(reference_id="00000000"))
+
+
+def test_rejects_chrony_local_mode_reference_id_as_synchronized():
+    adapter = HostTimeSyncStatusAdapter(expected_host_boot_id="boot-abc")
+    with pytest.raises(ValueError):
+        adapter.decode(message(reference_id="7F7F0101"))
