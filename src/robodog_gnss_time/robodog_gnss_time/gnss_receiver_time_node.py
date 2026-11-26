@@ -83,6 +83,8 @@ def main(args=None):
         if node._consumer.faulted:
             result = 2
     except Exception as exc:
+        if node is not None and node._consumer.faulted:
+            result = 2
         get_logger("gnss_receiver_time").fatal(
             f"GNSS receiver-time node failed: {type(exc).__name__}: {exc}"
         )
