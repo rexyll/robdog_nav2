@@ -227,12 +227,15 @@ class UbxFourMessageEpochJoiner:
             or connection_generation < 0
         ):
             raise EpochPairingError("UBX epoch record must carry a valid connection_generation")
-        expected_prefix = (
-            f"{process_session_id}:connection:{connection_generation}:gps-week:"
+        gps_week = getattr(message, "gps_week", None)
+        if isinstance(gps_week, bool) or not isinstance(gps_week, int) or not 0 <= gps_week <= 32767:
+            raise EpochPairingError("UBX epoch record must carry a valid gps_week")
+        expected_clock_id = (
+            f"{process_session_id}:connection:{connection_generation}:gps-week:{gps_week}"
         )
-        if not source_clock_id.startswith(expected_prefix):
+        if source_clock_id != expected_clock_id:
             raise EpochPairingError(
-                "stale process_session_id/connection_generation does not match source_clock_id"
+                "stale process_session_id/connection_generation/gps_week does not match source_clock_id"
             )
         if (
             isinstance(source_timestamp_ns, bool)
