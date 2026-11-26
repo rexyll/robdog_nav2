@@ -46,6 +46,7 @@ on:
       - "scripts/tests/test_livox_udp_sequence_audit.py"
       - "scripts/ptp_packet_audit.py"
       - "scripts/tests/test_ptp_packet_audit.py"
+      - "tools/collect_ptp_host_inventory.sh"
   pull_request:
     paths:
       - "scripts/urbanloco_gt_helpers.py"
@@ -128,6 +129,7 @@ jobs:
             scripts/evaluate_urbanloco_ulhk4.sh \
             scripts/verify_public_dataset_checksum.sh \
             scripts/tests/test_verify_public_dataset_checksum.sh
+            tools/collect_ptp_host_inventory.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
           bash scripts/tests/test_verify_public_dataset_checksum.sh
           PYTHONPATH=scripts python3 -m unittest discover \
