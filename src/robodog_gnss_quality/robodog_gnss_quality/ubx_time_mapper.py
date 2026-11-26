@@ -352,11 +352,15 @@ class UbxReceiverTimeMapper:
             gps.leap_seconds_valid
             and leap.current_leap_valid
             and leap.source_of_current_leap in self.trusted_leap_sources
+            and leap.leap_event_valid
             and gps.leap_seconds == gps_utc_leap_seconds
         )
         utc_seconds = None
         utc_nanoseconds = None
         reason = "GPS week/TOW valid; UTC leap mapping is not trusted"
+        if utc_valid and abs(leap.time_to_leap_event_seconds) <= 1:
+            utc_valid = False
+            reason = "GPS time is within the leap-second transition guard window"
         if utc_valid:
             utc_ns = (
                 GPS_EPOCH_UNIX_NS + source_timestamp_ns
@@ -372,6 +376,8 @@ class UbxReceiverTimeMapper:
             reason = "GPS week/TOW valid; NAV-TIMEGPS leapSValid is false"
         elif not leap.current_leap_valid:
             reason = "GPS week/TOW valid; NAV-TIMELS validCurrLs is false"
+        elif not leap.leap_event_valid:
+            reason = "GPS week/TOW valid; NAV-TIMELS leap-event timing is unavailable"
         elif leap.source_of_current_leap not in self.trusted_leap_sources:
             reason = "GPS week/TOW valid; NAV-TIMELS current leap source is not trusted"
         elif gps.leap_seconds != gps_utc_leap_seconds:
