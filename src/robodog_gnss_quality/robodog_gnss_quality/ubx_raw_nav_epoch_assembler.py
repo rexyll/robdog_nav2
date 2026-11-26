@@ -190,11 +190,14 @@ class UbxRawNavEpochAssembler:
                 self._raw_pending = OrderedDict()
             else:
                 # A GPS-week transition makes all previously buffered raw
-                # records ambiguous except the iTOW of this mapping.
+                # records ambiguous except the iTOW of this mapping. Retired
+                # iTOWs are week-scoped, so clear them only when an earlier
+                # trusted week context actually existed.
                 keep = self._raw_pending.pop(mapping.i_tow_ms, None)
                 keep_all = OrderedDict()
                 if keep is not None:
                     keep_all[mapping.i_tow_ms] = keep
+                self._retired.clear()
             self.adapter.begin_generation(
                 mapping.source_clock_id,
                 process_session_id=mapping.process_session_id,
@@ -205,7 +208,6 @@ class UbxRawNavEpochAssembler:
             self._raw_pending.clear()
             self._raw_pending.update(keep_all)
             self._mapping_pending.clear()
-            self._retired.clear()
         if mapping.i_tow_ms in self._retired:
             return None
 
