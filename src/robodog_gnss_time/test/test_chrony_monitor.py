@@ -9,7 +9,7 @@ from robodog_gnss_time.chrony_monitor import (
 )
 
 
-TRACKING = """Reference ID    : 203.0.113.10 (ntp.example)
+TRACKING = """Reference ID    : CB00710F
 Stratum         : 3
 Ref time (UTC)  : Thu Nov 26 00:00:00 2026
 System time     : 0.000125000 seconds fast of NTP time
@@ -30,7 +30,7 @@ def test_parse_tracking_and_offset_sign_convention():
     assert parsed["utc_offset_ns"] == 125_000
     assert parsed["uncertainty_ns"] == 5_250_000
     assert parsed["stratum"] == 3
-    assert parsed["reference_id"] == "203.0.113.10 (ntp.example)"
+    assert parsed["reference_id"] == "CB00710F"
     assert parsed["leap_status"] == "Normal"
 
 
@@ -135,3 +135,29 @@ def test_monitor_increments_sequence_across_samples(tmp_path):
     )
     assert monitor.sample()["sample_sequence"] == 1
     assert monitor.sample()["sample_sequence"] == 2
+
+
+def test_root_distance_uses_absolute_root_delay():
+    parsed = parse_chrony_tracking(TRACKING.replace(
+        "Root delay      : 0.010000000 seconds",
+        "Root delay      : -0.010000000 seconds",
+    ))
+    assert parsed["uncertainty_ns"] == 5_250_000
+
+
+def test_chrony_local_reference_mode_is_not_accepted_as_synchronized(tmp_path):
+    boot_file = tmp_path / "boot_id"
+    boot_file.write_text("boot-test", encoding="ascii")
+    local_mode = TRACKING.replace("CB00710F", "7F7F0101")
+    monitor = ChronyHostTimeMonitor(
+        ChronyMonitorConfig("chrony:tracking", 10_000_000),
+        boot_id_path=boot_file,
+        runner=lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=local_mode, stderr=""),
+        monotonic_ns=lambda: 10,
+    )
+    assert monitor.sample()["state"] == "unsynchronized"
+
+
+def test_rejects_malformed_reference_id():
+    with pytest.raises(ValueError):
+        parse_chrony_tracking(TRACKING.replace("CB00710F", "not-a-refid"))
