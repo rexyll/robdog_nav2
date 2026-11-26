@@ -119,8 +119,9 @@ configuration, EKF parameters, TF broadcaster, or robot-control integration.
 Next implementation slice:
 1. Use the new transport-independent `GnssObservationQualityJoiner` to pair
    observations and `GnssQualityStatus` by the complete session/generation/week/
-   iTOW/GPST/source-clock/monotonic identity. Its synthetic tests are in the
-   dedicated GNSS quality CI matrix.
+   iTOW/GPST/source-clock/monotonic identity. Its synthetic tests are in the dedicated GNSS quality CI matrix. The
+   implementation head `49dc479e42d6c4141d82e907c12a7bc47cd83288` passed
+   run `45812322052` on Humble/Jammy and Jazzy/Noble (208 tests in each job).
 2. Add a ROS adapter that converts both ROS messages into that canonical
    identity and rejects mismatches without nearest-time pairing.
 3. Add a ROS clock mode guard and explicit SystemTime/UTC mapping policy.
