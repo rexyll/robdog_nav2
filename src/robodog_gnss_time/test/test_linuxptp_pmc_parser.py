@@ -127,7 +127,8 @@ gmPresent true
 gmIdentity 080027.fffe.d9e453
 """
     with pytest.raises(ValueError):
-        parse_pmc_response(output, "TIME_STATUS_NP")\n
+        parse_pmc_response(output, "TIME_STATUS_NP")
+
 
 def _snapshot_output(clock_identity="080027.fffe.7f327b"):
     return f"""sending: GET TIME_STATUS_NP
