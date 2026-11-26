@@ -20,20 +20,22 @@ from .ros_message_adapter import (
     decode_nav_pvt_message,
     decode_nav_status_message,
 )
-from .ubx_time_mapper import (
-    UbxNavTimeGps,
-    UbxNavTimeLs,
-    UbxReceiverTimeMapper,
-    UbxTimeMapperStats,
-    decode_nav_timegps,
-    decode_nav_timels,
-)
 from .ubx_nav_pvt import (
     EpochPairingError,
     NavSatEpochRecord,
     UbxNavPvtQuality,
     decode_nav_pvt_flags,
     pair_navsat_fix_with_nav_pvt,
+)
+from .ubx_time_mapper import (
+    UbxReceiverTimeMapper,
+    UbxTimeMapperStats,
+)
+from .ubx_time_messages import (
+    UbxNavTimeGpsEpoch,
+    UbxNavTimeLsEpoch,
+    decode_nav_timegps_payload,
+    decode_nav_timels_payload,
 )
 
 __all__ = [
@@ -56,10 +58,10 @@ __all__ = [
     "UbxRosEpochAdapter",
     "UbxRosEpochResult",
     "UbxSourceTimeMapping",
-    "UbxNavTimeGps",
-    "UbxNavTimeLs",
+    "UbxNavTimeGpsEpoch",
+    "UbxNavTimeLsEpoch",
+    "decode_nav_timegps_payload",
+    "decode_nav_timels_payload",
     "UbxReceiverTimeMapper",
     "UbxTimeMapperStats",
-    "decode_nav_timegps",
-    "decode_nav_timels",
 ]
