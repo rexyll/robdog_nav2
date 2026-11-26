@@ -14,6 +14,7 @@ from robodog_gnss_quality.ubx_nav_pvt import EpochPairingError
 
 PROCESS_SESSION_ID = "ros-message-test-session"
 CONNECTION_GENERATION = 0
+GPS_WEEK = 2450
 
 
 def decode_pvt(message, receive):
@@ -87,7 +88,7 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "connection_generation"):
             decode_nav_pvt_message(
                 pvt(), 10, process_session_id=PROCESS_SESSION_ID,
-                connection_generation=True
+                connection_generation=True, gps_week=GPS_WEEK
             )
 
     def test_decode_pvt_carrier_solution_values(self):
