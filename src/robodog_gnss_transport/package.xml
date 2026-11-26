@@ -9,6 +9,7 @@
   <depend>rclcpp</depend>
   <depend>robodog_gnss_interfaces</depend>
   <depend>libusb-1.0</depend>
+  <build_depend>pkg-config</build_depend>
   <test_depend>ament_cmake_gtest</test_depend>
   <export><build_type>ament_cmake</build_type></export>
 </package>
