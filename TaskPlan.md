@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.211
+- 文档版本：v0.3.212
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1064,3 +1064,6 @@
 
 
 - Python raw GNSS ingress lifecycle consumer（2026-11-26 / v0.3.211）：新增 `GnssIngressEvent` Python representation 与 `GnssIngressEventProcessor`，把 C++ `GnssIngressEvent` 的 event_type/process_session_id/connection_generation/ingress_sequence/receive_monotonic_ns/protocol/frame bytes 映射为可测试消费合同。Processor 强制 mapper `require_ingress_sequence=True`；按单一 event sequence 串行消费 GenerationStarted/Frame/DeviceLost/TransportFault/Stopped；GenerationStarted 开启 mapper session；Frame 事件经 `decode_ubx_time_ingress_frame()` 再校验 UBX sync/declared length/checksum，仅 TIMEGPS/TIMELS 进入 canonical mapper，非 time UBX/RTCM3/NMEA 只计 ignored；DeviceLost/TransportFault/Stopped 清空未配对 epoch；拒绝旧 process/connection generation、重复/乱序 ingress sequence、重复终态事件、terminal/Stopped 后 frame、未以 GenerationStarted 开始的新 process session。新增 7 项 processor tests，覆盖 exact-iTOW time pair、non-time frame sequence consumption、DeviceLost→generation 2 fence、Stopped ordering、duplicate sequence rejection、新 process session sequence reset、mapper ingress sequence requirement。代码 commits：processor `e0995f5671cf5be57bdc96ecc51285c892b63167`、exports fix `4a539cefc458b713413ae822c376aae56afbf9be`、tests `f37732c5ec9ccdd20c396b4dfb960ce0e9f540e8`；doc/Navigation/34 §12 已更新。`gnss-quality-ci` run `45765454408`（head `f37732c5ec9ccdd20c396b4dfb960ce0e9f540e8`）Humble/Jammy、Jazzy/Noble 两项全部 success；同一 head 的通用 ROS2 package workflow run `45765454406` 当时仍 in progress，与本 Python 包测试不同。此处理器仍是纯 Python consumer contract，不包含 rclpy subscription、ROSIDL message、C++ binding、DDS reliability/QoS 或 executor callback barrier；不得视为 C++→ROS 2 bridge 完成。下一步取得通用 workflow 最终结果，并为 Python consumer 增加严格 event receive timestamp/order、bounded ingress buffering 或 ROS subscriber serialization 设计；再实现 ROS 2 message bridge。
+
+
+- Python ingress event host monotonic timestamp fence（2026-11-26 / v0.3.212）：在 `GnssIngressEventProcessor` 中增加 receive timestamp ordering contract：同一 process_session_id 下，`ingress_sequence` 必须严格递增，`receive_monotonic_ns` 必须非递减；允许相同 timestamp，因为一个 USB completion 可解析出多条 Frame 并共享 callback-entry 时间戳；process session 改变时重置 timestamp epoch。新增测试覆盖时间倒退拒绝、相同 callback timestamp 接受，并验证拒绝事件不消费 ingress sequence。代码 commits：processor `5234102753bad2fa0b315376694e861e1d34662f`、tests `821c6fa2296a7ef1467ee60b0603cb4b5699154a`；doc/Navigation/34 §12 已补充。最终 Humble/Jazzy CI 尚未完成，待验证该时间顺序约束与全部 ingress processor tests。该约束只在 consumer 看到的 event stream 上校验 monotonic metadata；不能替代 ROS DDS callback ordering 或跨主机 monotonic clock 比较。
