@@ -261,3 +261,4 @@
 - [28 — USB DeviceSession 状态机与 libusb transfer 长度安全合同](28_usb_device_session_design_and_length_safety_contract.md)
 
 - [29 — libusb transfer registry 并发审计与修复记录](29_libusb_transfer_registry_concurrency_audit.md)
+- [30 — libusb cancel 锁耦合与错误语义审计](30_libusb_cancel_locking_and_error_semantics.md)
