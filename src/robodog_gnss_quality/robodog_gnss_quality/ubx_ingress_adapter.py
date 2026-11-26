@@ -82,7 +82,7 @@ def _validate_ubx_frame(frame_bytes: bytes) -> bytes:
 def decode_ubx_time_ingress_frame(
     frame_bytes: bytes,
     *,
-    protocol: str,
+    protocol: Union[str, int],
     receive_monotonic_ns: int,
     process_session_id: str,
     connection_generation: int,
@@ -90,21 +90,28 @@ def decode_ubx_time_ingress_frame(
 ) -> Optional[UbxTimeIngressRecord]:
     """Decode one ordered ingress event; return None for non-time/non-UBX data.
 
-    protocol must be one of "ubx", "rtcm3", or "nmea". Non-UBX protocols
-    are ignored. UBX envelopes are revalidated (sync, exact declared length,
-    CK_A/CK_B) before class/id dispatch.
-    protocol accepts C++ enum values 0=UBX, 1=RTCM3, 2=NMEA or their names.
+    protocol accepts C++ enum values 0=UBX, 1=RTCM3, 2=NMEA or the strings
+    "ubx", "rtcm3", "nmea". Non-UBX protocols are ignored.
+    """
     if isinstance(protocol, bool):
         raise EpochPairingError("protocol must identify UBX, RTCM3, or NMEA")
-    protocol_names = {"ubx": PROTOCOL_UBX, "rtcm3": PROTOCOL_RTCM3, "nmea": PROTOCOL_NMEA}
+    protocol_names = {
+        "ubx": PROTOCOL_UBX,
+        "rtcm3": PROTOCOL_RTCM3,
+        "nmea": PROTOCOL_NMEA,
+    }
     if isinstance(protocol, str):
         protocol_id = protocol_names.get(protocol)
     elif isinstance(protocol, int):
-        protocol_id = protocol if protocol in (PROTOCOL_UBX, PROTOCOL_RTCM3, PROTOCOL_NMEA) else None
+        protocol_id = protocol if protocol in (
+            PROTOCOL_UBX, PROTOCOL_RTCM3, PROTOCOL_NMEA
+        ) else None
     else:
         protocol_id = None
     if protocol_id is None:
         raise EpochPairingError("protocol must identify UBX, RTCM3, or NMEA")
+
+    _validate_ingress_context(
         receive_monotonic_ns=receive_monotonic_ns,
         process_session_id=process_session_id,
         connection_generation=connection_generation,
