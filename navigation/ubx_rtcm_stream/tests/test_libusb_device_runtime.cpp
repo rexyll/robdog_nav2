@@ -30,6 +30,7 @@ struct RuntimeFake {
   std::atomic<int> callbacks_completed{0};
   bool session_device_closed_after_callback_drain{false};
   int context_exits{0};
+  int transfer_close_calls{0};
 
   robodog_protocol::LibusbDeviceSession::Api device_api() {
     robodog_protocol::LibusbDeviceSession::Api a;
@@ -90,7 +91,7 @@ struct RuntimeFake {
       t->callback(t, t->status, t->actual_length, t->user_data);
       return 0;
     };
-    a.close_device = [](void *) {};
+    a.close_device = [this](void *) { ++transfer_close_calls; };
     return a;
   }
 };
@@ -120,6 +121,7 @@ int main() {
   assert(runtime.shutdown(1000));
   assert(callback_count.load() == 1);
   assert(fake.session_device_closed_after_callback_drain);
+  assert(fake.transfer_close_calls == 0);
   assert(fake.context_exits == 1);
   assert(!runtime.is_open());
   return 0;
