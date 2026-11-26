@@ -108,6 +108,7 @@ class UbxRosEpochAdapter:
         self._evicted_stale = 0
         self._rejected_conflict = 0
         self._invalid_mappings = 0
+        self._stale_context_rejections = 0
 
     @property
     def source_clock_id(self) -> Optional[str]:
@@ -138,6 +139,11 @@ class UbxRosEpochAdapter:
     def invalid_mappings(self) -> int:
         with self._lock:
             return self._invalid_mappings
+
+    @property
+    def stale_context_rejections(self) -> int:
+        with self._lock:
+            return self._stale_context_rejections
 
     def _retire(self, i_tow_ms: int, reason: str) -> None:
         self._retired[i_tow_ms] = reason
@@ -268,6 +274,7 @@ class UbxRosEpochAdapter:
             message.process_session_id != self._process_session_id
             or message.connection_generation != self._connection_generation
         ):
+            self._stale_context_rejections += 1
             raise EpochPairingError(
                 "stale process_session_id/connection_generation; discard old ROS callback"
             )
@@ -325,6 +332,7 @@ class UbxRosEpochAdapter:
             or mapping.connection_generation != self._connection_generation
             or mapping.gps_week != self._gps_week
         ):
+            self._stale_context_rejections += 1
             raise EpochPairingError("time mapping does not match session/generation/week context")
         expected_clock_id = (
             f"{self._process_session_id}:connection:{self._connection_generation}"
