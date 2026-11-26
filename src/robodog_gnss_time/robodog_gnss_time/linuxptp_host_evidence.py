@@ -215,7 +215,7 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
                     event = {"type": "local_clock_selected_as_best_master", "identity": match.group(1).lower()}
         if event is None:
             match = re.search(
-                r"(?:^|\s)([^\s:]+):\s+"
+                r"(?:^|:\s*)([^:\n]+):\s+"
                 r"(INITIALIZING|LISTENING|UNCALIBRATED|SLAVE|MASTER|PASSIVE|FAULTY|DISABLED|PRE_MASTER)"
                 r"\s+to\s+"
                 r"(INITIALIZING|LISTENING|UNCALIBRATED|SLAVE|MASTER|PASSIVE|FAULTY|DISABLED|PRE_MASTER)"
