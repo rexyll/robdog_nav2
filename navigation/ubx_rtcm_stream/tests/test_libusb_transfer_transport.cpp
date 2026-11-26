@@ -14,6 +14,7 @@
 using robodog_protocol::LibusbCompletionStatus;
 using robodog_protocol::LibusbTransferRequest;
 using robodog_protocol::LibusbTransferTransport;
+using robodog_protocol::LibusbCancelResult;
 using robodog_protocol::UsbTransferDirection;
 
 struct FakeTransfer {
