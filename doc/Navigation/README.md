@@ -212,3 +212,4 @@
 - [09 §15 — PTPv2 / gPTP 报文识别与消息配对审计](09_mid360_timestamp_and_point_lio_integration_audit.md#15-ptpv2--gptp-报文识别与消息配对审计)
 - [PTPv2 / gPTP 抓包解析与关联器](../../scripts/ptp_packet_audit.py)
 - [PTP 报文解析与关联测试](../../scripts/tests/test_ptp_packet_audit.py)
+- [PTP Announce 候选观测、GM 声明变化与序号连续性审计](09_mid360_timestamp_and_point_lio_integration_audit.md#154-announce-候选来源变化与序号连续性观测)
