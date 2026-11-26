@@ -57,6 +57,14 @@ def decode(frame, sequence=11, protocol="ubx"):
 class TestUbxIngressAdapter(unittest.TestCase):
     def test_decodes_nav_timegps_with_event_context(self):
         record = decode(make_ubx_frame(0x01, 0x20, timegps_payload()), sequence=27)
+        numeric_protocol = decode_ubx_time_ingress_frame(
+            make_ubx_frame(0x01, 0x20, timegps_payload()),
+            protocol=0, receive_monotonic_ns=123_000,
+            process_session_id=SESSION, connection_generation=GENERATION,
+            ingress_sequence=29,
+        )
+        self.assertIsInstance(numeric_protocol, UbxNavTimeGpsEpoch)
+        self.assertEqual(numeric_protocol.ingress_sequence, 29)
         self.assertIsInstance(record, UbxNavTimeGpsEpoch)
         self.assertEqual(record.i_tow_ms, 123456)
         self.assertEqual(record.week, 2450)
@@ -79,6 +87,10 @@ class TestUbxIngressAdapter(unittest.TestCase):
     def test_non_ubx_protocol_is_ignored(self):
         self.assertIsNone(decode(b"not-a-ubx-frame", protocol="rtcm3"))
         self.assertIsNone(decode(b"not-a-ubx-frame", protocol="nmea"))
+        self.assertIsNone(decode(b"not-a-ubx-frame", protocol=1))
+        self.assertIsNone(decode(b"not-a-ubx-frame", protocol=2))
+        with self.assertRaises(EpochPairingError):
+            decode(b"not-a-ubx-frame", protocol=9)
 
     def test_bad_sync_length_and_checksum_are_rejected(self):
         valid = make_ubx_frame(0x01, 0x20, timegps_payload())
