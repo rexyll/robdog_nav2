@@ -22,14 +22,14 @@ def timegps(i_tow=1000, f_tow=250_000, week=2450, leap=18, valid=0x07, tacc=50):
     )
 
 
-def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0, time_to_event=86_400):
+def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0, time_to_event=86_400, change=1):
     payload = bytearray(24)
     payload[0:4] = i_tow.to_bytes(4, "little")
     payload[4] = version
     payload[8] = source
     payload[9:10] = leap.to_bytes(1, "little", signed=True)
     payload[10] = 2
-    payload[11:12] = (1).to_bytes(1, "little", signed=True)
+    payload[11:12] = change.to_bytes(1, "little", signed=True)
     payload[12:16] = time_to_event.to_bytes(4, "little", signed=True)
     payload[16:18] = (2451).to_bytes(2, "little")
     payload[18:20] = (7).to_bytes(2, "little")
