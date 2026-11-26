@@ -157,14 +157,16 @@ class GnssRtkQualityNode(Node):
             message.receive_monotonic_ns = observation.receive_monotonic_ns
         return message
 
-    def _publish_decision(self, observation, context, decision):
+    def _publish_decision(self, observation, context, decision, *, force=False):
         signature = (
             decision.qualified, decision.reason.value,
             decision.consecutive_fixed_samples,
             decision.horizontal_std_m, decision.vertical_std_m,
             decision.estimated_speed_mps,
         )
-        if signature != self._last_decision_signature:
+        # Every observation needs its own identity-bearing decision for the
+        # exact joiner. Deduplication is safe only for timer/watchdog repeats.
+        if force or signature != self._last_decision_signature:
             self._publisher.publish(self._status(observation, context, decision))
             self._last_decision_signature = signature
 
@@ -211,7 +213,7 @@ class GnssRtkQualityNode(Node):
             self._last_receive_ns = receive_ns
             self._last_observation = (observation, context)
             decision = self._gate.evaluate(observation, time.monotonic_ns())
-            self._publish_decision(observation, context, decision)
+            self._publish_decision(observation, context, decision, force=True)
         except Exception as exc:
             self._fault = exc
             self.get_logger().fatal(
