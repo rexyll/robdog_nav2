@@ -9,7 +9,7 @@ from .quality_gate import (
     RejectionReason,
     RtkQualityGate,
 )
-from .ros_message_adapter import (
+from .ros_epoch_adapter import (\n    UbxRosEpochAdapter,\n    UbxRosEpochResult,\n    UbxSourceTimeMapping,\n)\nfrom .ros_message_adapter import (
     decode_nav_cov_message,
     decode_nav_hp_pos_llh_message,
     decode_nav_pvt_message,
@@ -39,5 +39,5 @@ __all__ = [
     "decode_nav_pvt_message",
     "decode_nav_hp_pos_llh_message",
     "decode_nav_cov_message",
-    "decode_nav_status_message",
+    "decode_nav_status_message",\n    "UbxRosEpochAdapter",\n    "UbxRosEpochResult",\n    "UbxSourceTimeMapping",
 ]
