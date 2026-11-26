@@ -76,7 +76,7 @@ class GnssIngressQueue {
     if (capacity_ == 0) throw std::invalid_argument("ingress queue capacity must be > 0");
     if (process_session_id_.empty() ||
         std::all_of(process_session_id_.begin(), process_session_id_.end(),
-                    [](unsigned char c) { return c == ' ' || c == '\\t'; })) {
+                    [](unsigned char c) { return std::isspace(c) != 0; })) {
       throw std::invalid_argument("process_session_id must be non-empty");
     }
   }
