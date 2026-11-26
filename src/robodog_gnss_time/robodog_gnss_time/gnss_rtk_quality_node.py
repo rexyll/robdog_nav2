@@ -182,7 +182,7 @@ class GnssRtkQualityNode(Node):
                     reason=RejectionReason.OUT_OF_ORDER,
                     consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
                 )
-                self._publish_decision(observation, context, decision)
+                self._publish_decision(observation, context, decision, force=True)
                 return
             expected_clock_id = (
                 f"{context[0]}:connection:{context[1]}:gps-week:{context[2]}"
@@ -197,7 +197,7 @@ class GnssRtkQualityNode(Node):
                         reason=RejectionReason.OUT_OF_ORDER,
                         consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
                     )
-                    self._publish_decision(observation, context, decision)
+                    self._publish_decision(observation, context, decision, force=True)
                     return
                 if context[0] == old_session and context[1] == old_generation and context[2] < old_week:
                     decision = QualityDecision(
@@ -205,7 +205,7 @@ class GnssRtkQualityNode(Node):
                         reason=RejectionReason.OUT_OF_ORDER,
                         consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
                     )
-                    self._publish_decision(observation, context, decision)
+                    self._publish_decision(observation, context, decision, force=True)
                     return
             if context[:3] != (self._active_context[:3] if self._active_context else None):
                 self._gate.reset()
