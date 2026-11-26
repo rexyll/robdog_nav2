@@ -216,6 +216,19 @@ class TestPtpPacketAudit(unittest.TestCase):
             {(2, 1), (3, 1), (2, 2)},
         )
 
+    def test_ptp_capture_window_metadata_is_bounded(self):
+        audit = PtpCorrelationAudit(max_capture_windows=1)
+        for domain, timestamp_ns in ((0, 100), (1, 200)):
+            audit.observe(parse_ptp_v2_message(
+                ptp_message(0, body=timestamp(), domain=domain),
+                transport="udp/319", capture_timestamp_ns=timestamp_ns,
+                interface_id=0, section_index=0,
+            ))
+        report = audit.report()
+        self.assertEqual(len(report["ptp_capture_windows"]), 1)
+        self.assertEqual(report["ptp_capture_window_limit"], 1)
+        self.assertEqual(report["correlations"]["evicted_ptp_capture_windows"], 1)
+
     def test_timestamp_exchange_samples_preserve_origin_and_correction_fields(self):
         sync = ptp_message(0, flags=0x0200, sequence=44,
                            body=timestamp(0, 0), correction=65536)
