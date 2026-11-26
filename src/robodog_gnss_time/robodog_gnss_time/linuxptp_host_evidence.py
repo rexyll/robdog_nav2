@@ -208,6 +208,24 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         except (TypeError, ValueError) as exc:
             pmc_validation = {"status": "invalid", "error": str(exc)}
 
+    # A syntactically valid PTP snapshot is only one part of the host
+    # inventory. Never label a report complete when any explicitly requested
+    # host command failed or the boot identity could not be captured.
+    all_command_results = results + [pmc_result]
+    collection_issues = []
+    if not boot_id:
+        collection_issues.append("host_boot_id_unavailable")
+    for command_result in all_command_results:
+        if command_result["status"] != "ok":
+            collection_issues.append(
+                f"command_not_ok:{command_result['name']}:{command_result['status']}"
+            )
+    if pmc_validation["status"] != "valid":
+        collection_issues.append(
+            f"pmc_snapshot_not_valid:{pmc_validation['status']}"
+        )
+    collection_status = "complete" if not collection_issues else "partial"
+
     ptp_device_paths = sorted(glob.glob("/dev/ptp*"))
     sysfs_ptp_paths = sorted(glob.glob(
         f"/sys/class/net/{config.interface}/device/ptp/ptp*"
@@ -230,8 +248,10 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "collection_realtime_end_ns": realtime_end,
         "ptp_device_paths": ptp_device_paths,
         "interface_sysfs_ptp_paths": [os.path.realpath(path) for path in sysfs_ptp_paths],
-        "commands": results + [pmc_result],
+        "commands": all_command_results,
         "pmc_snapshot_validation": pmc_validation,
+        "collection_status": collection_status,
+        "collection_issues": collection_issues,
         "host_time_sync_claim": "not_evaluated",
         "safety_note": (
             "This report is raw host/PTP evidence only. It does not prove "
