@@ -152,6 +152,14 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertEqual(result.time_to_leap_event_seconds, 1)
         self.assertIn("near a scheduled leap-second", result.validity_reason)
 
+    def test_current_leap_can_be_valid_without_event_schedule(self):
+        m = mapper(trusted_leap_sources={2})
+        m.add_timegps(timegps(), 100)
+        result = m.add_timels(timels(valid=0x01), 110)
+        self.assertTrue(result.utc_stamp_valid)
+        self.assertFalse(result.leap_event_valid)
+        self.assertEqual(result.time_to_leap_event_seconds, 86_400)
+
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(valid=0x03), 100)
