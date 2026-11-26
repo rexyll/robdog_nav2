@@ -91,6 +91,18 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
                 connection_generation=True, gps_week=GPS_WEEK
             )
 
+    def test_gps_week_context_must_be_signed_16_bit_non_negative(self):
+        with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+            decode_nav_pvt_message(
+                pvt(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=True
+            )
+        with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+            decode_nav_pvt_message(
+                pvt(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=32768
+            )
+
     def test_decode_pvt_carrier_solution_values(self):
         self.assertEqual(decode_pvt(pvt(0), 10).carrier_solution,
                          CarrierSolution.NO_SOLUTION)
