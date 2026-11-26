@@ -28,8 +28,18 @@ bool LibusbDeviceRuntime::open(
 
   try {
     auto transfer_api = transfer_api_factory_(device_session_.native_context());
+    // DeviceSession is the sole owner of the native handle. The transfer
+    // adapter only borrows it and must not call libusb_close() itself.
+    transfer_api.close_device_on_close = false;
     transport_ = std::make_unique<LibusbTransferTransport>(
       std::move(transfer_api), device_session_.native_device());
+    if (!transport_->valid()) {
+      last_error_ = -6;
+      (void)transport_->close();
+      transport_.reset();
+      (void)device_session_.close();
+      return false;
+    }
     event_loop_ = std::make_unique<LibusbEventLoop>(*transport_, poll_timeout_ms);
     if (!event_loop_->start()) {
       last_error_ = -4;
