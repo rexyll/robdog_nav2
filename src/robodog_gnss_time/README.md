@@ -350,8 +350,9 @@ verify phc2sys's actual CLOCK_REALTIME sink and time-scale conversion chain.
 
 The `robodog_linuxptp_host_evidence` console command collects a host-side
 evidence bundle without changing system clocks or PHCs. It requires explicit
-`--interface`, `--domain`, and absolute `--pmc-socket` arguments; it has no
-assumed interface, domain, or socket defaults. Optional systemd unit names
+`--interface`, `--domain`, `--transport-specific`, and absolute
+`--pmc-socket` arguments; it has no assumed interface, domain, profile
+transportSpecific value, or socket defaults. Optional systemd unit names
 (`--ptp4l-service`, `--phc2sys-service`, `--chrony-service`) are only
 queried when explicitly supplied.
 
@@ -362,6 +363,7 @@ configuration; this is not a claim that these paths or units exist):
 ros2 run robodog_gnss_time robodog_linuxptp_host_evidence \
   --interface <verified-interface> \
   --domain <verified-domain-number> \
+  --transport-specific <verified-profile-field> \
   --pmc-socket <verified-ptp4l-uds-path> \
   --ptp4l-service <verified-ptp4l-unit> \
   --phc2sys-service <verified-phc2sys-unit> \
@@ -369,7 +371,8 @@ ros2 run robodog_gnss_time robodog_linuxptp_host_evidence \
   --output linuxptp-host-evidence.json
 ```
 
-The collector invokes `pmc` once with six fixed GET requests only, and uses
+The collector invokes `pmc` once with six fixed GET requests only, passing
+the explicitly configured domain and transportSpecific value, and uses
 argv-based subprocess calls with `shell=False`. It records raw stdout/stderr,
 exit status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot
 ID, NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
