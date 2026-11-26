@@ -53,6 +53,7 @@ struct GnssIngressQueueStats {
   bool device_lost{false};
   bool closed{false};
   bool stopped_event_recorded{false};
+  bool terminal_event_recorded{false};
 };
 
 enum class GnssIngressPushResult : std::uint8_t {
@@ -86,12 +87,18 @@ class GnssIngressQueue {
                         std::uint64_t receive_monotonic_ns) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (has_generation_ && generation <= current_generation_) return false;
+    if (has_generation_ && !stopped_event_recorded_ &&
+        !(terminal_event_type_.has_value() && terminal_event_recorded_)) {
+      return false;
+    }
     current_generation_ = generation;
     has_generation_ = true;
     accepting_frames_ = true;
     device_lost_ = false;
     closed_ = false;
     stopped_event_recorded_ = false;
+    terminal_event_type_.reset();
+    terminal_event_recorded_ = false;
     return push_control_locked(
         GnssIngressEventType::GenerationStarted, generation,
         receive_monotonic_ns);
@@ -142,10 +149,17 @@ class GnssIngressQueue {
       ++stats_.rejected_stale_generation;
       return false;
     }
+    if (terminal_event_type_ &&
+        *terminal_event_type_ != GnssIngressEventType::DeviceLost) {
+      return false;
+    }
     accepting_frames_ = false;
     device_lost_ = true;
-    return push_control_locked(
+    terminal_event_type_ = GnssIngressEventType::DeviceLost;
+    if (terminal_event_recorded_) return true;
+    terminal_event_recorded_ = push_control_locked(
         GnssIngressEventType::DeviceLost, generation, receive_monotonic_ns);
+    return terminal_event_recorded_;
   }
 
   bool mark_transport_fault(std::uint64_t generation,
@@ -155,16 +169,31 @@ class GnssIngressQueue {
       ++stats_.rejected_stale_generation;
       return false;
     }
+    if (terminal_event_type_ &&
+        *terminal_event_type_ != GnssIngressEventType::TransportFault) {
+      return false;
+    }
     accepting_frames_ = false;
-    return push_control_locked(
+    terminal_event_type_ = GnssIngressEventType::TransportFault;
+    if (terminal_event_recorded_) return true;
+    terminal_event_recorded_ = push_control_locked(
         GnssIngressEventType::TransportFault, generation,
         receive_monotonic_ns);
+    return terminal_event_recorded_;
   }
 
   bool close(std::uint64_t receive_monotonic_ns) {
     std::lock_guard<std::mutex> lock(mutex_);
     if (stopped_event_recorded_) return true;
     accepting_frames_ = false;
+    if (terminal_event_type_ && !terminal_event_recorded_) {
+      terminal_event_recorded_ = push_control_locked(
+          *terminal_event_type_, current_generation_, receive_monotonic_ns);
+      if (!terminal_event_recorded_) {
+        closed_ = true;
+        return false;
+      }
+    }
     const bool recorded = has_generation_
         ? push_control_locked(GnssIngressEventType::Stopped,
                               current_generation_, receive_monotonic_ns)
@@ -199,6 +228,7 @@ class GnssIngressQueue {
     snapshot.device_lost = device_lost_;
     snapshot.closed = closed_;
     snapshot.stopped_event_recorded = stopped_event_recorded_;
+    snapshot.terminal_event_recorded = terminal_event_recorded_;
     return snapshot;
   }
 
@@ -276,6 +306,8 @@ class GnssIngressQueue {
   bool device_lost_{false};
   bool closed_{false};
   bool stopped_event_recorded_{false};
+  std::optional<GnssIngressEventType> terminal_event_type_;
+  bool terminal_event_recorded_{false};
 };
 
 }  // namespace robodog_protocol
