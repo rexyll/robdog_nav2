@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.196
+- 文档版本：v0.3.197
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1021,3 +1021,6 @@
 
 
 - TIMEGPS/TIMELS mapper 与 canonical payload decoder 合并、session fence 闭环（2026-11-26 / v0.3.196）：修正 mapper 之前重复实现 TIMEGPS/TIMELS payload offsets 的问题，改为只消费 ubx_time_messages.py 的 UbxNavTimeGpsEpoch/UbxNavTimeLsEpoch immutable records。两个 decoder record 都携带 process_session_id、connection_generation、host monotonic receive timestamp；UbxReceiverTimeMapper.begin_session(process_session_id, connection_generation) 建立明确上下文；add_timegps/add_timels 拒绝旧 process session 或 connection generation；payload convenience methods 也必须由调用方显式传入 callback entry 时捕获的 session/generation，禁止用当前 generation 给旧队列帧重新贴标签。UbxSourceTimeMapping 新增 process_session_id/connection_generation，source_clock_id = process session + connection generation + normalized GPS week；UbxRosEpochAdapter 对有上下文的 mapping 校验 source_clock_id 与 session/generation/week 一致。新增 old-process callback、old-connection callback、reconnect flush/no-cross-generation pairing tests。移除 mapper 内重复 dataclass/decoder，统一 exports 到 ubx_time_messages.py。该修正针对之前只用 iTOW + current session string、可能误接纳旧 callback 的风险。真实 ROS DDS queued callback ingress drain/fence 仍需在 runtime adapter 中实现；本轮只证明纯 Python epoch/context fence。CI 待 Humble/Jazzy 矩阵。
+
+
+- Canonical session-fenced UBX time epoch API（2026-11-26 / v0.3.197）：统一 UbxReceiverTimeMapper 只消费 `UbxNavTimeGpsEpoch` / `UbxNavTimeLsEpoch` typed records；payload bytes 解码集中在 `ubx_time_messages.py`，typed records 必须携带 process_session_id、connection_generation、receive_monotonic_ns。新增 `add_timegps_payload` / `add_timels_payload` convenience API 仅负责解码并委托 typed API；mapper 在配对前校验 session/generation，拒绝旧进程/旧 USB generation callback，并统计 stale_context_rejections。`begin_session(process_session_id, connection_generation)` 清空 pending/retired caches，source_clock_id 包含 process session + connection generation + GPS week。新增 old process callback、old connection generation callback、reconnect cache flush 等测试。最终 canonical API head `beefbebb915136f82da525129ef2adb57e104831` 对应 Actions run `45756871899`，Humble/Jammy、Jazzy/Noble 两项全部 success，每项 124 tests、0 errors、0 failures、0 skipped。该层仍要求 ROS callback 在 ingress 处传入正确的 process/generation identity；固定驱动的 UBX ROS messages 本身没有这些字段，旧 DDS queued callback 的有序 barrier 仍需真实 ROS runtime 实现。
