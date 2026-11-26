@@ -70,10 +70,10 @@ def test_rejects_bool_alias_and_rosidl_out_of_range_uint64_fields():
         adapter.decode(message(uncertainty_ns=True))
     with pytest.raises(ValueError):
         adapter.decode(message(sample_sequence=True))
-    # Generated ROSIDL uint64 setters reject negative values before the
-    # adapter can receive such a message.
-    with pytest.raises(AssertionError):
-        message(sample_sequence=-1)
+    # Exercise the adapter's numeric boundary directly: ROSIDL generated
+    # uint64 setters differ across supported ROS distributions for negatives.
+    with pytest.raises(ValueError):
+        adapter._uint("sample_sequence", -1)
 
 
 def test_rejects_wrong_message_type_and_empty_expected_boot_id():
