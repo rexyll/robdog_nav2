@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.189
+- 文档版本：v0.3.190
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -998,3 +998,6 @@
 
 
 - GNSS ROS epoch/time mapping adapter 缓存与并发验收（2026-11-26 / v0.3.189）：UbxRosEpochAdapter 增加 RLock，允许 rclpy MultiThreadedExecutor 风格的并发 topic callbacks 串行化 exact-iTOW state；mapping 和四类 records 任意先后到达，需 explicit begin_generation(source_clock_id)，valid source mapping 与 UTC stamp validity 分离。CI 曾发现 stale expiry 测试暴露 iTOW resurrection：watermark 推进过期 pending 后同一次 _entry 可能重新创建相同 iTOW。修复为 stale tombstone 二次检查、expiry 使用最大 monotonic watermark、first_receive 取 mapping/records 中最早 callback time。Humble/Jammy + Jazzy/Noble 两个 CI runs 45755029444 与 45755029355 对应 head 4fbbf078bb0f83b657c78c0b87365282769d831e 均全部 success。该层仍不产生真实 time mapping；NAV-TIMEGPS/NAV-TIMELS parser、rclpy node、NavSatFix publisher 与设备/ROS 实测仍未完成。
+
+
+- GNSS ROS 历元回调并发与代际屏障（2026-11-26 / v0.3.190）：固定版 aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e 的 rover launch 使用 component_container_mt，驱动发布 UBX-NAV-PVT/HPPOSLLH/COV/STATUS 原始 topics；项目质量链路明确不以 convenience fix topic 作为 RTK Fixed 权威输入。ros_epoch_adapter.py 以 RLock 串行保护四路 UBX callback、独立 time mapping、generation reset 和 pending cache；新增五路并发 callback 测试，必须恰好输出一个 observation。Actions run 45755029444 与 45755029355 在同一 head 4fbbf078bb0f83b657c78c0b87365282769d831e 上 Humble/Jammy 与 Jazzy/Noble 两项均 success。新增 doc/Navigation/35_gnss_ros_epoch_callback_concurrency_and_generation_barrier.md。明确 RLock 仅证明纯 Python adapter 数据结构并发安全，不等于真实 ROS MultiThreadedExecutor/DDS 验收；旧 generation 的 DDS queued callbacks 仍需有序 ingress barrier / generation token，reset 前必须 drain 或 fence 旧 callback。下一步优先实现 ROS 2 runtime adapter + executor integration tests，并在 NAV-TIMEGPS/NAV-TIMELS parser/time mapper 未验收前继续 fail-closed，不输出可信 GPS absolute time。
