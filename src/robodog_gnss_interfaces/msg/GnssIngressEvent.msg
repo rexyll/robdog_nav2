@@ -28,3 +28,6 @@ uint8 checksum_status
 uint64 frame_sequence
 uint64 frame_connection_generation
 uint8[] frame_bytes
+
+# Cumulative DropOldest frame evictions observed when this event is popped.
+uint64 dropped_frame_events_total
