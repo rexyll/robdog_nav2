@@ -67,6 +67,46 @@ class TestMid360ControlParser(unittest.TestCase):
         self.assertEqual(values["lidar_diag_status"]["modules"]["scan"]["level"], 3)
         self.assertEqual(values["lidar_diag_status"]["modules"]["communication"]["level"], 1)
 
+
+    def test_hms_code_slots_decode_id_level_and_time_sync_catalog(self):
+        codes = [0x04020002, 0x040A0002, 0, 0x01020001, 0, 0, 0, 0]
+        data = struct.pack("<HH", 1, 0) + kv(
+            0x8011, struct.pack("<8I", *codes)
+        )
+        msg = parse_mid360_control_payload(control_packet(
+            0x0102, data, cmd_type=0
+        ))
+        item = msg.key_values[0]
+        self.assertEqual(item["active_count"], 3)
+        self.assertEqual(item["value"][0]["abnormal_id_hex"], "0x0402")
+        self.assertEqual(item["value"][0]["level_name"], "warning")
+        self.assertIn("PTP synchronization stopped",
+                      item["value"][0]["description"])
+        self.assertIn("PTP and gPTP", item["value"][1]["description"])
+        self.assertEqual(item["value"][2]["slot"], 3)
+        self.assertEqual(item["value"][2]["level_name"], "info")
+
+    def test_hms_unknown_id_and_unknown_level_are_not_guessed(self):
+        raw = 0x99990009
+        data = struct.pack("<HH", 1, 0) + kv(
+            0x8011, struct.pack("<8I", raw, 0, 0, 0, 0, 0, 0, 0)
+        )
+        msg = parse_mid360_control_payload(control_packet(
+            0x0102, data, cmd_type=0
+        ))
+        code, = msg.key_values[0]["value"]
+        self.assertIsNone(code["description"])
+        self.assertIsNone(code["recommendation"])
+        self.assertEqual(code["level_name"], "unknown")
+        self.assertEqual(code["reserved"], 0)
+
+    def test_hms_code_requires_exactly_eight_uint32_slots(self):
+        data = struct.pack("<HH", 1, 0) + kv(0x8011, b"\\x00" * 28)
+        with self.assertRaisesRegex(Mid360ControlPacketError, "32 bytes"):
+            parse_mid360_control_payload(control_packet(
+                0x0102, data, cmd_type=0
+            ))
+
     def test_unknown_key_is_preserved_without_interpretation(self):
         data = struct.pack("<HH", 1, 0) + kv(0x7777, b"abc")
         msg = parse_mid360_control_payload(control_packet(0x0102, data, cmd_type=0))
