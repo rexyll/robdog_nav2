@@ -13,13 +13,15 @@ from robodog_gnss_quality.ubx_nav_pvt import (
 
 PROCESS_SESSION_ID = "joiner-test-session"
 CONNECTION_GENERATION = 0
+GPS_WEEK = 2450
 GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2450"
 
 
-def make_pvt(i_tow=1000, receive=100, process_session_id=PROCESS_SESSION_ID, connection_generation=CONNECTION_GENERATION):
+def make_pvt(i_tow=1000, receive=100, process_session_id=PROCESS_SESSION_ID, connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK):
     return UbxNavPvtEpoch(
         process_session_id=process_session_id,
         connection_generation=connection_generation,
+        gps_week=gps_week,
         i_tow_ms=i_tow,
         gnss_fix_ok=True,
         carrier_solution=CarrierSolution.FIXED,
@@ -31,6 +33,7 @@ def make_position(i_tow=1000, receive=110):
     return UbxNavHpPosLlhEpoch(
         process_session_id=PROCESS_SESSION_ID,
         connection_generation=CONNECTION_GENERATION,
+        gps_week=GPS_WEEK,
         i_tow_ms=i_tow,
         lon=-1_220_000_000,
         lat=370_000_000,
@@ -52,6 +55,7 @@ def make_covariance(i_tow=1000, receive=120):
     return UbxNavCovEpoch(
         process_session_id=PROCESS_SESSION_ID,
         connection_generation=CONNECTION_GENERATION,
+        gps_week=GPS_WEEK,
         i_tow_ms=i_tow,
         pos_cor_valid=True,
         pos_cov_nn=1.0,
@@ -68,6 +72,7 @@ def make_status(i_tow=1000, receive=130):
     return UbxNavStatusEpoch(
         process_session_id=PROCESS_SESSION_ID,
         connection_generation=CONNECTION_GENERATION,
+        gps_week=GPS_WEEK,
         i_tow_ms=i_tow,
         gnss_fix_ok=True,
         carrier_solution_valid=True,
@@ -122,12 +127,21 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         stale = make_pvt().__class__(
             process_session_id="old-process-session",
             connection_generation=CONNECTION_GENERATION,
+            gps_week=GPS_WEEK,
             i_tow_ms=1000,
             gnss_fix_ok=True,
             carrier_solution=CarrierSolution.FIXED,
             receive_monotonic_ns=100,
         )
         with self.assertRaisesRegex(EpochPairingError, "stale process_session_id"):
+            joiner.add_pvt(
+                stale, source_clock_id=GENERATION, source_timestamp_ns=1_000_000
+            )
+
+    def test_old_gps_week_record_is_rejected_even_with_same_connection_generation(self):
+        joiner = make_joiner()
+        stale = make_pvt(gps_week=GPS_WEEK - 1)
+        with self.assertRaisesRegex(EpochPairingError, "gps_week"):
             joiner.add_pvt(
                 stale, source_clock_id=GENERATION, source_timestamp_ns=1_000_000
             )
@@ -453,7 +467,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         # The current generation can accept a fresh sample after the stale
         # callback was rejected, without inheriting old epoch cache state.
         self.assertIsNone(joiner.add_pvt(
-            make_pvt(1002, 121, connection_generation=1),
+            make_pvt(1002, 121, connection_generation=1, gps_week=2451),
             source_clock_id=new_generation,
             source_timestamp_ns=4_000_000,
         ))
