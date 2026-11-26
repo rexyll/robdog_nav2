@@ -15,8 +15,10 @@ _CONFIG_KEYS = (
     "CONFIG_FTRACE",
     "CONFIG_TRACEPOINTS",
     "CONFIG_HAVE_SYSCALL_TRACEPOINTS",
+    "CONFIG_FTRACE_SYSCALLS",
     "CONFIG_BPF",
     "CONFIG_BPF_SYSCALL",
+    "CONFIG_BPF_EVENTS",
     "CONFIG_DEBUG_INFO_BTF",
     "CONFIG_DEBUG_INFO_BTF_MODULES",
     "CONFIG_IKCONFIG",
@@ -118,7 +120,7 @@ def _mount_inventory(path, mountinfo):
             if separator + 1 >= len(fields):
                 continue
             mountpoint = os.path.normpath(_decode_mount_path(fields[4]))
-            if mountpoint == target:
+            if mountpoint == target or target.startswith(mountpoint.rstrip(os.sep) + os.sep):
                 mounts.append({
                     "mountpoint": mountpoint,
                     "filesystem_type": fields[separator + 1],
