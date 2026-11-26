@@ -1,6 +1,10 @@
 import pytest
 
-from robodog_gnss_time.linuxptp_pmc_parser import (\n    parse_pmc_response,\n    parse_pmc_response_envelope,\n    parse_pmc_snapshot,\n)
+from robodog_gnss_time.linuxptp_pmc_parser import (
+    parse_pmc_response,
+    parse_pmc_response_envelope,
+    parse_pmc_snapshot,
+)
 
 
 def test_parse_time_status_np_keeps_ptp_master_offset_as_separate_clock_domain():
