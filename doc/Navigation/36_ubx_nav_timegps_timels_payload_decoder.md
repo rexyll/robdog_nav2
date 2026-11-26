@@ -40,7 +40,7 @@
 - srcOfCurrLs=0（firmware default）与 255（unknown）不得自动成为可信当前 offset；其他来源也必须经过项目 source policy 和固件/设备证据。
 - parser 保留 signed currLs / lsChange；禁止把 I1 误读为 U1。
 - reserved bytes / reserved validity bits 被保留，当前不因非零而静默丢弃，也不赋予未定义语义。
-- parser 未执行 GPS week 展开、UTC civil conversion、leap second normalization、NAV-PVT/TIMEUTC/TIMELS exact epoch join 或 source freshness policy。
+- parser 未执行 GPS week 展开、UTC civil conversion、leap second normalization、NAV-PVT/TIMEUTC/TIMELS exact epoch join 或 source freshness policy；这些工作已由独立的 doc/Navigation/37 与 ubx_time_mapper.py 逐步承接，仍需完成 raw USB ingress 和目标设备验证。
 
 ## 3. 固定来源证据
 
