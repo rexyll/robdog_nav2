@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.210
+- 文档版本：v0.3.211
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1061,3 +1061,6 @@
 
 
 - GnssUsbStream stop→restart integration CI 验收（2026-11-26 / v0.3.210）：同一 stream 对象 generation 1→stop→generation 2→stop 的集成测试 head `f09ccb359160b9a40bcd9f020e25b552bd8e6b00` 对应 Actions run `45764761179`，四个 job 全部 success：ASan/UBSan CTest 10/10、TSan CTest 10/10、Clang libFuzzer smoke、production libusb binding compile/CTest 1/1。验证了同一 GnssUsbStream/LibusbDeviceRuntime 在 stop 后可重新 open，connection_generation 递增，GenerationStarted/Frame/Stopped ingress_sequence 跨代连续递增，设备句柄与 libusb context 第二次释放。该结果仍是 fake libusb API 集成，不代表物理 USB 拔插/hotplug。下一步构建 Python raw ingress lifecycle consumer，把 C++ GnssIngressEvent 的 GenerationStarted/Frame/DeviceLost/TransportFault/Stopped 事件按 ingress_sequence 串行转换为 canonical TIMEGPS/TIMELS typed records 并驱动 mapper session reset；这会为后续 ROS 2 message bridge 提供可测的 transport-independent 消费合同，但不冒充已完成 rclcpp/rclpy/DDS bridge。
+
+
+- Python raw GNSS ingress lifecycle consumer（2026-11-26 / v0.3.211）：新增 `GnssIngressEvent` Python representation 与 `GnssIngressEventProcessor`，把 C++ `GnssIngressEvent` 的 event_type/process_session_id/connection_generation/ingress_sequence/receive_monotonic_ns/protocol/frame bytes 映射为可测试消费合同。Processor 强制 mapper `require_ingress_sequence=True`；按单一 event sequence 串行消费 GenerationStarted/Frame/DeviceLost/TransportFault/Stopped；GenerationStarted 开启 mapper session；Frame 事件经 `decode_ubx_time_ingress_frame()` 再校验 UBX sync/declared length/checksum，仅 TIMEGPS/TIMELS 进入 canonical mapper，非 time UBX/RTCM3/NMEA 只计 ignored；DeviceLost/TransportFault/Stopped 清空未配对 epoch；拒绝旧 process/connection generation、重复/乱序 ingress sequence、重复终态事件、terminal/Stopped 后 frame、未以 GenerationStarted 开始的新 process session。新增 7 项 processor tests，覆盖 exact-iTOW time pair、non-time frame sequence consumption、DeviceLost→generation 2 fence、Stopped ordering、duplicate sequence rejection、新 process session sequence reset、mapper ingress sequence requirement。代码 commits：processor `e0995f5671cf5be57bdc96ecc51285c892b63167`、exports fix `4a539cefc458b713413ae822c376aae56afbf9be`、tests `f37732c5ec9ccdd20c396b4dfb960ce0e9f540e8`；doc/Navigation/34 §12 已更新。`gnss-quality-ci` run `45765454408`（head `f37732c5ec9ccdd20c396b4dfb960ce0e9f540e8`）Humble/Jammy、Jazzy/Noble 两项全部 success；同一 head 的通用 ROS2 package workflow run `45765454406` 当时仍 in progress，与本 Python 包测试不同。此处理器仍是纯 Python consumer contract，不包含 rclpy subscription、ROSIDL message、C++ binding、DDS reliability/QoS 或 executor callback barrier；不得视为 C++→ROS 2 bridge 完成。下一步取得通用 workflow 最终结果，并为 Python consumer 增加严格 event receive timestamp/order、bounded ingress buffering 或 ROS subscriber serialization 设计；再实现 ROS 2 message bridge。
