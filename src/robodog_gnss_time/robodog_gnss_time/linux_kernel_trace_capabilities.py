@@ -127,13 +127,16 @@ def _mount_inventory(path, mountinfo, root="/"):
             mountpoint = os.path.normpath(
                 str(Path(root) / mountpoint_value.lstrip("/"))
             )
-            if mountpoint == target or (
+            filesystem_type = fields[separator + 1]
+            is_target_or_parent = mountpoint == target or (
                 mountpoint != os.sep
                 and target.startswith(mountpoint.rstrip(os.sep) + os.sep)
-            ):
+            )
+            if is_target_or_parent and filesystem_type in {"tracefs", "debugfs"}:
                 mounts.append({
                     "mountpoint": mountpoint,
-                    "filesystem_type": fields[separator + 1],
+                    "filesystem_type": filesystem_type,
+                    "mount_relation": "exact" if mountpoint == target else "ancestor",
                     "mount_options": fields[5],
                 })
     return mounts
