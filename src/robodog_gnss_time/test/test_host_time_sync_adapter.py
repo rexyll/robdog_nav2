@@ -13,6 +13,9 @@ def message(**changes):
     msg.uncertainty_ns = 250_000
     msg.sample_monotonic_ns = 10_000_000
     msg.sample_sequence = 1
+    msg.reference_id = "203.0.113.10"
+    msg.stratum = 3
+    msg.leap_status = "Normal"
     for key, value in changes.items():
         setattr(msg, key, value)
     return msg
@@ -25,6 +28,9 @@ def test_decodes_synchronized_host_time_evidence():
     assert sample.source_id == "chrony:tracking"
     assert sample.utc_offset_ns == -125_000
     assert sample.uncertainty_ns == 250_000
+    assert sample.reference_id == "203.0.113.10"
+    assert sample.stratum == 3
+    assert sample.leap_status == "Normal"
     assert sample.as_policy_kwargs()["host_sync_sample_monotonic_ns"] == 10_000_000
 
 
@@ -82,3 +88,11 @@ def test_rejects_wrong_message_type_and_empty_expected_boot_id():
     adapter = HostTimeSyncStatusAdapter(expected_host_boot_id="boot-abc")
     with pytest.raises(TypeError):
         adapter.decode(object())
+
+
+def test_rejects_missing_chrony_reference_or_leap_evidence():
+    adapter = HostTimeSyncStatusAdapter(expected_host_boot_id="boot-abc")
+    with pytest.raises(ValueError):
+        adapter.decode(message(reference_id=""))
+    with pytest.raises(ValueError):
+        adapter.decode(message(leap_status=""))
