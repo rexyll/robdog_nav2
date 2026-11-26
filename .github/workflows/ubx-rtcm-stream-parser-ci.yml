@@ -1,0 +1,36 @@
+name: UBX RTCM3 Stream Decoder CI
+
+on:
+  push:
+    branches: [nav]
+    paths:
+      - "navigation/ubx_rtcm_stream/**"
+      - ".github/workflows/ubx-rtcm-stream-parser-ci.yml"
+  pull_request:
+    branches: [nav]
+    paths:
+      - "navigation/ubx_rtcm_stream/**"
+      - ".github/workflows/ubx-rtcm-stream-parser-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ubx-rtcm-stream-parser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone-cpp-tests:
+    name: C++17 UBX/RTCM3 parser with ASan and UBSan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream -DROBODOG_ENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/ubx_rtcm_stream --parallel 2
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --test-dir build/ubx_rtcm_stream --output-on-failure
