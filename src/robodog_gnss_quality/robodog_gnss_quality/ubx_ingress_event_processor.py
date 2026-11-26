@@ -58,6 +58,7 @@ class GnssIngressEventProcessor:
         self._process_session_id: Optional[str] = None
         self._connection_generation: Optional[int] = None
         self._last_ingress_sequence: Optional[int] = None
+        self._last_receive_monotonic_ns: Optional[int] = None
         self._active = False
         self._terminal_type: Optional[str] = None
         self._stopped = False
@@ -106,6 +107,7 @@ class GnssIngressEventProcessor:
                 self.mapper.reset()
                 self._connection_generation = None
                 self._last_ingress_sequence = None
+                self._last_receive_monotonic_ns = None
                 self._active = False
                 self._terminal_type = None
                 self._stopped = False
@@ -116,6 +118,13 @@ class GnssIngressEventProcessor:
             ):
                 raise EpochPairingError(
                     "stale or reordered ingress event sequence"
+                )
+            if (
+                self._last_receive_monotonic_ns is not None
+                and event.receive_monotonic_ns < self._last_receive_monotonic_ns
+            ):
+                raise EpochPairingError(
+                    "ingress receive_monotonic_ns moved backwards"
                 )
 
             if event.event_type == "GenerationStarted":
@@ -152,6 +161,7 @@ class GnssIngressEventProcessor:
             # message or its payload is rejected. The next event must still be
             # strictly newer in the source event stream.
             self._last_ingress_sequence = event.ingress_sequence
+            self._last_receive_monotonic_ns = event.receive_monotonic_ns
             self._processed_events += 1
 
             if event.event_type == "Frame":
