@@ -1,0 +1,42 @@
+name: GNSS receiver-time ROS runtime CI
+
+on:
+  push:
+    paths:
+      - "src/robodog_gnss_time/**"
+      - "src/robodog_gnss_quality/**"
+      - "src/robodog_gnss_interfaces/**"
+      - ".github/workflows/gnss-time-node-ci.yml"
+  pull_request:
+    paths:
+      - "src/robodog_gnss_time/**"
+      - "src/robodog_gnss_quality/**"
+      - "src/robodog_gnss_interfaces/**"
+      - ".github/workflows/gnss-time-node-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.ros_distro }} on ${{ matrix.ubuntu }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ros_distro: humble
+            ubuntu: jammy
+            container_image: rostooling/setup-ros-docker:ubuntu-jammy-latest
+          - ros_distro: jazzy
+            ubuntu: noble
+            container_image: rostooling/setup-ros-docker:ubuntu-noble-latest
+    container:
+      image: ${{ matrix.container_image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build and test GNSS receiver-time runtime
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: robodog_gnss_time
+          target-ros2-distro: ${{ matrix.ros_distro }}
+          coverage-result: false
