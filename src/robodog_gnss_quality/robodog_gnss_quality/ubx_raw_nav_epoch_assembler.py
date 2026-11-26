@@ -305,10 +305,12 @@ class UbxRawNavEpochAssembler:
         for i_tow, pending in list(self._raw_pending.items()):
             if now_monotonic_ns - pending.first_receive_monotonic_ns > self.max_pending_age_ns:
                 self._raw_pending.pop(i_tow, None)
+                self._retire(i_tow)
                 self._expired_raw_epochs += 1
         for i_tow, mapping in list(self._mapping_pending.items()):
             if now_monotonic_ns - mapping.receive_monotonic_ns > self.max_pending_age_ns:
                 self._mapping_pending.pop(i_tow, None)
+                self._retire(i_tow)
         self.adapter.expire_stale(now_monotonic_ns)
 
     def expire_stale(self, now_monotonic_ns: int):
