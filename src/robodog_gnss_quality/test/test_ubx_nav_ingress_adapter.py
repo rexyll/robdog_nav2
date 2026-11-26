@@ -94,7 +94,7 @@ def test_decode_nav_pvt_raw_frame_and_attach_week_only_at_mapping_boundary():
 
 
 def test_decode_hpposllh_preserves_each_invalid_component_bit():
-    raw = decode(ubx_frame(0x14, hppos_payload(flags=0x22)), 11)
+    raw = decode(ubx_frame(0x14, hppos_payload(flags=0x20)), 11)
     epoch = decode_ubx_nav_raw_record(raw, gps_week=WEEK)
     assert epoch.invalid_lon is False
     assert epoch.invalid_lat is False
