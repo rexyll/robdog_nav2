@@ -217,6 +217,8 @@ class UbxRawNavEpochAssembler:
             if (record.process_session_id, record.connection_generation) != expected:
                 self._rejected_stale_generation += 1
                 return None
+        if record.i_tow_ms in self._retired:
+            return None
         mapping = self._mapping_pending.get(record.i_tow_ms)
         if mapping is not None:
             if not self._within_skew(record.receive_monotonic_ns, mapping.receive_monotonic_ns):
@@ -225,8 +227,6 @@ class UbxRawNavEpochAssembler:
             result = self._feed_raw(record, mapping)
             return self._finish_result(record.i_tow_ms, result)
 
-        if record.i_tow_ms in self._retired:
-            return None
         pending = self._raw_pending.get(record.i_tow_ms)
         if pending is None:
             pending = _PendingRawEpoch(record.receive_monotonic_ns)
@@ -269,6 +269,7 @@ class UbxRawNavEpochAssembler:
         if result is not None:
             self._mapping_pending.pop(i_tow_ms, None)
             self._raw_pending.pop(i_tow_ms, None)
+            self._retire(i_tow_ms)
             self._emitted_observations += 1
         return result
 
@@ -283,8 +284,11 @@ class UbxRawNavEpochAssembler:
 
     def _enforce_capacity(self, cache):
         while len(cache) > self.max_pending_epochs:
-            cache.popitem(last=False)
+            evicted_i_tow, _ = cache.popitem(last=False)
             self._capacity_evictions += 1
+            self._raw_pending.pop(evicted_i_tow, None)
+            self._mapping_pending.pop(evicted_i_tow, None)
+            self._retire(evicted_i_tow)
 
     def _expire(self, now_monotonic_ns):
         for i_tow, pending in list(self._raw_pending.items()):
