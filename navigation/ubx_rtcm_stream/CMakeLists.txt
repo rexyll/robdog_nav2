@@ -43,6 +43,11 @@ target_link_libraries(test_fake_usb_transport PRIVATE robodog_ubx_rtcm_stream Th
 target_compile_options(test_fake_usb_transport PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fake_usb_transport_tests COMMAND test_fake_usb_transport)
 
+add_executable(test_libusb_transfer_transport tests/test_libusb_transfer_transport.cpp)
+target_link_libraries(test_libusb_transfer_transport PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
+target_compile_options(test_libusb_transfer_transport PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME libusb_transfer_transport_tests COMMAND test_libusb_transfer_transport)
+
 add_executable(stream_decoder_tests tests/test_stream_decoder.cpp)
 target_link_libraries(stream_decoder_tests PRIVATE robodog_ubx_rtcm_stream)
 target_compile_options(stream_decoder_tests PRIVATE -Wall -Wextra -Wpedantic)
