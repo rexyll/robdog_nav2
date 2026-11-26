@@ -379,6 +379,8 @@ class PtpCorrelationAudit:
         self.max_exchange_samples = 32
         self.capture_windows = {}
         self.transport_windows = {}
+        self.l2_sync_sources = {}
+        self.max_l2_sync_sources = max_capture_windows
 
     @staticmethod
     def _timestamp_fields(message: PtpMessage) -> dict:
@@ -457,6 +459,40 @@ class PtpCorrelationAudit:
                 window["capture_timestamp_max_ns"] = max(
                     window["capture_timestamp_max_ns"], message.capture_timestamp_ns
                 )
+        if message.transport == "ethernet_l2" and message.message_type in {0, 8}:
+            source_key = (
+                message.section_index, message.interface_id,
+                message.domain_number, message.source_port_identity,
+            )
+            source_state = self.l2_sync_sources.get(source_key)
+            if source_state is None:
+                if len(self.l2_sync_sources) >= self.max_l2_sync_sources:
+                    self.l2_sync_sources.pop(next(iter(self.l2_sync_sources)))
+                    self.counts["evicted_l2_sync_sources"] += 1
+                source_state = {
+                    "section_index": message.section_index,
+                    "interface_id": message.interface_id,
+                    "domain_number": message.domain_number,
+                    "source_port_identity": message.source_port_identity,
+                    "sync_messages": 0,
+                    "follow_up_messages": 0,
+                    "first_capture_timestamp_ns": message.capture_timestamp_ns,
+                    "last_capture_timestamp_ns": message.capture_timestamp_ns,
+                    "transport_specific_values": set(),
+                }
+                self.l2_sync_sources[source_key] = source_state
+            if message.message_type == 0:
+                source_state["sync_messages"] += 1
+            else:
+                source_state["follow_up_messages"] += 1
+            source_state["transport_specific_values"].add(message.transport_specific)
+            if message.capture_timestamp_ns is not None:
+                previous_last = source_state["last_capture_timestamp_ns"]
+                if previous_last is None or message.capture_timestamp_ns > previous_last:
+                    source_state["last_capture_timestamp_ns"] = message.capture_timestamp_ns
+                previous_first = source_state["first_capture_timestamp_ns"]
+                if previous_first is None or message.capture_timestamp_ns < previous_first:
+                    source_state["first_capture_timestamp_ns"] = message.capture_timestamp_ns
         transport_key = (message.section_index, message.interface_id,
                          message.transport)
         transport_window = self.transport_windows.get(transport_key)
@@ -601,6 +637,39 @@ class PtpCorrelationAudit:
             for (section_index, interface_id), families in sorted(by_interface.items())
             if {"udp_ip_ptp", "ethernet_l2_ptp"}.issubset(families)
         ]
+        l2_sync_source_observations = []
+        l2_sources_by_domain = {}
+        for key, value in sorted(self.l2_sync_sources.items()):
+            item = dict(value)
+            item["transport_specific_values"] = sorted(
+                item["transport_specific_values"]
+            )
+            l2_sync_source_observations.append(item)
+            domain_key = (
+                item["section_index"], item["interface_id"], item["domain_number"]
+            )
+            l2_sources_by_domain.setdefault(domain_key, set()).add(
+                item["source_port_identity"]
+            )
+        multiple_l2_sync_sources = [
+            {
+                "section_index": section_index,
+                "interface_id": interface_id,
+                "domain_number": domain_number,
+                "source_port_identities": sorted(identities),
+                "source_count": len(identities),
+                "interpretation": (
+                    "Multiple Ethernet-L2 Sync sourcePortIdentity values were "
+                    "observed. They are observed talkers only, not proof of multiple "
+                    "active grandmasters or of which source the MID-360 follows. "
+                    "Livox's documented gPTP mode uses an AUTOSAR time-sync profile "
+                    "without Announce/BMCA; use domain-controller configuration and "
+                    "device status for selection evidence."
+                ),
+            }
+            for (section_index, interface_id, domain_number), identities
+            in sorted(l2_sources_by_domain.items()) if len(identities) > 1
+        ]
         announce_candidates = self.announce_audit.report()["observed_candidates"]
         candidates_by_domain = {}
         for candidate in announce_candidates:
@@ -614,7 +683,9 @@ class PtpCorrelationAudit:
                 "candidate_count": len(set(identities)),
                 "interpretation": (
                     "Multiple distinct GM identities were advertised by Announce "
-                    "messages in this domain. This is a network/configuration risk "
+                    "messages in this domain. This indicator applies to Announce-based "
+                    "PTP profiles only; Livox's documented AUTOSAR gPTP mode cancels "
+                    "Announce and does not use BMCA. It is a network/configuration risk "
                     "for MID-360, whose vendor documentation says multiple master "
                     "clocks are unsupported; packet observations do not establish "
                     "which GM any receiver selected."
@@ -641,6 +712,9 @@ class PtpCorrelationAudit:
             "ptp_transport_observation_limit": self.max_capture_windows,
             "mixed_ptp_transport_interfaces": mixed_transport_interfaces,
             "multiple_gm_candidates_by_domain": multiple_gm_domains,
+            "ethernet_l2_sync_source_observations": l2_sync_source_observations,
+            "ethernet_l2_sync_source_limit": self.max_l2_sync_sources,
+            "multiple_ethernet_l2_sync_sources_by_domain": multiple_l2_sync_sources,
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
                 "delay_req_waiting_delay_resp": len(self.pending_delay_req),
