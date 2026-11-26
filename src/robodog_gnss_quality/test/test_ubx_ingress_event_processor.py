@@ -52,6 +52,9 @@ def event(kind, sequence, *, session=SESSION, generation=GENERATION,
         receive_monotonic_ns=1_000_000 + sequence * 1000,
         dropped_frame_events_total=dropped_frame_events_total,
         protocol=protocol,
+        checksum_status=1 if kind == "Frame" else None,
+        frame_sequence=sequence if kind == "Frame" else None,
+        frame_connection_generation=generation if kind == "Frame" else None,
         frame_bytes=frame_bytes,
     )
 
@@ -163,6 +166,9 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
                 ingress_sequence=1,
                 receive_monotonic_ns=999_999,
                 protocol=0,
+                checksum_status=1,
+                frame_sequence=1,
+                frame_connection_generation=GENERATION,
                 frame_bytes=generic,
             ))
         # Equal timestamps are valid: multiple frames can be decoded from one
@@ -207,6 +213,63 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
         processor.process(event("GenerationStarted", 0, dropped_frame_events_total=1))
         with self.assertRaisesRegex(EpochPairingError, "unexplained dropped-frame"):
             processor.process(event("Stopped", 1, dropped_frame_events_total=1))
+
+
+    def test_ros_message_numeric_enums_convert_to_processor_events(self):
+        from types import SimpleNamespace
+
+        processor = make_processor()
+        start_message = SimpleNamespace(
+            event_type=0,
+            process_session_id=SESSION,
+            connection_generation=GENERATION,
+            ingress_sequence=0,
+            receive_monotonic_ns=1_000_000,
+            dropped_frame_events_total=0,
+            protocol=255,
+            checksum_status=0,
+            frame_sequence=0,
+            frame_connection_generation=0,
+            frame_bytes=[],
+        )
+        processor.process(GnssIngressEvent.from_ros_message(start_message))
+        generic = make_ubx_frame(0x01, 0x07, b"\\x00\\x01")
+        frame_message = SimpleNamespace(
+            event_type=1,
+            process_session_id=SESSION,
+            connection_generation=GENERATION,
+            ingress_sequence=1,
+            receive_monotonic_ns=1_001_000,
+            dropped_frame_events_total=0,
+            protocol=0,
+            checksum_status=1,
+            frame_sequence=0,
+            frame_connection_generation=GENERATION,
+            frame_bytes=list(generic),
+        )
+        self.assertIsNone(processor.process(
+            GnssIngressEvent.from_ros_message(frame_message)
+        ))
+        self.assertEqual(processor.stats().ignored_frames, 1)
+
+    def test_ros_lifecycle_message_rejects_nonempty_frame_sentinels(self):
+        from types import SimpleNamespace
+
+        message = SimpleNamespace(
+            event_type=0,
+            process_session_id=SESSION,
+            connection_generation=GENERATION,
+            ingress_sequence=0,
+            receive_monotonic_ns=1_000_000,
+            dropped_frame_events_total=0,
+            protocol=0,
+            checksum_status=0,
+            frame_sequence=0,
+            frame_connection_generation=0,
+            frame_bytes=[],
+        )
+        with self.assertRaisesRegex(EpochPairingError, "sentinel"):
+            GnssIngressEvent.from_ros_message(message)
 
     def test_mapper_must_enforce_ingress_sequence(self):
         with self.assertRaisesRegex(ValueError, "require ingress_sequence"):
