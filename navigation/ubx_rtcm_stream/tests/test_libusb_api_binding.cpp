@@ -25,7 +25,7 @@ int main()
   std::array<std::uint8_t, 16> buffer{};
   const int fill_result = api.fill_bulk_transfer(
     transfer, nullptr, 0x81, buffer.data(), static_cast<int>(buffer.size()),
-    250, &noop_callback, reinterpret_cast<void *>(0x1234));
+    250, 0, &noop_callback, reinterpret_cast<void *>(0x1234));
   assert(fill_result == LIBUSB_SUCCESS);
 
   // No submit/callback is attempted: free_transfer must safely reclaim the
