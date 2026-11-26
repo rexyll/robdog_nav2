@@ -69,6 +69,6 @@ UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 ci
 - GPS week rollover clock ID；
 - invalid GPS flags、stale/capacity、conflicting duplicate、session reset、并发 callbacks。
 
-## 6. 未完成项
+CI 验收：Actions run `45756478736`，head `caced3828e9c5a7116c32211d6b422d285099907`，Humble/Jammy 与 Jazzy/Noble 全部 success；两个环境各 121 tests、0 failures。该测试覆盖 synthetic payload/mapper，不是设备验收。\n\n## 6. 未完成项
 
 该 mapper 目前由纯 Python payload bytes 调用。尚未从 GnssUsbStream raw Frame queue 或真实 ublox_dgnss USB stream 接入；尚未验证目标 F9P 固件版本、实际 TIMELS source、输出频率、week rollover、leap event 和接收器重启。trusted_leap_sources 必须在目标设备证据明确后配置，不得默认启用。
