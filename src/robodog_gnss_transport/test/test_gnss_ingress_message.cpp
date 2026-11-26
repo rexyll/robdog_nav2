@@ -56,3 +56,30 @@ TEST(GnssIngressMessage, RejectsFramePayloadOnLifecycleEvent) {
   event.frame = Frame{Protocol::Ubx, {0xB5, 0x62}, 0, 0, ChecksumStatus::Valid};
   EXPECT_THROW(to_ros_message(event), std::invalid_argument);
 }
+
+TEST(GnssIngressMessage, ConvertsRtcmAndNmeaProtocolEnums) {
+  GnssIngressEvent rtcm;
+  rtcm.type = GnssIngressEventType::Frame;
+  rtcm.process_session_id = "process-test";
+  rtcm.connection_generation = 9;
+  rtcm.frame = Frame{Protocol::Rtcm3, {0xD3, 0x00, 0x00}, 5, 9, ChecksumStatus::Valid};
+  const auto rtcm_message = to_ros_message(rtcm);
+  EXPECT_EQ(rtcm_message.protocol, rtcm_message.PROTOCOL_RTCM3);
+
+  GnssIngressEvent nmea;
+  nmea.type = GnssIngressEventType::Frame;
+  nmea.process_session_id = "process-test";
+  nmea.connection_generation = 9;
+  nmea.frame = Frame{Protocol::Nmea, {'$', 'G', 'P'}, 6, 9, ChecksumStatus::Absent};
+  const auto nmea_message = to_ros_message(nmea);
+  EXPECT_EQ(nmea_message.protocol, nmea_message.PROTOCOL_NMEA);
+  EXPECT_EQ(nmea_message.checksum_status, nmea_message.CHECKSUM_ABSENT);
+}
+
+TEST(GnssIngressMessage, RejectsFrameEventWithoutPayload) {
+  GnssIngressEvent event;
+  event.type = GnssIngressEventType::Frame;
+  event.process_session_id = "process-test";
+  event.connection_generation = 1;
+  EXPECT_THROW(to_ros_message(event), std::invalid_argument);
+}
