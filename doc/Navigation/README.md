@@ -215,3 +215,4 @@
 - [PTP timestamp exchange / correctionField 原始证据与 Orin 运行态核验](09_mid360_timestamp_and_point_lio_integration_audit.md#155-sync--follow_updelay-与-correctionfield-时间戳关联)
 - [Orin PTP host inventory 只读采集脚本](../../tools/collect_ptp_host_inventory.sh)
 - [PTP Announce 候选观测、GM 声明变化与序号连续性审计](09_mid360_timestamp_and_point_lio_integration_audit.md#154-announce-候选来源变化与序号连续性观测)
+- [PTP responder identity 与 MID-360 time_type 共观测审计](09_mid360_timestamp_and_point_lio_integration_audit.md#16-ptp-exchange-responder-校验与-mid-360-timebase-共观测)
