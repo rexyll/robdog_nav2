@@ -471,6 +471,7 @@ def test_journal_parser_extracts_ptp4l_gm_port_and_announce_events():
         "gm_candidate_observed", "gm_selected", "port_state_transition",
         "master_announce_transmit_timeout",
     ]
+    assert evidence["events"][2]["port"] == "port 1 (eth0)"
     assert evidence["coverage_status"] == "unknown"
     assert "does not prove" in evidence["absence_interpretation"]
     assert evidence["events"][-1]["interpretation"].startswith("ptp4l master announce")
