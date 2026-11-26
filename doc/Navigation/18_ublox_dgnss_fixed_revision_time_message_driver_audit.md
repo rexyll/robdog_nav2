@@ -123,6 +123,20 @@ node 为 UBX timer 与 USB-events timer 创建了**不同的 MutuallyExclusive c
 
 此外，`usb.cpp` 的 `transfer_queue_` 在 `cleanup_transfer_queue()`、`cleanup_all_transfers()`、`queued_transfer_in_num()` 中有若干 `size()==0` 检查位于 mutex 之前；`transfer_t::completed` 在 libusb callback 中写入、在持锁队列扫描中读取，但写入方没有同一 mutex 或 atomic。若 libusb callbacks 与其他 Connection 方法并发，这些访问也需要线程安全审查。当前未通过 TSAN 验证。
 
+### 5.7 RTCM3 接收校验与队列并发问题
+
+固定版本 `ublox_in_callback()` 对 RTCM 的识别条件为 `len > 2 && buf[0] == 0xD3 && buf[1] == 0x00`，随后将整个 transfer 原样放入 RTCM queue。该实现存在三类问题：
+
+1. RTCM3 header 的第二字节包含 10-bit payload length 的高 2 bit（其余 6 bit 为 reserved）。要求第二字节严格等于 `0x00` 会拒绝长度高 2 bit 非零的合法 RTCM3 帧，即 payload length 256–1023 bytes 的帧。正确处理应校验 reserved bits 为零，并从第二、三字节解码完整 10-bit length。
+2. 该入口没有根据 header length 验证 transfer 中是否存在完整 frame，也没有在一个 transfer 内循环拆分多个 RTCM3 frame 或保留跨 transfer 的部分帧。
+3. `rtcm_queue_frame_in()` 直接把缓存内容发布到 `rtcm_msgs/Message`；未发现 CRC24Q 校验。CRC24Q 应在 frame 完整且长度正确后验证，校验失败的帧不得发布为有效改正数据。
+
+RTCM timer 的队列访问与 UBX timer 结构相同：先在无锁状态下检查 `rtcm_queue_.size()`，再通过 `rtcm_queue_[0]` 复制，最后才加锁 `pop_front()`。USB callback 在 `rtcm_queue_mutex_` 下 push。构造函数把 RTCM timer 与 USB-events timer 放在不同 MutuallyExclusive callback groups；固定标准 launch 使用 `component_container_mt`。因此 RTCM queue 同样存在由标准部署配置可触发的并发读写缺陷（静态确认，未 TSAN 复现）。RTCM 与 UBX 应统一采用“锁内检查并 move/copy front + pop，锁外处理局部副本”的消费模式，避免持锁执行 ROS publish 或复杂解析。
+
+### 5.8 UBX frame 长度校验应前移到构造边界
+
+`ubx::Frame::from_buf_build()` 直接读取 `buf[0..5]`、将 `buf[4..5]` 解释为 payload length，并从 vector 末尾读取 checksum；它没有先验证 `buf.size() >= 8`，也没有验证 `buf.size() == declared_payload_length + 8`。此外，`payload_to_hex()` 按 header 声明长度遍历 payload 指针。因此不能只在 queue dispatch/checksum 阶段补检查：必须在 stream decoder 产出完整 UBX frame 后、调用 `from_buf_build()` 或暴露 payload 指针前完成最小长度、最大 payload、精确总长检查。避免未校验的 Frame 对象进入任何调用者。
+
 ### 5.6 固定版本标准 launch 明确使用 MultiThreadedExecutor 容器
 
 进一步核对固定 commit 中的 `ublox_dgnss/launch/ublox_rover_hpposllh.launch.py`：其 `ComposableNodeContainer` 明确指定 `rclcpp_components` 的 `component_container_mt`。因此，对该 launch 所启动的 node，不能再把“SingleThreadedExecutor 可能串行化”当作默认部署保护。UBX timer 与 USB-events timer 属不同 MutuallyExclusive callback groups，MultiThreadedExecutor 可在不同组之间并发调度；USB libusb event callback 可 push UBX queue，同时 UBX timer 执行未持锁的 `size()`/index 读取。**对该标准 launch，node-level UBX queue 的未同步读写应提升为已由部署配置触发的并发缺陷（静态证据），但仍未通过 TSAN/压力测试观察到运行时故障。**
