@@ -81,5 +81,7 @@ jobs:
           sudo apt-get install --yes pkg-config libusb-1.0-0-dev
       - name: Configure optional production binding
         run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-libusb -DROBODOG_BUILD_LIBUSB_BINDING=ON -DCMAKE_BUILD_TYPE=Debug
-      - name: Build production binding
-        run: cmake --build build/ubx_rtcm_stream-libusb --target robodog_libusb_binding --parallel 2
+      - name: Build production binding and native bridge test
+        run: cmake --build build/ubx_rtcm_stream-libusb --target test_libusb_api_binding --parallel 2
+      - name: Run native bridge smoke test
+        run: ctest --test-dir build/ubx_rtcm_stream-libusb -R libusb_api_binding_tests --output-on-failure
