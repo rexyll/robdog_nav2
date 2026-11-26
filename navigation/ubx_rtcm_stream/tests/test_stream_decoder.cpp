@@ -83,6 +83,11 @@ void test_multiple_frames_noise_and_recovery() {
   stream.insert(stream.end(), bad.begin(), bad.end());
   stream.insert(stream.end(), u.begin(), u.end());
 
+  StreamDecoder whole_chunk_decoder;
+  const auto whole_chunk_frames = whole_chunk_decoder.feed(stream);
+  require(whole_chunk_frames.size() == 3,
+          "concatenated frames in one chunk were not all decoded");
+
   StreamDecoder decoder;
   std::vector<Frame> frames;
   for (auto byte : stream) {
