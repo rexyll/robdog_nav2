@@ -1,6 +1,6 @@
 # UBX / RTCM3 / NMEA 增量字节流解析器设计与测试合同
 
-- 状态：总体设计合同；UBX/RTCM3 第一实现切片已落地并完成本地 ASan/UBSan 测试；NMEA、property/fuzz、ROS/libusb 集成仍未实现/验证
+- 状态：UBX/RTCM3/NMEA 独立解析器已实现并完成本地 ASan/UBSan 测试；随机分片与本地 fuzz smoke 已验证；ROS/libusb 集成、队列并发和 USB lifecycle 修复仍未实现/验证
 - 审计对象：aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e
 - 关联审计：18_ublox_dgnss_fixed_revision_time_message_driver_audit.md
 - 项目分支：nav
