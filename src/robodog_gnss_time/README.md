@@ -309,3 +309,20 @@ NTP server's UTC traceability. The configured `source_id` must be added to the
 downstream immutable policy allowlist only after deployment architecture and
 timing budget review. The node's synthetic tests do not prove the host's real
 Chrony daemon, source selection, PHC chain, or UTC accuracy.
+
+
+## LinuxPTP pmc response parser (not a host-time producer)
+
+`linuxptp_pmc_parser.py` is a strict, transport-independent parser for
+selected read-only `pmc GET` response datasets:
+`TIME_STATUS_NP`, `CURRENT_DATA_SET`, `PORT_DATA_SET`, and
+`TIME_PROPERTIES_DATA_SET`. It validates the exact response header, required
+fields, duplicate/unknown keys, integer/boolean/decimal types and leap-flag
+consistency. It preserves `master_offset` as PTP clock-to-GM evidence and
+does not convert it into host SystemTime-to-UTC offset.
+
+The parser is not a pmc command runner, does not connect to a ptp4l socket,
+does not know the target PTP domain/interface/PHC, and does not publish
+`HostTimeSyncStatus`. It is a parser/test slice only; a future collector must
+first use the target machine's verified socket/domain/profile and separately
+verify phc2sys's actual CLOCK_REALTIME sink and time-scale conversion chain.
