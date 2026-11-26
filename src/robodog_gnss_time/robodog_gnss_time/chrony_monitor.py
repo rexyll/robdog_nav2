@@ -122,7 +122,6 @@ class ChronyHostTimeMonitor:
             state = "synchronized" if healthy else "unsynchronized"
             fault = ""
         except Exception as exc:
-            boot_id = ""
             evidence = {
                 "reference_id": "unavailable", "stratum": 0,
                 "utc_offset_ns": 0, "uncertainty_ns": 0,
