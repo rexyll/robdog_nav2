@@ -50,12 +50,17 @@ placeholder.
 
 The navigation observation path uses five additional messages:
 
-- `GnssNavPvt`: raw NAV-PVT flags, iTOW and process/connection/GPS-week context.
-- `GnssNavHpPosLlh`: integer LLH and high-precision residual fields plus raw invalid-LLH flags.
-- `GnssNavCov`: raw validity flags and NED covariance upper-triangle terms in m².
-- `GnssNavStatus`: raw NAV-STATUS flags and fixStat bytes for an independent quality cross-check.
+- `GnssNavPvt`: decoded `gps_fix_type`, `gnss_fix_ok`, `diff_soln`, carrier solution and `invalid_llh`.
+- `GnssNavHpPosLlh`: integer LLH/high-precision fields and the individual invalid-component booleans.
+- `GnssNavCov`: decoded `pos_cor_valid` / `vel_cor_valid` and NED covariance upper-triangle terms in m².
+- `GnssNavStatus`: decoded fix validity, differential state, `carr_soln_valid` and carrier solution for an independent quality cross-check.
 - `GnssObservation`: one joined observation with GPST source timestamp/clock identity, host monotonic receive time, ENU covariance, RTK state and optional UTC/leap metadata.
 
 All four input messages carry exact receiver iTOW, GPS week, process session ID and connection generation. They deliberately omit ROS Header timestamps: callback adapters sample host monotonic time locally. The runtime rejects stale session/generation/week data, requires an exact iTOW match across all four inputs and a valid receiver-time mapping, and does not infer receiver time from iTOW or wall clock. HPPOSLLH invalidLlh and NAV-COV posCovValid are preserved as raw validity gates; NAV-COV NED cross terms are transformed to ENU with the correct Down-axis sign changes.
 
 These contracts describe decoded fields and do not themselves provide a UBX hardware driver or prove that a particular upstream publisher populates them correctly. Package licensing remains `UNSPECIFIED` pending repository-level license governance.
+
+
+### Pinned `ublox_dgnss` source compatibility
+
+The audited source pin `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` publishes the corresponding decoded ROS types on `ubx_nav_pvt`, `ubx_nav_hp_pos_llh`, `ubx_nav_cov` and `ubx_nav_status`. Its messages use `itow`, nested `gps_fix.fix_type` / `carr_soln.status`, individual HPPOSLLH invalid booleans, and `pos_cor_valid`; they do not publish the normalized process-session/connection-generation/GPS-week context. The source adapter therefore requires that context separately and ignores the upstream `Header.stamp`. The upstream node stamps that header using `rclcpp::Clock().now()` in its USB receive callback; it is a host-side arrival stamp, not receiver GPST. The bridge from this upstream package into the normalized messages must supply a trustworthy connection-generation lifecycle signal before it can be treated as reconnect-safe.
