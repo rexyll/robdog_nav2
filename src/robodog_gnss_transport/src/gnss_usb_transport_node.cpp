@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 namespace robodog_gnss_transport {
 namespace {
 std::string make_process_session_id() {
