@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer="RobDog Nav2 maintainers",
     maintainer_email="maintainers@example.invalid",
-    description="ROS 2 runtime consumer for ordered GNSS receiver-time ingress.",
+    description="ROS 2 GNSS runtime and host time synchronization evidence monitor.",
     license="UNSPECIFIED",
     tests_require=["pytest"],
     entry_points={
