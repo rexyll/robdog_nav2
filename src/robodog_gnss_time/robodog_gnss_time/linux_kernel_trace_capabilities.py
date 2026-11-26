@@ -265,7 +265,7 @@ def main(argv=None):
     )
     rendered = json.dumps(report, indent=2, sort_keys=True)
     if args.output:
-        Path(args.output).write_text(rendered + "\\n", encoding="utf-8")
+        Path(args.output).write_text(rendered + "\n", encoding="utf-8")
     else:
         print(rendered)
     return 0
