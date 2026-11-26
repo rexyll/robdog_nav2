@@ -146,6 +146,23 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
                 stale, source_clock_id=GENERATION, source_timestamp_ns=1_000_000
             )
 
+
+    def test_all_four_message_types_reject_stale_gps_week(self):
+        joiner = make_joiner()
+        records = (
+            ("pvt", make_pvt(gps_week=GPS_WEEK - 1)),
+            ("position", make_position()),
+            ("covariance", make_covariance()),
+            ("status", make_status()),
+        )
+        for kind, record in records:
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+                    getattr(joiner, "add_" + kind)(
+                        record, source_clock_id=GENERATION,
+                        source_timestamp_ns=1_000_000,
+                    )
+
     def test_different_itow_samples_never_cross_join(self):
         joiner = make_joiner()
         joiner.add_pvt(
