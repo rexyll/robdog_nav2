@@ -74,3 +74,8 @@ consecutive Fixed recovery count, optional uncertainty/speed metrics, and
 the source session/generation/week/iTOW identity. Missing metrics use explicit
 validity booleans plus zero sentinels. This status is not a NavSatFix or
 motion command.
+
+
+## HostTimeSyncStatus
+
+`HostTimeSyncStatus.msg` carries host UTC synchronization evidence without a ROS Header timestamp: state (`unknown` / `synchronized` / `unsynchronized` / `fault`), source identifier, Linux boot ID, signed host-SystemTime-minus-UTC offset, uncertainty, CLOCK_MONOTONIC sample timestamp and strictly increasing sample sequence. The boot ID fences monotonic samples across host reboots; the sequence and sample timestamp fence replay/reordering within one boot. This message is evidence supplied by a host-time monitor, not proof by itself. Consumers must validate source IDs against an immutable deployment allowlist and must reject unknown, stale, reordered, cross-boot or untrusted samples. No production host-time monitor is included yet.
