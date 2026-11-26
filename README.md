@@ -120,7 +120,7 @@ flowchart TB
 - [ROS 2 Workspace 与 package 规划](docs/implementation/ros2_workspace_and_packages.md)
 - [导航与感知验收测试矩阵](docs/testing/acceptance_test_matrix.md)
 - [实施任务计划 TaskPlan（唯一进度台账）](TaskPlan.md)
-- [完整导航模块专项研究目录](doc/Navigation/README.md)
+- [完整导航模块专项研究目录](doc/Navigation/README.md)\n- [独立 UBX/RTCM3 C++ stream parser 与测试](navigation/ubx_rtcm_stream/README.md)
 - [GNSS PTP Grandmaster 与 PPS 时间标签分发 ADR 候选](doc/Navigation/16_gnss_ptp_grandmaster_vs_pps_distribution_adr.md)
 - [TaskPlan Part 1：架构与硬件设计](TaskPlan_Part-01_ArchitectureAndHardware.md)
 - [TaskPlan Part 2：测试、风险与参考资料](TaskPlan_Part-02_TestingAndGovernance.md)
