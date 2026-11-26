@@ -89,6 +89,15 @@ class HostTimeSyncStatusAdapter:
             raise ValueError("stratum must be uint8")
         if not isinstance(message.leap_status, str) or not message.leap_status.strip():
             raise ValueError("leap_status must be a non-empty string")
+        reference_id = message.reference_id.strip()
+        leap_status = message.leap_status.strip()
+        if self._STATE_MAP[message.state] == "synchronized":
+            if not 1 <= message.stratum <= 15:
+                raise ValueError("synchronized Chrony evidence requires stratum in [1, 15]")
+            if leap_status.lower() != "normal":
+                raise ValueError("synchronized Chrony evidence requires Leap status Normal")
+            if reference_id in {"00000000", "0000000000000000", "0.0.0.0", "::"}:
+                raise ValueError("synchronized Chrony evidence requires a valid reference ID")
         sample = HostTimeSyncSample(
             state=self._STATE_MAP[message.state],
             source_id=message.source_id,
@@ -97,9 +106,9 @@ class HostTimeSyncStatusAdapter:
             uncertainty_ns=uncertainty,
             sample_monotonic_ns=sample_ns,
             sample_sequence=sequence,
-            reference_id=message.reference_id,
+            reference_id=reference_id,
             stratum=message.stratum,
-            leap_status=message.leap_status,
+            leap_status=leap_status,
         )
         self._last_sequence = sequence
         self._last_sample_monotonic_ns = sample_ns
