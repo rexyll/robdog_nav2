@@ -218,3 +218,22 @@ def test_expired_epoch_is_retired_and_late_duplicate_cannot_resurrect():
     a.process_event(frame_event(0x07, pvt_payload(), 2, 1010))
     assert a.stats().buffered_before_mapping == 1
     assert a.handle_mapping(mapping(receive_ns=1020)) is None
+
+
+def test_gps_week_rollover_reuses_i_tow_after_generation_context_changes():
+    a = assembler()
+    start(a)
+    send_four(a, first_sequence=1, first_receive=1100, itow=I_TOW)
+    first = a.handle_mapping(mapping(receive_ns=1450, week=WEEK))
+    assert first is not None
+
+    # Same iTOW after the week boundary is buffered as a candidate, not emitted
+    # against the old week's retired epoch.
+    send_four(a, first_sequence=5, first_receive=2000, itow=I_TOW)
+    assert a.stats().emitted_observations == 1
+    next_week = mapping(receive_ns=2450, week=WEEK + 1)
+    second = a.handle_mapping(next_week)
+    assert second is not None
+    assert second.time_mapping.gps_week == WEEK + 1
+    assert second.observation.source_clock_id == next_week.source_clock_id
+    assert a.stats().emitted_observations == 2
