@@ -38,6 +38,8 @@ private:
   std::condition_variable condition_;
   std::thread worker_;
   bool started_{false};
+  bool thread_ready_{false};
+  bool thread_start_failed_{false};
   int last_event_error_{0};
   bool callback_exception_seen_{false};
 };
