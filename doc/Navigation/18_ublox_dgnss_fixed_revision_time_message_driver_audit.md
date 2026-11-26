@@ -72,7 +72,7 @@ parser 将 status flags 拆为 gpsFixOK、diffSoln、wknSet、towSet 等字段�
 1. 在消息类型 payload constructor 或 FrameContainer dispatch 前，验证消息 exact payload length；至少 TIMEUTC=20 bytes、STATUS=16 bytes、PVT=92 bytes（需以固定目标协议版本再核对）。
 2. 不匹配时返回结构化 parse error/reason code；不得继续执行字段 memcpy。
 3. `buf_offset` 增加通用边界检查，避免其他 UBX parser 重复暴露相同风险。
-4. 检查完整帧 parser 对 sync、declared length、buffer actual length、checksum、class/id 的验证顺序；校验 checksum 时必须同时验证两个 checksum byte（不能只在两个都不匹配时才失败）。
+4. 已在 `ubx.hpp::get_polled_frame()` 发现 checksum 条件使用 `ck_a != received_a && ck_b != received_b`。该逻辑只有两个 checksum byte 都错误时才拒绝；若仅一个 byte 错误则会放行。应改为任一 byte 不匹配即拒绝（`||`），并增加 A-only/B-only/both mismatch 三组测试。此证据来自 poll-response 路径；普通异步 USB receive parser 的 checksum 行为仍需单独审计。
 5. 增加 payload 长度 0、1、expected−1、expected、expected+1、最大合法值、declared/actual length 不一致等测试。
 6. 通过 fuzz/property tests 检查 parser 对截断帧、拼接帧、损坏 length、错误 checksum 的 fail-closed 行为。
 
