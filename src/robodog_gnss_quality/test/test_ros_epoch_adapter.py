@@ -122,6 +122,14 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         self.assertEqual(a.pending_count, 0)
         self.assertEqual(a.evicted_stale, 1)
 
+    def test_stale_expiry_uses_monotonic_watermark_and_earliest_receive(self):
+        a = adapter(max_pending_age_ns=20)
+        a.add_time_mapping(mapping(receive=120))
+        a.add_pvt(pvt(receive=100))
+        a.add_status(status(receive=300))
+        self.assertEqual(a.expire_stale(150), 1)
+        self.assertEqual(a.pending_count, 0)
+
     def test_utc_stamp_may_remain_unavailable_even_with_valid_gps_mapping(self):
         a = adapter()
         for record, add in (
