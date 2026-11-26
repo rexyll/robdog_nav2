@@ -107,6 +107,17 @@ def test_quality_node_publishes_recovery_acceptance_and_stale_watchdog():
         assert accepted.consecutive_fixed_samples == 3
         assert accepted.source_clock_id.endswith("gps-week:2450")
 
+        # A stable accepted state still needs a fresh decision carrying each
+        # observation's exact identity; signature deduplication must not starve
+        # the downstream exact-identity joiner.
+        publisher.publish(make_observation(time.monotonic_ns(), 4_000_000_000))
+        spin_until(
+            executor,
+            lambda: len([item for item in received if item.qualified]) >= 2,
+        )
+        accepted_epochs = [item.source_timestamp_ns for item in received if item.qualified]
+        assert 4_000_000_000 in accepted_epochs
+
         spin_until(
             executor,
             lambda: any(item.reason == "fix_stale" for item in received),
