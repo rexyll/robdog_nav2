@@ -145,16 +145,45 @@ public:
   }
 
   int poll_events(unsigned int timeout_ms = 0) {
-    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-    if (closed_ || !api_valid()) return -1;
-    const int rc = api_.handle_events(timeout_ms);
-    reap_callbacks_after_event_pump();
+    std::vector<std::unique_ptr<Context>> drained;
+    int rc = -1;
+    {
+      std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+      if (closed_ || !api_valid()) return -1;
+      rc = api_.handle_events(timeout_ms);
+      drained = take_callbacks_after_event_pump();
+      for (auto & context : drained) {
+        const int actual = std::max(0, context->actual_length);
+        if (context->buffer.size() > static_cast<std::size_t>(actual)) {
+          context->buffer.resize(static_cast<std::size_t>(actual));
+        }
+        api_.free_transfer(context->transfer);
+        context->transfer = nullptr;
+      }
+      callbacks_in_flight_ += drained.size();
+    }
+
+    // User callbacks run outside operation_mutex_: they may submit new work.
+    for (auto & context : drained) {
+      try {
+        context->completion(
+          context->id, context->generation, map_status(context->native_status),
+          std::move(context->buffer), context->actual_length);
+      } catch (...) {
+        std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+        --callbacks_in_flight_;
+        throw;
+      }
+      std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+      --callbacks_in_flight_;
+    }
     return rc;
   }
 
   bool close() {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     if (closed_) return true;
+    if (callbacks_in_flight_ != 0) return false;
     {
       std::lock_guard<std::mutex> lock(registry_mutex_);
       if (!pending_.empty()) return false;
@@ -221,34 +250,18 @@ private:
     if (context->transfer) api_.free_transfer(context->transfer);
   }
 
-  void reap_callbacks_after_event_pump() {
+  std::vector<std::unique_ptr<Context>> take_callbacks_after_event_pump() {
     std::vector<std::unique_ptr<Context>> drained;
-    {
-      std::lock_guard<std::mutex> lock(registry_mutex_);
-      for (auto it = pending_.begin(); it != pending_.end();) {
-        if (it->second->callback_seen) {
-          drained.push_back(std::move(it->second));
-          it = pending_.erase(it);
-        } else {
-          ++it;
-        }
+    std::lock_guard<std::mutex> lock(registry_mutex_);
+    for (auto it = pending_.begin(); it != pending_.end();) {
+      if (it->second->callback_seen) {
+        drained.push_back(std::move(it->second));
+        it = pending_.erase(it);
+      } else {
+        ++it;
       }
     }
-
-    // Do not free native transfers or callback contexts inside libusb's
-    // callback. handle_events() has returned before this finalization runs.
-    for (auto & context : drained) {
-      const auto status = map_status(context->native_status);
-      const int actual = std::max(0, context->actual_length);
-      if (context->buffer.size() > static_cast<std::size_t>(actual)) {
-        context->buffer.resize(static_cast<std::size_t>(actual));
-      }
-      api_.free_transfer(context->transfer);
-      context->transfer = nullptr;
-      context->completion(
-        context->id, context->generation, status,
-        std::move(context->buffer), context->actual_length);
-    }
+    return drained;
   }
 
   Api api_;
@@ -257,6 +270,7 @@ private:
   std::mutex operation_mutex_;
   std::map<std::uint64_t, std::unique_ptr<Context>> pending_;
   bool closed_{false};
+  std::size_t callbacks_in_flight_{0};
 };
 
 }  // namespace robodog_protocol
