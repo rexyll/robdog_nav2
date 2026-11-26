@@ -27,8 +27,8 @@ struct RuntimeFake {
   std::mutex mutex;
   std::vector<RuntimeNativeTransfer *> pending;
   std::vector<RuntimeNativeTransfer *> events;
-  bool transport_closed{false};
-  bool session_device_closed_after_transport{false};
+  std::atomic<int> callbacks_completed{0};
+  bool session_device_closed_after_callback_drain{false};
   int context_exits{0};
 
   robodog_protocol::LibusbDeviceSession::Api device_api() {
@@ -39,7 +39,7 @@ struct RuntimeFake {
       return reinterpret_cast<void *>(0x20);
     };
     a.close_device = [this](void *) {
-      session_device_closed_after_transport = transport_closed;
+      session_device_closed_after_callback_drain = callbacks_completed.load() == 1;
     };
     a.get_bulk_endpoints = [](void *, std::vector<UsbBulkEndpointDescriptor> & out) {
       out = {{1, 0, 0x81, 64}, {1, 0, 0x02, 64}};
@@ -90,7 +90,7 @@ struct RuntimeFake {
       t->callback(t, t->status, t->actual_length, t->user_data);
       return 0;
     };
-    a.close_device = [this](void *) { transport_closed = true; };
+    a.close_device = [](void *) {};
     return a;
   }
 };
@@ -114,12 +114,12 @@ int main() {
         std::vector<std::uint8_t>, int) {
       assert(status == LibusbCompletionStatus::Cancelled);
       ++callback_count;
+      ++fake.callbacks_completed;
     }));
 
   assert(runtime.shutdown(1000));
   assert(callback_count.load() == 1);
-  assert(fake.transport_closed);
-  assert(fake.session_device_closed_after_transport);
+  assert(fake.session_device_closed_after_callback_drain);
   assert(fake.context_exits == 1);
   assert(!runtime.is_open());
   return 0;
