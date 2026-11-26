@@ -131,6 +131,24 @@ def _run_readonly_command(name, argv, timeout_s, runner=None):
     return result
 
 
+def _ptp_boundary_identity(snapshot):
+    """Return only PTP identity/state fields suitable for boundary comparison."""
+    responses = snapshot.responses
+    time_status = responses["TIME_STATUS_NP"].values
+    port = responses["PORT_DATA_SET"]
+    parent = responses["PARENT_DATA_SET"].values
+    default = responses["DEFAULT_DATA_SET"].values
+    return {
+        "clock_identity": snapshot.clock_identity.lower(),
+        "port_identity": str(port.values["portIdentity"]).lower(),
+        "port_state": str(port.values["portState"]),
+        "domain_number": default["domainNumber"],
+        "gm_present": time_status["gmPresent"],
+        "gm_identity": str(time_status["gmIdentity"]).lower(),
+        "parent_grandmaster_identity": str(parent["grandmasterIdentity"]).lower(),
+    }
+
+
 def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=None):
     """Collect raw read-only host/PTP evidence; never claim host UTC synchronized."""
     if not isinstance(config, LinuxPtpHostEvidenceConfig):
@@ -143,6 +161,35 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     except OSError as exc:
         boot_id = None
         boot_id_error = str(exc)
+
+    pmc_argv = [
+        "pmc", "-u", "-s", config.pmc_socket, "-d", str(config.domain_number),
+        "-t", f"0x{config.transport_specific:x}", "-b", "0",
+    ]
+    if config.target_port_identity:
+        pmc_argv.append(f"TARGET {config.target_port_identity}")
+    pmc_argv.extend(_PMC_GET_COMMANDS)
+
+    # Capture a read-only PTP identity baseline before the host inventory.
+    pmc_boundary_before = _run_readonly_command(
+        "pmc_identity_boundary_before", pmc_argv, config.timeout_s, runner=runner,
+    )
+    pmc_boundary_before_validation = {"status": "not_run"}
+    if pmc_boundary_before["status"] == "ok":
+        try:
+            before_snapshot = parse_pmc_snapshot(pmc_boundary_before["stdout"])
+            validate_pmc_snapshot_domain(before_snapshot, config.domain_number)
+            if config.target_port_identity and (
+                str(before_snapshot.responses["PORT_DATA_SET"].values["portIdentity"]).lower()
+                != config.target_port_identity.lower()
+            ):
+                raise ValueError("boundary PORT_DATA_SET identity does not match configured TARGET")
+            pmc_boundary_before_validation = {
+                "status": "valid",
+                "identity": _ptp_boundary_identity(before_snapshot),
+            }
+        except (TypeError, ValueError) as exc:
+            pmc_boundary_before_validation = {"status": "invalid", "error": str(exc)}
 
     commands = [
         ("timedatectl", ["timedatectl", "show"]),
@@ -168,15 +215,8 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
         for name, argv in commands
     ]
-    pmc_argv = [
-        "pmc", "-u", "-s", config.pmc_socket, "-d", str(config.domain_number),
-        "-t", f"0x{config.transport_specific:x}", "-b", "0",
-    ]
-    if config.target_port_identity:
-        # TARGET changes only pmc client-side destination selection; it is not
-        # a PTP SET/CMD management operation and does not alter clock state.
-        pmc_argv.append(f"TARGET {config.target_port_identity}")
-    pmc_argv.extend(_PMC_GET_COMMANDS)
+    # TARGET, when configured, changes only pmc client-side destination
+    # selection; it is not a remote SET/CMD management operation.
     pmc_result = _run_readonly_command(
         "pmc_get_snapshot", pmc_argv, config.timeout_s, runner=runner,
     )
@@ -212,7 +252,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     # inventory. The six GET responses are sequential observations returned
     # by one pmc process; the management protocol output carries no common
     # sample instant, so do not describe them as an atomic snapshot.
-    all_command_results = results + [pmc_result]
+    all_command_results = [pmc_boundary_before] + results + [pmc_result]
     ptp_device_paths = sorted(glob.glob("/dev/ptp*"))
     sysfs_ptp_paths = sorted(glob.glob(
         f"/sys/class/net/{config.interface}/device/ptp/ptp*"
@@ -234,7 +274,36 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         realtime_elapsed_ns - monotonic_elapsed_ns
     )
 
+    pmc_boundary_comparison = {"status": "unavailable"}
+    if (
+        pmc_boundary_before_validation["status"] == "valid"
+        and pmc_validation["status"] == "valid"
+    ):
+        before_identity = pmc_boundary_before_validation["identity"]
+        after_identity = _ptp_boundary_identity(snapshot)
+        changed_fields = [
+            key for key in before_identity
+            if before_identity[key] != after_identity[key]
+        ]
+        pmc_boundary_comparison = {
+            "status": "unchanged" if not changed_fields else "changed",
+            "changed_fields": changed_fields,
+            "before": before_identity,
+            "after": after_identity,
+            "interpretation": (
+                "Boundary comparison only; matching endpoints do not prove "
+                "that no transient GM or port-state change occurred inside "
+                "the collection window."
+            ),
+        }
+
     collection_issues = []
+    if pmc_boundary_before_validation["status"] != "valid":
+        collection_issues.append(
+            f"pmc_identity_boundary_before_not_valid:{pmc_boundary_before_validation['status']}"
+        )
+    if pmc_boundary_comparison["status"] == "changed":
+        collection_issues.append("ptp_identity_changed_between_collection_boundaries")
     if not boot_id:
         collection_issues.append("host_boot_id_unavailable")
     if not boot_id_after:
@@ -293,6 +362,8 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "interface_sysfs_ptp_paths": [os.path.realpath(path) for path in sysfs_ptp_paths],
         "commands": all_command_results,
         "pmc_snapshot_validation": pmc_validation,
+        "pmc_identity_boundary_before_validation": pmc_boundary_before_validation,
+        "pmc_identity_boundary_comparison": pmc_boundary_comparison,
         "collection_status": collection_status,
         "collection_issues": collection_issues,
         "host_time_sync_claim": "not_evaluated",
