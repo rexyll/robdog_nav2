@@ -7,12 +7,13 @@ from audit_mid360_pcap import audit_packet_records
 from pcapng_reader import PcapngPacket
 
 
-def mid360_payload(data_type, dot_num=1, corrupt_crc=False, udp_cnt=3, frame_cnt=1):
+def mid360_payload(data_type, dot_num=1, corrupt_crc=False, udp_cnt=3, frame_cnt=1,
+                   time_type=1):
     sample_size = {0: 24, 1: 14, 2: 8, 3: 10}[data_type]
     data = bytes(range(sample_size * dot_num))
     payload = bytearray(36 + len(data))
     struct.pack_into("<BHHHHBBB", payload, 0, 0, len(payload), 100,
-                     dot_num, udp_cnt, frame_cnt, data_type, 1)
+                     dot_num, udp_cnt, frame_cnt, data_type, time_type)
     struct.pack_into("<Q", payload, 28, 1_700_000_000_000_000_000)
     payload[36:] = data
     crc = zlib.crc32(payload[28:]) & 0xffffffff
@@ -98,6 +99,43 @@ class TestMid360CaptureAudit(unittest.TestCase):
         self.assertEqual(report["ptp_audit"]["message_count"], 1)
         self.assertEqual(report["ptp_audit"]["message_types"], {"sync": 1})
         self.assertEqual(report["valid_payloads"]["point_cloud"], 1)
+
+    def test_sensor_time_ranges_and_ptp_co_observation_are_not_domain_binding(self):
+        sensor_packet = record(mid360_payload(1, time_type=1, udp_cnt=10), 56300)
+        ptp = bytearray(44)
+        ptp[0] = 0
+        ptp[1] = 2
+        struct.pack_into("!H", ptp, 2, len(ptp))
+        ptp[4] = 7
+        ptp[20:30] = bytes.fromhex("0011223344556677") + struct.pack("!H", 1)
+        struct.pack_into("!H", ptp, 30, 42)
+        ptp[34:40] = (100).to_bytes(6, "big")
+        struct.pack_into("!I", ptp, 40, 123)
+        frame = raw_ipv4_udp(bytes(ptp), 319, 319)
+        ptp_packet = PcapngPacket(
+            0, 0, 101, 123, 123, len(frame), len(frame), frame, True, False
+        )
+        report = audit_packet_records([sensor_packet, ptp_packet])
+        observation, = report["sensor_time_observations"]
+        self.assertEqual(observation["time_type"], 1)
+        self.assertEqual(observation["packet_count"], 1)
+        self.assertEqual(observation["sensor_timestamp_min_ns"],
+                         1_700_000_000_000_000_000)
+        co_observation, = report["ptp_sensor_timebase_co_observations"]
+        self.assertEqual(co_observation["ptp_domain_number_observed"], 7)
+        self.assertIn("does not bind", co_observation["interpretation"])
+        self.assertIn("not proof", report["time_semantics"]["ptp_sensor_co_observation"])
+
+    def test_sensor_observations_are_separated_by_time_type(self):
+        report = audit_packet_records([
+            record(mid360_payload(1, time_type=1), 56300),
+            record(mid360_payload(1, time_type=2), 56300),
+        ])
+        self.assertEqual(
+            {item["time_type"] for item in report["sensor_time_observations"]},
+            {1, 2},
+        )
+        self.assertEqual(len(report["sensor_time_observations"]), 2)
 
     def test_crc_error_counted_without_aborting_capture(self):
         report = audit_packet_records([
