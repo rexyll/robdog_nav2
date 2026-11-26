@@ -4,7 +4,7 @@ import unittest
 
 from pcapng_reader import PcapngPacket
 from ptp_packet_audit import (
-    PtpPacketError, audit_ptp_records, parse_ptp_v2_message,
+    PtpPacketError, PtpCorrelationAudit, audit_ptp_records, parse_ptp_v2_message,
 )
 
 
@@ -57,6 +57,27 @@ def ethernet_ptp(payload, vlan=False):
     if vlan:
         return header + struct.pack("!HHH", 0x8100, 7, 0x88f7) + payload
     return header + struct.pack("!H", 0x88f7) + payload
+
+
+def announce_message(*, source=PORT_A, sequence=1, domain=0, gm_identity=None,
+                    priority1=128, clock_class=248, priority2=128,
+                    steps_removed=0, capture_timestamp_ns=None):
+    body = bytearray(30)
+    body[:10] = timestamp(200, 456)
+    struct.pack_into("!h", body, 10, 37)
+    body[13] = priority1
+    body[14] = clock_class
+    body[15] = 0x20
+    struct.pack_into("!H", body, 16, 0x1234)
+    body[18] = priority2
+    body[19:27] = gm_identity or CLOCK_A
+    struct.pack_into("!H", body, 27, steps_removed)
+    body[29] = 0x20
+    return parse_ptp_v2_message(
+        ptp_message(11, source=source, sequence=sequence, domain=domain,
+                    body=bytes(body)),
+        transport="udp/320", capture_timestamp_ns=capture_timestamp_ns,
+    )
 
 
 class TestPtpPacketAudit(unittest.TestCase):
@@ -166,6 +187,46 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(msg.grandmaster_identity, "aa:bb:cc:dd:ee:ff:00:11")
         self.assertEqual(msg.steps_removed, 3)
         self.assertEqual(msg.time_source, 0x20)
+
+    def test_announce_candidates_sequence_and_source_gm_changes(self):
+        audit = PtpCorrelationAudit()
+        gm_a = bytes.fromhex("aabbccddeeff0011")
+        gm_b = bytes.fromhex("aabbccddeeff0022")
+        gm_c = bytes.fromhex("aabbccddeeff0033")
+        messages = [
+            announce_message(sequence=10, gm_identity=gm_a, capture_timestamp_ns=100),
+            announce_message(sequence=12, gm_identity=gm_a, capture_timestamp_ns=200),
+            announce_message(sequence=11, gm_identity=gm_a, capture_timestamp_ns=300),
+            announce_message(sequence=13, gm_identity=gm_b, capture_timestamp_ns=400),
+            announce_message(source=PORT_B, sequence=1, gm_identity=gm_c),
+            announce_message(sequence=1, domain=1, gm_identity=gm_a),
+        ]
+        for message in messages:
+            audit.observe(message)
+        report = audit.report()["announce_audit"]
+        self.assertEqual(report["counts"]["announce_sequence_gap_observed"], 1)
+        self.assertEqual(report["counts"]["announce_sequence_out_of_order_or_late"], 1)
+        self.assertEqual(report["counts"]["announcing_source_gm_identity_changes"], 1)
+        self.assertEqual(report["selection_status"], "NOT_INFERRED_FROM_PACKET_CAPTURE")
+        domain_zero = [c for c in report["observed_candidates"] if c["domain_number"] == 0]
+        domain_one = [c for c in report["observed_candidates"] if c["domain_number"] == 1]
+        self.assertEqual({c["grandmaster_identity"] for c in domain_zero},
+                         {gm_a.hex(":"), gm_b.hex(":"), gm_c.hex(":")})
+        self.assertEqual(len(domain_one), 1)
+        self.assertEqual(domain_one[0]["grandmaster_identity"], gm_a.hex(":"))
+        self.assertEqual(report["observed_source_gm_identity_changes"][0]
+                         ["capture_timestamp_ns"], 400)
+
+    def test_announce_audit_bounds_candidate_and_source_state(self):
+        audit = PtpCorrelationAudit(max_pending=1)
+        audit.observe(announce_message(source=PORT_A, sequence=1))
+        audit.observe(announce_message(source=PORT_B, sequence=1,
+                                       gm_identity=bytes.fromhex("0102030405060708")))
+        report = audit.report()["announce_audit"]
+        self.assertEqual(len(report["announcing_sources"]), 1)
+        self.assertEqual(len(report["observed_candidates"]), 1)
+        self.assertEqual(report["counts"]["evicted_announce_sources"], 1)
+        self.assertEqual(report["counts"]["evicted_announce_candidates"], 1)
 
     def test_pending_state_is_bounded(self):
         from ptp_packet_audit import PtpCorrelationAudit
