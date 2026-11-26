@@ -391,3 +391,25 @@ the six-dataset snapshot and configured domain when possible, but always sets
 PHC-to-CLOCK_REALTIME discipline, UTC traceability, or an end-to-end error
 bound. CI tests use mocked subprocess results; they are not target Orin evidence.
 
+
+
+### Read-only kernel clock-step tracing capability audit
+
+The host evidence report now includes `clock_step_trace_capabilities`. It
+records the running kernel release/architecture, available kernel config
+snapshots (`/proc/config.gz` and `/boot/config-<release>`), BTF file
+presence/readability, tracefs mount information, and only those syscall
+tracepoints actually listed in each tracefs `available_events` file. For each
+listed clock-adjustment syscall event it preserves the target kernel's raw
+`format` text and parsed field names. The collector also records
+`systemctl --version`.
+
+This is a read-only inventory: it does not mount tracefs, enable events, write
+trace controls, install audit rules, start perf, or load eBPF. Config snapshots
+are build-time evidence, BTF presence does not prove BPF loadability, and
+missing/unreadable tracepoint lists are not interpreted as proof that no
+alternative instrumentation exists. No event capture or loss accounting is
+performed. The report is not Orin hardware evidence; run it on the target Orin
+and retain the raw JSON plus kernel/systemd version details before selecting an
+instrumentation design. See
+`doc/Navigation/41_linuxptp_phc_host_clock_evidence_contract.md` §12.
