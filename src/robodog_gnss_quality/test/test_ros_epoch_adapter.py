@@ -38,7 +38,8 @@ def status(i_tow=1000, receive=115):
 
 
 def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
-            utc_valid=True, clock_id=GENERATION):
+            utc_valid=True, clock_id=GENERATION, session_id=None,
+            generation=None, gps_week=None):
     return UbxSourceTimeMapping(
         i_tow_ms=i_tow,
         source_timestamp_ns=source_time,
@@ -49,6 +50,9 @@ def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
         utc_seconds=1_800_000_000 if utc_valid else None,
         utc_nanoseconds=123 if utc_valid else None,
         validity_reason="valid" if valid else "time source invalid",
+        process_session_id=session_id,
+        connection_generation=generation,
+        gps_week=gps_week,
     )
 
 
@@ -169,6 +173,38 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         self.assertEqual(len(emitted), 1)
         self.assertEqual(emitted[0].observation.source_timestamp_ns, 10_000_000)
         self.assertEqual(a.pending_count, 0)
+
+    def test_time_mapping_session_context_must_match_clock_id(self):
+        a = adapter()
+        bad = mapping(
+            session_id="f9p-session",
+            generation=3,
+            gps_week=2450,
+            clock_id=GENERATION,
+        )
+        with self.assertRaisesRegex(EpochPairingError, "does not match session/generation/week"):
+            a.add_time_mapping(bad)
+
+    def test_time_mapping_context_is_preserved_in_result(self):
+        source_id = "f9p-session:connection:3:gps-week:2450"
+        a = adapter()
+        a.begin_generation(source_id)
+        for record, add in (
+            (pvt(), a.add_pvt),
+            (position(), a.add_position),
+            (covariance(), a.add_covariance),
+            (status(), a.add_status),
+        ):
+            add(record)
+        result = a.add_time_mapping(mapping(
+            clock_id=source_id,
+            session_id="f9p-session",
+            generation=3,
+            gps_week=2450,
+        ))
+        self.assertIsNotNone(result)
+        self.assertEqual(result.time_mapping.process_session_id, "f9p-session")
+        self.assertEqual(result.time_mapping.connection_generation, 3)
 
     def test_reset_requires_explicit_new_generation(self):
         a = adapter()
