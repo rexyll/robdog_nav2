@@ -66,4 +66,4 @@ Actions run 45755029444 与 45755029355 对应 nav head 4fbbf078bb0f83b657c78c0b
 较早 run 45754968219 / 45754972709 暴露 stale expiry 测试语义不一致；分析确认 adapter 在 watermark 推进时过期 epoch 后，可能在同一 _entry 调用中重新创建相同 iTOW 的 pending entry。修复为 stale retire 后再次检查 tombstone，拒绝同一 iTOW resurrection；同时按最大 monotonic watermark 计算 expiry，并把 epoch first_receive 设为 mapping/record 中最早 callback 时间。修复后的 Humble/Jazzy 测试全部通过。
 
 
-当前 GPS-week-context 扩展的 Humble/Jazzy `gnss-quality-ci` 与 `ros2-package-ci` 尚以最终 head 的 run 为准；早期 runs 暴露了旧测试 fixture 未补 `gps_week`、week rollover 测试在切换后仍使用旧周 PVT，以及 ROS decoder 未向后三路 records 传递 week 等问题，均已修复/补测，尚不把早期失败 run 计入通过证据。
+CI 验收：代码/测试 head `afd9fc290db35e9922d3c6cf503a3003d0275271` 对应 `gnss-quality-ci` run `45759750171` 和 `ros2-package-ci` run `45759750178`；Humble/Jammy、Jazzy/Noble 全部 success，gnss-quality 每个环境 141 tests、0 failures。此为纯 Python tests，不代表 ROS DDS/executor barrier 或真实 USB/F9P 实测。
