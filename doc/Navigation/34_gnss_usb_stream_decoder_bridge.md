@@ -40,7 +40,7 @@ test_gnss_usb_stream 使用 fake DeviceSession + fake transfer API：
 - 验证 completion 后 IN transfer 自动重提交，in-flight 数量恢复；
 - 验证 stop 时 pending transfer 被取消、callback drain、device handle/context 最终释放。
 
-Actions run 45753122570（head 12bddcfd96d31673127afd66f66b434e0f7fa393）四项 job 全部成功，覆盖 GNSS stream 测试及 ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding。随后新增 lifecycle mutex 的最新代码 head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4 对应 run 45753314359 正在排队；待该 run 完成后再确认最终 head。
+Actions run 45753122570（head 12bddcfd96d31673127afd66f66b434e0f7fa393）四项 job 全部成功，覆盖 GNSS stream 测试及 ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding。随后新增 lifecycle mutex 的最新代码 head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4 对应 Actions run 45753314359 四项 job 全部成功（ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding）。
 
 ## 5. 验收边界与未完成项
 
