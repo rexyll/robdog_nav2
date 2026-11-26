@@ -12,6 +12,38 @@ from robodog_gnss_quality.ros_message_adapter import (
 from robodog_gnss_quality.ubx_nav_pvt import EpochPairingError
 
 
+PROCESS_SESSION_ID = "ros-message-test-session"
+CONNECTION_GENERATION = 0
+
+
+def decode_pvt(message, receive):
+    return decode_nav_pvt_message(
+        message, receive, process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
+    )
+
+
+def decode_hppos(message, receive):
+    return decode_nav_hp_pos_llh_message(
+        message, receive, process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
+    )
+
+
+def decode_cov(message, receive):
+    return decode_nav_cov_message(
+        message, receive, process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
+    )
+
+
+def decode_status(message, receive):
+    return decode_nav_status_message(
+        message, receive, process_session_id=PROCESS_SESSION_ID,
+        connection_generation=CONNECTION_GENERATION,
+    )
+
+
 def pvt(status=2):
     return SimpleNamespace(
         itow=1234,
@@ -48,17 +80,17 @@ def status(code=2):
 
 class TestUbxRosMessageAdapter(unittest.TestCase):
     def test_decode_pvt_carrier_solution_values(self):
-        self.assertEqual(decode_nav_pvt_message(pvt(0), 10).carrier_solution,
+        self.assertEqual(decode_pvt(pvt(0), 10).carrier_solution,
                          CarrierSolution.NO_SOLUTION)
-        self.assertEqual(decode_nav_pvt_message(pvt(1), 10).carrier_solution,
+        self.assertEqual(decode_pvt(pvt(1), 10).carrier_solution,
                          CarrierSolution.FLOAT)
-        self.assertEqual(decode_nav_pvt_message(pvt(2), 10).carrier_solution,
+        self.assertEqual(decode_pvt(pvt(2), 10).carrier_solution,
                          CarrierSolution.FIXED)
-        self.assertEqual(decode_nav_pvt_message(pvt(3), 10).carrier_solution,
+        self.assertEqual(decode_pvt(pvt(3), 10).carrier_solution,
                          CarrierSolution.UNKNOWN)
 
     def test_decode_hpposllh_preserves_raw_precision_and_flags(self):
-        decoded = decode_nav_hp_pos_llh_message(hppos(), 11)
+        decoded = decode_hppos(hppos(), 11)
         self.assertEqual((decoded.lon, decoded.lon_hp), (100, -2))
         self.assertEqual((decoded.lat, decoded.lat_hp), (-200, 3))
         self.assertEqual((decoded.height_mm, decoded.height_hp), (3000, -4))
@@ -66,10 +98,10 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         self.assertEqual(decoded.receive_monotonic_ns, 11)
 
     def test_decode_covariance_and_status(self):
-        decoded_cov = decode_nav_cov_message(cov(), 12)
+        decoded_cov = decode_cov(cov(), 12)
         self.assertTrue(decoded_cov.pos_cor_valid)
         self.assertAlmostEqual(decoded_cov.pos_cov_ed, 0.003)
-        decoded_status = decode_nav_status_message(status(2), 13)
+        decoded_status = decode_status(status(2), 13)
         self.assertTrue(decoded_status.gnss_fix_ok)
         self.assertTrue(decoded_status.carrier_solution_valid)
         self.assertEqual(decoded_status.carrier_solution, CarrierSolution.FIXED)
@@ -78,31 +110,31 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         invalid = pvt()
         invalid.itow = 604800000
         with self.assertRaises(EpochPairingError):
-            decode_nav_pvt_message(invalid, 1)
+            decode_pvt(invalid, 1)
         with self.assertRaises(EpochPairingError):
-            decode_nav_pvt_message(pvt(), -1)
+            decode_pvt(pvt(), -1)
         invalid = pvt()
         invalid.gnss_fix_ok = 1
         with self.assertRaises(EpochPairingError):
-            decode_nav_pvt_message(invalid, 1)
+            decode_pvt(invalid, 1)
 
     def test_rejects_nonfinite_covariance(self):
         invalid = cov()
         invalid.pos_cov_nn = math.nan
         with self.assertRaises(EpochPairingError):
-            decode_nav_cov_message(invalid, 1)
+            decode_cov(invalid, 1)
 
     def test_rejects_boolean_covariance_field(self):
         invalid = cov()
         invalid.pos_cov_nn = True
         with self.assertRaises(EpochPairingError):
-            decode_nav_cov_message(invalid, 1)
+            decode_cov(invalid, 1)
 
     def test_rejects_missing_nested_carrier_field(self):
         invalid = pvt()
         invalid.carr_soln = None
         with self.assertRaises(EpochPairingError):
-            decode_nav_pvt_message(invalid, 1)
+            decode_pvt(invalid, 1)
 
 
 if __name__ == "__main__":
