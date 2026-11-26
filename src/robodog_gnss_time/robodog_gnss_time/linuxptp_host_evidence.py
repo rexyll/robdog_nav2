@@ -348,17 +348,23 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
         for name, argv in commands
     ]
-    journal_context_commands = [
-        ("journal_config", ["systemd-analyze", "cat-config", "systemd/journald.conf"]),
-        ("journal_disk_usage", ["journalctl", "--disk-usage"]),
-        ("journal_boot_inventory", ["journalctl", "--list-boots", "--no-pager"]),
-        ("journal_suppression_events", [
-            "journalctl", "-u", "systemd-journald.service", "--since",
-            config.journal_since, "--no-pager", "--output=json", "--all",
-        ]),
-    ]
-    for service in (config.ptp4l_service, config.phc2sys_service, config.chrony_service):
-        if service:
+    configured_services = tuple(
+        service for service in (
+            config.ptp4l_service, config.phc2sys_service, config.chrony_service
+        ) if service
+    )
+    journal_context_commands = []
+    if configured_services:
+        journal_context_commands = [
+            ("journal_config", ["systemd-analyze", "cat-config", "systemd/journald.conf"]),
+            ("journal_disk_usage", ["journalctl", "--disk-usage"]),
+            ("journal_boot_inventory", ["journalctl", "--list-boots", "--no-pager"]),
+            ("journal_suppression_events", [
+                "journalctl", "-u", "systemd-journald.service", "--since",
+                config.journal_since, "--no-pager", "--output=json", "--all",
+            ]),
+        ]
+        for service in configured_services:
             journal_context_commands.append((
                 "unit_logging_config:" + service, ["systemctl", "cat", service],
             ))
@@ -471,7 +477,8 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     )
     journal_storage_context = {
         "status": (
-            "observed" if all(item["status"] == "ok" for item in journal_context_results)
+            "not_requested" if not journal_context_results
+            else "observed" if all(item["status"] == "ok" for item in journal_context_results)
             else "partial"
         ),
         "commands": journal_context_results,
