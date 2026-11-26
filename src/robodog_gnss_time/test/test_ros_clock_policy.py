@@ -30,6 +30,7 @@ def gate():
         ClockPolicyConfig(
             max_host_utc_error_ns=2_000_000,
             max_sync_sample_age_ns=500_000_000,
+            trusted_host_sync_sources=frozenset({"chrony:tracking"}),
         )
     )
 
@@ -52,6 +53,7 @@ def test_accepts_only_fresh_system_time_with_bounded_utc_error():
         ({"leap_guard_active": True}, ClockPolicyReason.LEAP_GUARD_ACTIVE),
         ({"host_sync_state": "unknown"}, ClockPolicyReason.HOST_SYNC_UNKNOWN),
         ({"host_sync_source": ""}, ClockPolicyReason.HOST_SYNC_SOURCE_MISSING),
+        ({"host_sync_source": "unverified:claim"}, ClockPolicyReason.HOST_SYNC_SOURCE_UNTRUSTED),
         ({"host_utc_offset_ns": "0"}, ClockPolicyReason.HOST_SYNC_OFFSET_INVALID),
         ({"host_utc_uncertainty_ns": -1}, ClockPolicyReason.HOST_SYNC_UNCERTAINTY_INVALID),
     ],
@@ -88,4 +90,6 @@ def test_config_rejects_bool_and_nonpositive_thresholds():
     with pytest.raises(ValueError):
         ClockPolicyConfig(max_host_utc_error_ns=True, max_sync_sample_age_ns=1)
     with pytest.raises(ValueError):
-        ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=0)
+        ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=0, trusted_host_sync_sources={"chrony:tracking"})
+    with pytest.raises(ValueError):
+        ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=1, trusted_host_sync_sources=frozenset())
