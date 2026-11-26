@@ -44,6 +44,7 @@
 
 - fake 不模拟 libusb 内部线程、USB endpoint、event handling timeout 或内核驱动行为。
 - 当前 callback event 由测试显式排队，再由 poll_events 派发；尚未压力验证多线程调用 submit/cancel/poll/close。
+- 首轮 CI run `45744404049` 的 ASan/UBSan 与 TSan build 因 `submission_failed()` 的字面 `\\n` 转义编译错误失败；修复提交 `29a9efe61f14c84debc59eed25a24ee0b9569c5a` 将其改为正常多行定义，并允许 `SubmitFailed` terminal state release。修复后 CI 尚待确认。
 - 下一步增加 callback 与 shutdown 的多线程 stress/TSan，再实现真实 libusb adapter。
 - 真实 ROS 2 Jazzy component_container_mt、断连重连和物理 F9P 验收均未完成。
 
