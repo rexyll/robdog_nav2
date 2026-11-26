@@ -278,3 +278,5 @@
 - [34 — GNSS USB bulk-IN 到 UBX/RTCM3/NMEA 帧队列桥接](34_gnss_usb_stream_decoder_bridge.md)
 - [GnssUsbStream API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/gnss_usb_stream.hpp)
 - [GnssUsbStream tests](../../navigation/ubx_rtcm_stream/tests/test_gnss_usb_stream.cpp)
+
+- [35 — 固定版 ublox_ubx_msgs ROS 消息字段适配合同](35_pinned_ublox_ros_message_adapter_contract.md)
