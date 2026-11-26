@@ -366,6 +366,24 @@ Livox MID-360 v1.4.12 明确支持：
 Announce 的 grandmasterIdentity / priority / clockClass 只统计报文宣告内容，不代表设备已经选定该 GM。未解析 BMCA 全状态机、foreign-master announce receipt timeout、port state、profile-specific TLV 或设备 vendor-specific TLV。
 
 
+### 15.3 解释边界
+
+PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmaster，均**不证明**：
+- MID-360 已锁定该 GM，或 GM 是网络最终选出的 active grandmaster；
+- Orin PHC 正在运行 ptp4l，PHC hardware timestamp 已启用；
+- PTP offset、path delay、asymmetry、servo state 或同步精度达到验收目标；
+- PCAP capture timestamp 是 NIC hardware timestamp，或与 PTP message timestamp 同一时钟域。
+
+工具仅做协议字段、transport、domain、source identity、sequence correlation 和 Announce GM metadata 观察。correctionField 以 raw signed scaled value 与 ns 表示；PTP timestamp 保留 48-bit seconds + 32-bit nanoseconds，不自行转换 UTC/GPS，也不使用 capture 时间差推导链路延迟。
+
+PTP parser/correlation 9 项、MID-360 capture audit 6 项合成测试已在 GitHub Actions run 45643176003 通过。本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证；PTPv2.1 minorVersionPTP 拒绝向量已覆盖。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
+
+依据：
+- Livox MID-360 v1.4.12：支持 IEEE1588v2.0 UDP/IP 与 gPTP L2；
+- IEEE 1588 common header / sequenceId / correctionField；
+- IEEE 1588 event/general UDP ports 319/320；
+- Ethernet PTP EtherType 0x88F7。
+
 ### 15.4 Announce 候选、来源变化与序号连续性观测
 
 `PtpAnnounceAudit` 对每个 `(domainNumber, sourcePortIdentity)` 独立跟踪 Announce sequenceId，并按 16-bit 模数差值报告：
@@ -409,21 +427,3 @@ Pdelay 的完整计算同样需要本地请求发送和响应接收/发送事件
 - PTP/MID-360 原始 PCAP、网卡/PHC 映射、host inventory 与 ptp4l/phc2sys/pmc 结果需带同一 UTC 采集时间，才能进行交叉关联。
 
 仓库的 `tools/collect_ptp_host_inventory.sh` 是只读盘点工具，不启动或配置 PTP 服务。实机证据仍待用户在目标 Orin/载板上运行后提供。
-
-### 15.3 解释边界
-
-PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmaster，均**不证明**：
-- MID-360 已锁定该 GM，或 GM 是网络最终选出的 active grandmaster；
-- Orin PHC 正在运行 ptp4l，PHC hardware timestamp 已启用；
-- PTP offset、path delay、asymmetry、servo state 或同步精度达到验收目标；
-- PCAP capture timestamp 是 NIC hardware timestamp，或与 PTP message timestamp 同一时钟域。
-
-工具仅做协议字段、transport、domain、source identity、sequence correlation 和 Announce GM metadata 观察。correctionField 以 raw signed scaled value 与 ns 表示；PTP timestamp 保留 48-bit seconds + 32-bit nanoseconds，不自行转换 UTC/GPS，也不使用 capture 时间差推导链路延迟。
-
-PTP parser/correlation 9 项、MID-360 capture audit 6 项合成测试已在 GitHub Actions run 45643176003 通过。本轮测试为合成 PTP 报文，不是 MID-360 实机 gPTP/PTP 互操作验证；PTPv2.1 minorVersionPTP 拒绝向量已覆盖。目标 Orin、交换机、GM、MID-360 的 PTP 模式必须由设备配置、ptp4l/phc2sys 状态、PHC 设备信息和硬件时间戳抓包共同证明。
-
-依据：
-- Livox MID-360 v1.4.12：支持 IEEE1588v2.0 UDP/IP 与 gPTP L2；
-- IEEE 1588 common header / sequenceId / correctionField；
-- IEEE 1588 event/general UDP ports 319/320；
-- Ethernet PTP EtherType 0x88F7。
