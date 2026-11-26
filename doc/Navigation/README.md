@@ -296,3 +296,4 @@
 - [38 — GNSS ROS 2 transport publisher、subscriber match gate 与 DDS 生命周期合同](38_gnss_ros2_transport_publisher_and_qos_contract.md)
 
 - [GNSS RTK quality ROS runtime](39_gnss_rtk_quality_ros_runtime.md)
+- [40 — GNSS NavSatFix / robot_localization handoff contract](40_gnss_navsatfix_localization_handoff_contract.md)
