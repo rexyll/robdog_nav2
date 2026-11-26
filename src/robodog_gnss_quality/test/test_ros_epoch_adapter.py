@@ -204,10 +204,10 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
             connection_generation=3, gps_week=2450
         )
         for record, add in (
-            (pvt(), a.add_pvt),
-            (position(), a.add_position),
-            (covariance(), a.add_covariance),
-            (status(), a.add_status),
+            (pvt(session_id="f9p-session", generation=3), a.add_pvt),
+            (position(session_id="f9p-session", generation=3), a.add_position),
+            (covariance(session_id="f9p-session", generation=3), a.add_covariance),
+            (status(session_id="f9p-session", generation=3), a.add_status),
         ):
             add(record)
         result = a.add_time_mapping(mapping(
