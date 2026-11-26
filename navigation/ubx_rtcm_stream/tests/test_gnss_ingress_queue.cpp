@@ -102,6 +102,36 @@ int main() {
   }
 
   {
+    GnssIngressQueue queue(1, OverflowPolicy::DropOldest, "process-F");
+    assert(queue.begin_generation(1, 10));
+    // A terminal event that cannot fit is remembered and can be retried.
+    assert(!queue.mark_device_lost(1, 20));
+    assert(!queue.stats().terminal_event_recorded);
+    auto started = queue.try_pop();
+    assert(started && started->type == GnssIngressEventType::GenerationStarted);
+    assert(queue.mark_device_lost(1, 30));
+    assert(queue.stats().terminal_event_recorded);
+    assert(queue.mark_device_lost(1, 31));  // duplicate callback is idempotent
+    assert(!queue.mark_transport_fault(1, 32));  // first terminal cause wins
+    auto lost = queue.try_pop();
+    assert(lost && lost->type == GnssIngressEventType::DeviceLost);
+    assert(lost->ingress_sequence == 1);
+    assert(queue.close(40));  // room is now available for Stopped
+    auto stopped = queue.try_pop();
+    assert(stopped && stopped->type == GnssIngressEventType::Stopped);
+    assert(stopped->ingress_sequence == 2);
+    assert(queue.stats().accepted_control_events == 3);
+  }
+
+  {
+    GnssIngressQueue queue(4, OverflowPolicy::DropOldest, "process-G");
+    assert(queue.begin_generation(1, 10));
+    assert(!queue.begin_generation(2, 11));  // active generation cannot be replaced
+    assert(queue.mark_transport_fault(1, 12));
+    assert(queue.begin_generation(2, 13));   // terminal event fences old generation
+  }
+
+  {
     GnssIngressQueue queue(2, OverflowPolicy::RejectNewest, "process-D");
     assert(queue.begin_generation(1, 1));
     assert(queue.push_frame(frame(0, 1), 2) == GnssIngressPushResult::Accepted);
