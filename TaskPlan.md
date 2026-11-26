@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.203
+- 文档版本：v0.3.204
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1040,3 +1040,6 @@
 
 
 - Ordered GNSS ingress queue 最终 CI 验收（2026-11-26 / v0.3.203）：warning-cleanup 代码 head `4ed27fb20afd35f08d819078606395a7f6b34e03` 对应 Actions run `45761176296`，四个 job 全部 success：GCC C++17 + ASan/UBSan CTest（10/10）、ThreadSanitizer CTest（10/10）、Clang libFuzzer smoke、production libusb 1.0 binding compile + native bridge smoke。最终日志无 multi-character literal warning。前序 run `45760916265` 也全 success，但 `4ed27f` 为当前无警告最终验收 head。该证据覆盖 standalone parser/queue/fake USB stream，不覆盖物理 USB、ROS 2 executor/DDS barrier 或目标 F9P。
+
+
+- GNSS ingress terminal Stopped event backpressure 修复（2026-11-26 / v0.3.204）：发现 bounded ingress queue 在 capacity=1 或控制事件占满时，`GnssIngressQueue::close()` 会因无可驱逐 frame 而无法追加 `Stopped`，但旧实现把 `closed_` 当作 close 完成标志；第二次 close 直接返回 true，且 `GnssUsbStream::stop()` 忽略 close 返回值，导致调用方可能把“停止事件未入队”误认为成功。修复为独立 `stopped_event_recorded_` 状态；close 失败仍保持 frame-ingress closed，但允许消费队列后重试写入 `Stopped`；只有真实记录后重复 close 才幂等返回 true；stats 暴露 stopped_event_recorded；stream stop 传播 ingress close 结果。新增 capacity-1 测试覆盖 GenerationStarted 占满→close false→消费→close retry true→Stopped sequence 1→重复 close true。代码 commits：queue header `46da69873793fa5e9610d8080eef24f5963273c7`、测试 `f9f1dd624dc86d22ef8ac326eca019dcdb55941d`、stream propagation `1a7d2436e427f8c7e48247343e49d501c26ec8a4`；文档 Navigation 34 已更新。CI run `45763745597`（queue header commit）TSan 与 libusb binding job 已成功，ASan/UBSan 与 Clang fuzz 仍在运行；后续 test commit run `45763748874` 被紧接着 push 取消，最新 stream commit run `45763754376` pending。尚无最终 head 完整 CI 证据，暂不标记通过。下一步等待最新 `nav` head 对应 sanitizer/TSan/fuzzer/libusb 全矩阵完成，检查 capacity-1 重试用例及 `stop()` 语义；之后继续设计 C++→ROS 2 ingress bridge 与真实 executor callback barrier，保持 nav 分支。
