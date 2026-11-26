@@ -274,3 +274,7 @@
 - [33 — libusb DeviceRuntime 顶层统一所有权第一切片](33_libusb_device_runtime_unified_ownership.md)
 - [LibusbDeviceRuntime API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/libusb_device_runtime.hpp)
 - [LibusbDeviceRuntime tests](../../navigation/ubx_rtcm_stream/tests/test_libusb_device_runtime.cpp)
+
+- [34 — GNSS USB bulk-IN 到 UBX/RTCM3/NMEA 帧队列桥接](34_gnss_usb_stream_decoder_bridge.md)
+- [GnssUsbStream API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/gnss_usb_stream.hpp)
+- [GnssUsbStream tests](../../navigation/ubx_rtcm_stream/tests/test_gnss_usb_stream.cpp)
