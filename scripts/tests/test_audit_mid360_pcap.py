@@ -39,6 +39,30 @@ def record(payload, port, *, truncated=False):
                         frame, True, truncated)
 
 
+def control_kv(key, value):
+    return struct.pack("<HH", key, len(value)) + value
+
+
+def control_message(cmd_id, data, *, cmd_type=1):
+    packet = bytearray(24 + len(data))
+    packet[0] = 0xAA
+    packet[1] = 0
+    struct.pack_into("<H", packet, 2, len(packet))
+    struct.pack_into("<I", packet, 4, 91)
+    struct.pack_into("<H", packet, 8, cmd_id)
+    packet[10] = cmd_type
+    packet[11] = 1
+    packet[24:] = data
+    crc16 = 0xFFFF
+    for byte in packet[:18]:
+        crc16 ^= byte << 8
+        for _ in range(8):
+            crc16 = ((crc16 << 1) ^ 0x1021) & 0xFFFF if crc16 & 0x8000 else (crc16 << 1) & 0xFFFF
+    struct.pack_into("<H", packet, 18, crc16)
+    struct.pack_into("<I", packet, 20, zlib.crc32(packet[24:]) & 0xFFFFFFFF)
+    return bytes(packet)
+
+
 class TestMid360CaptureAudit(unittest.TestCase):
     def test_valid_pointcloud_and_imu_streams(self):
         report = audit_packet_records([
@@ -52,6 +76,24 @@ class TestMid360CaptureAudit(unittest.TestCase):
         self.assertEqual(report["time_types"], {"1": 2})
         self.assertFalse(report["time_semantics"]["delta_is_network_latency"])
 
+
+    def test_control_port_time_diagnostics_are_joined_into_capture_report(self):
+        data = b"\\x00" + struct.pack("<H", 3) + b"".join([
+            control_kv(0x8009, struct.pack("<Q", 1_700_000_000_000_000_100)),
+            control_kv(0x800A, struct.pack("<Q", 1_700_000_000_000_000_000)),
+            control_kv(0x800B, struct.pack("<q", 100)),
+        ])
+        report = audit_packet_records([
+            record(control_message(0x0101, data), 56100),
+            record(mid360_payload(1, time_type=1), 56300),
+        ])
+        self.assertEqual(report["streams"]["control"], 1)
+        observation, = report["control_diagnostic_observations"]
+        self.assertEqual(observation["cmd_id"], 0x0101)
+        self.assertEqual(observation["diagnostics"]["time_offset"]["value"], 100)
+        self.assertIn("device-reported snapshot",
+                      report["time_semantics"]["diagnostic_time_offset"])
+        self.assertIn("PTP/gPTP", report["time_semantics"]["time_type_1"])
 
     def test_pointcloud_sequence_gap_and_reordered_recovery(self):
         report = audit_packet_records([
