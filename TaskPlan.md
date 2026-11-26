@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.179
+- 文档版本：v0.3.180
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -967,4 +967,7 @@
 - DeviceSession CI 验收记录（2026-11-26 / v0.3.178）：Actions run `45751154284` 对应 head `869a169513f0f6db6aefd5c51a8c6eb7b51295ba`，ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile 四项全部成功。该 run 已覆盖 DeviceSession RAII、endpoint discovery、kernel-driver unsupported 平台分支、测试 import 修复及生产 binding function-table 检查。后续文档/README 更新 run `45751248926` 正在执行。真实 USB 设备、GNSS ROS 节点、event-loop owner thread 与 ZED-F9P 实测仍未验收。
 
 
-- libusb 单一 event-loop owner 与 shutdown drain 第一切片（2026-11-26 / v0.3.179）：在 `LibusbTransferTransport` 增加提交停止 gate、`cancel_all_detailed()`、包含 callback-in-flight 计数的 `drained()`，以及 event-thread bind/unbind；绑定后拒绝非 owner thread 调用 `poll_events()`。新增 `LibusbEventLoop` 专用 worker，start 等待 owner thread 绑定成功；shutdown 先停止新提交，再取消 pending transfers，持续 pump 至所有 callback 和用户 completion drain，最后 join。timeout 时保持 worker 运行、submission gate 关闭，允许诊断后重试；析构时若 worker 仍 joinable 则 fail-closed。新增 synthetic fake API 测试覆盖 owner thread enforcement、cancel/drain、shutdown gate 下 callback reentrant submit 被拒绝。实现提交：transport `8d8195b4424e4141f88394fe4a88f2e816cb1469`；event loop API `8dd1f71c63660b1c7a25eebe6cff7e28fe6712b8`；event loop source `4f9f92c8e57fe1e6f94b423d77c2d66895fc8a9f`；event loop test `b7f970fc9fdb0dbdc029f120e09f2b066b819d96`；后续修正见 `a0882e91`、`33a6c6e2`、`c97dfcaf`、`9c7c0e06`、`a4a88689`、CMake `e1816a6f`。Actions run `45751870160` 正在执行；TSan 与 ASan/UBSan 已先后完成成功，Clang libFuzzer 与生产 binding compile 尚在运行，不能提前记为四项全部通过。真实 libusb 断连、hotplug/reconnect、ROS 2 Lifecycle 和 ZED-F9P 实测仍未完成。
+- libusb 单一 event-loop owner 与 shutdown drain 第一切片（2026-11-26 / v0.3.179）：在 `LibusbTransferTransport` 增加提交停止 gate、`cancel_all_detailed()`、包含 callback-in-flight 计数的 `drained()`，以及 event-thread bind/unbind；绑定后拒绝非 owner thread 调用 `poll_events()`。新增 `LibusbEventLoop` 专用 worker，start 等待 owner thread 绑定成功；shutdown 先停止新提交，再取消 pending transfers，持续 pump 至所有 callback 和用户 completion drain，最后 join。timeout 时保持 worker 运行、submission gate 关闭，允许诊断后重试；析构时若 worker 仍 joinable 则 fail-closed。新增 synthetic fake API 测试覆盖 owner thread enforcement、cancel/drain、shutdown gate 下 callback reentrant submit 被拒绝。实现提交：transport `8d8195b4424e4141f88394fe4a88f2e816cb1469`；event loop API `8dd1f71c63660b1c7a25eebe6cff7e28fe6712b8`；event loop source `4f9f92c8e57fe1e6f94b423d77c2d66895fc8a9f`；event loop test `b7f970fc9fdb0dbdc029f120e09f2b066b819d96`；后续修正见 `a0882e91`、`33a6c6e2`、`c97dfcaf`、`9c7c0e06`、`a4a88689`、CMake `e1816a6f`。Actions run `45751870160`（head `e1816a6f00cc2a47586485cff723104a4ce580c0`）四项全部成功：ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile。该 run 覆盖 event-loop worker、submission gate、cancel-all、owner-thread poll guard 与 fake shutdown drain 测试。真实 libusb 断连、hotplug/reconnect、ROS 2 Lifecycle 和 ZED-F9P 实测仍未完成。
+
+
+- 单一 event-loop owner CI 验收（2026-11-26 / v0.3.180）：Actions run `45751870160`，head `e1816a6f00cc2a47586485cff723104a4ce580c0`，四个 job 全部 success。该结果证明新增 fake API 测试及当前 standalone / sanitizer / fuzz / binding 编译门禁通过；不证明真实 USB 断连 callback、热插拔、ROS 2 executor 或 ZED-F9P 行为。
