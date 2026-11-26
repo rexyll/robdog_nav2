@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 _NSEC = Decimal(1_000_000_000)
-_REFERENCE_UNKNOWN = {"00000000", "0000000000000000", "0.0.0.0", "::"}
+_REFERENCE_UNKNOWN = {"00000000", "0000000000000000", "0.0.0.0", "::", "7F7F0101"}
 
 
 def _seconds_to_ns(value: str) -> int:
@@ -45,6 +45,14 @@ def parse_chrony_tracking(output: str):
         raise ValueError("Chrony tracking output is empty")
     lines = output.splitlines()
     reference_id = _field(lines, "Reference ID")
+    # With -n, current Chrony prints a hexadecimal refid; older versions may
+    # print dotted-quad IPv4. A trailing name is tolerated for older releases.
+    reference_token = reference_id.split()[0]
+    if not (re.fullmatch(r"[0-9A-Fa-f]{8}", reference_token)
+            or re.fullmatch(r"(?:\\d{1,3}\\.){3}\\d{1,3}", reference_token)):
+        raise ValueError("unsupported Chrony Reference ID format")
+    if "." in reference_token and any(int(part) > 255 for part in reference_token.split(".")):
+        raise ValueError("Chrony IPv4 Reference ID octet outside range")
     stratum_text = _field(lines, "Stratum")
     system_time = _field(lines, "System time")
     root_delay = _field(lines, "Root delay")
@@ -67,7 +75,7 @@ def parse_chrony_tracking(output: str):
     delay_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_delay)
     if not delay_match:
         raise ValueError("unsupported Chrony Root delay format")
-    root_delay_ns = _seconds_to_ns(delay_match.group(1).lstrip("+"))
+    root_delay_ns = _seconds_to_ns(delay_match.group(1).lstrip("+").lstrip("-"))
     root_dispersion_ns = _seconds_to_ns(dispersion_match.group(1).lstrip("+"))
     # Use NTP root distance = root dispersion + half root delay; round upward
     # so conversion to integer nanoseconds never understates the bound.
