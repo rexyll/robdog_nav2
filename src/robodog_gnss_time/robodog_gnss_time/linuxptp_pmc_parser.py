@@ -231,6 +231,10 @@ def parse_pmc_snapshot(output: str) -> PmcSnapshot:
     sequence_ids = [response.sequence_id for response in responses.values()]
     if len(set(sequence_ids)) != len(sequence_ids):
         raise ValueError("pmc snapshot response sequence IDs are not unique")
+    default = responses["DEFAULT_DATA_SET"].values
+    port = responses["PORT_DATA_SET"]
+    if default["numberPorts"] < 1 or not 1 <= port.port_number <= default["numberPorts"]:
+        raise ValueError("PORT_DATA_SET response port number is outside DEFAULT_DATA_SET.numberPorts")
     time_status = responses["TIME_STATUS_NP"].values
     parent = responses["PARENT_DATA_SET"].values
     if time_status["gmPresent"] and (
@@ -242,3 +246,19 @@ def parse_pmc_snapshot(output: str) -> PmcSnapshot:
         clock_identity=clock_identity,
         responses=MappingProxyType(responses),
     )
+
+
+
+def validate_pmc_snapshot_domain(snapshot: PmcSnapshot, expected_domain_number: int) -> None:
+    """Require an explicit deployment domain; the parser never assumes domain 0."""
+    if not isinstance(snapshot, PmcSnapshot):
+        raise TypeError("snapshot must be a PmcSnapshot")
+    if isinstance(expected_domain_number, bool) or not isinstance(expected_domain_number, int):
+        raise ValueError("expected PTP domain number must be an integer")
+    if not 0 <= expected_domain_number <= 255:
+        raise ValueError("expected PTP domain number must fit uint8")
+    actual = snapshot.responses["DEFAULT_DATA_SET"].values["domainNumber"]
+    if actual != expected_domain_number:
+        raise ValueError(
+            f"PTP domain mismatch: expected {expected_domain_number}, received {actual}"
+        )
