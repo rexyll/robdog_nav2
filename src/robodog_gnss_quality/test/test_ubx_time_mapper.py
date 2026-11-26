@@ -220,12 +220,19 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertEqual(result.gps_week, 2449)
         self.assertEqual(result.source_timestamp_ns, 2450 * GPS_WEEK_NS - 100_000)
 
-    def test_fractional_tow_carry_normalizes_into_next_week(self):
+    def test_fractional_tow_near_week_end_does_not_carry_early(self):
         m = mapper(trusted_leap_sources={2})
         add_gps(m, i_tow=604_799_999, f_tow=500_000, week=2450)
         result = add_ls(m, i_tow=604_799_999)
-        self.assertEqual(result.gps_week, 2451)
-        self.assertEqual(result.source_timestamp_ns, 2451 * GPS_WEEK_NS)
+        self.assertEqual(result.gps_week, 2450)
+        self.assertEqual(result.source_timestamp_ns, 2450 * GPS_WEEK_NS - 500_000)
+
+    def test_negative_fractional_tow_borrows_into_previous_week(self):
+        m = mapper(trusted_leap_sources={2})
+        add_gps(m, i_tow=0, f_tow=-500_000, week=2450)
+        result = add_ls(m, i_tow=0)
+        self.assertEqual(result.gps_week, 2449)
+        self.assertEqual(result.source_timestamp_ns, 2450 * GPS_WEEK_NS - 500_000)
 
     def test_invalid_week_with_valid_flag_fails_closed(self):
         m = mapper(trusted_leap_sources={2})
