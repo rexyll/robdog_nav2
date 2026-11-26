@@ -64,3 +64,13 @@ These contracts describe decoded fields and do not themselves provide a UBX hard
 ### Pinned `ublox_dgnss` source compatibility
 
 The audited source pin `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` publishes the corresponding decoded ROS types on `ubx_nav_pvt`, `ubx_nav_hp_pos_llh`, `ubx_nav_cov` and `ubx_nav_status`. Its messages use `itow`, nested `gps_fix.fix_type` / `carr_soln.status`, individual HPPOSLLH invalid booleans, and `pos_cor_valid`; they do not publish the normalized process-session/connection-generation/GPS-week context. The source adapter therefore requires that context separately and ignores the upstream `Header.stamp`. The upstream node stamps that header using `rclcpp::Clock().now()` in its USB receive callback; it is a host-side arrival stamp, not receiver GPST. The bridge from this upstream package into the normalized messages must supply a trustworthy connection-generation lifecycle signal before it can be treated as reconnect-safe.
+
+
+## GnssQualityStatus
+
+`GnssQualityStatus.msg` reports the fail-closed RTK quality-gate decision
+for one exact-epoch `GnssObservation`. It carries qualification/reason,
+consecutive Fixed recovery count, optional uncertainty/speed metrics, and
+the source session/generation/week/iTOW identity. Missing metrics use explicit
+validity booleans plus zero sentinels. This status is not a NavSatFix or
+motion command.
