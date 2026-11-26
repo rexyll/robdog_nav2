@@ -409,7 +409,17 @@ trace controls, install audit rules, start perf, or load eBPF. Config snapshots
 are build-time evidence, BTF presence does not prove BPF loadability, and
 missing/unreadable tracepoint lists are not interpreted as proof that no
 alternative instrumentation exists. No event capture or loss accounting is
-performed. The report is not Orin hardware evidence; run it on the target Orin
-and retain the raw JSON plus kernel/systemd version details before selecting an
+performed.
+
+The report is not Orin hardware evidence. Run it independently on the target
+Orin (no PTP interface/domain/PMC socket arguments are required):
+
+```bash
+ros2 run robodog_gnss_time robodog_linux_kernel_trace_capabilities --output "$HOME/robodog_kernel_trace_capabilities.json"
+```
+
+The command reads the live host's existing procfs/sysfs state and writes only
+the requested JSON output file. Omit `--output` to print JSON to stdout.
+Retain the raw report plus kernel/systemd version details before selecting an
 instrumentation design. See
 `doc/Navigation/41_linuxptp_phc_host_clock_evidence_contract.md` §12.
