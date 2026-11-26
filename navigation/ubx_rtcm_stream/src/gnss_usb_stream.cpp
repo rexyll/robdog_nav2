@@ -82,8 +82,7 @@ bool GnssUsbStream::stop(std::uint32_t timeout_ms)
   std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
   running_.store(false, std::memory_order_release);
   if (runtime_.is_open() && !runtime_.shutdown(timeout_ms)) return false;
-  (void)ingress_queue_.close(steady_now_ns());
-  return true;
+  return ingress_queue_.close(steady_now_ns());
 }
 
 std::optional<Frame> GnssUsbStream::try_pop_frame()
