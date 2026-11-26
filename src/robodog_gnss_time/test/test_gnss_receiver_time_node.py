@@ -3,6 +3,7 @@ import time
 
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.parameter import Parameter
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 from robodog_gnss_interfaces.msg import GnssIngressEvent, GnssReceiverTime
 
@@ -66,7 +67,7 @@ def test_ros_node_publishes_generation_fenced_receiver_time_mapping():
     mapping_topic = f"/test/gnss_time_mapping_{suffix}"
     node = GnssReceiverTimeNode()
     node.set_parameters([
-        rclpy.parameter.Parameter("ingress_topic", value=ingress_topic),
+        Parameter("ingress_topic", value=ingress_topic),
         rclpy.parameter.Parameter("mapping_topic", value=mapping_topic),
     ])
     harness = rclpy.create_node("gnss_time_node_test_harness")
@@ -89,6 +90,10 @@ def test_ros_node_publishes_generation_fenced_receiver_time_mapping():
         while ingress_publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
             executor.spin_once(timeout_sec=0.01)
         assert ingress_publisher.get_subscription_count() > 0
+        mapping_deadline = time.monotonic() + 5
+        while node._publisher.get_subscription_count() == 0 and time.monotonic() < mapping_deadline:
+            executor.spin_once(timeout_sec=0.01)
+        assert node._publisher.get_subscription_count() > 0
 
         ingress_publisher.publish(make_event(GnssIngressEvent.EVENT_GENERATION_STARTED, 0))
         ingress_publisher.publish(make_event(GnssIngressEvent.EVENT_FRAME, 1, timegps_frame()))
