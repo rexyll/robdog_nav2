@@ -71,6 +71,6 @@ UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 ci
 
 CI 验收：Actions run `45756478736`，head `caced3828e9c5a7116c32211d6b422d285099907`，Humble/Jammy 与 Jazzy/Noble 全部 success；两个环境各 121 tests、0 failures。该测试覆盖 synthetic payload/mapper，不是设备验收。
 
-## 6. 未完成项
+Generation fence implementation and CI: UbxReceiverTimeMapper.begin_session(receiver_session_id, connection_generation) resets pending state and embeds the explicit connection generation in source_clock_id. Actions run `45756727874`, head `d34f638da9b1a87021890953dfcdf87d3cea3433`, passed Humble/Jammy and Jazzy/Noble; each ran 123 tests with zero failures. This verifies only the pure Python mapper and synthetic inputs; caller-side USB/DDS ingress fencing remains required.\n\n## 6. 未完成项
 
 该 mapper 目前由纯 Python payload bytes 调用。尚未从 GnssUsbStream raw Frame queue 或真实 ublox_dgnss USB stream 接入；尚未验证目标 F9P 固件版本、实际 TIMELS source、输出频率、week rollover、leap event 和接收器重启。trusted_leap_sources 必须在目标设备证据明确后配置，不得默认启用。
