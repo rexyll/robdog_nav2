@@ -270,3 +270,42 @@ The gate does **not** discover or prove host clock synchronization. A separate t
 ### HostTimeSyncStatus adapter
 
 `HostTimeSyncStatusAdapter` validates the host clock evidence message against the active Linux boot ID and rejects malformed state/source/offset/uncertainty, cross-boot samples, repeated or reordered sequence numbers, and non-increasing CLOCK_MONOTONIC sample timestamps. It preserves `unknown`, `unsynchronized` and `fault` states as non-qualified evidence for the clock policy to reject. It does not launch chrony/ptp4l/pmc, read PHC state, or create the host boot ID; a trusted monitor must provide those inputs. The adapter and interface tests are synthetic only.
+
+
+## Host SystemTime-to-UTC evidence monitor (Chrony)
+
+The `host_time_sync_node` executable publishes `HostTimeSyncStatus` on
+`/gnss/host_time_sync`. It is a read-only monitor: each sample reads the Linux
+boot ID from `/proc/sys/kernel/random/boot_id`, executes
+`chronyc -n tracking` with an argument vector (no shell), and timestamps the
+sample with the same host `time.monotonic_ns()` clock used by the GNSS runtime.
+It never invokes `chronyc makestep`, changes system time, starts services, or
+selects a source.
+
+Example (the error budget and source ID are deployment-owned mandatory inputs):
+
+```bash
+ros2 run robodog_gnss_time host_time_sync_node --ros-args \
+  -p source_id:=chrony:tracking \
+  -p max_host_utc_error_ns:=5000000 \
+  -p poll_period_s:=1.0 \
+  -p command_timeout_s:=0.5
+```
+
+The collector accepts only the documented `System time` fast/slow phrase,
+`Root delay`, `Root dispersion`, `Stratum`, `Reference ID`, and
+`Leap status` fields. Positive offset means SystemTime is ahead of NTP/UTC;
+negative means behind. Its uncertainty field is a conservative NTP root-distance
+estimate: root dispersion plus half root delay, rounded upward to nanoseconds.
+A sample is synchronized only when leap status is Normal, stratum is 1..15,
+reference ID is nonzero, and absolute offset plus that uncertainty is within
+the explicitly supplied error budget. Missing/malformed output, command errors,
+timeout, or missing boot ID never yield a synchronized sample.
+
+This is an initial Chrony adapter, not a universal host clock monitor. It does
+not currently parse LinuxPTP `pmc` / `ptp4l` / `phc2sys` telemetry, read a
+PHC device, prove PHC-to-SystemTime discipline, or independently validate the
+NTP server's UTC traceability. The configured `source_id` must be added to the
+downstream immutable policy allowlist only after deployment architecture and
+timing budget review. The node's synthetic tests do not prove the host's real
+Chrony daemon, source selection, PHC chain, or UTC accuracy.
