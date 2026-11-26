@@ -135,3 +135,10 @@ Physical ZED-F9P MON-VER/CFG readback, PPS/host UTC synchronization, antenna
 extrinsics, RTK correction service, actual TF timing, EKF behavior and robot
 navigation remain unverified. Root repository LICENSE is absent; package
 license metadata `UNSPECIFIED` is not a redistribution grant.
+
+
+## 7. First clock-policy implementation slice
+
+`robodog_gnss_time.ros_clock_policy.RosSystemTimeUtcPolicy` implements a pure, fail-closed decision gate for the timestamp preconditions above. It rejects simulation time, invalid/non-normalized UTC, leap-transition guard activation, unknown or missing host synchronization state/source, stale or future synchronization evidence, and `abs(host_utc_offset_ns) + host_utc_uncertainty_ns` above an explicitly supplied error budget. It rejects UTC seconds beyond signed 32-bit `builtin_interfaces/Time.sec` range to prevent ROS timestamp overflow.
+
+The policy deliberately does not run `chronyc`, inspect PHC state, infer synchronization from `/clock`, or trust a static boolean. The caller must supply fresh measurements from a separate trusted host-time monitor, including the monitor's source, offset, uncertainty, and host-monotonic sample time. Both the sample and the evaluation time must use the same host monotonic clock domain. Thresholds are mandatory constructor inputs and are not production defaults. No ROS node currently supplies this evidence; until a trusted monitor and the target Orin time chain are validated, the gate remains closed and no NavSatFix is published. Synthetic policy tests do not establish actual host UTC synchronization.
