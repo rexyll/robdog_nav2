@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.212
+- 文档版本：v0.3.213
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1067,3 +1067,6 @@
 
 
 - Python ingress event host monotonic timestamp fence（2026-11-26 / v0.3.212）：在 `GnssIngressEventProcessor` 中增加 receive timestamp ordering contract：同一 process_session_id 下，`ingress_sequence` 必须严格递增，`receive_monotonic_ns` 必须非递减；允许相同 timestamp，因为一个 USB completion 可解析出多条 Frame 并共享 callback-entry 时间戳；process session 改变时重置 timestamp epoch。新增测试覆盖时间倒退拒绝、相同 callback timestamp 接受，并验证拒绝事件不消费 ingress sequence。代码 commits：processor `5234102753bad2fa0b315376694e861e1d34662f`、tests `821c6fa2296a7ef1467ee60b0603cb4b5699154a`；doc/Navigation/34 §12 已补充。最终 Humble/Jazzy CI 尚未完成，待验证该时间顺序约束与全部 ingress processor tests。该约束只在 consumer 看到的 event stream 上校验 monotonic metadata；不能替代 ROS DDS callback ordering 或跨主机 monotonic clock 比较。
+
+
+- ROS 2 GNSS ingress wire interface（2026-11-26 / v0.3.213）：新增独立 ament_cmake/rosidl package `robodog_gnss_interfaces` 与 `msg/GnssIngressEvent.msg`，把 C++ ordered event stream 映射为单 topic wire contract：event type（GenerationStarted/Frame/DeviceLost/TransportFault/Stopped）、process_session_id、connection_generation、global ingress_sequence、host steady-clock receive_monotonic_ns，以及 Frame 的 protocol/checksum/frame_sequence/frame_connection_generation/frame_bytes。刻意不使用 std_msgs/Header，避免把 host monotonic clock 冒充 ROS time/UTC/GPS time。定义协议枚举常量与生命周期事件空 frame 字段约定；README 要求 subscriber 检查 frame_generation==event_generation 并按 ingress_sequence 串行处理。新增 Humble/Jazzy dedicated `gnss-interfaces-ci.yml`。文件 commits：message `1739937fd998d8be0546af660a755b0062ed6ceb`、package.xml `4bda3e034ba1a5ddb9968036297bd48049e43c6b`、CMake `ac4285bbbbc7be63b995ec1df9ed77550c00fd42`、README `808c3dc5f13edb5d428bc7a3ee706b77bec87fb3`、workflow `70f5ad6a1e6f18b92045779519b9f61805565593`；`src/README.md` 已索引。专门 CI run `45766147161` 正在运行；通用 ROS2 package CI 也因 src/** 变更触发，但它目前只构建 `robodog_lite3_bridge`，不作为本接口包的构建证据。包 license 字段保留 `UNSPECIFIED`，因为仓库根目录没有 LICENSE；这是显式治理阻塞，不代表授权已确认。当前只完成 ROSIDL message contract，尚无 C++ rclcpp publisher/component、libusb-to-ROS wiring、QoS contract、subscriber serialized executor、DDS queue drain barrier 或实机验证。下一步以专用 Humble/Jazzy CI 验证接口生成，再实现 ROS 2 transport publisher package，先以 fake device API 做 node integration tests。
