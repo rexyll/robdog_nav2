@@ -106,7 +106,7 @@ def _journald_suppression_output(boot_id=None):
         "_SYSTEMD_UNIT": "systemd-journald.service",
         "MESSAGE_ID": "a596d6fe7bfa4994828e72309e95d61e",
         "MESSAGE": "Suppressed 17 messages from /system.slice/ptp4l.service",
-    }) + "\\n"
+    }) + "\n"
 
 
 
@@ -557,7 +557,7 @@ def test_journal_parser_extracts_systemd_rate_limit_and_kernel_loss_events():
         },
     ]
     evidence = parse_linuxptp_journal_evidence(
-        "\\n".join(json.dumps(record) for record in records), boot
+        "\n".join(json.dumps(record) for record in records), boot
     )
     assert evidence["status"] == "parsed"
     assert [event["type"] for event in evidence["events"]] == [
