@@ -206,6 +206,8 @@ class UbxRawNavEpochAssembler:
             self._raw_pending.update(keep_all)
             self._mapping_pending.clear()
             self._retired.clear()
+        if mapping.i_tow_ms in self._retired:
+            return None
 
         result = self.adapter.add_time_mapping(mapping)
         self._mapping_pending[mapping.i_tow_ms] = mapping
