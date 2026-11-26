@@ -88,8 +88,8 @@ def test_offset_plus_uncertainty_must_fit_budget():
 
 def test_config_rejects_bool_and_nonpositive_thresholds():
     with pytest.raises(ValueError):
-        ClockPolicyConfig(max_host_utc_error_ns=True, max_sync_sample_age_ns=1)
+        ClockPolicyConfig(max_host_utc_error_ns=True, max_sync_sample_age_ns=1, trusted_host_sync_sources=frozenset({'chrony:tracking'}))
     with pytest.raises(ValueError):
-        ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=0, trusted_host_sync_sources={"chrony:tracking"})
+        ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=0, trusted_host_sync_sources=frozenset({"chrony:tracking"}))
     with pytest.raises(ValueError):
         ClockPolicyConfig(max_host_utc_error_ns=1, max_sync_sample_age_ns=1, trusted_host_sync_sources=frozenset())
