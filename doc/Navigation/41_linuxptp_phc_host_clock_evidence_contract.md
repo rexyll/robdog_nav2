@@ -298,6 +298,9 @@ schema v3 将 journal query 的时间语义与 collector 命令执行时间分�
   gap，后续按该 namespace 查询 systemd-journald@NAMESPACE.service。这些诊断命令为可选上下文；不可用会令该 context 标为
   partial，但不单独使核心 PTP inventory 失败。若没有显式配置任何目标 service，
   不执行这些 journald 诊断命令，journal_storage_context.status=not_requested。
+  systemd-analyze cat-config 只提供配置文件/ drop-in 合并视图，不等同于读取
+  journald 当前运行时内部状态，也不能自动补齐编译时默认值；journalctl --disk-usage
+  是当前占用统计，不是历史查询窗口内每个 journal file 的保留证明。
 
 ### 11.1 丢失与限流通知
 
