@@ -133,6 +133,18 @@ node 为 UBX timer 与 USB-events timer 创建了**不同的 MutuallyExclusive c
 
 RTCM timer 的队列访问与 UBX timer 结构相同：先在无锁状态下检查 `rtcm_queue_.size()`，再通过 `rtcm_queue_[0]` 复制，最后才加锁 `pop_front()`。USB callback 在 `rtcm_queue_mutex_` 下 push。构造函数把 RTCM timer 与 USB-events timer 放在不同 MutuallyExclusive callback groups；固定标准 launch 使用 `component_container_mt`。因此 RTCM queue 同样存在由标准部署配置可触发的并发读写缺陷（静态确认，未 TSAN 复现）。RTCM 与 UBX 应统一采用“锁内检查并 move/copy front + pop，锁外处理局部副本”的消费模式，避免持锁执行 ROS publish 或复杂解析。
 
+### 5.9 libusb transfer queue 与断连/关闭生命周期
+
+固定版本 `usb.cpp` 的 `cleanup_transfer_queue()`、`cleanup_all_transfers()`、`queued_transfer_in_num()` 都先在 mutex 外执行 `transfer_queue_.size()` 检查，再在后续才加锁。即使队列访问主体有锁，该锁外读取仍与并发 push/erase/clear 构成 deque data race。需要删除所有锁外 size/empty 检查，并将检查与遍历放在同一临界区。
+
+另有 `transfer_t::completed` 为普通 bool：`callback_in/out()` 写入 completed，队列清理/计数函数在 mutex 下读取；callback 写入没有使用该 mutex，因此 mutex 不能建立 happens-before。应改成 atomic（明确 memory order）或统一在同一同步协议下读写。
+
+`callback_in()` 与 `callback_out()` 对 `LIBUSB_TRANSFER_NO_DEVICE` 分支直接 return，早于后面的 `user_data` 取出、delete 和 completed 标记。这条分支不会释放由 `make_transfer_in/out()` 分配的 `new shared_ptr<transfer_t>`，也不会将 transfer 标记完成。若设备断开触发此状态，会留下 user_data/队列清理路径不一致；需要单一 RAII completion cleanup 路径覆盖所有 transfer status，包括 NO_DEVICE/CANCELLED。
+
+关闭路径的顺序也需要重新设计：`shutdown()` 先设置 `keep_running_=false`，再 `close_devh()`；后者调用 `cleanup_all_transfers()`，对未完成 transfer 调用 `libusb_cancel_transfer()` 后立即清空 transfer queue，随后关闭 handle。当前代码未展示在 cancel 后持续 pump libusb events，直到所有取消 callback 完成的 drain/barrier。不能据此断言 callback 一定未执行，但目前没有证明取消完成与 `libusb_close/libusb_exit` 之间存在生命周期屏障。修复应采用明确的 stop-submit → cancel → continue event handling/drain callbacks → release transfer/user_data → close handle/context 顺序，并测试 detach/shutdown 竞态。
+
+`cleanup_all_transfers()` 在持有 `transfer_queue_mutex_` 时调用 `libusb_cancel_transfer()`；若取消完成 callback 可由另一个事件处理线程并发执行，而 callback 后续调用 `queued_transfer_in_num()` 取同一 mutex，则需排查锁竞争/死锁可能。该项依赖 libusb event handling 的具体线程调度，需压力测试，不在静态审计中标记为已复现死锁。
+
 ### 5.8 UBX frame 长度校验应前移到构造边界
 
 `ubx::Frame::from_buf_build()` 直接读取 `buf[0..5]`、将 `buf[4..5]` 解释为 payload length，并从 vector 末尾读取 checksum；它没有先验证 `buf.size() >= 8`，也没有验证 `buf.size() == declared_payload_length + 8`。此外，`payload_to_hex()` 按 header 声明长度遍历 payload 指针。因此不能只在 queue dispatch/checksum 阶段补检查：必须在 stream decoder 产出完整 UBX frame 后、调用 `from_buf_build()` 或暴露 payload 指针前完成最小长度、最大 payload、精确总长检查。避免未校验的 Frame 对象进入任何调用者。
