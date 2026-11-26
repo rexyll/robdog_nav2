@@ -92,6 +92,12 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         with self.assertRaises(EpochPairingError):
             decode_nav_cov_message(invalid, 1)
 
+    def test_rejects_boolean_covariance_field(self):
+        invalid = cov()
+        invalid.pos_cov_nn = True
+        with self.assertRaises(EpochPairingError):
+            decode_nav_cov_message(invalid, 1)
+
     def test_rejects_missing_nested_carrier_field(self):
         invalid = pvt()
         invalid.carr_soln = None
