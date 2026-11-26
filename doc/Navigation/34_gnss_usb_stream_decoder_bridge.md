@@ -78,3 +78,8 @@ The ingress queue now records `stopped_event_recorded` independently from the ge
 ## 9. Per-generation terminal-event idempotence
 
 A generation has at most one terminal cause: the first `DeviceLost` or `TransportFault` wins. Repeated callbacks reporting the same terminal cause are idempotent and do not create duplicate control events; a conflicting later cause is rejected. If the first terminal event cannot be enqueued because the bounded queue contains only control events, its type is retained and the same call may be retried after draining; `close()` also attempts to flush that pending terminal event before appending `Stopped`. A new connection generation cannot replace an active generation; it is admitted only after the previous generation has a recorded terminal event or a recorded `Stopped`. Generation transition admission is atomic: if `GenerationStarted` cannot fit, current_generation is not advanced. Synthetic tests cover duplicate NoDevice-like callbacks, conflicting fatal status, terminal-event retry, active-generation replacement rejection, and failed GenerationStarted admission.
+
+
+## 10. Reject terminal callbacks after a committed stop
+
+Once `Stopped` has been successfully recorded, later `DeviceLost` or `TransportFault` notifications for that generation are rejected. A terminal callback whose earlier event enqueue failed remains retryable because its terminal type is retained; a queue closed by `close()` without a pending terminal cause does not accept a new terminal cause afterward. This prevents late or duplicate callback paths from appending a contradictory lifecycle event after `Stopped`. The synthetic regression test checks both late terminal event types and confirms the event stream remains `GenerationStarted → Stopped` only.
