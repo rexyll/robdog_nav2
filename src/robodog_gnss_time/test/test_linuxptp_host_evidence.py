@@ -66,6 +66,7 @@ def _config(**overrides):
         "domain_number": 5,
         "pmc_socket": "/run/ptp4l",
         "transport_specific": 0,
+        "target_port_identity": "",
         "ptp4l_service": "ptp4l.service",
         "phc2sys_service": "phc2sys.service",
         "chrony_service": "chrony.service",
@@ -120,6 +121,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert report["pmc_snapshot_validation"]["status"] == "valid"
     assert report["pmc_snapshot_validation"]["clock_identity"] == "080027.fffe.7f327b"
     assert report["expected_transport_specific"] == 0
+    assert report["expected_target_port_identity"] is None
     assert report["host_time_sync_claim"] == "not_evaluated"
     assert report["evidence_kind"] == "read_only_linuxptp_host_inventory"
     assert all(call[1]["shell"] is False for call in calls)
@@ -173,3 +175,61 @@ def test_collector_does_not_guess_service_names_when_not_configured():
 def test_config_rejects_invalid_transport_specific(transport_specific):
     with pytest.raises(ValueError):
         _config(transport_specific=transport_specific)
+
+def test_collector_targets_only_explicit_port_before_fixed_get_requests():
+    target = "080027.fffe.7f327b-1"
+    calls = []
+
+    def runner(argv, **kwargs):
+        calls.append(argv)
+        stdout = _pmc_output() if argv[0] == "pmc" else ""
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(
+        _config(target_port_identity=target),
+        runner=runner,
+    )
+    pmc_argv = next(argv for argv in calls if argv[0] == "pmc")
+    command_start = pmc_argv.index(f"TARGET {target}")
+    assert pmc_argv[command_start + 1:] == [
+        "GET TIME_STATUS_NP",
+        "GET CURRENT_DATA_SET",
+        "GET PORT_DATA_SET",
+        "GET PARENT_DATA_SET",
+        "GET TIME_PROPERTIES_DATA_SET",
+        "GET DEFAULT_DATA_SET",
+    ]
+    assert report["expected_target_port_identity"] == target
+    assert report["host_time_sync_claim"] == "not_evaluated"
+
+
+@pytest.mark.parametrize("target", [
+    "080027.fffe.7f327b",
+    "080027.fffe.7f327b-0",
+    "080027.fffe.7f327b-65536",
+    "not-a-port-identity",
+])
+def test_config_rejects_invalid_target_port_identity(target):
+    with pytest.raises(ValueError, match="target_port_identity"):
+        _config(target_port_identity=target)
+
+
+def test_collector_preserves_multi_port_snapshot_as_invalid_without_selecting_one():
+    output = _pmc_output().replace(
+        "sending: GET PARENT_DATA_SET",
+        "080027.fffe.7f327b-2 seq 16 RESPONSE MANAGEMENT PORT_DATA_SET\\n"
+        "    portIdentity 080027.fffe.7f327b-2\\n"
+        "    portState LISTENING\\n"
+        "sending: GET PARENT_DATA_SET",
+    )
+
+    def runner(argv, **kwargs):
+        stdout = output if argv[0] == "pmc" else ""
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["commands"][-1]["stdout"] == output
+    assert report["pmc_snapshot_validation"]["status"] == "invalid"
+    assert "exactly six response blocks" in report["pmc_snapshot_validation"]["error"]
+    assert report["host_time_sync_claim"] == "not_evaluated"
+
