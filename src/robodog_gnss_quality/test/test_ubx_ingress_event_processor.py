@@ -43,13 +43,14 @@ def timels_frame(i_tow=123456):
 
 
 def event(kind, sequence, *, session=SESSION, generation=GENERATION,
-          frame_bytes=None, protocol=None):
+          frame_bytes=None, protocol=None, dropped_frame_events_total=0):
     return GnssIngressEvent(
         event_type=kind,
         process_session_id=session,
         connection_generation=generation,
         ingress_sequence=sequence,
         receive_monotonic_ns=1_000_000 + sequence * 1000,
+        dropped_frame_events_total=dropped_frame_events_total,
         protocol=protocol,
         frame_bytes=frame_bytes,
     )
@@ -176,6 +177,36 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
             frame_bytes=generic,
         )))
         self.assertEqual(processor.stats().ignored_frames, 1)
+
+
+    def test_queue_drop_watermark_accounts_for_sequence_gaps(self):
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=1))
+        # Sequence 1 was accepted and later evicted by DropOldest. Its loss
+        # watermark may already be visible on the earlier popped start event.
+        processor.process(event(
+            "Frame", 2, frame_bytes=timegps_frame(), protocol=0,
+            dropped_frame_events_total=1
+        ))
+        mapping = processor.process(event(
+            "Frame", 3, frame_bytes=timels_frame(), protocol=0,
+            dropped_frame_events_total=1
+        ))
+        self.assertIsNotNone(mapping)
+
+    def test_unexplained_ingress_sequence_gap_fails_closed(self):
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0))
+        with self.assertRaisesRegex(EpochPairingError, "not explained"):
+            processor.process(event(
+                "Frame", 2, frame_bytes=timegps_frame(), protocol=0
+            ))
+
+    def test_unaccounted_drop_watermark_must_be_resolved_before_terminal(self):
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=1))
+        with self.assertRaisesRegex(EpochPairingError, "unexplained dropped-frame"):
+            processor.process(event("Stopped", 1, dropped_frame_events_total=1))
 
     def test_mapper_must_enforce_ingress_sequence(self):
         with self.assertRaisesRegex(ValueError, "require ingress_sequence"):
