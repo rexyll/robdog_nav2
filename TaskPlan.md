@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.183
+- 文档版本：v0.3.184
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -979,4 +979,7 @@
 - DeviceRuntime 统一所有权 CI 验收（2026-11-26 / v0.3.182）：Actions run `45752651888`，head `173467273c00a304bdbb0d72955455af113d352c`，四项全部 success。ASan/UBSan 与 TSan CTest 包含 DeviceSession、EventLoop、Runtime fake API 测试；生产 binding compile 和 Clang libFuzzer 也成功。该证据仅覆盖 synthetic/fake API 与 CI libusb 1.0.27 编译，不覆盖真实设备总线、USB 权限、热插拔或 ROS 2 Lifecycle。
 
 
-- GNSS USB bulk-IN → 协议帧队列桥接（2026-11-26 / v0.3.183）：新增 GnssUsbStream，将 DeviceRuntime 动态发现的 bulk-IN endpoint 与 StreamDecoder、BoundedFrameQueue 接通。默认 12,800-byte IN buffer、4 个 in-flight reads、timeout 0；支持 UBX/RTCM3/NMEA 跨 completion 分片、Frame generation fence、成功/timeout 自动重提交、fatal status 停止重提交并 cancel 其他 pending、stop 时 callback drain。增加 lifecycle mutex 串行化 start/stop，decoder 和 stats 线程安全。Fake API 测试注入有效 UBX 帧，验证 decode、queue、自动重提交和 shutdown 释放。实现提交：API 3bfdcece1629df73f3510412ffcbd6b716f94de7、source 52e812b683d536dd8f5515205525497d64f7c052、test 026b55ca6446520e87c737182ceddd87edd4871e、CMake e1e6a1a54006ebe5a68810f586c91b40db4e0759；后续修正 fa415b6b、44eb075e、12bddcfd、lifecycle mutex d1eb43d9/316382dd/9f3cd1a0。Actions run 45753122570（head 12bddcfd96d31673127afd66f66b434e0f7fa393）四项全部成功，覆盖该 GNSS bridge 及 fake test；包含 lifecycle mutex 的最新 head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4 的 run 45753314359 仍 pending，待完成后再记最终验收。目标 F9P 的真实 USB、固件/协议配置、ROS 2 publisher、hotplug/reconnect 和 GNSS timestamp/validity mapping 仍未实现或实测。
+- GNSS USB bulk-IN → 协议帧队列桥接（2026-11-26 / v0.3.183）：新增 GnssUsbStream，将 DeviceRuntime 动态发现的 bulk-IN endpoint 与 StreamDecoder、BoundedFrameQueue 接通。默认 12,800-byte IN buffer、4 个 in-flight reads、timeout 0；支持 UBX/RTCM3/NMEA 跨 completion 分片、Frame generation fence、成功/timeout 自动重提交、fatal status 停止重提交并 cancel 其他 pending、stop 时 callback drain。增加 lifecycle mutex 串行化 start/stop，decoder 和 stats 线程安全。Fake API 测试注入有效 UBX 帧，验证 decode、queue、自动重提交和 shutdown 释放。实现提交：API 3bfdcece1629df73f3510412ffcbd6b716f94de7、source 52e812b683d536dd8f5515205525497d64f7c052、test 026b55ca6446520e87c737182ceddd87edd4871e、CMake e1e6a1a54006ebe5a68810f586c91b40db4e0759；后续修正 fa415b6b、44eb075e、12bddcfd、lifecycle mutex d1eb43d9/316382dd/9f3cd1a0。Actions run 45753122570（head 12bddcfd96d31673127afd66f66b434e0f7fa393）四项全部成功，覆盖该 GNSS bridge 及 fake test；包含 lifecycle mutex 的最新代码 head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4 的 run 45753314359 也已四项全部成功。目标 F9P 的真实 USB、固件/协议配置、ROS 2 publisher、hotplug/reconnect 和 GNSS timestamp/validity mapping 仍未实现或实测。
+
+
+- GNSS USB stream bridge CI 验收（2026-11-26 / v0.3.184）：Actions run 45753314359，head 9f3cd1a0d671119800689700992b2fdbbd5ae1b4，ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding 四项全部 success。该 head 包含 GnssUsbStream bulk-IN 自动重提交、协议解析/帧队列、generation fence、start/stop lifecycle mutex 与 fake USB 数据注入测试。当前 TaskPlan 最新 head 仅有文档更新；真实 F9P/USB、ROS 2 GNSS component、message decoding/time mapping 与 hotplug/reconnect 仍未完成。
