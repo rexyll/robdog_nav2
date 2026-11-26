@@ -273,6 +273,7 @@ class UbxRosEpochAdapter:
         if (
             message.process_session_id != self._process_session_id
             or message.connection_generation != self._connection_generation
+            or message.gps_week != self._gps_week
         ):
             self._stale_context_rejections += 1
             raise EpochPairingError(
