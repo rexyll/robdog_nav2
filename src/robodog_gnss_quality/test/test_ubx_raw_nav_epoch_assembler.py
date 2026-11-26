@@ -207,3 +207,14 @@ def test_raw_pending_epochs_expire_and_capacity_is_bounded():
     assert a.stats().capacity_evictions == 1
     a.expire_stale(1000)
     assert a.stats().expired_raw_epochs == 1
+
+
+def test_expired_epoch_is_retired_and_late_duplicate_cannot_resurrect():
+    a = assembler(max_pending_age_ns=100)
+    start(a)
+    a.process_event(frame_event(0x07, pvt_payload(), 1, 110))
+    a.expire_stale(1000)
+    assert a.stats().expired_raw_epochs == 1
+    a.process_event(frame_event(0x07, pvt_payload(), 2, 1010))
+    assert a.stats().buffered_before_mapping == 1
+    assert a.handle_mapping(mapping(receive_ns=1020)) is None
