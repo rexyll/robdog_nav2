@@ -1,7 +1,5 @@
 """Strict conversion from the transport-independent receiver-time mapping to ROSIDL."""
 
-from .ingress_consumer import GnssIngressConsumer  # re-exported for runtime users
-
 
 def _integer(name, value, minimum, maximum):
     if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
@@ -41,6 +39,10 @@ def populate_receiver_time_message(mapping, message):
         raise ValueError("invalid UTC stamp must not carry timestamp values")
     if not isinstance(mapping.leap_event_valid, bool):
         raise ValueError("leap_event_valid must be a boolean")
+    if mapping.leap_event_valid != (mapping.time_to_leap_event_seconds is not None):
+        raise ValueError("leap event validity and countdown presence must agree")
+    if not isinstance(mapping.validity_reason, str):
+        raise ValueError("validity_reason must be a string")
 
     message.i_tow_ms = mapping.i_tow_ms
     message.source_timestamp_ns = mapping.source_timestamp_ns
