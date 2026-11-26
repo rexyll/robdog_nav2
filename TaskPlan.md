@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.190
+- 文档版本：v0.3.192
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1007,3 +1007,6 @@
 
 
 - UBX-NAV-TIMEGPS/NAV-TIMELS receiver-time mapper（2026-11-26 / v0.3.190）：新增严格 payload decoder 和 UbxReceiverTimeMapper。按固定 F9 HPG 1.32 schema 解码 TIMEGPS 16-byte、TIMELS 24-byte；按 exact iTOW 配对，bounded pending/LRU/stale/skew/conflict checks；GPST source timestamp 由 week+iTOW+fTOW 计算并规范化 fractional week boundary；source_clock_id 包含 receiver session + GPS week。UTC stamp 独立 fail-closed：要求 TIMEGPS leapSValid、TIMELS validCurrLs、显式 trusted_leap_sources allowlist、source-adjusted TIMELS.currLs 与 TIMEGPS.leapS 一致；allowlist 默认空，source 0 hardcoded default 不可信，255 Unknown 不可信；BeiDou source 4 按协议差异 +14s 归一到 GPS-UTC。GPS source time 可有效而 UTC stamp 无效，禁止下游伪造 NavSatFix UTC stamp；不以 NAV-TIMEUTC 替代 TIMELS。新增 12+ 场测试覆盖解析、valid flags、精确配对、来源信任、BDS leap adjustment、week rollover、stale/capacity/conflict/session/concurrent callbacks。协议字段依据 u-blox F9 HPG 1.32 Interface Description, UBX-22008968, sections 3.15.25–3.15.26。实现提交：mapper module bc8918dc31c098b4febb41f14a6f5a61b1de13e7、test d6ccf8f615c5c886fbc268e8e613300bc0ef29ba；BDS offset normalization commits 6e3e8df615156c9b3a830bf514e4456fd1675262 / 0d3ca295bb0ce8fc8b02f0268f25593add1cc1aa；后续 lock/export/README/Navigation 37。CI 待 Humble/Jazzy 矩阵。
+
+
+- UTC leap-transition ambiguity guard（2026-11-26 / v0.3.192）：审查 UbxReceiverTimeMapper 的 UTC POSIX stamp 生成路径，发现仅以当前 GPS−UTC offset 换算 Unix timestamp，无法表达 UTC 23:59:60，正闰秒瞬间可能与下一正常秒映射到相同 POSIX 时间。已加严 fail-closed：UTC stamp 还要求 NAV-TIMELS validTimeToLsEvent；timeToLsEvent ∈ {-1,0,+1} s 的保守切换 guard window 不输出 UTC stamp，但 GPST source timestamp 仍可 valid；source 0 firmware default 从 allowlist 中禁止，allowlist 仅允许显式 source ID 1..8。新增测试覆盖 event validity 缺失、±1s guard、guard 外恢复和 source 0 拒绝。更新 doc/Navigation/37。该策略避免把 leap second 伪装成普通 POSIX second；sec=60 leap-aware civil representation / transition evidence API 仍待实现。当前测试提交 `3dd6b350804eac3e29933bd50909b4bc6059470e` 与 mapper 修复提交 `a78b6f460c4a569943a4e42b11cdbd7720cfb9bc` 将由后续 CI 验证，尚未标记通过。
