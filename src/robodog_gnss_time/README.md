@@ -327,7 +327,10 @@ PORT_DATA_SET, PARENT_DATA_SET, TIME_PROPERTIES_DATA_SET, and DEFAULT_DATA_SET.
 It rejects mixed responder clock identities and reused sequence IDs, verifies
 PORT_DATA_SET and DEFAULT_DATA_SET identities against their response headers,
 and cross-checks the parent grandmaster identity against TIME_STATUS_NP when
-`gmPresent` is true. Parent/default dataset hex fields are parsed as integers. The snapshot deliberately has no timestamp:
+`gmPresent` is true. It also verifies the returned PORT_DATA_SET port number is
+within DEFAULT_DATA_SET.numberPorts. `validate_pmc_snapshot_domain()` requires
+an explicit deployment-supplied expected domain (0..255); there is no implicit
+domain-0 assumption. Parent/default dataset hex fields are parsed as integers. The snapshot deliberately has no timestamp:
 the future collector must bracket the command with host monotonic samples and
 apply a separate freshness/uncertainty policy. It preserves `master_offset`
 as PTP clock-to-GM evidence and does not convert it into host
