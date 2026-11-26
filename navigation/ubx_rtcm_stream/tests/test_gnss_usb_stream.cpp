@@ -170,5 +170,35 @@ int main() {
   assert(stopped.has_value());
   assert(stopped->type == robodog_protocol::GnssIngressEventType::Stopped);
   assert(stopped->ingress_sequence > frame_event->ingress_sequence);
+
+  // Restart the same stream object. The lifecycle queue must preserve its
+  // global sequence while the connection generation advances.
+  assert(stream.start());
+  assert(fake.pending_count() == 2);
+  auto started2 = stream.try_pop_event();
+  assert(started2.has_value());
+  assert(started2->type == robodog_protocol::GnssIngressEventType::GenerationStarted);
+  assert(started2->connection_generation == 2);
+  assert(started2->ingress_sequence > stopped->ingress_sequence);
+
+  assert(fake.inject(ubx));
+  std::optional<robodog_protocol::GnssIngressEvent> frame_event2;
+  for (int i = 0; i < 200 && !frame_event2; ++i) {
+    frame_event2 = stream.try_pop_event();
+    if (!frame_event2) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+  }
+  assert(frame_event2.has_value());
+  assert(frame_event2->type == robodog_protocol::GnssIngressEventType::Frame);
+  assert(frame_event2->connection_generation == 2);
+  assert(frame_event2->frame && frame_event2->frame->connection_generation == 2);
+  assert(frame_event2->ingress_sequence > started2->ingress_sequence);
+  assert(stream.stop(1000));
+  auto stopped2 = stream.try_pop_event();
+  assert(stopped2.has_value());
+  assert(stopped2->type == robodog_protocol::GnssIngressEventType::Stopped);
+  assert(stopped2->connection_generation == 2);
+  assert(stopped2->ingress_sequence > frame_event2->ingress_sequence);
+  assert(fake.device_closes == 2);
+  assert(fake.context_exits == 2);
   return 0;
 }
