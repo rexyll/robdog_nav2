@@ -233,3 +233,19 @@ def test_collector_preserves_multi_port_snapshot_as_invalid_without_selecting_on
     assert "exactly six response blocks" in report["pmc_snapshot_validation"]["error"]
     assert report["host_time_sync_claim"] == "not_evaluated"
 
+def test_collector_rejects_response_not_matching_explicit_target_port():
+    configured_target = "080027.fffe.7f327b-2"
+
+    def runner(argv, **kwargs):
+        stdout = _pmc_output() if argv[0] == "pmc" else ""
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(
+        _config(target_port_identity=configured_target),
+        runner=runner,
+    )
+    assert report["pmc_snapshot_validation"]["status"] == "invalid"
+    assert "does not match configured TARGET" in report["pmc_snapshot_validation"]["error"]
+    assert report["expected_target_port_identity"] == configured_target
+    assert report["host_time_sync_claim"] == "not_evaluated"
+
