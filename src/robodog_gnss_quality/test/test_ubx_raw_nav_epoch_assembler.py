@@ -216,8 +216,10 @@ def test_expired_epoch_is_retired_and_late_duplicate_cannot_resurrect():
     a.expire_stale(1000)
     assert a.stats().expired_raw_epochs == 1
     a.process_event(frame_event(0x07, pvt_payload(), 2, 1010))
-    assert a.stats().buffered_before_mapping == 1
+    assert a.stats().buffered_before_mapping == 2
+    # A same-week mapping cannot resurrect the retired epoch.
     assert a.handle_mapping(mapping(receive_ns=1020)) is None
+    assert a.stats().emitted_observations == 0
 
 
 def test_gps_week_rollover_reuses_i_tow_after_generation_context_changes():
