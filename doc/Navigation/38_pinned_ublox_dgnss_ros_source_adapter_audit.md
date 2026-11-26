@@ -108,13 +108,13 @@ rclcpp::Time ts = rclcpp::Clock().now();
 
 ## 6. 配置与运行验证缺口
 
-四类消息输出依赖对应 CFG_MSGOUT 参数启用：
+固定版默认 launch 的消息配置并未满足四流完整输入：\n- `ublox_rover_hpposllh.launch.py` 启用 HPPOSLLH 与 NAV-STATUS，但没有启用 NAV-PVT / NAV-COV；\n- `ublox_rover_hpposllh_navsatfix.launch.py` 启用 HPPOSLLH、NAV-STATUS、NAV-COV，但没有启用 NAV-PVT；\n- 因此现有 launch 即使运行成功，四流 joiner 仍会缺少 PVT 输入。必须显式启用 `CFG_MSGOUT_UBX_NAV_PVT_USB`，并对四路输出做 topic/rate 实测。\n\n四类消息输出依赖对应 CFG_MSGOUT 参数启用：
 - `CFG_MSGOUT_UBX_NAV_PVT_USB`
 - `CFG_MSGOUT_UBX_NAV_HPPOSLLH_USB`
 - `CFG_MSGOUT_UBX_NAV_COV_USB`
 - `CFG_MSGOUT_UBX_NAV_STATUS_USB`
 
-必须在目标设备读取实际配置并验证四路输出频率、iTOW 对齐、丢帧与 reconnect 行为。NAV-COV 的目标 ZED-F9P firmware/profile 可用性也必须用实际设备和对应 Interface Description 核实；仅凭驱动中存在 parser/publisher 不代表目标固件会输出该消息。
+必须在目标设备读取实际配置并验证四路输出频率、iTOW 对齐、丢帧与 reconnect 行为。上游 launch 的 `namespace` 默认空值且 topic 使用相对名称；如果给驱动设置 namespace，实际 topic 也会带该 namespace。当前本项目 observation node 的输入是 normalized `/gnss/nav_*` topics，仍需要 source bridge/remap，不可假定会自动订阅上游 `/ubx_nav_*` topics。NAV-COV 的目标 ZED-F9P firmware/profile 可用性也必须用实际设备和对应 Interface Description 核实；仅凭驱动中存在 parser/publisher 不代表目标固件会输出该消息。
 
 当前没有目标设备 MON-VER、CFG readback、真实 ROS topic capture、四流 iTOW 对齐统计或 USB reconnect 实测证据。
 
