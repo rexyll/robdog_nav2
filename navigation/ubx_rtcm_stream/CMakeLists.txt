@@ -25,6 +25,8 @@ if(ROBODOG_BUILD_FUZZER)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "ROBODOG_BUILD_FUZZER requires Clang/libFuzzer")
   endif()
+  target_compile_options(robodog_ubx_rtcm_stream PRIVATE
+    -fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
   add_executable(stream_decoder_fuzz tests/fuzz_stream_decoder.cpp)
   target_link_libraries(stream_decoder_fuzz PRIVATE robodog_ubx_rtcm_stream)
   target_compile_options(stream_decoder_fuzz PRIVATE -fsanitize=fuzzer,address,undefined -fno-omit-frame-pointer)
