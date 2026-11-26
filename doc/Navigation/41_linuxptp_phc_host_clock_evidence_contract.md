@@ -24,12 +24,12 @@ LinuxPTP `pmc` 是 IEEE 1588 management client；支持 GET/SET/CMD。监测器�
 待目标机确认 socket/domain/interface 后，可执行以下只读命令（示例仅为接口，不是目标机已验证命令）：
 
 ```bash
-pmc -u -b 0 'GET TIME_STATUS_NP'
-pmc -u -b 0 'GET CURRENT_DATA_SET'
-pmc -u -b 0 'GET PORT_DATA_SET'
-pmc -u -b 0 'GET PARENT_DATA_SET'
-pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
-pmc -u -b 0 'GET DEFAULT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET TIME_STATUS_NP'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET CURRENT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET PORT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET PARENT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET TIME_PROPERTIES_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET DEFAULT_DATA_SET'
 ```
 
 关注字段与职责：
@@ -95,16 +95,16 @@ timedatectl show
 ethtool -T <ptp-interface>
 readlink -f /sys/class/net/<ptp-interface>/device/ptp
 ls -l /dev/ptp*
-pmc -u -b 0 'GET TIME_STATUS_NP'
-pmc -u -b 0 'GET CURRENT_DATA_SET'
-pmc -u -b 0 'GET PORT_DATA_SET'
-pmc -u -b 0 'GET PARENT_DATA_SET'
-pmc -u -b 0 'GET TIME_PROPERTIES_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET TIME_STATUS_NP'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET CURRENT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET PORT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET PARENT_DATA_SET'
+pmc -u -s <verified-ptp4l-uds-path> -d <verified-domain> -t <verified-transport-specific> -b 0 'GET TIME_PROPERTIES_DATA_SET'
 systemctl status ptp4l phc2sys chrony --no-pager
 journalctl -u ptp4l -u phc2sys -u chrony --since '15 min ago' --no-pager
 ```
 
-占位符 `<ptp-interface>` 必须替换为目标机真实接口；服务名、socket、domain 也必须先核验。该清单不要求用户现在执行；进入实机阶段前先由项目确认目标 Orin/NIC/服务部署。
+占位符 `<ptp-interface>` 必须替换为目标机真实接口；服务名、socket、domain 也必须先核验。该清单不要求用户现在执行；进入实机阶段前先由项目确认目标 Orin/NIC/服务部署。采集器 `robodog_linuxptp_host_evidence` 同样要求显式传入 interface、domain、transportSpecific 和 UDS socket；不使用 LinuxPTP 的 domain 0 / transportSpecific 0 / 默认 socket 作为项目部署假设。
 
 ## 6. 实施 Gate
 
