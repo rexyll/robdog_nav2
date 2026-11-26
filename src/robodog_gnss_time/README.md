@@ -345,3 +345,37 @@ does not know the target PTP domain/interface/PHC, and does not publish
 `HostTimeSyncStatus`. It is a parser/test slice only; a future collector must
 first use the target machine's verified socket/domain/profile and separately
 verify phc2sys's actual CLOCK_REALTIME sink and time-scale conversion chain.
+
+## Read-only LinuxPTP host evidence collector
+
+The `robodog_linuxptp_host_evidence` console command collects a host-side
+evidence bundle without changing system clocks or PHCs. It requires explicit
+`--interface`, `--domain`, and absolute `--pmc-socket` arguments; it has no
+assumed interface, domain, or socket defaults. Optional systemd unit names
+(`--ptp4l-service`, `--phc2sys-service`, `--chrony-service`) are only
+queried when explicitly supplied.
+
+Example template (replace every angle-bracket value with verified target-host
+configuration; this is not a claim that these paths or units exist):
+
+```bash
+ros2 run robodog_gnss_time robodog_linuxptp_host_evidence \
+  --interface <verified-interface> \
+  --domain <verified-domain-number> \
+  --pmc-socket <verified-ptp4l-uds-path> \
+  --ptp4l-service <verified-ptp4l-unit> \
+  --phc2sys-service <verified-phc2sys-unit> \
+  --chrony-service <verified-chrony-unit> \
+  --output linuxptp-host-evidence.json
+```
+
+The collector invokes `pmc` once with six fixed GET requests only, and uses
+argv-based subprocess calls with `shell=False`. It records raw stdout/stderr,
+exit status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot
+ID, NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
+PHC paths, plus explicitly requested service status/journal output. It validates
+the six-dataset snapshot and configured domain when possible, but always sets
+`host_time_sync_claim=not_evaluated`: this bundle does not prove
+PHC-to-CLOCK_REALTIME discipline, UTC traceability, or an end-to-end error
+bound. CI tests use mocked subprocess results; they are not target Orin evidence.
+
