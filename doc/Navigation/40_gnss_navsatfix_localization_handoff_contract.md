@@ -117,12 +117,16 @@ NavSatFix publisher, a TimeReference publisher, robot_localization launch
 configuration, EKF parameters, TF broadcaster, or robot-control integration.
 
 Next implementation slice:
-1. Add a bounded exact-identity observation/quality decision joiner.
-2. Add a ROS clock mode guard and explicit SystemTime/UTC mapping policy.
-3. Require antenna frame and verified static extrinsic before publishing.
-4. Publish NavSatFix only for qualified exact epochs with valid UTC.
-5. Publish diagnostics/status for every loss of qualification and test EKF
-   timeout/recovery behavior.
+1. Use the new transport-independent `GnssObservationQualityJoiner` to pair
+   observations and `GnssQualityStatus` by the complete session/generation/week/
+   iTOW/GPST/source-clock/monotonic identity. Its synthetic tests are in the
+   dedicated GNSS quality CI matrix.
+2. Add a ROS adapter that converts both ROS messages into that canonical
+   identity and rejects mismatches without nearest-time pairing.
+3. Add a ROS clock mode guard and explicit SystemTime/UTC mapping policy.
+4. Require antenna frame and verified static extrinsic before publishing.
+5. Publish NavSatFix only for qualified exact epochs with valid UTC, and test
+   diagnostics/status propagation plus EKF timeout/recovery behavior.
 6. Test Humble/Jazzy software integration with synthetic data, then obtain
    physical F9P/antenna/RTK/clock evidence.
 
