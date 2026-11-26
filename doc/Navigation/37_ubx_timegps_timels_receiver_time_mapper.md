@@ -45,7 +45,7 @@ UTC stamp 只有在以下条件全部成立时才生成：
 
 NAV-TIMELS 与 NAV-TIMEGPS 按 exact iTOW 配对；没有 TIMELS 时不产生 mapping。NAV-TIMEUTC 不作为替代 leap source。GPS source timestamp 可以有效而 UTC stamp 无效；这种情况下 mapping.valid=true、utc_stamp_valid=false，下游可进行 GPST epoch pairing，但不得伪造 NavSatFix UTC header。
 
-UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 civil label。若 TIMELS validTimeToLsEvent=true，mapper 在 timeToLsEvent 为 -1/0/+1 秒的保守 guard window 内将 utc_stamp_valid 置 false；若 event flag 无效，只省略 event countdown，不单独否定仍有效的 current leap offset。GPST source timestamp 仍可保持 valid/单调。真正的 sec=60 civil representation 与 transition evidence API 仍需单独实现。\n\n## 4. 缓存与会话
+UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 civil label。若 TIMELS validTimeToLsEvent=true，mapper 在 timeToLsEvent 为 -1/0/+1 秒的保守 guard window 内将 utc_stamp_valid 置 false；若 event flag 无效，只省略 event countdown，不单独否定仍有效的 current leap offset；lsChange 的 -1/0/+1 语义范围仅在 validTimeToLsEvent=true 时强制校验，避免无效 future-event 字段污染当前 offset。GPST source timestamp 仍可保持 valid/单调。真正的 sec=60 civil representation 与 transition evidence API 仍需单独实现。\n\n## 4. 缓存与会话
 
 - TIMEGPS/TIMELS 可任意先后到达；
 - exact iTOW pair、pair receive skew、pending age、LRU capacity 均受限；
