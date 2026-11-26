@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 
 from robodog_gnss_quality import CarrierSolution
@@ -254,6 +255,34 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
             CarrierSolution.FIXED, 101
         )
         self.assertIsNone(a.add_pvt(fresh))
+
+
+    def test_all_four_message_types_reject_old_week_after_rollover(self):
+        a = adapter()
+        old_records = (
+            ("pvt", pvt(), a.add_pvt),
+            ("position", position(), a.add_position),
+            ("covariance", covariance(), a.add_covariance),
+            ("status", status(), a.add_status),
+        )
+        new_week = GPS_WEEK + 1
+        new_clock = (
+            f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:"
+            f"gps-week:{new_week}"
+        )
+        a.begin_generation(
+            new_clock, process_session_id=PROCESS_SESSION_ID,
+            connection_generation=CONNECTION_GENERATION, gps_week=new_week
+        )
+        for kind, record, add in old_records:
+            with self.subTest(kind=kind):
+                with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+                    add(record)
+        self.assertEqual(a.stale_context_rejections, 4)
+        for kind, record, add in old_records:
+            with self.subTest(fresh_kind=kind):
+                self.assertIsNone(add(replace(record, gps_week=new_week)))
+        self.assertEqual(a.pending_count, 1)
 
     def test_reset_requires_explicit_new_generation(self):
         a = adapter()
