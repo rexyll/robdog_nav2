@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.157
+- 文档版本：v0.3.158
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -910,3 +910,5 @@
 - CI 触发范围修正：`.github/workflows/ublox-dgnss-driver-ci.yml` 原 push trigger 仅包含 main，且仅监听旧路径 `docs/implementation/zed_f9p_driver_evaluation.md`；N1 当前在 nav 与 `doc/Navigation/18/19` 下推进，自动构建不会触发。已将 push branches 扩展为 main/nav，并把 Navigation 18/19 审计与设计合同加入 paths（保留旧路径）；本次工作流变更应触发 nav 分支的 pinned u-blox driver compatibility build。此 workflow 仍只验证固定上游构建/ROSIDL interfaces，不代表 parser tests 或设备验收。
 
 - UBX/RTCM3 独立解析器首个实现切片（2026-11-26 / v0.3.157）：根据 Navigation/19 合同，在 `navigation/ubx_rtcm_stream/` 新增无 ROS/libusb 依赖的 C++17 standalone library。当前实现 UBX B5 62 framing、little-endian payload length、可配置部署 payload ceiling、CK_A/CK_B 验证；RTCM3 D3 framing、reserved bits、完整 10-bit payload length（含 256–1023）、CRC24Q 验证；支持任意 chunk 分片、逐字节输入、多帧连续输入、噪声跳过、坏校验后重新扫描、connection generation reset、frame sequence 和基础统计。新增独立 CMake/CTest 工程及 8 组测试：CRC24Q 标准 check value、UBX 所有 split point、混合协议/噪声/损坏帧恢复、CK_A 与 CK_B 单独损坏、RTCM payload 长度 0/1/255/256/511/1023、reserved bits/CRC 拒绝、generation reset、截断/超 ceiling。当前未实现 NMEA；尚未接入上游 ROS/libusb 驱动，队列并发和 USB transfer lifecycle 也未修复。代码提交：CMake `cdb76f1f45aa05e08644be31d0f59c1ac1219b59`；API `1c827b68d1a00f4f11e5ded35b50b2a0043c5349`；实现 `d8753db2471041e1367ef84118fd7d7e4e985ebf`；测试 `64df0233998adf0622b127acb4c827bf205885dd`；ASan/UBSan CI workflow `dc9872ff458aa0ab5473bfd1076b5bb94d952810`。本地容器以 GCC 14.2、CMake、C++17、ASan+UBSan 构建并运行 CTest：1/1 test executable passed，8 组测试全部通过；无 sanitizer 报告。GitHub Actions run `45740377808` success（job `139643615660`，head `3217611ec375a66c0fd3baabcfb33b559cfdf045`）：C++17 parser configure/build/CTest 全部通过，ASan+UBSan 开启；8 组测试所在的 `stream_decoder_tests` test executable 通过。解析器目前仅为第一实现切片：NMEA、property/fuzz、随机 segmentation 等合同仍未实现；部署 payload ceiling 尚未依据 F9P 实际输出白名单冻结。下一步先确认该 CI 在 nav 的实际结果，再补 NMEA 与 property/fuzz，再进入 ROS/libusb 集成前的接口评审。
+
+- UBX/RTCM3 stream parser 同 chunk 拼帧回归补强（2026-11-26 / v0.3.158）：补充在单次 `feed()` 输入中同时包含噪声、UBX、RTCM3、损坏 UBX 与后续合法 UBX 的测试，确保同一 transfer/chunk 内多帧连续拆分及 checksum 失败后的后续帧恢复；原逐字节输入用例继续保留。修改提交：`795edf077da7558e986b9c4d4591bef003fcccea`。本地 GCC 14.2 + ASan/UBSan 重新构建并运行 CTest：1/1 test executable passed。GitHub Actions parser CI run `45740479635` success（job `139643955970`，head `795edf077da7558e986b9c4d4591bef003fcccea`），Configure/Build/Test 全部通过，ASan+UBSan 已启用。此前 parser CI run `45740377808` 也成功，但以本轮最新 head 的 `45740479635` 为当前验证依据。当前仍未实现 NMEA、随机分片 property test、fuzz；未接入 ROS/libusb，也未修复上游队列并发与 USB transfer lifecycle。
