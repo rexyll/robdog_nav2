@@ -385,7 +385,7 @@ identity must use LinuxPTP's exact clockIdentity-portNumber format; absent this
 option, no port is selected implicitly. It records raw stdout/stderr, exit
 status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot ID,
 NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
-PHC paths, plus explicitly requested service status/journal output. It validates
+PHC paths, plus explicitly requested service status, selected systemd properties (`ExecStart`, unit/drop-in paths and active state), and journal output. Review the resulting report locally and redact any sensitive command-line values or paths before sharing it. It validates
 the six-dataset snapshot and configured domain when possible, but always sets
 `host_time_sync_claim=not_evaluated`: this bundle does not prove
 PHC-to-CLOCK_REALTIME discipline, UTC traceability, or an end-to-end error
