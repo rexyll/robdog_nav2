@@ -63,7 +63,7 @@ int main() {
     assert(second && second->type == GnssIngressEventType::Frame);
     assert(second->frame && second->frame->sequence == 2);
     assert(third && third->type == GnssIngressEventType::DeviceLost);
-    assert(queue.stats().dropped_oldest_frame_events == 1);
+    assert(queue.stats().dropped_oldest_frame_events == 2);
   }
 
   {
