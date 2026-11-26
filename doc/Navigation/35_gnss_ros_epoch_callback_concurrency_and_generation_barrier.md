@@ -66,4 +66,4 @@ RLock 不解决：
 
 ## 已实现的回调上下文校验补充
 
-四路 UBX ROS epoch record（PVT/HPPOSLLH/COV/STATUS）都携带 process_session_id 与 connection_generation；decoder 必须显式接收上下文。UbxRosEpochAdapter.begin_generation 显式绑定 process/session、connection generation 与 GPS week，并在消息及 time mapping 入队前校验 session/generation。UbxFourMessageEpochJoiner 也验证 process/generation 与 source_clock_id 前缀一致。Actions run `45757990351` 在 Humble/Jammy、Jazzy/Noble 均成功，每环境 133 tests、0 failures。当前记录尚未携带独立 gps_week 字段；GPS week rollover 的 stale callback fence 仍需下一阶段补齐。
+四路 UBX ROS epoch record（PVT/HPPOSLLH/COV/STATUS）都携带 process_session_id 与 connection_generation；decoder 必须显式接收上下文。UbxRosEpochAdapter.begin_generation 显式绑定 process/session、connection generation 与 GPS week，并在消息及 time mapping 入队前校验 session/generation。UbxFourMessageEpochJoiner 也验证 process/generation 与 source_clock_id 前缀一致。Actions run `45757990351` 在 Humble/Jammy、Jazzy/Noble 均成功，每环境 133 tests、0 failures。四路记录现均携带独立 `gps_week`；decoder、ROS epoch adapter、joiner 与直接 builder 都校验 process/session、connection generation 和 GPS week。GPS week rollover 的纯 Python stale callback 拒绝测试已通过 Humble/Jazzy CI；真正的 DDS queued callback drain/barrier 仍需 ROS runtime integration 实现。
