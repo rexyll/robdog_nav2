@@ -13,9 +13,13 @@ ordered ingress events as `robodog_gnss_interfaces/msg/GnssIngressEvent`.
   of `GnssUsbStream::try_pop_event()` and publishes events in ingress sequence
   order.
 - Publishes with reliable, volatile, KeepLast QoS. `dds_history_depth` must be
-  at least `frame_queue_capacity`; the ingress queue remains the authoritative
-  bounded buffer and records frame eviction in its per-event sequence-prefix
-  watermark.
+  at least `frame_queue_capacity`. Before the first matched subscriber, the
+  publisher thread leaves events in the bounded ingress queue so the initial
+  `GenerationStarted` is retained; DropOldest frame loss is represented by the
+  per-event sequence-prefix watermark. During shutdown it drains even without
+  a matched subscriber. A subscriber that joins after an earlier subscriber
+  disconnected must treat a nonzero initial sequence as a discontinuity and
+  reset/fail closed; volatile QoS does not replay a completed process session.
 - On shutdown, stops USB submissions and drains native callbacks first,
   closes the ingress queue with `Stopped`, then drains all retained ingress
   events on the publisher thread before joining it.
