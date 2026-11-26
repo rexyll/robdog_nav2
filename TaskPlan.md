@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.209
+- 文档版本：v0.3.210
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1058,3 +1058,6 @@
 
 
 - GnssUsbStream stop→restart 跨 generation 集成测试（2026-11-26 / v0.3.209）：扩展 `test_gnss_usb_stream`，对同一 `GnssUsbStream` 对象执行 generation 1 start→Frame→stop→Stopped，再次 start 得到 generation 2→Frame→stop→Stopped；验证 ingress_sequence 跨 generation 全局严格递增、不重置，GenerationStarted/Frame/Stopped 的 generation 标签一致，Fake DeviceSession 的 device/context 可第二次重新 open/close。该测试覆盖真实 stream/runtime class 与 fake libusb API 的集成，不等于物理拔插/hotplug。代码 commit `f09ccb359160b9a40bcd9f020e25b552bd8e6b00`；doc/Navigation/34 §11 已更新。Actions run `45764761179` 正在执行四 job 矩阵，尚未取得结果。下一步根据 CI 结果修复 restart 语义或验收，再检查 ROS 2 runtime bridge 的构建依赖、消息合同、event queue 消费线程和 callback drain barrier；保持 nav 分支。
+
+
+- GnssUsbStream stop→restart integration CI 验收（2026-11-26 / v0.3.210）：同一 stream 对象 generation 1→stop→generation 2→stop 的集成测试 head `f09ccb359160b9a40bcd9f020e25b552bd8e6b00` 对应 Actions run `45764761179`，四个 job 全部 success：ASan/UBSan CTest 10/10、TSan CTest 10/10、Clang libFuzzer smoke、production libusb binding compile/CTest 1/1。验证了同一 GnssUsbStream/LibusbDeviceRuntime 在 stop 后可重新 open，connection_generation 递增，GenerationStarted/Frame/Stopped ingress_sequence 跨代连续递增，设备句柄与 libusb context 第二次释放。该结果仍是 fake libusb API 集成，不代表物理 USB 拔插/hotplug。下一步构建 Python raw ingress lifecycle consumer，把 C++ GnssIngressEvent 的 GenerationStarted/Frame/DeviceLost/TransportFault/Stopped 事件按 ingress_sequence 串行转换为 canonical TIMEGPS/TIMELS typed records 并驱动 mapper session reset；这会为后续 ROS 2 message bridge 提供可测的 transport-independent 消费合同，但不冒充已完成 rclcpp/rclpy/DDS bridge。
