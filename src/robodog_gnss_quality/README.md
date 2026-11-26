@@ -147,3 +147,10 @@ This helper is pure algorithm code. It is not a serial/USB parser, ROS subscript
 `ros_message_adapter.py` adds strict, ROS-runtime-independent conversion helpers for the pinned `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` message schema. It converts `UBXNavPVT`, `UBXNavHPPosLLH`, `UBXNavCov`, and `UBXNavStatus` objects into the immutable epoch records consumed by `UbxFourMessageEpochJoiner`. Carrier solution codes 0/1/2 map to no-solution/float/fixed; reserved and unknown codes fail closed. Raw high-precision integer fields and validity flags are preserved.
 
 The adapter deliberately ignores ROS `header.stamp`: the caller must supply `time.monotonic_ns()` (or one equivalent host monotonic source) at callback entry. It does not derive receiver `source_timestamp_ns` or `source_clock_id`, and it does not implement rclpy subscriptions or publish NavSatFix. The receiver-time mapper remains a hard integration gate because the pinned driver does not publish NAV-TIMEGPS or NAV-TIMELS in this revision.
+
+
+## Bounded ROS epoch adapter and receiver-time mapping
+
+`ros_epoch_adapter.py` adds a bounded, generation-fenced buffer between the four decoded UBX ROS message streams and the exact-iTOW joiner. It accepts records in any order and holds them until a separately validated `UbxSourceTimeMapping` for that exact iTOW arrives. The mapping carries receiver `source_timestamp_ns`, `source_clock_id`, and separate UTC-stamp validity/fields. A GPS-time mapping may be valid while UTC conversion remains unavailable; downstream code must not publish a ROS NavSatFix with an invalid UTC stamp.
+
+The adapter requires `begin_generation()` after the mapper has validated a new GPS week/receiver boot generation. It never derives time from iTOW or ROS Header.stamp, and rejects unexpected clock IDs, conflicting mappings, conflicting duplicate records, stale/capacity-evicted epochs, and invalid mappings. This is still a pure Python adapter contract; the NAV-TIMEGPS/NAV-TIMELS parser and live ROS mapper publisher remain unimplemented.
