@@ -230,10 +230,10 @@ class UbxRawNavEpochAssembler:
             if (record.process_session_id, record.connection_generation) != expected:
                 self._rejected_stale_generation += 1
                 return None
-        if record.i_tow_ms in self._retired:
-            return None
         mapping = self._mapping_pending.get(record.i_tow_ms)
         if mapping is not None:
+            if record.i_tow_ms in self._retired:
+                return None
             if not self._within_skew(record.receive_monotonic_ns, mapping.receive_monotonic_ns):
                 self._rejected_receive_skew += 1
                 return None
