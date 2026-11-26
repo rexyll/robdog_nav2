@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.204
+- 文档版本：v0.3.205
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1043,3 +1043,6 @@
 
 
 - GNSS ingress terminal Stopped event backpressure 修复（2026-11-26 / v0.3.204）：发现 bounded ingress queue 在 capacity=1 或控制事件占满时，`GnssIngressQueue::close()` 会因无可驱逐 frame 而无法追加 `Stopped`，但旧实现把 `closed_` 当作 close 完成标志；第二次 close 直接返回 true，且 `GnssUsbStream::stop()` 忽略 close 返回值，导致调用方可能把“停止事件未入队”误认为成功。修复为独立 `stopped_event_recorded_` 状态；close 失败仍保持 frame-ingress closed，但允许消费队列后重试写入 `Stopped`；只有真实记录后重复 close 才幂等返回 true；stats 暴露 stopped_event_recorded；stream stop 传播 ingress close 结果。新增 capacity-1 测试覆盖 GenerationStarted 占满→close false→消费→close retry true→Stopped sequence 1→重复 close true。代码 commits：queue header `46da69873793fa5e9610d8080eef24f5963273c7`、测试 `f9f1dd624dc86d22ef8ac326eca019dcdb55941d`、stream propagation `1a7d2436e427f8c7e48247343e49d501c26ec8a4`；文档 Navigation 34 已更新。CI run `45763745597`（queue header commit）TSan 与 libusb binding job 已成功，ASan/UBSan 与 Clang fuzz 仍在运行；后续 test commit run `45763748874` 被紧接着 push 取消，最新 stream commit run `45763754376` pending。尚无最终 head 完整 CI 证据，暂不标记通过。下一步等待最新 `nav` head 对应 sanitizer/TSan/fuzzer/libusb 全矩阵完成，检查 capacity-1 重试用例及 `stop()` 语义；之后继续设计 C++→ROS 2 ingress bridge 与真实 executor callback barrier，保持 nav 分支。
+
+
+- GNSS ingress terminal Stopped event 修复 CI 验收（2026-11-26 / v0.3.205）：最终代码 head `1a7d2436e427f8c7e48247343e49d501c26ec8a4` 对应 Actions run `45763754376`，四个 job 全部 success：GCC C++17 + ASan/UBSan CTest 10/10、ThreadSanitizer CTest 10/10、Clang libFuzzer smoke、production libusb 1.0 binding compile/CTest 1/1。该 head 验证 queue terminal-state retry、capacity-1 `Stopped` overflow→drain→retry、close 幂等以及 GnssUsbStream::stop() 传播失败；之前仅 queue header 的 run `45763745597` 全部 success，但最终以包含 test 与 stream propagation 的 `45763754376` 为准。文档 `doc/Navigation/34_gnss_usb_stream_decoder_bridge.md` 已记录语义。证据仍限于 synthetic/fake USB 和 standalone C++ 测试，不代表物理 F9P USB、ROS 2 executor/DDS ingress barrier 或自动重连验收。下一步审计同一 generation 多个 pending IN transfer 同时返回 NO_DEVICE/fatal status 时是否重复发布 DeviceLost/TransportFault，并设计首个终态事件胜出、失败可重试、重复 callback 幂等的状态合同；随后推进真正 C++→ROS 2 ingress bridge 和旧 DDS callback drain barrier，保持 nav 分支。
