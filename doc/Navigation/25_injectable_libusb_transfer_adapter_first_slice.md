@@ -71,4 +71,4 @@
 - 还需验证 callback status code mapping 与目标 libusb 版本一致，且记录 libusb runtime/development package 的精确版本。
 - 还未在 ROS 2 Jazzy `component_container_mt` 下集成，也未做真实设备拔插/断连/重连、ASan/TSan 设备压力测试。
 
-**本阶段状态：注入式 adapter 第一实现切片已提交，CI 待本轮最终 commit 结果；生产 libusb binding 和真实设备集成未完成。**
+**本阶段状态：注入式 adapter 第一实现切片已提交；最终 Actions run `45746920823`（head `c5765ea237dc1c62354650d9440934a3795a7b64`）三个 job 全部成功：ASan/UBSan CTest、TSan CTest、Clang libFuzzer smoke。前一轮 run `45746703263` 的 ASan/UBSan 与 TSan build 因 `valid() const` 锁定非 mutable mutex 而失败；将 operation mutex 标记为 mutable 后重跑成功。生产 libusb binding 和真实设备集成未完成。**
