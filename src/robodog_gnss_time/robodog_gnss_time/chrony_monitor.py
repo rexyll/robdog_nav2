@@ -64,7 +64,7 @@ def parse_chrony_tracking(output: str):
     dispersion_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_dispersion)
     if not dispersion_match:
         raise ValueError("unsupported Chrony Root dispersion format")
-    delay_match = re.fullmatch(r"([+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)) seconds", root_delay)
+    delay_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_delay)
     if not delay_match:
         raise ValueError("unsupported Chrony Root delay format")
     root_delay_ns = _seconds_to_ns(delay_match.group(1).lstrip("+"))
