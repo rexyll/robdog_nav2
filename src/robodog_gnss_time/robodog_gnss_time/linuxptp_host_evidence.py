@@ -31,7 +31,8 @@ class LinuxPtpHostEvidenceConfig:
     interface: str
     domain_number: int
     pmc_socket: str
-    timeout_s: float = 3.0
+    transport_specific: int
+    timeout_s: float = 10.0
     ptp4l_service: str = ""
     phc2sys_service: str = ""
     chrony_service: str = ""
@@ -46,6 +47,10 @@ class LinuxPtpHostEvidenceConfig:
             raise ValueError("domain_number must be an integer")
         if not 0 <= self.domain_number <= 255:
             raise ValueError("domain_number must fit uint8")
+        if isinstance(self.transport_specific, bool) or not isinstance(self.transport_specific, int):
+            raise ValueError("transport_specific must be an integer")
+        if not 0 <= self.transport_specific <= 15:
+            raise ValueError("transport_specific must fit the PTP four-bit field")
         if not isinstance(self.pmc_socket, str) or not os.path.isabs(self.pmc_socket):
             raise ValueError("pmc_socket must be an explicit absolute Unix socket path")
         if len(os.fsencode(self.pmc_socket)) >= 108:
@@ -150,7 +155,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     ]
     pmc_argv = [
         "pmc", "-u", "-s", config.pmc_socket, "-d", str(config.domain_number),
-        "-b", "0", *_PMC_GET_COMMANDS,
+        "-t", f"0x{config.transport_specific:x}", "-b", "0", *_PMC_GET_COMMANDS,
     ]
     pmc_result = _run_readonly_command(
         "pmc_get_snapshot", pmc_argv, config.timeout_s, runner=runner,
@@ -217,7 +222,8 @@ def main(argv=None):
     parser.add_argument("--interface", required=True)
     parser.add_argument("--domain", required=True, type=int)
     parser.add_argument("--pmc-socket", required=True)
-    parser.add_argument("--timeout", type=float, default=3.0)
+    parser.add_argument("--transport-specific", required=True, type=lambda value: int(value, 0))
+    parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--ptp4l-service", default="")
     parser.add_argument("--phc2sys-service", default="")
     parser.add_argument("--chrony-service", default="")
@@ -228,6 +234,7 @@ def main(argv=None):
         interface=args.interface,
         domain_number=args.domain,
         pmc_socket=args.pmc_socket,
+        transport_specific=args.transport_specific,
         timeout_s=args.timeout,
         ptp4l_service=args.ptp4l_service,
         phc2sys_service=args.phc2sys_service,
