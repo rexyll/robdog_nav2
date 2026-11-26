@@ -124,10 +124,11 @@ Next implementation slice:
    run `45812322052` on Humble/Jammy and Jazzy/Noble (208 tests in each job).
 2. Add a ROS adapter that converts both ROS messages into that canonical
    identity and rejects mismatches without nearest-time pairing.
-3. Implement and validate a trusted HostTimeSyncStatus producer/ROS interface
-   for live SystemTime-to-UTC state, source, offset, uncertainty and freshness;
-   the pure policy gate is already Humble/Jazzy CI-validated (run 45817485449,
-   49 tests per distro), but has no real host-time evidence source.
+3. Implement and validate a trusted HostTimeSyncStatus producer for live
+   SystemTime-to-UTC state, source, offset, uncertainty and freshness. The
+   ROS message and strict adapter now exist; the producer and real host-time
+   evidence source are still missing. The pure policy gate is Humble/Jazzy
+   CI-validated (run 45817485449, 49 tests per distro).
 4. Require antenna frame and verified static extrinsic before publishing.
 5. Combine exact observation/quality join, UTC/leap policy, host clock evidence
    and antenna readiness; only then publish NavSatFix and test diagnostics/status
@@ -146,3 +147,8 @@ license metadata `UNSPECIFIED` is not a redistribution grant.
 `robodog_gnss_time.ros_clock_policy.RosSystemTimeUtcPolicy` implements a pure, fail-closed decision gate for the timestamp preconditions above. It rejects simulation time, invalid/non-normalized UTC, leap-transition guard activation, unknown or missing host synchronization state/source, stale or future synchronization evidence, and `abs(host_utc_offset_ns) + host_utc_uncertainty_ns` above an explicitly supplied error budget. It rejects UTC seconds beyond signed 32-bit `builtin_interfaces/Time.sec` range to prevent ROS timestamp overflow.
 
 The policy deliberately does not run `chronyc`, inspect PHC state, infer synchronization from `/clock`, or trust a static boolean. The caller must supply fresh measurements from a separate trusted host-time monitor, including the monitor's source, offset, uncertainty, and host-monotonic sample time. The source identifier must belong to an explicit immutable allowlist selected for the deployed host-time architecture. Both the sample and the evaluation time must use the same host monotonic clock domain. Thresholds are mandatory constructor inputs and are not production defaults. No ROS node currently supplies this evidence; until a trusted monitor and the target Orin time chain are validated, the gate remains closed and no NavSatFix is published. Synthetic policy tests do not establish actual host UTC synchronization.
+
+
+## 8. HostTimeSyncStatus interface and adapter
+
+The interface package now defines `HostTimeSyncStatus.msg` with explicit state, source ID, Linux boot ID, signed SystemTime-minus-UTC offset, uncertainty, CLOCK_MONOTONIC sample timestamp and per-boot sequence. `HostTimeSyncStatusAdapter` checks the expected active boot ID and rejects malformed or unknown states, replayed/reordered sequence, and non-increasing monotonic samples. Non-synchronized states remain explicit fail-closed evidence. This does not implement a chrony/ptp4l/PHC monitor and does not prove the values are true; the monitor process and deployment allowlist remain a separate trust boundary.
