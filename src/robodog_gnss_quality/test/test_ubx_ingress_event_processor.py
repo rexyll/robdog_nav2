@@ -180,6 +180,9 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
             ingress_sequence=1,
             receive_monotonic_ns=1_000_000,
             protocol=0,
+            checksum_status=1,
+            frame_sequence=1,
+            frame_connection_generation=GENERATION,
             frame_bytes=generic,
         )))
         self.assertEqual(processor.stats().ignored_frames, 1)
