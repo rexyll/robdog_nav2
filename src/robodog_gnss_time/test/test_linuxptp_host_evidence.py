@@ -126,6 +126,8 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert report["evidence_kind"] == "read_only_linuxptp_host_inventory"
     assert all(call[1]["shell"] is False for call in calls)
     assert any(call[0][0] == "systemctl" for call in calls)
+    show_call = next(call[0] for call in calls if call[0][:2] == ["systemctl", "show"])
+    assert "--property=Id,LoadState,ActiveState,SubState,ExecStart,FragmentPath,DropInPaths" in show_call
     assert any(call[0][0] == "journalctl" for call in calls)
 
 
