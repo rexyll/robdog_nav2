@@ -252,20 +252,28 @@ class GnssIngressEventProcessor:
                 self._active = True
                 self._terminal_type = None
                 self._stopped = False
-            elif (
-                self._process_session_id != event.process_session_id
-                or self._connection_generation != event.connection_generation
-            ):
+            elif self._process_session_id != event.process_session_id:
                 raise EpochPairingError(
-                    "event process_session_id/connection_generation is stale"
+                    "event process_session_id is stale"
                 )
 
-            # Consume source sequence even if a valid frame is not a time message.
+            # Consume the ordered source event even when its connection
+            # generation is stale. Otherwise one rejected old-generation
+            # callback would make every subsequent current-generation event
+            # look like an unexplained sequence gap.
             self._last_ingress_sequence = event.ingress_sequence
             self._last_receive_monotonic_ns = event.receive_monotonic_ns
             self._last_dropped_frame_events_total = event.dropped_frame_events_total
             self._pending_dropped_frame_events = pending_drops
             self._processed_events += 1
+
+            if (
+                kind != "GenerationStarted"
+                and self._connection_generation != event.connection_generation
+            ):
+                raise EpochPairingError(
+                    "event process_session_id/connection_generation is stale"
+                )
 
             if kind == "Frame":
                 if not self._active or self._terminal_type is not None or self._stopped:
