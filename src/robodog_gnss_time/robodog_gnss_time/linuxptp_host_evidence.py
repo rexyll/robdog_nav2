@@ -178,6 +178,11 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         try:
             snapshot = parse_pmc_snapshot(pmc_result["stdout"])
             validate_pmc_snapshot_domain(snapshot, config.domain_number)
+            if config.target_port_identity and (
+                str(snapshot.responses["PORT_DATA_SET"].values["portIdentity"]).lower()
+                != config.target_port_identity.lower()
+            ):
+                raise ValueError("PORT_DATA_SET identity does not match configured TARGET portIdentity")
             pmc_validation = {
                 "status": "valid",
                 "clock_identity": snapshot.clock_identity,
