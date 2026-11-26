@@ -24,6 +24,7 @@ VLAN_ETHERTYPES = {0x8100, 0x88A8, 0x9100}
 IPPROTO_UDP = 17
 
 MID360_LIDAR_PORTS = {
+    56100: "control",
     56200: "push",
     56300: "point_cloud",
     56400: "imu",
