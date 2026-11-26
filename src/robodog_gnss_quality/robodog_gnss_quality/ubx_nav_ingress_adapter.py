@@ -184,6 +184,8 @@ def decode_ubx_nav_raw_record(
         version = payload[4]
         if version != 0:
             raise EpochPairingError(f"unsupported NAV-COV version {version}")
+        if payload[5] not in (0, 1) or payload[6] not in (0, 1):
+            raise EpochPairingError("NAV-COV validity bytes must be 0 or 1")
         pos_cor_valid = bool(payload[5])
         values = struct.unpack_from("<ffffff", payload, 16)
         return UbxNavCovEpoch(
