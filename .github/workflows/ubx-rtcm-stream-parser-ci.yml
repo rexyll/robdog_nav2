@@ -46,7 +46,7 @@ jobs:
         env:
           CC: clang
           CXX: clang++
-        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-fuzz -DROBODOG_BUILD_FUZZER=ON -DCMAKE_BUILD_TYPE=Debug
+        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-fuzz -DROBODOG_BUILD_FUZZER=ON -DROBODOG_ENABLE_SANITIZERS=ON -DCMAKE_BUILD_TYPE=Debug
       - name: Build fuzzer
         run: cmake --build build/ubx_rtcm_stream-fuzz --target stream_decoder_fuzz --parallel 2
       - name: Run bounded fuzz smoke
