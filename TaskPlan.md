@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.186
+- 文档版本：v0.3.187
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -988,4 +988,7 @@
 - GNSS USB stream 最终 head CI 验收（2026-11-26 / v0.3.185）：最终 README 集成提交 head d6be44a868c49efc0ef16160e52a632293a37c27 对应 Actions run 45753542957 四项全部 success。该 head 包含 GnssUsbStream、lifecycle mutex、UBX test vector 修正、README/文档索引；ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile 均成功。该结果仍是 synthetic/fake USB API 证据，未连接 ZED-F9P，未验证实际 output config、NAV-TIMELS/TIMEGPS、ROS 2 publisher 或时间映射。
 
 
-- 固定版 ublox_ubx_msgs ROS 消息字段适配器（2026-11-26 / v0.3.186）：新增纯 Python ros_message_adapter.py，将固定上游 aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e 的 UBXNavPVT/HPPOSLLH/COV/STATUS 字段转换为现有 immutable epoch records。严格校验 iTOW、int/uint 范围、bool 类型、finite covariance 与嵌套 carr_soln.status；carrier code 0/1/2 分别映射 no-solution/float/fixed，保留值 fail-closed 为 UNKNOWN。HPPOSLLH raw HP integers 与 invalid flags 原样保留。明确忽略 ROS Header.stamp，必须由调用方在 callback entry 传入统一 host monotonic timestamp；适配器不合成 receiver source timestamp 或 source_clock_id。新增 6 组 ROS-message-shaped pytest fixtures。新增 Navigation 35 与 README 记录。提交：module 5567d8b6dcebd0037ecea7699edf4b4c9f0d674d；test c5ea199c3b5a8232954bf08c2fdc0f409306785a；package export、README 与 Navigation 35 随后提交。该层仍不是 rclpy subscription node，不发布 NavSatFix；由于固定 driver 缺少 NAV-TIMEGPS/NAV-TIMELS，receiver-time mapper gate 仍 fail-closed。CI 已由 source path 触发，待 Humble/Jazzy 两矩阵结果。
+- 固定版 ublox_ubx_msgs ROS 消息字段适配器（2026-11-26 / v0.3.186）：新增纯 Python ros_message_adapter.py，将固定上游 aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e 的 UBXNavPVT/HPPOSLLH/COV/STATUS 字段转换为现有 immutable epoch records。严格校验 iTOW、int/uint 范围、bool 类型、finite covariance 与嵌套 carr_soln.status；carrier code 0/1/2 分别映射 no-solution/float/fixed，保留值 fail-closed 为 UNKNOWN。HPPOSLLH raw HP integers 与 invalid flags 原样保留。明确忽略 ROS Header.stamp，必须由调用方在 callback entry 传入统一 host monotonic timestamp；适配器不合成 receiver source timestamp 或 source_clock_id。新增 6 组 ROS-message-shaped pytest fixtures。新增 Navigation 35 与 README 记录。提交：module 5567d8b6dcebd0037ecea7699edf4b4c9f0d674d；nav test bc5162380dcc0c4c0781b5b3e0d0fcee8225062b；严格拒绝 bool covariance 的修正为 module 2ef0f2cb48ca1e385a52e323b70e0fc6ac3ce605、test 518e0efff52d1785052501e620a0a2b0fa42e721；package export c7e2a040、README 6d959a90 与 Navigation 35 随后提交。Actions run 45754335767（nav head 518e0efff52d1785052501e620a0a2b0fa42e721）Humble/Jammy 与 Jazzy/Noble 两个 job 全部 success。该层仍不是 rclpy subscription node，不发布 NavSatFix；由于固定 driver 缺少 NAV-TIMEGPS/NAV-TIMELS，receiver-time mapper gate 仍 fail-closed。分支纪律事故记录：创建 test_ros_message_adapter.py 时遗漏 branch 参数，文件短暂进入默认分支；已复制到 nav，并通过删除提交 89823552ea3283af71c1e17953995f003eb17243 清理。回读 main/nav 完整 tree 确认该文件只存在于 nav，main 当前不含该路径；未改动 main 其他文件。
+
+
+- 固定版 UBX ROS 消息字段适配器 CI 验收（2026-11-26 / v0.3.187）：Actions run 45754335767，nav head 518e0efff52d1785052501e620a0a2b0fa42e721，Humble/Jammy、Jazzy/Noble 两个矩阵全部 success。覆盖 strict field decoder、reserved carrier solution fail-closed、HPPOSLLH precision/flags、NAV-COV finite/validity、NAV-STATUS quality fields 和 bool covariance rejection。真实 rclpy subscription、time mapper、NavSatFix publication 尚未实现。
