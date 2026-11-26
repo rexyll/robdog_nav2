@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GnssNavStatus.msg"
   "msg/GnssObservation.msg"
   "msg/GnssQualityStatus.msg"
+  "msg/HostTimeSyncStatus.msg"
 )
 
 ament_export_dependencies(rosidl_default_runtime)
