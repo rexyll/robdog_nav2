@@ -166,3 +166,17 @@ The adapter requires `begin_generation()` after the mapper has validated a new G
 `ubx_time_messages.py` is the single raw-payload decoder for the fixed 16-byte NAV-TIMEGPS and 24-byte NAV-TIMELS layouts. Each decoded immutable epoch carries process_session_id, connection_generation and host monotonic receive time. `ubx_time_mapper.py` consumes those decoded epoch records; it does not re-decode raw payloads. It pairs them by exact iTOW, bounds pending state, computes GPS source time from valid week + iTOW + fTOW, and derives UTC only when NAV-TIMEGPS.leapSValid, NAV-TIMELS.validCurrLs, an explicitly trusted srcOfCurrLs, and the source-adjusted leap value all agree. The trusted source allowlist defaults to empty. NAV-TIMELS source 0 is hardcoded and may be outdated; source 4 is BeiDou-UTC and is normalized by +14 seconds before comparison with GPS-UTC. Unknown source 255 cannot be trusted.
 
 The mapper does not use NAV-TIMEUTC as a substitute for NAV-TIMELS. It returns a valid GPS source timestamp with utc_stamp_valid=false when leap information is not trusted; downstream may use the GPST epoch for exact message pairing but must not publish a NavSatFix with a fabricated UTC stamp. The mapper requires an explicit process session ID and connection generation; decoded callbacks from an old generation are rejected. The output clock ID and UbxSourceTimeMapping include process session, connection generation and GPS week so reconnect/week rollover triggers a generation fence in the ROS epoch adapter. Raw-payload convenience methods also require the callback's captured session/generation context; they never stamp an old queued callback with the current generation.
+
+
+## Exact quality-decision / observation handoff join
+
+`observation_quality_joiner.py` provides a transport-independent bounded
+exact-key join for a `GnssObservation` and its `QualityDecision`. Its identity
+includes process session, connection generation, GPS week, iTOW, GPST source
+timestamp, canonical source clock ID and host monotonic receive timestamp.
+Only a matching `qualified=true` decision emits a pair. Unqualified decisions
+retire the epoch; mismatched identities never nearest-match. Duplicate
+identical records are ignored, conflicting duplicates retire the key, and
+pending records are bounded by capacity and monotonic age. This joiner is
+intended as the next boundary before any NavSatFix publisher; it does not
+convert GPST/UTC or publish ROS messages.
