@@ -39,13 +39,13 @@ UTC stamp 只有在以下条件全部成立时才生成：
 1. TIMEGPS.leapSValid = true；
 2. TIMELS.validCurrLs = true；
 3. srcOfCurrLs 在应用显式 trusted_leap_sources allowlist 中；
-4. TIMEGPS.leapS 与按来源归一化后的 TIMELS.currLs 一致。
+6. TIMEGPS.leapS 与按来源归一化后的 TIMELS.currLs 一致。
 
-默认 trusted_leap_sources 为空；来源 0 是 firmware hardcoded default，官方文档明确提示可能过时，因此默认不信任；255 Unknown 永不允许加入 allowlist。来源 4 BeiDou 报告 BDS-UTC，官方文档说明其比 GPS-UTC 少 14 秒，因此比较/UTC 换算前加 14 秒。其他来源不自动加入 allowlist，必须由设备配置和系统验证决定。
+默认 trusted_leap_sources 为空；来源 0 是 firmware hardcoded default，官方文档明确提示可能过时，因此代码禁止将其加入 allowlist；255 Unknown 永不允许加入 allowlist。来源 4 BeiDou 报告 BDS-UTC，官方文档说明其比 GPS-UTC 少 14 秒，因此比较/UTC 换算前加 14 秒。其他来源不自动加入 allowlist，必须由设备配置和系统验证决定。
 
 NAV-TIMELS 与 NAV-TIMEGPS 按 exact iTOW 配对；没有 TIMELS 时不产生 mapping。NAV-TIMEUTC 不作为替代 leap source。GPS source timestamp 可以有效而 UTC stamp 无效；这种情况下 mapping.valid=true、utc_stamp_valid=false，下游可进行 GPST epoch pairing，但不得伪造 NavSatFix UTC header。
 
-## 4. 缓存与会话
+UTC 时间戳使用 POSIX/Unix 秒表示，无法表达 23:59:60 这个独立 civil label。为避免正闰秒期间 leap offset 更新前后出现相同 Unix timestamp，mapper 还要求 TIMELS validTimeToLsEvent=true，并在 timeToLsEvent 为 -1/0/+1 秒的保守 guard window 内将 utc_stamp_valid 置 false；GPST source timestamp 仍可保持 valid/单调。真正的 sec=60 civil representation 与 transition evidence API 仍需单独实现。\n\n## 4. 缓存与会话
 
 - TIMEGPS/TIMELS 可任意先后到达；
 - exact iTOW pair、pair receive skew、pending age、LRU capacity 均受限；
@@ -60,7 +60,7 @@ NAV-TIMELS 与 NAV-TIMEGPS 按 exact iTOW 配对；没有 TIMELS 时不产生 ma
 - 两种 payload 的长度、offset、signed/unsigned 和 version；
 - valid flags 与 iTOW/fTOW/week 范围；
 - exact iTOW pair，任意到达顺序；
-- source allowlist 默认 fail-closed；
+- source allowlist 默认 fail-closed，且 source 0 不可显式 allowlist；\n- TIMELS event validity 与 ±1 s leap-transition guard；
 - TIMEGPS leapSValid、TIMELS validCurrLs 与 offset cross-check；
 - BeiDou source +14 秒归一化；
 - fractional TOW week boundary carry/borrow；
