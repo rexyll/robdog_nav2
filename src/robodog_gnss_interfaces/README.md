@@ -16,8 +16,10 @@ For frame events, `protocol`, `checksum_status`, `frame_sequence`,
 Frame metadata. Consumers must verify
 `frame_connection_generation == connection_generation`, validate the protocol
 and checksum status, and process events in strictly increasing
-`ingress_sequence` order. Lifecycle events carry no frame bytes and use
-`PROTOCOL_NONE`.
+`ingress_sequence` order. `dropped_frame_events_total` is a per-event prefix
+watermark: it counts only evictions whose dropped frame sequence precedes the
+event. A later eviction must never retroactively alter an earlier lifecycle
+event. Lifecycle events carry no frame bytes and use `PROTOCOL_NONE`.
 
 The package is an interface-only slice. It does not implement the publisher,
 USB device selection, rclcpp component, DDS QoS, subscriber executor, or
