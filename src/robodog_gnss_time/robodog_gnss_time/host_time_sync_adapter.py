@@ -19,6 +19,9 @@ class HostTimeSyncSample:
     uncertainty_ns: int
     sample_monotonic_ns: int
     sample_sequence: int
+    reference_id: str
+    stratum: int
+    leap_status: str
 
     def as_policy_kwargs(self):
         return {
@@ -78,6 +81,12 @@ class HostTimeSyncStatusAdapter:
             and sample_ns <= self._last_sample_monotonic_ns
         ):
             raise ValueError("sample_monotonic_ns must strictly increase")
+        if not isinstance(message.reference_id, str) or not message.reference_id.strip():
+            raise ValueError("reference_id must be a non-empty string")
+        if isinstance(message.stratum, bool) or not isinstance(message.stratum, int) or not 0 <= message.stratum <= 255:
+            raise ValueError("stratum must be uint8")
+        if not isinstance(message.leap_status, str) or not message.leap_status.strip():
+            raise ValueError("leap_status must be a non-empty string")
         sample = HostTimeSyncSample(
             state=self._STATE_MAP[message.state],
             source_id=message.source_id,
@@ -86,6 +95,9 @@ class HostTimeSyncStatusAdapter:
             uncertainty_ns=uncertainty,
             sample_monotonic_ns=sample_ns,
             sample_sequence=sequence,
+            reference_id=message.reference_id,
+            stratum=message.stratum,
+            leap_status=message.leap_status,
         )
         self._last_sequence = sequence
         self._last_sample_monotonic_ns = sample_ns
