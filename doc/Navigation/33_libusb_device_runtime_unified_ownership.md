@@ -53,4 +53,4 @@ DeviceSession、TransferTransport 与 EventLoop 若由调用方分别管理，�
 
 ## 6. CI
 
-本轮 Runtime 组合测试及 borrowed-handle 修正已提交。必须等待最新代码 head 对应的 ASan/UBSan、TSan、Clang libFuzzer、生产 binding 四项 CI 全部成功后，才可验收该切片；先前 event-loop-only run 不能替代 Runtime 最新 head 的测试证据。
+Actions run `45752651888`（head `173467273c00a304bdbb0d72955455af113d352c`）四项 job 全部成功：ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile。该 run 覆盖 Runtime 集成测试、borrowed-handle 不重复 close、event-loop owner unbind 前禁止 transport close 等最新代码。测试仍是 fake API/synthetic transport，不代表真实 USB 总线或设备拔插已验收。
