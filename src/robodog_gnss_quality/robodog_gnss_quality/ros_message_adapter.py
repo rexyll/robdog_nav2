@@ -33,11 +33,14 @@ def _receive_time(value: object) -> int:
     return _integer("receive_monotonic_ns", value, 0, (1 << 63) - 1)
 
 
-def _context(process_session_id: object, connection_generation: object) -> tuple:
+def _context(
+    process_session_id: object, connection_generation: object, gps_week: object
+) -> tuple:
     if not isinstance(process_session_id, str) or not process_session_id.strip():
         raise EpochPairingError("process_session_id must be a non-empty string")
     generation = _integer("connection_generation", connection_generation, 0, (1 << 63) - 1)
-    return process_session_id, generation
+    week = _integer("gps_week", gps_week, 0, 32767)
+    return process_session_id, generation, week
 
 
 def _i_tow(value: object) -> int:
@@ -53,7 +56,7 @@ def _carrier_solution(status: object) -> CarrierSolution:
     }.get(code, CarrierSolution.UNKNOWN)
 
 
-def decode_nav_pvt_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int) -> UbxNavPvtEpoch:
+def decode_nav_pvt_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int, gps_week: int) -> UbxNavPvtEpoch:
     """Decode only the NAV-PVT fields required by the fail-closed quality core."""
     try:
         return UbxNavPvtEpoch(
@@ -61,8 +64,9 @@ def decode_nav_pvt_message(message: object, receive_monotonic_ns: int, *, proces
             gnss_fix_ok=_boolean("NAV-PVT gnss_fix_ok", message.gnss_fix_ok),
             carrier_solution=_carrier_solution(message.carr_soln.status),
             receive_monotonic_ns=_receive_time(receive_monotonic_ns),
-            process_session_id=_context(process_session_id, connection_generation)[0],
-            connection_generation=_context(process_session_id, connection_generation)[1],
+            process_session_id=_context(process_session_id, connection_generation, gps_week)[0],
+            connection_generation=_context(process_session_id, connection_generation, gps_week)[1],
+            gps_week=_context(process_session_id, connection_generation, gps_week)[2],
         )
     except AttributeError as exc:
         raise EpochPairingError("NAV-PVT ROS message is missing a required field") from exc
@@ -108,7 +112,7 @@ def _finite_float(name: str, value: object) -> float:
     return converted
 
 
-def decode_nav_cov_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int) -> UbxNavCovEpoch:
+def decode_nav_cov_message(message: object, receive_monotonic_ns: int, *, process_session_id: str, connection_generation: int, gps_week: int) -> UbxNavCovEpoch:
     """Decode the six NED position covariance terms and validity bit."""
     try:
         return UbxNavCovEpoch(
