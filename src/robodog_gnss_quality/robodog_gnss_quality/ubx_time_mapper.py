@@ -412,7 +412,9 @@ class UbxReceiverTimeMapper:
             leap_source=leap.source_of_current_leap,
             reported_leap_seconds=leap.current_leap_seconds,
             leap_event_valid=leap.leap_event_valid,
-            time_to_leap_event_seconds=leap.time_to_leap_event_seconds,
+            time_to_leap_event_seconds=(
+                leap.time_to_leap_event_seconds if leap.leap_event_valid else None
+            ),
         )
 
     def stats(self) -> UbxTimeMapperStats:
