@@ -47,7 +47,7 @@ LibusbTransferTransport::Api make_libusb_api(libusb_context * context)
   };
   api.fill_bulk_transfer = [](
     void * native_transfer, void * device_handle, std::uint8_t endpoint,
-    std::uint8_t * buffer, int length, unsigned int timeout_ms,
+    std::uint8_t * buffer, int length, unsigned int timeout_ms, std::uint8_t flags,
     LibusbTransferTransport::NativeCallback callback, void * user_data) -> int
   {
     auto * bridge = new (std::nothrow) CallbackBridge{callback, user_data};
@@ -57,6 +57,7 @@ LibusbTransferTransport::Api make_libusb_api(libusb_context * context)
       static_cast<libusb_transfer *>(native_transfer),
       static_cast<libusb_device_handle *>(device_handle), endpoint,
       buffer, length, &native_callback, bridge, timeout_ms);
+    static_cast<libusb_transfer *>(native_transfer)->flags = flags;
     return LIBUSB_SUCCESS;
   };
   api.submit_transfer = [](void * native_transfer) -> int {
