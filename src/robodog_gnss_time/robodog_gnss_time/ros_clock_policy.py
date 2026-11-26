@@ -35,7 +35,7 @@ class ClockPolicyConfig:
 
     max_host_utc_error_ns: int
     max_sync_sample_age_ns: int
-    trusted_host_sync_sources: frozenset
+    trusted_host_sync_sources: frozenset[str]
 
     def __post_init__(self):
         for name, value in (
@@ -44,7 +44,7 @@ class ClockPolicyConfig:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
-        if not isinstance(self.trusted_host_sync_sources, (set, frozenset)) or not self.trusted_host_sync_sources:
+        if not isinstance(self.trusted_host_sync_sources, frozenset) or not self.trusted_host_sync_sources:
             raise ValueError("trusted_host_sync_sources must be a non-empty set")
         if any(not isinstance(source, str) or not source.strip() for source in self.trusted_host_sync_sources):
             raise ValueError("trusted host sync source IDs must be non-empty strings")
