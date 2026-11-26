@@ -190,9 +190,9 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
 
     def test_queue_drop_watermark_accounts_for_sequence_gaps(self):
         processor = make_processor()
-        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=1))
-        # Sequence 1 was accepted and later evicted by DropOldest. Its loss
-        # watermark may already be visible on the earlier popped start event.
+        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=0))
+        # Sequence 1 was accepted and later evicted by DropOldest. The next
+        # retained event carries the prefix watermark for that earlier drop.
         processor.process(event(
             "Frame", 2, frame_bytes=timegps_frame(), protocol=0,
             dropped_frame_events_total=1
@@ -213,7 +213,7 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
 
     def test_unaccounted_drop_watermark_must_be_resolved_before_terminal(self):
         processor = make_processor()
-        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=1))
+        processor.process(event("GenerationStarted", 0, dropped_frame_events_total=0))
         with self.assertRaisesRegex(EpochPairingError, "unexplained dropped-frame"):
             processor.process(event("Stopped", 1, dropped_frame_events_total=1))
 
