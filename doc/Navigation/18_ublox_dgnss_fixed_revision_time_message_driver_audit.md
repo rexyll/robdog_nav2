@@ -99,6 +99,30 @@ parser 将 status flags 拆为 gpsFixOK、diffSoln、wknSet、towSet 等字段�
 
 这属于静态源码暴露的并发风险，尚未通过 TSAN 或压力测试复现。
 
+
+### 5.3 固定 USB transfer 容量与 callback 的额外边界问题
+
+固定版本 `usb.hpp` 定义 `IN_BUFFER_SIZE = 64 * 200 = 12800`，`make_transfer_in()` 将此容量传给 `libusb_fill_bulk_transfer`。`callback_in()` 在 COMPLETED 时将 transfer 交给 node 的 `ublox_in_callback()`，然后标记完成并尝试补交下一条 IN transfer。
+
+`ublox_in_callback()` 的 NMEA 分支在 `len>0) 时直接写 `buf[len] = 0`，但没有检查 `len < transfer buffer capacity`。当 `actual_length == IN_BUFFER_SIZE` 时该写入越过 12800-byte transfer buffer 尾端 1 byte。这是可由代码路径直接证明的越界写风险；是否实际发生取决于设备/USB transfer 是否返回满 buffer，需要边界测试或硬件 trace 验证。应改为长度受控的字符串构造，或确保 buffer 预留并验证 terminator 空间，不能写入 libusb transfer 缓冲区边界之外。
+
+更严重的是，UBX 与 RTCM 分支仅检查 `len > 2` 后就将整个 transfer 交给 frame parser。对于 UBX，`Frame::from_buf_build()` 无条件读取 buf[0..5] 并访问 buf[size-2]、buf[size-1]；因此 3–7 bytes 的 transfer 会在解析阶段越界读取。对任意长度大于 2 的 UBX 起始 transfer，尚未验证 `len >= 8`、declared payload length <= actual bytes、以及 `len == declared_length + 8`。该问题不仅是“未实现跨 transfer 重组”的功能缺口，也包含可静态确认的短缓冲区越界读风险。
+
+`ublox_out_callback()` 对 USB OUT transfer 使用相同的 `len>2` + `from_buf_build()` 模式，也需要相同的长度保护；虽然 OUT 数据通常由本机生成，但不能把“通常可信”作为内存安全边界。
+
+### 5.4 IN transfer 与 USB stream framing 的证据边界
+
+libusb IN transfer 的 buffer capacity 是 12800 bytes；bulk endpoint descriptor 的 max packet size 与 transfer buffer capacity 是不同概念。一次 bulk transfer 的完成长度是本次 transfer 的 `actual_length`，不能据此推导“一次 transfer 恰好包含一个完整 UBX/RTCM/NMEA 消息”。当前代码把一次 transfer 的起始字节作为协议判别，并把整个 transfer 当成单一消息，缺少通用增量 stream decoder。除非另有目标设备 USB trace / 协议约束证明一 transfer 一消息，否则应按 byte stream 设计：同步字搜索、长度字段解析、完整帧等待、连续帧拆分、噪声丢弃、最大帧长上限和 checksum 验证。
+
+### 5.5 队列线程安全：修正风险定级
+
+node 为 UBX timer 与 USB-events timer 创建了**不同的 MutuallyExclusive callback groups**。因此：
+- 若运行于 SingleThreadedExecutor，两个 timer callback 不会并发执行，USB libusb callback（由 `handle_usb_events()` 驱动）与 UBX timer 对 node-level queue 的访问在 executor callback 维度被串行化；此前“必然存在并发 data race”的表述过强。
+- 若运行于 MultiThreadedExecutor 或不同 executor/thread，两个 callback group 可以并行，USB callback 在 `ubx_queue_mutex_` 下 push，而 UBX timer 对 `size()`/index 读取未持锁，随后才锁住 pop；此时存在 data race / deque invalidation 风险。
+- 当前固定源码审计尚未确认目标启动入口使用的 executor 类型，也未找到对所有运行方式强制 single-threaded 的约束。因此应将此项定为**executor-dependent concurrency defect / unresolved deployment risk**，不能标记为已复现 race。
+
+此外，`usb.cpp` 的 `transfer_queue_` 在 `cleanup_transfer_queue()`、`cleanup_all_transfers()`、`queued_transfer_in_num()` 中有若干 `size()==0` 检查位于 mutex 之前；`transfer_t::completed` 在 libusb callback 中写入、在持锁队列扫描中读取，但写入方没有同一 mutex 或 atomic。若 libusb callbacks 与其他 Connection 方法并发，这些访问也需要线程安全审查。当前未通过 TSAN 验证。
+
 ## 6. 同历元与接收时序
 
 当前发布函数使用 `f->ts` 填充 ROS Header stamp，消息本身包含 iTOW（PVT、STATUS、TIMEUTC）。这给消费者提供了接收/采集时间戳与 GNSS epoch tag 两种信息，但源码中未发现为跨 topic 组帧提供的统一 `process_session_id`、`connection_generation`、`queue_sequence` 身份字段。
@@ -134,12 +158,12 @@ parser 将 status flags 拆为 gpsFixOK、diffSoln、wknSet、towSet 等字段�
 
 未完成：
 - USB receive callback 的 transfer 边界/残帧重组/多帧拆分与 declared-vs-actual length 审计；poll-response 与 async receive checksum 路径差异审计；
-- 精确定位 receive queue 的线程、锁、生命周期及 reconnect generation；静态发现 UBX queue 的 size/index 读取未持锁，需 executor 线程归属或 TSAN/压力测试确认；
+- 精确定位 receive queue 的线程、锁、生命周期及 reconnect generation；UBX queue size/index 未持锁的风险依赖 executor 类型：不同 MutuallyExclusive callback groups 在 MultiThreadedExecutor 下可并发，在 SingleThreadedExecutor 下串行；executor 入口尚未确认；
 - 对上游驱动做构建/测试；
 - ZED-F9P MON-VER、TIMEGPS/TIMELS 原始帧与固件实测；
 - 对 payload 长度风险做最小复现或 fuzz。
 
-下一项任务应是基于 libusb transfer 实际边界确认/修复 UBX framing（增量缓存、按 declared length 拆帧、校验 actual length）、poll checksum 条件与 queue 互斥；在这之前不动时间消息生产实现。若确认长度防护确实缺失，先提交最小、可独立测试的 parser hardening patch，再扩展时间消息。
+下一项任务应是修复 UBX/RTCM/NMEA transfer 边界与增量 framing、poll checksum 条件，并先确认 executor/Connection callback 线程模型，再修复队列和 transfer_queue 的同步；在这之前不动时间消息生产实现。若确认长度防护确实缺失，先提交最小、可独立测试的 parser hardening patch，再扩展时间消息。
 
 ## 9. 固定源码引用
 
