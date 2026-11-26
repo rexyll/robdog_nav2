@@ -7,8 +7,6 @@ a rejection, never an implicit synchronized state.
 
 from dataclasses import dataclass
 from enum import Enum
-import math
-
 
 INT32_MAX = (1 << 31) - 1
 NSEC_PER_SEC = 1_000_000_000
