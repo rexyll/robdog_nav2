@@ -3,6 +3,7 @@
 #include "robodog_gnss_transport/gnss_ingress_message.hpp"
 
 #include <atomic>
+#include <cstddef>
 #include <chrono>
 #include <exception>
 #include <functional>
