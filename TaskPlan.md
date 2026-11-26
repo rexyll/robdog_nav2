@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.242
+- 文档版本：v0.3.243
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1143,3 +1143,5 @@
   首轮 collector/配置测试最终 head `ffef03d95ba0` 对应 GNSS runtime CI run `45826859585`：Humble/Jammy 与 Jazzy/Noble 均 success，各 **124/124 tests passed**（0 errors/failures/skipped）；同 head ROS 2 package CI run `45826859551` success。后续文档 head `61e8c48ba572` 明确 LinuxPTP pmc 默认向所有 port 发送管理请求；当前 snapshot parser 对每个 dataset 只接受唯一 response，多 port 出现多个 PORT_DATA_SET 时会保留原始输出但将 snapshot 标记 invalid，不静默挑选端口；目标拓扑未确认前不猜测 TARGET 语法或 port selection。LinuxPTP runtime CI run `45826766752` 曾因临时重复测试文件引用已移除的试验性重复模块而在 collection 阶段失败；已删除重复文件，后续 run `45826784563` 恢复为 124/124 passed。后续文档更新 `ddfbecc724e9` 已将采集器能力与 parser/UTC 边界写入 Navigation 41。以上均为 mock subprocess 与 CI 合成证据，不是 Orin 实机证据；真实 interface/socket/domain/transportSpecific/port topology/PTP profile/PHC mapping/phc2sys sink/Chrony 冲突/UTC traceability 仍待目标机只读取证。保持仅 `nav` 分支，不合并 `main`。
 
 - N1 LinuxPTP collector 最终文档 head 的 CI 复核（2026-11-26 / v0.3.242）：在 v0.3.241 记录的代码/测试 head ffef03d95ba004e1fbc25a64452073c2ab2f541c 与文档 head 61e8c48ba572f58e80db1d6210456651cb6fa034 基础上，最终文档 head 61e8 对应 runtime CI run 45826942105 和 ROS 2 package CI run 45826942104 均 success；Humble/Jammy 与 Jazzy/Noble 各 124/124 tests passed（0 errors/failures/skipped）。这一复核覆盖 collector 文档中的显式 transportSpecific、默认 all-ports 行为及多端口 fail-closed 说明；无代码行为变化，无 Orin 实机取证。保持 nav 分支，不合并 main。
+
+- N1 LinuxPTP 多端口显式 TARGET 选择与响应身份校验（2026-11-26 / v0.3.243）：基于上游 LinuxPTP `pmc_common.c` 与 `util.c` 源码审计，确认 `TARGET [portIdentity]` 是 pmc 客户端本地 destination selector：`pmc_do_command()` 将其送入 `parse_target()`，最终只更新 `pmc->target`，不是远端 PTP clock 的 SET/CMD 管理动作；`str2pid()` 接受 `xxxxxx.xxxx.xxxxxx-portNumber` 格式并将 portNumber 解析为 uint16。collector 增加可选 `--target-port-identity`，仅接受已验证格式及 port 1..65535；未指定时维持 all-ports 默认行为。指定时在六条 GET 前加入单条 TARGET client command，并将返回 `PORT_DATA_SET.portIdentity` 与配置值做大小写不敏感精确匹配；多响应仍 fail-closed，不自动挑首个、不使用 TARGET *。新增格式/类型/port range、TARGET 命令顺序、目标响应不匹配及多端口保留原始输出的测试。一次 CI 失败定位为多端口测试夹具将换行写成字面量反斜杠-n，导致第二条 response header 被当作上一 dataset 的未知字段；修正 fixture 后最终 head `3c3a8898412c55c069717b71da56e380fd6b2bd9` 对应 GNSS runtime CI run `45828051488`：Humble/Jammy 与 Jazzy/Noble 均 success，各 **134/134 tests passed**（0 errors/failures/skipped）；同 head ROS 2 package CI run `45828051873` success。详细文档 `doc/Navigation/41_linuxptp_phc_host_clock_evidence_contract.md` 已记录 TARGET 语义与门禁。该功能只在真实目标 portIdentity 已由目标设备/配置证据确认时才能使用；CI fixture identity 不是目标机证据。目标 Orin 的 interface/socket/domain/transportSpecific/port topology、LinuxPTP version、PHC mapping、phc2sys CLOCK_REALTIME sink、Chrony 互斥和 UTC traceability 仍未实测。保持仅 `nav` 分支，不合并 `main`。
