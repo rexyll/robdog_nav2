@@ -21,9 +21,26 @@ watermark: it counts only evictions whose dropped frame sequence precedes the
 event. A later eviction must never retroactively alter an earlier lifecycle
 event. Lifecycle events carry no frame bytes and use `PROTOCOL_NONE`.
 
-The package is an interface-only slice. It does not implement the publisher,
-USB device selection, rclcpp component, DDS QoS, subscriber executor, or
-callback-drain barrier. Those remain separate implementation and validation
-gates. Package license metadata is currently `UNSPECIFIED` because the
-repository has no declared root license; public redistribution is not approved
-by this placeholder.
+## GnssReceiverTime
+
+`GnssReceiverTime` is emitted only after the Python raw-ingress processor pairs
+NAV-TIMEGPS and NAV-TIMELS with the same iTOW and active process/connection
+generation. `source_timestamp_ns` is receiver GPST in `source_clock_id`;
+`receive_monotonic_ns` remains host steady-clock arrival time.
+
+UTC values and optional receiver metadata use explicit `*_valid` flags. In
+particular, `valid=true` can coexist with `utc_stamp_valid=false`: GPST may be
+valid while the leap source is not trusted. Consumers must not synthesize UTC
+from GPST unless `utc_stamp_valid` is true. A missing event countdown is
+represented by `time_to_leap_event_seconds_valid=false`, not a fabricated
+zero.
+
+The package remains an interface-only slice. The C++ publisher/runtime and
+Python consumer/runtime live in separate packages and have independent CI
+gates. The Python consumer uses a single-threaded executor and latches any
+malformed/reordered ingress or mapping-publish failure as a process-level
+fail-closed condition.
+
+Package license metadata is currently `UNSPECIFIED` because the repository
+has no declared root license; public redistribution is not approved by this
+placeholder.
