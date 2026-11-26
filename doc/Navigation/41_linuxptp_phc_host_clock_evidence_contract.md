@@ -421,7 +421,18 @@ collector 输出 `clock_step_trace_capabilities`。盘点器仅读取现有 proc
   config、BTF、tracefs、syscall event format、systemd 版本及访问权限仍需
   用户提供原始报告/现场执行结果，状态为“需要实物/授权，未完成”。
 
-### 12.3 上游依据
+### 12.3 独立执行方式
+
+能力盘点不依赖 PTP 接口、domain 或 PMC socket，可在目标 Orin 上独立运行：
+
+```bash
+ros2 run robodog_gnss_time robodog_linux_kernel_trace_capabilities \
+  --output "$HOME/robodog_kernel_trace_capabilities.json"
+```
+
+命令只读取当前主机已有 procfs/sysfs 信息；除用户明确指定的 JSON 输出文件外，不写入系统配置或 tracing 控制接口。若仅需打印到终端，可省略 `--output`。`--root` 和 `--kernel-release` 仅用于离线 fixture/交叉检查，不应拿它们替代目标 Orin 本机采集。
+
+### 12.4 上游依据
 
 - Linux kernel Event Tracing：`available_events` 与 event `format` 是目标
   内核实际事件/字段的发现依据：
