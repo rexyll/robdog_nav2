@@ -155,6 +155,10 @@ def parse_pmc_response_envelope(output: str, dataset: str) -> PmcResponse:
         raise ValueError("pmc response port number and sequence ID must fit uint16")
     end = next((header_index for header_index, _ in headers if header_index > index), len(lines))
     values = _parse_values(lines[index + 1:end], dataset)
+    if dataset == "PORT_DATA_SET":
+        expected_port_identity = f"{clock_identity}-{port_number}"
+        if values["portIdentity"].lower() != expected_port_identity.lower():
+            raise ValueError("PORT_DATA_SET portIdentity does not match response identity")
     return PmcResponse(
         dataset=dataset,
         clock_identity=clock_identity,
@@ -188,10 +192,13 @@ def parse_pmc_snapshot(output: str) -> PmcSnapshot:
         dataset: parse_pmc_response_envelope(output, dataset)
         for dataset in _SNAPSHOT_DATASETS
     }
-    clock_identities = {response.clock_identity for response in responses.values()}
+    clock_identities = {response.clock_identity.lower() for response in responses.values()}
     if len(clock_identities) != 1:
         raise ValueError("pmc snapshot responses came from different PTP clock identities")
-    clock_identity = next(iter(clock_identities))
+    sequence_ids = [response.sequence_id for response in responses.values()]
+    if len(set(sequence_ids)) != len(sequence_ids):
+        raise ValueError("pmc snapshot response sequence IDs are not unique")
+    clock_identity = next(iter(responses.values())).clock_identity
     return PmcSnapshot(
         clock_identity=clock_identity,
         responses=MappingProxyType(responses),
