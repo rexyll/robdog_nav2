@@ -137,6 +137,15 @@ class TestMid360CaptureAudit(unittest.TestCase):
         )
         self.assertEqual(len(report["sensor_time_observations"]), 2)
 
+    def test_sensor_time_observation_metadata_is_bounded(self):
+        report = audit_packet_records([
+            record(mid360_payload(1, time_type=1), 56300),
+            record(mid360_payload(1, time_type=2), 56300),
+        ], max_sensor_time_observations=1)
+        self.assertEqual(len(report["sensor_time_observations"]), 1)
+        self.assertEqual(report["sensor_time_observation_evictions"], 1)
+        self.assertEqual(report["sensor_time_observation_limit"], 1)
+
     def test_crc_error_counted_without_aborting_capture(self):
         report = audit_packet_records([
             record(mid360_payload(1, corrupt_crc=True), 56300),
