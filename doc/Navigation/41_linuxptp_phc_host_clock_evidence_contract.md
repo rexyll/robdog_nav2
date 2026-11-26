@@ -448,3 +448,32 @@ ros2 run robodog_gnss_time robodog_linux_kernel_trace_capabilities \
 - libbpf overview：运行内核 BTF 暴露路径
   `/sys/kernel/btf/vmlinux`：
   https://docs.kernel.org/next/bpf/libbpf/libbpf_overview.html
+
+
+### 12.5 syscall entry/exit 成对完整性与现有 enable 状态（v0.3.251）
+
+独立能力盘点器现按每个 syscall 分别报告 entry/exit 状态及
+`pair_status`：
+- `complete`：entry 与 exit 均在当前 `available_events` 中且各自
+  `format` 可读；
+- `partial`：只有一侧达到上述条件；
+- `not_listed`：成功读取的事件列表中两侧均未出现；
+- `unknown`：事件列表或格式读取不足以得出前三类结论。
+
+每个实际列出的事件还只读读取对应的 `events/syscalls/<event>/enable`。
+Linux 内核文档定义读取值 `0`、`1`、`X`、`?` 分别表示所有受影响事件
+关闭、开启、混合状态和该文件不影响任何事件。报告原样保留值并映射为解释；
+文件缺失、权限不足、读取错误或未知内容均保持 unknown/具体读取状态。
+该状态可能由主机上其他进程或系统服务设置，**不是本工具的状态，也不是本工具
+开启的**。盘点器绝不写入 `enable`、`set_event`、`filter` 或
+`trigger`，也不尝试关闭任何已有事件。
+
+成对完整只表示事件定义与格式可观测，不证明采集期间两侧都启用、事件确实
+发生、buffer 无丢失或 entry/exit 能正确关联。尤其 `clock_adjtime`
+entry 中的 `struct timex *` 仍只是用户空间指针字段；不能从 tracepoint
+format 得到指针指向的 `modes`、offset 或其他 timex 内容。后续若需读取
+用户内存，必须单独设计安全读取失败、权限、地址生命周期、架构 ABI 与数据
+完整性合同，不能把 pointer 字段当作 timex 内容。
+
+测试仅使用合成 procfs/sysfs fixture，覆盖完整/部分/未列出 pair、enable
+读取状态与只读行为；Orin 实机报告仍待用户提供。
