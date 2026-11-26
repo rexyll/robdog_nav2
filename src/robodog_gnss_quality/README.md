@@ -140,3 +140,10 @@ The pinned driver's ROS `header.stamp` is populated from the host USB receive pa
 The configured cache capacity, pair receive-skew limit and pending-age limit in tests are test fixtures, not validated ZED-F9P operating thresholds. Choose production values only after collecting actual topic rates, latency, jitter and receiver-reset behavior.
 
 This helper is pure algorithm code. It is not a serial/USB parser, ROS subscription node, receiver-time mapper, NavSatFix publisher, PPS driver, NTRIP client, or EKF integration.
+
+
+## Pinned ublox_ubx_msgs field adapter
+
+`ros_message_adapter.py` adds strict, ROS-runtime-independent conversion helpers for the pinned `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` message schema. It converts `UBXNavPVT`, `UBXNavHPPosLLH`, `UBXNavCov`, and `UBXNavStatus` objects into the immutable epoch records consumed by `UbxFourMessageEpochJoiner`. Carrier solution codes 0/1/2 map to no-solution/float/fixed; reserved and unknown codes fail closed. Raw high-precision integer fields and validity flags are preserved.
+
+The adapter deliberately ignores ROS `header.stamp`: the caller must supply `time.monotonic_ns()` (or one equivalent host monotonic source) at callback entry. It does not derive receiver `source_timestamp_ns` or `source_clock_id`, and it does not implement rclpy subscriptions or publish NavSatFix. The receiver-time mapper remains a hard integration gate because the pinned driver does not publish NAV-TIMEGPS or NAV-TIMELS in this revision.
