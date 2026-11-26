@@ -305,6 +305,49 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(msg.steps_removed, 3)
         self.assertEqual(msg.time_source, 0x20)
 
+    def test_mixed_udp_and_ethernet_l2_ptp_is_reported_as_coexistence_risk(self):
+        audit = PtpCorrelationAudit()
+        udp = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp()),
+            transport="udp/319", capture_timestamp_ns=100,
+            interface_id=1, section_index=0,
+        )
+        l2 = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp()),
+            transport="ethernet_l2", capture_timestamp_ns=200,
+            interface_id=1, section_index=0,
+        )
+        separate_interface = parse_ptp_v2_message(
+            ptp_message(0, body=timestamp()),
+            transport="ethernet_l2", capture_timestamp_ns=300,
+            interface_id=2, section_index=0,
+        )
+        for message in (udp, l2, separate_interface):
+            audit.observe(message)
+        report = audit.report()
+        mixed, = report["mixed_ptp_transport_interfaces"]
+        self.assertEqual(mixed["interface_id"], 1)
+        self.assertEqual(
+            set(mixed["transport_families"]), {"udp_ip_ptp", "ethernet_l2_ptp"}
+        )
+        self.assertIn("not proof", mixed["interpretation"])
+
+    def test_multiple_announce_gm_identities_are_risk_not_elected_gm(self):
+        audit = PtpCorrelationAudit()
+        audit.observe(announce_message(
+            source=PORT_A, sequence=1, domain=4,
+            gm_identity=bytes.fromhex("aabbccddeeff0011"),
+        ))
+        audit.observe(announce_message(
+            source=PORT_B, sequence=1, domain=4,
+            gm_identity=bytes.fromhex("aabbccddeeff0022"),
+        ))
+        report = audit.report()
+        item, = report["multiple_gm_candidates_by_domain"]
+        self.assertEqual(item["domain_number"], 4)
+        self.assertEqual(item["candidate_count"], 2)
+        self.assertIn("do not establish", item["interpretation"])
+
     def test_announce_candidates_sequence_and_source_gm_changes(self):
         audit = PtpCorrelationAudit()
         gm_a = bytes.fromhex("aabbccddeeff0011")
