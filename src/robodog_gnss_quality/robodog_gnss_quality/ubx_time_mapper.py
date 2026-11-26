@@ -149,6 +149,7 @@ class UbxReceiverTimeMapper:
         max_pending_epochs: int = 8,
         max_pair_receive_skew_ns: int = 500_000_000,
         max_pending_age_ns: int = 2_000_000_000,
+        leap_event_guard_seconds: int = 2,
     ) -> None:
         for name, value in (
             ("max_pending_epochs", max_pending_epochs),
@@ -162,6 +163,10 @@ class UbxReceiverTimeMapper:
             for source in trusted_leap_sources
         ):
             raise ValueError("trusted leap sources must be explicit NAV-TIMELS source IDs 1..8; source 0 is firmware default and is never trusted")
+        if (isinstance(leap_event_guard_seconds, bool) or
+                not isinstance(leap_event_guard_seconds, int) or leap_event_guard_seconds < 0):
+            raise ValueError("leap_event_guard_seconds must be a non-negative integer")
+        self.leap_event_guard_seconds = leap_event_guard_seconds
         self.trusted_leap_sources = frozenset(trusted_leap_sources)
         self.max_pending_epochs = max_pending_epochs
         self.max_pair_receive_skew_ns = max_pair_receive_skew_ns
@@ -382,6 +387,8 @@ class UbxReceiverTimeMapper:
             reason = "GPS week/TOW valid; NAV-TIMELS current leap source is not trusted"
         elif gps.leap_seconds != gps_utc_leap_seconds:
             reason = "GPS week/TOW valid; TIMEGPS leapS differs from source-adjusted TIMELS currLs"
+        elif leap_event_near:
+            reason = "GPS week/TOW valid; UTC stamp withheld near a scheduled leap-second event"
 
         if utc_valid:
             self._utc_valid_epochs += 1
@@ -406,6 +413,8 @@ class UbxReceiverTimeMapper:
             leap_seconds=gps_utc_leap_seconds,
             leap_source=leap.source_of_current_leap,
             reported_leap_seconds=leap.current_leap_seconds,
+            leap_event_valid=leap.leap_event_valid,
+            time_to_leap_event_seconds=leap.time_to_leap_event_seconds,
         )
 
     def stats(self) -> UbxTimeMapperStats:
