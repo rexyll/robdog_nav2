@@ -9,6 +9,9 @@ from pathlib import Path
 import sys
 
 from livox_mid360_udp_parser import Mid360PacketError, parse_mid360_udp_payload
+from livox_mid360_control_parser import (
+    Mid360ControlPacketError, parse_mid360_control_payload,
+)
 from livox_udp_sequence_audit import LivoxUdpSequenceAudit
 from network_packet_decoder import (
     PacketDecodeError, classify_mid360_datagram, decode_link_packet,
@@ -29,6 +32,8 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
     time_types = Counter()
     sequence_audits = {}
     sensor_time_observations = {}
+    control_diagnostic_observations = []
+    control_diagnostic_errors = Counter()
     ptp_audit = PtpCaptureAudit()
     interfaces = defaultdict(lambda: {"packets": 0, "capture_timestamp_min_ns": None,
                                        "capture_timestamp_max_ns": None})
@@ -74,6 +79,41 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
         streams[stream_name] += 1
         counts[f"direction_{direction}"] += 1
 
+        if stream_name in {"control", "push"}:
+            if len(datagram.payload) >= 10:
+                command_id = int.from_bytes(datagram.payload[8:10], "little")
+                if command_id in {0x0101, 0x0102}:
+                    try:
+                        message = parse_mid360_control_payload(datagram.payload)
+                    except Mid360ControlPacketError as exc:
+                        control_diagnostic_errors[str(exc)] += 1
+                    else:
+                        selected = {
+                            item["name"]: item for item in message.key_values
+                            if item.get("name") in {
+                                "local_time_now", "last_sync_time",
+                                "time_offset", "time_sync_type",
+                                "lidar_diag_status",
+                            }
+                        }
+                        if selected:
+                            if len(control_diagnostic_observations) < 4096:
+                                control_diagnostic_observations.append({
+                                    "capture_timestamp_ns": datagram.capture_timestamp_ns,
+                                    "section_index": datagram.section_index,
+                                    "interface_id": datagram.interface_id,
+                                    "source": f"{datagram.source_ip}:{datagram.source_port}",
+                                    "destination": f"{datagram.destination_ip}:{datagram.destination_port}",
+                                    "cmd_id": message.cmd_id,
+                                    "cmd_type": message.cmd_type,
+                                    "sender_type": message.sender_type,
+                                    "sequence_number": message.sequence_number,
+                                    "return_code": message.return_code,
+                                    "diagnostics": selected,
+                                })
+                            else:
+                                counts["truncated_control_diagnostic_observations"] += 1
+            continue
         if stream_name not in {"point_cloud", "imu"}:
             continue
         try:
@@ -220,6 +260,12 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
         "interfaces": dict(interfaces),
         "ptp_audit": ptp_report,
         "sensor_time_observations": sensor_observations,
+        "control_diagnostic_observations": control_diagnostic_observations,
+        "control_diagnostic_observation_limit": 4096,
+        "control_diagnostic_observation_truncated": counts[
+            "truncated_control_diagnostic_observations"
+        ],
+        "control_diagnostic_parse_errors": dict(control_diagnostic_errors),
         "sensor_time_observation_evictions": counts["evicted_sensor_time_observations"],
         "sensor_time_observation_limit": max_sensor_time_observations,
         "ptp_sensor_timebase_co_observations": co_observations,
@@ -239,7 +285,20 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
         "time_semantics": {
             "capture_timestamp_ns": "capture-file timestamp; not LiDAR sensor time",
             "sensor_timestamp_ns": "MID-360 payload timestamp; clock domain follows time_type",
-            "time_type_1": "sensor declares PTP/gPTP master time; observed PTP domain is not inferred",
+            "time_type_1": "point-cloud header declares PTP/gPTP master time; observed PTP domain is not inferred",
+            "diagnostic_time_sync_type_1": (
+                "control diagnostic key 0x800C specifically labels IEEE 1588v2.0 PTP; "
+                "it does not identify gPTP. This is distinct from point-cloud time_type=1."
+            ),
+            "diagnostic_time_offset": (
+                "key 0x800B is signed local_time_now minus synchronization-source time "
+                "(t0 - t1), in ns; it is a device-reported snapshot, not an independently "
+                "validated accuracy or live-lock measurement."
+            ),
+            "diagnostic_last_sync_time": (
+                "key 0x800A is the last master-time sample (PTP Follow_Up t1 or GPS PPS edge); "
+                "it does not alone prove current synchronization."
+            ),
             "ptp_sensor_co_observation": (
                 "same capture section/interface and overlapping capture-file time windows; "
                 "not proof of clock-domain binding, lock, or synchronization"
