@@ -359,6 +359,7 @@ class UbxReceiverTimeMapper:
             gps.leap_seconds_valid
             and leap.current_leap_valid
             and leap.source_of_current_leap in self.trusted_leap_sources
+            and 0 <= gps_utc_leap_seconds <= 127
             and gps.leap_seconds == gps_utc_leap_seconds
         )
         utc_seconds = None
@@ -388,6 +389,8 @@ class UbxReceiverTimeMapper:
             reason = "GPS week/TOW valid; NAV-TIMELS validCurrLs is false"
         elif leap.source_of_current_leap not in self.trusted_leap_sources:
             reason = "GPS week/TOW valid; NAV-TIMELS current leap source is not trusted"
+        elif not 0 <= gps_utc_leap_seconds <= 127:
+            reason = "GPS week/TOW valid; source-adjusted GPS-UTC leap offset is outside 0..127"
         elif gps.leap_seconds != gps_utc_leap_seconds:
             reason = "GPS week/TOW valid; TIMEGPS leapS differs from source-adjusted TIMELS currLs"
         elif leap_event_near:
