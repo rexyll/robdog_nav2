@@ -142,6 +142,7 @@ class GnssIngressQueue {
     event.connection_generation = current_generation_;
     event.ingress_sequence = next_sequence_++;
     event.receive_monotonic_ns = receive_monotonic_ns;
+    event.dropped_frame_events_total = stats_.dropped_oldest_frame_events;
     event.frame = std::move(frame);
     events_.push_back(std::move(event));
     ++stats_.accepted_frame_events;
@@ -220,7 +221,6 @@ class GnssIngressQueue {
     if (events_.empty()) return std::nullopt;
     GnssIngressEvent event = std::move(events_.front());
     events_.pop_front();
-    event.dropped_frame_events_total = stats_.dropped_oldest_frame_events;
     if (event.type == GnssIngressEventType::Frame) {
       ++stats_.popped_frame_events;
     } else {
@@ -265,8 +265,16 @@ class GnssIngressQueue {
   bool drop_oldest_frame_locked() {
     for (auto it = events_.begin(); it != events_.end(); ++it) {
       if (it->type == GnssIngressEventType::Frame) {
+        const auto dropped_sequence = it->ingress_sequence;
         events_.erase(it);
         ++stats_.dropped_oldest_frame_events;
+        // Stamp only later events. Earlier queued lifecycle events must not
+        // inherit drops whose sequence lies after them.
+        for (auto & event : events_) {
+          if (event.ingress_sequence > dropped_sequence) {
+            event.dropped_frame_events_total = stats_.dropped_oldest_frame_events;
+          }
+        }
         return true;
       }
     }
@@ -288,6 +296,7 @@ class GnssIngressQueue {
     event.connection_generation = generation;
     event.ingress_sequence = next_sequence_++;
     event.receive_monotonic_ns = receive_monotonic_ns;
+    event.dropped_frame_events_total = stats_.dropped_oldest_frame_events;
     events_.push_back(std::move(event));
     ++stats_.accepted_control_events;
     update_watermark_locked();
