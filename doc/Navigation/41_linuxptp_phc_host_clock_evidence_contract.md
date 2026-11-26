@@ -108,7 +108,7 @@ journalctl -u ptp4l -u phc2sys -u chrony --since '15 min ago' --no-pager
 
 ## 6. 实施 Gate
 
-现已新增 transport-independent `linuxptp_pmc_parser.py`，仅解析四种只读 GET response dataset（TIME_STATUS_NP、CURRENT_DATA_SET、PORT_DATA_SET、TIME_PROPERTIES_DATA_SET），严格校验 header/required fields/types/duplicates/unknown fields；它不执行 pmc、不连接 socket、不推断 PHC/UTC、不发布 HostTimeSyncStatus。由于目标机拓扑与版本输出仍未确认，暂不新增 LinuxPTP ROS producer。取得目标 Orin 原始样本后，先核验 socket/domain/port/profile 与真实字段差异，再建立 fail-closed state model 和只读 collector；禁止任何 clock adjustment side effect。
+现有 transport-independent `linuxptp_pmc_parser.py` 包含三层接口：`parse_pmc_response()` 保持原有 dataset dictionary API；`parse_pmc_response_envelope()` 在解析字段之外保留 response clock identity、port number 和 management sequence ID；`parse_pmc_snapshot()` 从同一份组合输出提取四种 GET dataset，并要求每种恰好一条响应、clock identity 一致、sequence ID 不重复，且 PORT_DATA_SET.portIdentity 与响应头的 clock/port identity 一致。Snapshot 不强制四个 response 的 port number 相同（不同 dataset 的管理范围可能不同），也不赋予共同时间戳或 simultaneity 保证；未来 collector 必须记录命令前后 host CLOCK_MONOTONIC 样本，并由单独 policy 判断采样窗口/freshness。解析器严格校验 header/required fields/types/duplicates/unknown fields；它不执行 pmc、不连接 socket、不推断 PHC/UTC、不发布 HostTimeSyncStatus。由于目标机拓扑与版本输出仍未确认，暂不新增 LinuxPTP ROS producer。取得目标 Orin 原始样本后，先核验 socket/domain/port/profile 与真实字段差异，再建立 fail-closed state model 和只读 collector；禁止任何 clock adjustment side effect。
 
 ## 7. 上游参考
 
