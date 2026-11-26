@@ -13,7 +13,7 @@ from robodog_gnss_quality.ubx_nav_pvt import (
 
 PROCESS_SESSION_ID = "joiner-test-session"
 CONNECTION_GENERATION = 0
-GENERATION = "zed_f9p_week_2450_receiver_generation_0"
+GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2450"
 
 
 def make_pvt(i_tow=1000, receive=100):
@@ -116,6 +116,21 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         self.assertEqual(observation.source_clock_id, GENERATION)
         self.assertEqual(observation.carrier_solution, CarrierSolution.FIXED)
         self.assertEqual(joiner.pending_count, 0)
+
+    def test_old_receiver_generation_record_is_rejected_by_source_clock_id(self):
+        joiner = make_joiner()
+        stale = make_pvt().__class__(
+            process_session_id="old-process-session",
+            connection_generation=CONNECTION_GENERATION,
+            i_tow_ms=1000,
+            gnss_fix_ok=True,
+            carrier_solution=CarrierSolution.FIXED,
+            receive_monotonic_ns=100,
+        )
+        with self.assertRaisesRegex(EpochPairingError, "stale process_session_id"):
+            joiner.add_pvt(
+                stale, source_clock_id=GENERATION, source_timestamp_ns=1_000_000
+            )
 
     def test_different_itow_samples_never_cross_join(self):
         joiner = make_joiner()
@@ -241,7 +256,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
             )
         self.assertEqual(joiner.pending_count, 1)
 
-        joiner.begin_generation("zed_f9p_week_2451_receiver_generation_0")
+        joiner.begin_generation(f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451")
         self.assertEqual(joiner.pending_count, 0)
         self.assertIsNone(joiner.add_pvt(
             make_pvt(), source_clock_id="zed_f9p_week_2451_receiver_generation_0",
