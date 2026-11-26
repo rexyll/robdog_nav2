@@ -136,4 +136,4 @@ def test_quality_node_rejects_old_generation_without_resetting_active_gate():
         assert node._gate.consecutive_fixed_samples == 2
         assert node.faulted is False
     finally:
-        teardown(node, harness, executor)
+        cleanup_nodes(node, harness, executor)
