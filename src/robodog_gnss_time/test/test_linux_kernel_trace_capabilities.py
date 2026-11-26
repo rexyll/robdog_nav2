@@ -73,7 +73,7 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     ]
     assert tracefs["syscall_events"]["sys_exit_clock_adjtime"]["status"] == "available"
     assert tracefs["syscall_events"]["sys_enter_adjtimex"]["status"] == "not_listed"
-    assert "No tracepoint was enabled" in tracefs["interpretation"]
+    assert "No event was enabled" in tracefs["interpretation"]
 
 
 def test_capability_audit_fails_closed_when_kernel_artifacts_are_missing(tmp_path):
