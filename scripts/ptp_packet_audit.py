@@ -483,7 +483,7 @@ class PtpCorrelationAudit:
             if request_message is not None:
                 self.counts["pdelay_req_resp_pairs"] += 1
                 self._store(self.pending_pdelay_resp, request_key,
-                            "pdelay_resp", message)
+                            "pdelay_resp", (request_message, message))
                 self._record_exchange(
                     "peer_delay_req_resp",
                     {"pdelay_req": request_message, "pdelay_resp": message},
@@ -495,12 +495,14 @@ class PtpCorrelationAudit:
         elif message.message_type == 10 and message.requesting_port_identity:
             request_key = (message.domain_number,
                            message.requesting_port_identity, message.sequence_id)
-            response_message = self.pending_pdelay_resp.pop(request_key, None)
-            if response_message is not None:
+            response_exchange = self.pending_pdelay_resp.pop(request_key, None)
+            if response_exchange is not None:
+                request_message, response_message = response_exchange
                 self.counts["pdelay_resp_follow_up_pairs"] += 1
                 self._record_exchange(
                     "peer_delay_response_follow_up",
-                    {"pdelay_resp": response_message,
+                    {"pdelay_req": request_message,
+                     "pdelay_resp": response_message,
                      "pdelay_resp_follow_up": message},
                     domain_number=message.domain_number,
                     sequence_id=message.sequence_id,
