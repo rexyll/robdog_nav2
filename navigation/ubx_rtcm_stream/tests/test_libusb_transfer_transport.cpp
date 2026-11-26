@@ -6,6 +6,8 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <thread>
+#include <atomic>
 #include <vector>
 
 using robodog_protocol::LibusbCompletionStatus;
@@ -234,5 +236,32 @@ int main() {
     assert(transport.pending_count() == 0);
     assert(transport.close());
   }
+
+  {
+    // Concurrent pending_count() must be synchronized with cancel()'s
+    // registry lookup while the operation lock serializes native libusb calls.
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.endpoint = 0x87;
+    request.direction = UsbTransferDirection::In;
+    request.buffer.resize(8);
+    assert(transport.submit(50, 11, request, [](auto, auto, auto, auto, auto) {}));
+    std::atomic<bool> start{false};
+    std::thread observer([&] {
+      while (!start.load(std::memory_order_acquire)) {}
+      for (int i = 0; i < 20000; ++i) {
+        (void)transport.pending_count();
+      }
+    });
+    start.store(true, std::memory_order_release);
+    assert(transport.cancel(50));
+    observer.join();
+    assert(transport.pending_count() == 1);
+    assert(transport.poll_events() == 0);
+    assert(transport.pending_count() == 0);
+    assert(transport.close());
+  }
+
   return 0;
 }
