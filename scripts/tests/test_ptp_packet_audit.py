@@ -348,6 +348,50 @@ class TestPtpPacketAudit(unittest.TestCase):
         self.assertEqual(item["candidate_count"], 2)
         self.assertIn("do not establish", item["interpretation"])
 
+    def test_ethernet_l2_sync_sources_are_observed_without_bmca_selection(self):
+        audit = PtpCorrelationAudit()
+        messages = [
+            parse_ptp_v2_message(
+                ptp_message(0, source=PORT_A, sequence=1, domain=5,
+                            flags=0x0200, body=timestamp()),
+                transport="ethernet_l2", capture_timestamp_ns=100,
+                interface_id=3, section_index=0,
+            ),
+            parse_ptp_v2_message(
+                ptp_message(8, source=PORT_A, sequence=1, domain=5,
+                            body=timestamp()),
+                transport="ethernet_l2", capture_timestamp_ns=110,
+                interface_id=3, section_index=0,
+            ),
+            parse_ptp_v2_message(
+                ptp_message(0, source=PORT_B, sequence=2, domain=5,
+                            flags=0x0200, body=timestamp()),
+                transport="ethernet_l2", capture_timestamp_ns=120,
+                interface_id=3, section_index=0,
+            ),
+        ]
+        for message in messages:
+            audit.observe(message)
+        report = audit.report()
+        self.assertEqual(len(report["ethernet_l2_sync_source_observations"]), 2)
+        self.assertEqual(len(report["multiple_ethernet_l2_sync_sources_by_domain"]), 1)
+        risk, = report["multiple_ethernet_l2_sync_sources_by_domain"]
+        self.assertEqual(risk["source_count"], 2)
+        self.assertIn("not proof of multiple", risk["interpretation"])
+
+    def test_multiple_announce_gm_report_excludes_gptp_bmca_claim(self):
+        audit = PtpCorrelationAudit()
+        audit.observe(announce_message(
+            source=PORT_A, sequence=1, domain=4,
+            gm_identity=bytes.fromhex("aabbccddeeff0011"),
+        ))
+        audit.observe(announce_message(
+            source=PORT_B, sequence=1, domain=4,
+            gm_identity=bytes.fromhex("aabbccddeeff0022"),
+        ))
+        item, = audit.report()["multiple_gm_candidates_by_domain"]
+        self.assertIn("does not use BMCA", item["interpretation"])
+
     def test_announce_candidates_sequence_and_source_gm_changes(self):
         audit = PtpCorrelationAudit()
         gm_a = bytes.fromhex("aabbccddeeff0011")
