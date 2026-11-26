@@ -1,6 +1,8 @@
 #include "robodog_protocol/gnss_usb_stream.hpp"
 
 #include <limits>
+#include <exception>
+#include <stdexcept>
 #include <utility>
 
 namespace robodog_protocol {
@@ -183,11 +185,14 @@ void GnssUsbStream::on_completion(
     }
   }
 
-  if (resubmit && !submit_read(generation)) {
-    running_.store(false, std::memory_order_release);
-    std::lock_guard<std::mutex> lock(stats_mutex_);
-    ++counters_.submit_failures;
-    cancel_remaining_transfers();
+  if (resubmit && running_.load(std::memory_order_acquire) && !submit_read(generation)) {
+    if (running_.exchange(false, std::memory_order_acq_rel)) {
+      {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        ++counters_.submit_failures;
+      }
+      cancel_remaining_transfers();
+    }
   }
 }
 
