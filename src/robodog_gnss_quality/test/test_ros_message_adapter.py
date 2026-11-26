@@ -79,6 +79,17 @@ def status(code=2):
 
 
 class TestUbxRosMessageAdapter(unittest.TestCase):
+    def test_receiver_context_is_required_and_validated(self):
+        with self.assertRaisesRegex(EpochPairingError, "process_session_id"):
+            decode_nav_pvt_message(
+                pvt(), 10, process_session_id="", connection_generation=0
+            )
+        with self.assertRaisesRegex(EpochPairingError, "connection_generation"):
+            decode_nav_pvt_message(
+                pvt(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=True
+            )
+
     def test_decode_pvt_carrier_solution_values(self):
         self.assertEqual(decode_pvt(pvt(0), 10).carrier_solution,
                          CarrierSolution.NO_SOLUTION)
