@@ -1,4 +1,3 @@
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -111,3 +110,28 @@ def test_monitor_faults_closed_when_chronyc_unavailable(tmp_path):
 def test_monitor_requires_explicit_error_budget():
     with pytest.raises(ValueError):
         ChronyMonitorConfig("chrony:tracking", 0)
+
+
+def test_monitor_faults_closed_when_boot_id_unavailable(tmp_path):
+    monitor = ChronyHostTimeMonitor(
+        ChronyMonitorConfig("chrony:tracking", 1_000_000),
+        boot_id_path=tmp_path / "missing-boot-id",
+        runner=lambda *args, **kwargs: pytest.fail("chronyc must not run without boot ID"),
+        monotonic_ns=lambda: 10,
+    )
+    sample = monitor.sample()
+    assert sample["state"] == "fault"
+    assert sample["host_boot_id"] == ""
+
+
+def test_monitor_increments_sequence_across_samples(tmp_path):
+    boot_file = tmp_path / "boot_id"
+    boot_file.write_text("boot-test", encoding="ascii")
+    monitor = ChronyHostTimeMonitor(
+        ChronyMonitorConfig("chrony:tracking", 1_000_000),
+        boot_id_path=boot_file,
+        runner=lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout=TRACKING, stderr=""),
+        monotonic_ns=iter([10, 20]).__next__,
+    )
+    assert monitor.sample()["sample_sequence"] == 1
+    assert monitor.sample()["sample_sequence"] == 2
