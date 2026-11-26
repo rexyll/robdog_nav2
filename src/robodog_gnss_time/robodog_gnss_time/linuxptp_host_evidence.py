@@ -155,6 +155,11 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
             commands.append((f"systemctl_status:{service}", [
                 "systemctl", "status", "--no-pager", service,
             ]))
+            commands.append((f"systemctl_properties:{service}", [
+                "systemctl", "show", "--no-pager",
+                "--property=Id,LoadState,ActiveState,SubState,ExecStart,FragmentPath,DropInPaths",
+                service,
+            ]))
             commands.append((f"journal:{service}", [
                 "journalctl", "-u", service, "--since", config.journal_since, "--no-pager",
             ]))
