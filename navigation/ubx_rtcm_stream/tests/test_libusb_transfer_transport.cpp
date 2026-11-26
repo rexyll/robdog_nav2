@@ -84,7 +84,7 @@ int main() {
     FakeLibusb fake;
     LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
     LibusbTransferRequest request;
-    request.endpoint = 2;
+    request.endpoint = 0x82;
     request.direction = UsbTransferDirection::In;
     request.buffer.resize(8);
     bool called = false;
@@ -110,6 +110,7 @@ int main() {
     fake.submit_result = -1;
     LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
     LibusbTransferRequest request;
+    request.endpoint = 0x81;
     request.buffer.resize(16);
     assert(!transport.submit(2, 1, request, [](auto, auto, auto, auto, auto) {}));
     assert(transport.pending_count() == 0);
@@ -122,6 +123,7 @@ int main() {
     LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
     LibusbTransferRequest request;
     request.direction = UsbTransferDirection::Out;
+    request.endpoint = 0x02;
     request.buffer = {1, 2, 3};
     bool called = false;
     assert(transport.submit(3, 2, request,
