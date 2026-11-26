@@ -282,3 +282,5 @@
 - [35 — 固定版 ublox_ubx_msgs ROS 消息字段适配合同](35_pinned_ublox_ros_message_adapter_contract.md)
 
 - [36 — GNSS ROS 四消息历元缓冲与 receiver-time mapping adapter](36_gnss_ros_epoch_and_time_mapping_adapter.md)
+
+- [35 — GNSS ROS 历元回调并发与接收机代际屏障合同](35_gnss_ros_epoch_callback_concurrency_and_generation_barrier.md)
