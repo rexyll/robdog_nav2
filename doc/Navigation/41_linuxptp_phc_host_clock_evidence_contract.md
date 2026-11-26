@@ -160,3 +160,31 @@ monotonic 起止时间界定整体观测窗口。不得把六类 dataset 描述�
 若未来需要逐 dataset freshness / GM 切换时刻审计，必须引入可验证的逐响应
 时间戳或独立采样方案，再定义明确的窗口和一致性策略。
 
+## 9. PTP identity 的采集窗口边界比较
+
+collector 在主机命令采集前执行一次完整的 GET-only 六数据集身份基线，
+并在主机命令采集后保留原有六数据集快照。两次观测均独立解析、校验显式
+domain；配置了 TARGET 时也分别校验返回的 PORT_DATA_SET.portIdentity。
+
+`pmc_identity_boundary_comparison` 对比以下字段：
+
+- local clockIdentity；
+- PORT_DATA_SET.portIdentity 与 portState；
+- DEFAULT_DATA_SET.domainNumber；
+- TIME_STATUS_NP.gmPresent 与 gmIdentity；
+- PARENT_DATA_SET.grandmasterIdentity。
+
+如果前后两次观测均有效但上述任一字段不同，报告标记
+`ptp_identity_changed_between_collection_boundaries`，并将
+`collection_status` 置为 `partial`。前置身份基线不可用或无效，同样
+不能把采集报告标为 complete。该比较仅描述边界观测，不自动判定 PTP
+失锁、主时钟质量下降或 host UTC 不可信。
+
+**边界相同不代表窗口内部没有变化。** GM 可能在两次观测之间切换后又切回，
+portState 也可能短暂抖动；当前 pmc 输出没有可验证的逐响应采样时刻，因此
+无法从两端一致推导窗口内连续稳定。ptp4l/phc2sys/chrony 的 systemd
+properties、ExecStart 和 journal 仍是各自命令执行时的单次只读观察，不是
+事务性配置快照，也没有自动前后 diff。未来若需证明窗口内无瞬态切换，必须
+使用有时间戳的事件流或连续采样，并定义采样周期、丢样检测与时钟域；不得
+把边界比较包装成连续监控保证。
+
