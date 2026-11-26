@@ -377,10 +377,14 @@ argv-based subprocess calls with `shell=False`. LinuxPTP `pmc` addresses all
 ports by default; this snapshot parser requires exactly one response per
 dataset. If a multi-port clock returns multiple PORT_DATA_SET responses, the
 collector records the raw output but marks snapshot validation invalid rather
-than silently choosing a port. A target-port selection option is intentionally
-not guessed before the target topology is known. It records raw stdout/stderr,
-exit status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot
-ID, NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
+than silently choosing a port. If the target port identity has already been
+independently verified, optional `--target-port-identity` adds LinuxPTP's
+client-side `TARGET <portIdentity>` selector before the GET requests. This is
+not a remote SET/CMD management action and does not change clock state. The
+identity must use LinuxPTP's exact clockIdentity-portNumber format; absent this
+option, no port is selected implicitly. It records raw stdout/stderr, exit
+status, command-level CLOCK_MONOTONIC/CLOCK_REALTIME brackets, host boot ID,
+NIC timestamping capabilities, discovered `/dev/ptp*` and interface sysfs
 PHC paths, plus explicitly requested service status/journal output. It validates
 the six-dataset snapshot and configured domain when possible, but always sets
 `host_time_sync_claim=not_evaluated`: this bundle does not prove
