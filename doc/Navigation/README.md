@@ -233,3 +233,5 @@
 - [UBX/RTCM3 parser public API](../../navigation/ubx_rtcm_stream/include/robodog_protocol/stream_decoder.hpp)
 - [UBX/RTCM3 parser implementation](../../navigation/ubx_rtcm_stream/src/stream_decoder.cpp)
 - [UBX/RTCM3 parser tests](../../navigation/ubx_rtcm_stream/tests/test_stream_decoder.cpp)
+
+- [20 — UBX/RTCM3 有界 ingress queue、generation fence 与 TSan 合同](20_ubx_rtcm_bounded_ingress_queue_design_and_tsan_contract.md)
