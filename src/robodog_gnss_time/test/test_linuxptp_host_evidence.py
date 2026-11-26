@@ -78,7 +78,7 @@ def _config(**overrides):
 
 
 
-def _journal_output(boot_id=None, message="eth0: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT"):
+def _journal_output(boot_id=None, message="port 1 (eth0): LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT"):
     if boot_id is None:
         boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
     import json
@@ -453,7 +453,7 @@ def test_journal_parser_extracts_ptp4l_gm_port_and_announce_events():
     messages = [
         "eth0: new foreign master 080027.fffe.d9e453-1",
         "selected best master clock 080027.fffe.d9e453",
-        "eth0: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT",
+        "port 1 (eth0): LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT",
         "eth0: master tx announce timeout",
     ]
     import json
