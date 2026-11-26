@@ -124,6 +124,14 @@ def test_decode_nav_status_uses_flags2_for_carrier_and_fixstat_for_validity():
     assert epoch.carrier_solution is CarrierSolution.FIXED
 
 
+def test_nav_cov_non_boolean_validity_byte_is_rejected():
+    payload = bytearray(cov_payload())
+    payload[5] = 2
+    raw = decode(ubx_frame(0x36, bytes(payload)), 14)
+    with pytest.raises(EpochPairingError, match="validity bytes"):
+        decode_ubx_nav_raw_record(raw, gps_week=WEEK)
+
+
 def test_nav_pvt_invalid_llh_and_unsupported_versions_are_rejected():
     raw = decode(ubx_frame(0x07, pvt_payload(flags3=1)), 14)
     with pytest.raises(EpochPairingError, match="LLH invalid"):
