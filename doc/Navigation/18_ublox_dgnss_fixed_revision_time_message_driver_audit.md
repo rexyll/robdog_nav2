@@ -123,6 +123,12 @@ node 为 UBX timer 与 USB-events timer 创建了**不同的 MutuallyExclusive c
 
 此外，`usb.cpp` 的 `transfer_queue_` 在 `cleanup_transfer_queue()`、`cleanup_all_transfers()`、`queued_transfer_in_num()` 中有若干 `size()==0` 检查位于 mutex 之前；`transfer_t::completed` 在 libusb callback 中写入、在持锁队列扫描中读取，但写入方没有同一 mutex 或 atomic。若 libusb callbacks 与其他 Connection 方法并发，这些访问也需要线程安全审查。当前未通过 TSAN 验证。
 
+### 5.6 固定版本标准 launch 明确使用 MultiThreadedExecutor 容器
+
+进一步核对固定 commit 中的 `ublox_dgnss/launch/ublox_rover_hpposllh.launch.py`：其 `ComposableNodeContainer` 明确指定 `rclcpp_components` 的 `component_container_mt`。因此，对该 launch 所启动的 node，不能再把“SingleThreadedExecutor 可能串行化”当作默认部署保护。UBX timer 与 USB-events timer 属不同 MutuallyExclusive callback groups，MultiThreadedExecutor 可在不同组之间并发调度；USB libusb event callback 可 push UBX queue，同时 UBX timer 执行未持锁的 `size()`/index 读取。**对该标准 launch，node-level UBX queue 的未同步读写应提升为已由部署配置触发的并发缺陷（静态证据），但仍未通过 TSAN/压力测试观察到运行时故障。**
+
+其他 launch/自定义部署仍应逐一核验；本结论严格绑定上述固定 commit 的该 launch 文件。
+
 ## 6. 同历元与接收时序
 
 当前发布函数使用 `f->ts` 填充 ROS Header stamp，消息本身包含 iTOW（PVT、STATUS、TIMEUTC）。这给消费者提供了接收/采集时间戳与 GNSS epoch tag 两种信息，但源码中未发现为跨 topic 组帧提供的统一 `process_session_id`、`connection_generation`、`queue_sequence` 身份字段。
