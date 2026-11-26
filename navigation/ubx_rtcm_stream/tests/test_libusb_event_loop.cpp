@@ -1,6 +1,7 @@
 #include "robodog_protocol/libusb_event_loop.hpp"
 
 #include <atomic>
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -75,10 +76,8 @@ int main() {
   LibusbEventLoop loop(transport, 2);
   assert(loop.start());
 
-  for (int i = 0; i < 100 && !transport.bind_event_thread(); ++i) {
-    std::this_thread::sleep_for(std::chrono::milliseconds(1));
-  }
-  // The owner thread is bound; a second thread cannot pump the same context.
+  // start() returns only after the worker has bound the event-loop owner.
+  // A second thread cannot pump the same context.
   assert(transport.poll_events(0) < 0);
 
   std::atomic<int> completed{0};
