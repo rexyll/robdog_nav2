@@ -192,5 +192,9 @@ jobs:
             -v
           PYTHONPATH=scripts python3 -m unittest discover \
             -s scripts/tests \
+            -p "test_livox_mid360_control_parser.py" \
+            -v
+          PYTHONPATH=scripts python3 -m unittest discover \
+            -s scripts/tests \
             -p "test_urbanloco_ulhk4.py" \
             -v
