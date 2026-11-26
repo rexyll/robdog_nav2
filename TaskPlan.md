@@ -1182,3 +1182,16 @@
 - 验证边界：CI 合成测试不替代 Orin 实机报告。尚未加载 eBPF、未启用 tracing、
   未安装 audit rule；目标 Orin 的 kernel config、BTF、tracefs、权限与实际
   syscall format 仍需用户在本机执行 CLI 后提供 JSON。N1/N9 实体验收不变。
+
+
+## 本轮增量（2026-11-26 / v0.3.252）
+
+- 代码审查发现 `_mount_inventory()` 原先会把目标路径的所有祖先挂载都加入
+  结果，真实主机上的 `/sys`（sysfs）等无关挂载可能混入 tracefs/debugfs
+  inventory。虽不直接影响 available_events 判断，但会降低挂载证据可读性。
+- 修正为仅保留与候选 tracing 目录相交的 `tracefs` / `debugfs` 挂载，并新增
+  `mount_relation=exact|ancestor` 说明是精确挂载还是父目录挂载。
+- 扩展 fixture：同时包含 `/sys` sysfs、`/sys/kernel/tracing` tracefs、
+  `/sys/kernel/debug` debugfs，验证只输出实际 tracing filesystem。新增独立
+  测试覆盖 ext4/sysfs 无关祖先挂载过滤。
+- 此增量仍为代码/合成测试审查，不是 Orin 实机验证；不启用或修改 tracing。
