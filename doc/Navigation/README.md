@@ -223,3 +223,5 @@
 - [MID-360 控制协议诊断解析器单元测试](../../scripts/tests/test_livox_mid360_control_parser.py)
 
 - [09 §19 — MID-360 HMS 故障诊断码与时间同步异常关联](09_mid360_timestamp_and_point_lio_integration_audit.md#19-mid-360-hms-故障诊断码与时间同步异常关联hms-001010)
+
+- [09 §20 — MID-360 HMS 连续快照生命周期审计](09_mid360_timestamp_and_point_lio_integration_audit.md#20-mid-360-hms-连续快照生命周期审计hms-011016)
