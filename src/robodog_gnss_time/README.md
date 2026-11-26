@@ -316,10 +316,19 @@ Chrony daemon, source selection, PHC chain, or UTC accuracy.
 `linuxptp_pmc_parser.py` is a strict, transport-independent parser for
 selected read-only `pmc GET` response datasets:
 `TIME_STATUS_NP`, `CURRENT_DATA_SET`, `PORT_DATA_SET`, and
-`TIME_PROPERTIES_DATA_SET`. It validates the exact response header, required
-fields, duplicate/unknown keys, integer/boolean/decimal types and leap-flag
-consistency. It preserves `master_offset` as PTP clock-to-GM evidence and
-does not convert it into host SystemTime-to-UTC offset.
+`TIME_PROPERTIES_DATA_SET`. It validates the response header, required fields, duplicate/unknown keys,
+integer/boolean/decimal types and leap-flag consistency. The
+`parse_pmc_response_envelope()` API retains responder clock identity, port
+number and management sequence ID; the backward-compatible
+`parse_pmc_response()` API still returns the dataset dictionary.
+`parse_pmc_snapshot()` accepts one combined pmc output containing exactly one
+response for each of the four datasets, rejects mixed responder clock
+identities and reused sequence IDs, and verifies PORT_DATA_SET port identity
+against its response header. The snapshot deliberately has no timestamp:
+the future collector must bracket the command with host monotonic samples and
+apply a separate freshness/uncertainty policy. It preserves `master_offset`
+as PTP clock-to-GM evidence and does not convert it into host
+SystemTime-to-UTC offset.
 
 The parser is not a pmc command runner, does not connect to a ptp4l socket,
 does not know the target PTP domain/interface/PHC, and does not publish
