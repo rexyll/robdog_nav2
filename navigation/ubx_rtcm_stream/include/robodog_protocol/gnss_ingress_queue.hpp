@@ -157,6 +157,7 @@ class GnssIngressQueue {
       ++stats_.rejected_stale_generation;
       return false;
     }
+    if (closed_ && !terminal_event_type_) return false;
     if (terminal_event_type_ &&
         *terminal_event_type_ != GnssIngressEventType::DeviceLost) {
       return false;
@@ -177,6 +178,7 @@ class GnssIngressQueue {
       ++stats_.rejected_stale_generation;
       return false;
     }
+    if (closed_ && !terminal_event_type_) return false;
     if (terminal_event_type_ &&
         *terminal_event_type_ != GnssIngressEventType::TransportFault) {
       return false;
