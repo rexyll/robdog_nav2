@@ -34,17 +34,18 @@ public:
       fail_next_submit_ = false;
       return false;
     }
-    pending_.emplace(id, Pending{generation, std::move(completion)});
+    pending_.emplace(id, Pending{generation, std::move(completion), false});
     return true;
   }
 
   bool cancel(std::uint64_t id) override {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = pending_.find(id);
-    if (closed_ || it == pending_.end() || fail_next_cancel_) {
+    if (closed_ || it == pending_.end() || it->second.event_queued || fail_next_cancel_) {
       fail_next_cancel_ = false;
       return false;
     }
+    it->second.event_queued = true;
     events_.push_back(Event{id, it->second.generation, UsbCompletionStatus::Cancelled});
     return true;
   }
@@ -71,7 +72,8 @@ public:
   bool complete(std::uint64_t id, UsbCompletionStatus status) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = pending_.find(id);
-    if (closed_ || it == pending_.end()) return false;
+    if (closed_ || it == pending_.end() || it->second.event_queued) return false;
+    it->second.event_queued = true;
     events_.push_back(Event{id, it->second.generation, status});
     return true;
   }
@@ -99,7 +101,7 @@ public:
   }
 
 private:
-  struct Pending { std::uint64_t generation; Completion completion; };
+  struct Pending { std::uint64_t generation; Completion completion; bool event_queued; };
   struct Event { std::uint64_t id; std::uint64_t generation; UsbCompletionStatus status; };
 
   mutable std::mutex mutex_;
@@ -116,6 +118,7 @@ public:
   : lifecycle_(lifecycle), transport_(transport) {}
 
   bool submit(std::uint64_t id) {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     const auto generation = lifecycle_.generation();
     if (!lifecycle_.register_transfer(id, generation)) return false;
     if (!lifecycle_.mark_submitted(id)) {
@@ -138,11 +141,18 @@ public:
   }
 
   bool cancel(std::uint64_t id) {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     if (!lifecycle_.request_cancel(id)) return false;
     return transport_.cancel(id);
   }
 
+  std::size_t poll_events() {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    return transport_.poll_events();
+  }
+
   bool shutdown(std::size_t max_polls = 1024) {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     const auto cancel_ids = lifecycle_.begin_shutdown();
     for (const auto id : cancel_ids) (void)transport_.cancel(id);
     for (std::size_t i = 0; i < max_polls && !lifecycle_.callbacks_drained(); ++i) {
@@ -153,6 +163,7 @@ public:
   }
 
 private:
+  std::mutex operation_mutex_;
   TransferLifecycle & lifecycle_;
   IUsbTransferTransport & transport_;
 };

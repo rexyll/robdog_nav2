@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.165
+- 文档版本：v0.3.166
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -932,3 +932,6 @@
 - Fake USB transport seam 首个实现切片（2026-11-26 / v0.3.164）：新增 `IUsbTransferTransport`、确定性 `FakeUsbTransport` 与 `TransferSession`，实现先登记/置为 Submitted 再调用 transport submit、submit failure 使用独立 SubmitFailed terminal state 并释放、所有 Completed/Cancelled/NoDevice/Error callback 共用 completion finalizer、cancel failure 不错误地当作 transfer 已完成、shutdown stop-submit→cancel→poll callback→drain→close。fake transport 只在 `poll_events()` 派发 callback，且不持内部 mutex 调用外部 callback；close 在 pending/event 未清空时拒绝。新增 `test_fake_usb_transport.cpp` 覆盖正常完成、取消、NO_DEVICE/error/cancelled、submit failure rollback、cancel failure 后自然完成、shutdown 自动 drain。新增 Navigation 22 合同并更新 CMake/README/索引。此实现仍是 fake transport，不代表真实 libusb、ROS 2 executor 或物理设备行为；下一步需修复并验证 generation event 快照，增加多线程 callback/shutdown stress 与 TSan，再实现 libusb adapter。
 
 - Fake USB transport 首轮 CI 失败分析与修复（2026-11-26 / v0.3.165）：Actions run `45744404049` 中 Clang libFuzzer 成功，但 ASan/UBSan 与 TSan 两个 build job 失败。回读日志对应源码后定位为 `TransferLifecycle::submission_failed()` 写入字面 `\\n` 转义序列，导致 C++ 编译失败；并发现 `release()` 未允许 `SubmitFailed` terminal state 释放。已在提交 `29a9efe61f14c84debc59eed25a24ee0b9569c5a` 修复为正常多行函数，并将 SubmitFailed 加入合法 release gate。已确认回读文件无字面转义问题；修复后的 Actions 运行结果待确认。该轮 CI 失败明确记账，不作通过声明。
+
+
+- Fake USB transport 并发边界与 generation event 固化（2026-11-26 / v0.3.166）：在上一轮修复后 CI run `45744564081` 三个 job 全部成功（ASan/UBSan CTest、TSan CTest、Clang libFuzzer smoke），对应修复前 run `45744404049` 的两个编译失败 job 已被纠正。进一步审查发现 session 的 submit 与 shutdown 若并发可形成 shutdown cancellation snapshot 后仍提交的竞态；已在 `TransferSession` 对 submit/cancel/poll/shutdown 加操作序列化。Fake pending transfer 增加 event_queued，避免 complete event 与 shutdown cancel 重复入队；事件携带 submit 时捕获的 generation，不再依赖当前代次。新增测试：generation 快照、完成事件已排队时 shutdown 不产生双 callback、100 轮 submit-vs-shutdown 并发竞争。新增测试代码及 TSan/ASan/UBSan CI 待本轮实际运行确认。此仍为 fake transport 层合成验证，不是 libusb event thread 或 ROS executor 集成。
