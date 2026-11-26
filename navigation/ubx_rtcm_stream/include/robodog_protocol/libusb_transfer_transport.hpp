@@ -74,9 +74,8 @@ public:
   ~LibusbTransferTransport() { if (!close()) std::terminate(); }
 
   bool valid() const {
-    return api_.alloc_transfer && api_.free_transfer && api_.fill_bulk_transfer &&
-           api_.submit_transfer && api_.cancel_transfer && api_.handle_events &&
-           api_.close_device && device_handle_ != nullptr;
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    return api_valid();
   }
 
   bool submit(
@@ -85,9 +84,9 @@ public:
   {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     const bool endpoint_is_in = (request.endpoint & 0x80u) != 0;
-    if (!valid() || closed_ || !completion ||
+    if (!api_valid() || closed_ || !completion ||
         endpoint_is_in != (request.direction == UsbTransferDirection::In) ||
-        (request.endpoint & 0x70u) != 0 || request.buffer.size() >
+        (request.endpoint & 0x70u) != 0 || (request.endpoint & 0x0fu) == 0 || request.buffer.size() >
         static_cast<std::size_t>(0x7fffffff)) return false;
 
     {
@@ -147,7 +146,7 @@ public:
 
   int poll_events(unsigned int timeout_ms = 0) {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-    if (closed_ || !valid()) return -1;
+    if (closed_ || !api_valid()) return -1;
     const int rc = api_.handle_events(timeout_ms);
     reap_callbacks_after_event_pump();
     return rc;
@@ -172,6 +171,12 @@ public:
   }
 
 private:
+  bool api_valid() const {
+    return api_.alloc_transfer && api_.free_transfer && api_.fill_bulk_transfer &&
+           api_.submit_transfer && api_.cancel_transfer && api_.handle_events &&
+           api_.close_device && device_handle_ != nullptr;
+  }
+
   struct Context {
     std::uint64_t id{};
     std::uint64_t generation{};
