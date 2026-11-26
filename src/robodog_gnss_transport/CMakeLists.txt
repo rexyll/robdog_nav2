@@ -42,6 +42,12 @@ if(BUILD_TESTING)
     Threads::Threads)
   ament_target_dependencies(test_gnss_ingress_message
     robodog_gnss_interfaces)
+
+  ament_add_gtest(test_gnss_ingress_ros_delivery
+    test/test_gnss_ingress_ros_delivery.cpp)
+  ament_target_dependencies(test_gnss_ingress_ros_delivery
+    rclcpp
+    robodog_gnss_interfaces)
 endif()
 
 ament_export_include_directories(include)
