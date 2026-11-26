@@ -84,7 +84,10 @@ public:
     LibusbTransferRequest request, Completion completion)
   {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-    if (!valid() || closed_ || !completion || request.buffer.size() >
+    const bool endpoint_is_in = (request.endpoint & 0x80u) != 0;
+    if (!valid() || closed_ || !completion ||
+        endpoint_is_in != (request.direction == UsbTransferDirection::In) ||
+        (request.endpoint & 0x70u) != 0 || request.buffer.size() >
         static_cast<std::size_t>(0x7fffffff)) return false;
 
     {
