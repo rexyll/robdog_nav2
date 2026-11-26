@@ -128,7 +128,7 @@ jobs:
             scripts/run_urbanloco_ulhk4.sh \
             scripts/evaluate_urbanloco_ulhk4.sh \
             scripts/verify_public_dataset_checksum.sh \
-            scripts/tests/test_verify_public_dataset_checksum.sh
+            scripts/tests/test_verify_public_dataset_checksum.sh \
             tools/collect_ptp_host_inventory.sh
           PYTHONPATH=scripts python3 scripts/extract_urbanloco_ulhk4_gt.py --help >/dev/null
           bash scripts/tests/test_verify_public_dataset_checksum.sh
