@@ -40,6 +40,8 @@ class UbxSourceTimeMapping:
     reported_leap_seconds: Optional[int] = None
     leap_event_valid: bool = False
     time_to_leap_event_seconds: Optional[int] = None
+    process_session_id: Optional[str] = None
+    connection_generation: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -283,6 +285,22 @@ class UbxRosEpochAdapter:
             raise EpochPairingError(
                 "source_clock_id changed; validate receiver week/reset and call begin_generation()"
             )
+        if mapping.process_session_id is not None or mapping.connection_generation is not None:
+            if (not isinstance(mapping.process_session_id, str)
+                    or not mapping.process_session_id.strip()
+                    or isinstance(mapping.connection_generation, bool)
+                    or not isinstance(mapping.connection_generation, int)
+                    or mapping.connection_generation < 0
+                    or isinstance(mapping.gps_week, bool)
+                    or not isinstance(mapping.gps_week, int)
+                    or mapping.gps_week < 0):
+                raise EpochPairingError("mapping session/generation/week context is incomplete")
+            expected_clock_id = (
+                f"{mapping.process_session_id}:connection:{mapping.connection_generation}"
+                f":gps-week:{mapping.gps_week}"
+            )
+            if mapping.source_clock_id != expected_clock_id:
+                raise EpochPairingError("source_clock_id does not match session/generation/week context")
         if not isinstance(mapping.valid, bool) or not isinstance(mapping.utc_stamp_valid, bool):
             raise EpochPairingError("time mapping validity fields must be booleans")
         if (
