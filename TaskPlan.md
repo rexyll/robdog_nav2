@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.195
+- 文档版本：v0.3.196
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1015,3 +1015,6 @@
 
 
 - UBX receiver-time mapper leap policy CI 验收（2026-11-26 / v0.3.195）：最终代码/测试 head `caced3828e9c5a7116c32211d6b422d285099907` 对应 Actions run `45756478736`，Humble/Jammy 与 Jazzy/Noble 两个 job 全部 success；每个 job 121 tests、0 errors、0 failures、0 skipped。覆盖 TIMEGPS/TIMELS 精确 iTOW 配对、GPST week/fTOW 归一化、BDS source 4 +14s、source0 拒绝、GPS−UTC 0..127 范围、current leap 与 event validity 分离、event flag 无效时不暴露 countdown、event 有效时 ±1s UTC guard、lsChange 仅在 event flag 有效时验证、并发/过期/容量/冲突/session reset。早期失败 runs 的 root causes 均在最终 head 中修正；这些失败记录不作为验收结果。后续文档与 TaskPlan 仅做说明更新，不改变已测代码。该验收仅为纯 Python synthetic tests，不代表目标 ZED-F9P 固件、raw USB/ROS ingress、device generation fence、真实 leap event 或实机时间同步已通过。
+
+
+- Receiver time mapping connection-generation fence（2026-11-26 / v0.3.196）：UbxReceiverTimeMapper.begin_session() 显式接收 connection_generation，并将 source_clock_id 固定为 receiver_session_id + connection_generation + GPS week；begin_session 更换 generation 会清空 pending/retired cache，拒绝旧代缓存跨代配对；connection_generation 必须为非负整数且拒绝 bool。新增 generation identity 与非法类型测试。最终代码/测试 head `d34f638da9b1a87021890953dfcdf87d3cea3433` 对应 Actions run `45756727874`，Humble/Jammy、Jazzy/Noble 两项全部 success，每项 123 tests、0 errors、0 failures、0 skipped。该机制只在调用方正确传入 DeviceRuntime/DeviceSession generation 时有效；仍不能自动识别已排队的旧 ROS/DDS callback，实际 ingress barrier、raw USB→mapper wiring、目标 F9P session evidence 和硬件拔插验证未完成。
