@@ -31,6 +31,7 @@ GnssUsbStream::~GnssUsbStream()
 
 bool GnssUsbStream::start()
 {
+  std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
   if (running_.load(std::memory_order_acquire) || runtime_.is_open()) return false;
   if (!runtime_.open(config_.device, config_.event_poll_timeout_ms)) {
     frame_queue_.close();
@@ -63,6 +64,7 @@ bool GnssUsbStream::start()
 
 bool GnssUsbStream::stop(std::uint32_t timeout_ms)
 {
+  std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
   running_.store(false, std::memory_order_release);
   if (runtime_.is_open() && !runtime_.shutdown(timeout_ms)) return false;
   frame_queue_.close();
