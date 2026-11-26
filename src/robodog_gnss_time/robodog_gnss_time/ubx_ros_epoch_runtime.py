@@ -6,6 +6,7 @@ wall-clock time are never used to derive receiver GPST.
 
 import math
 import time
+from types import SimpleNamespace
 
 from robodog_gnss_quality.quality_gate import CarrierSolution
 from robodog_gnss_quality.ros_epoch_adapter import (
@@ -77,14 +78,20 @@ def _carrier(code):
 def nav_pvt_from_ros(message, *, receive_monotonic_ns):
     session, generation, week = _context(message)
     i_tow = _integer("NAV-PVT i_tow_ms", message.i_tow_ms, 0, 604_799_999)
-    flags = _integer("NAV-PVT raw_flags", message.raw_flags, 0, 255)
+    _integer("NAV-PVT gps_fix_type", message.gps_fix_type, 0, 5)
+    gnss_fix_ok = _boolean("NAV-PVT gnss_fix_ok", message.gnss_fix_ok)
+    _boolean("NAV-PVT diff_soln", message.diff_soln)
+    invalid_llh = _boolean("NAV-PVT invalid_llh", message.invalid_llh)
+    if invalid_llh:
+        raise EpochPairingError("NAV-PVT marks LLH invalid")
+    carrier_code = _integer("NAV-PVT carrier_solution", message.carrier_solution, 0, 3)
     return UbxNavPvtEpoch(
         process_session_id=session,
         connection_generation=generation,
         gps_week=week,
         i_tow_ms=i_tow,
-        gnss_fix_ok=bool(flags & 0x01),
-        carrier_solution=_carrier((flags >> 6) & 0x03),
+        gnss_fix_ok=gnss_fix_ok,
+        carrier_solution=_carrier(carrier_code),
         receive_monotonic_ns=_integer(
             "receive_monotonic_ns", receive_monotonic_ns, 0, (1 << 64) - 1
         ),
@@ -94,8 +101,21 @@ def nav_pvt_from_ros(message, *, receive_monotonic_ns):
 def nav_hp_pos_llh_from_ros(message, *, receive_monotonic_ns):
     session, generation, week = _context(message)
     i_tow = _integer("HPPOSLLH i_tow_ms", message.i_tow_ms, 0, 604_799_999)
-    flags = _integer("HPPOSLLH raw_flags", message.raw_flags, 0, 255)
-    invalid_llh = bool(flags & 0x01)
+    version = _integer("HPPOSLLH version", message.version, 0, 255)
+    if version != 0:
+        raise EpochPairingError("unsupported HPPOSLLH message version")
+    invalid_lon = _boolean("HPPOSLLH invalid_lon", message.invalid_lon)
+    invalid_lat = _boolean("HPPOSLLH invalid_lat", message.invalid_lat)
+    invalid_height = _boolean("HPPOSLLH invalid_height", message.invalid_height)
+    invalid_lon_hp = _boolean("HPPOSLLH invalid_lon_hp", message.invalid_lon_hp)
+    invalid_lat_hp = _boolean("HPPOSLLH invalid_lat_hp", message.invalid_lat_hp)
+    invalid_height_hp = _boolean("HPPOSLLH invalid_height_hp", message.invalid_height_hp)
+    _boolean("HPPOSLLH invalid_hmsl", message.invalid_hmsl)
+    _boolean("HPPOSLLH invalid_hmsl_hp", message.invalid_hmsl_hp)
+    _integer("HPPOSLLH hmsl_mm", message.hmsl_mm, -(1 << 31), (1 << 31) - 1)
+    _integer("HPPOSLLH hmsl_hp", message.hmsl_hp, -128, 127)
+    _integer("HPPOSLLH h_acc", message.h_acc, 0, (1 << 32) - 1)
+    _integer("HPPOSLLH v_acc", message.v_acc, 0, (1 << 32) - 1)
     return UbxNavHpPosLlhEpoch(
         process_session_id=session,
         connection_generation=generation,
@@ -107,12 +127,12 @@ def nav_hp_pos_llh_from_ros(message, *, receive_monotonic_ns):
         lon_hp=_integer("HPPOSLLH lon_hp", message.lon_hp, -128, 127),
         lat_hp=_integer("HPPOSLLH lat_hp", message.lat_hp, -128, 127),
         height_hp=_integer("HPPOSLLH height_hp", message.height_hp, -128, 127),
-        invalid_lon=invalid_llh,
-        invalid_lat=invalid_llh,
-        invalid_height=invalid_llh,
-        invalid_lon_hp=invalid_llh,
-        invalid_lat_hp=invalid_llh,
-        invalid_height_hp=invalid_llh,
+        invalid_lon=invalid_lon,
+        invalid_lat=invalid_lat,
+        invalid_height=invalid_height,
+        invalid_lon_hp=invalid_lon_hp,
+        invalid_lat_hp=invalid_lat_hp,
+        invalid_height_hp=invalid_height_hp,
         receive_monotonic_ns=_integer(
             "receive_monotonic_ns", receive_monotonic_ns, 0, (1 << 64) - 1
         ),
@@ -122,13 +142,17 @@ def nav_hp_pos_llh_from_ros(message, *, receive_monotonic_ns):
 def nav_cov_from_ros(message, *, receive_monotonic_ns):
     session, generation, week = _context(message)
     i_tow = _integer("NAV-COV i_tow_ms", message.i_tow_ms, 0, 604_799_999)
-    flags = _integer("NAV-COV raw_flags", message.raw_flags, 0, 255)
+    version = _integer("NAV-COV version", message.version, 0, 255)
+    if version != 0:
+        raise EpochPairingError("unsupported NAV-COV message version")
+    pos_cor_valid = _boolean("NAV-COV pos_cor_valid", message.pos_cor_valid)
+    _boolean("NAV-COV vel_cor_valid", message.vel_cor_valid)
     return UbxNavCovEpoch(
         process_session_id=session,
         connection_generation=generation,
         gps_week=week,
         i_tow_ms=i_tow,
-        pos_cor_valid=bool(flags & 0x01),
+        pos_cor_valid=pos_cor_valid,
         pos_cov_nn=_finite("NAV-COV pos_cov_nn", message.pos_cov_nn),
         pos_cov_ne=_finite("NAV-COV pos_cov_ne", message.pos_cov_ne),
         pos_cov_nd=_finite("NAV-COV pos_cov_nd", message.pos_cov_nd),
@@ -144,21 +168,120 @@ def nav_cov_from_ros(message, *, receive_monotonic_ns):
 def nav_status_from_ros(message, *, receive_monotonic_ns):
     session, generation, week = _context(message)
     i_tow = _integer("NAV-STATUS i_tow_ms", message.i_tow_ms, 0, 604_799_999)
-    flags = _integer("NAV-STATUS raw_flags", message.raw_flags, 0, 255)
-    fix_stat = _integer("NAV-STATUS raw_fix_stat", message.raw_fix_stat, 0, 255)
-    carrier_code = (fix_stat >> 1) & 0x03
+    _integer("NAV-STATUS gps_fix_type", message.gps_fix_type, 0, 5)
+    gnss_fix_ok = _boolean("NAV-STATUS gps_fix_ok", message.gps_fix_ok)
+    _boolean("NAV-STATUS diff_soln", message.diff_soln)
+    _boolean("NAV-STATUS wkn_set", message.wkn_set)
+    _boolean("NAV-STATUS tow_set", message.tow_set)
+    _boolean("NAV-STATUS diff_corr", message.diff_corr)
+    carrier_solution_valid = _boolean(
+        "NAV-STATUS carrier_solution_valid", message.carrier_solution_valid
+    )
+    carrier_code = _integer("NAV-STATUS carrier_solution", message.carrier_solution, 0, 3)
+    _integer("NAV-STATUS map_matching_status", message.map_matching_status, 0, 3)
+    _integer("NAV-STATUS psm_state", message.psm_state, 0, 3)
+    _integer("NAV-STATUS spoof_det_state", message.spoof_det_state, 0, 3)
+    _integer("NAV-STATUS ttff", message.ttff, 0, (1 << 32) - 1)
+    _integer("NAV-STATUS msss", message.msss, 0, (1 << 32) - 1)
     return UbxNavStatusEpoch(
         process_session_id=session,
         connection_generation=generation,
         gps_week=week,
         i_tow_ms=i_tow,
-        gnss_fix_ok=bool(flags & 0x01),
-        carrier_solution_valid=carrier_code in (1, 2),
+        gnss_fix_ok=gnss_fix_ok,
+        carrier_solution_valid=carrier_solution_valid,
         carrier_solution=_carrier(carrier_code),
         receive_monotonic_ns=_integer(
             "receive_monotonic_ns", receive_monotonic_ns, 0, (1 << 64) - 1
         ),
     )
+
+
+def _upstream_context_message(message, *, process_session_id, connection_generation,
+                              gps_week, receive_monotonic_ns, **fields):
+    """Normalize upstream ublox_ubx_msgs fields without using Header.stamp."""
+    return SimpleNamespace(
+        i_tow_ms=message.itow,
+        process_session_id=process_session_id,
+        connection_generation=connection_generation,
+        gps_week=gps_week,
+        **fields,
+    )
+
+
+def nav_pvt_from_ublox_ros(
+    message, *, process_session_id, connection_generation, gps_week,
+    receive_monotonic_ns,
+):
+    normalized = _upstream_context_message(
+        message, process_session_id=process_session_id,
+        connection_generation=connection_generation, gps_week=gps_week,
+        receive_monotonic_ns=receive_monotonic_ns,
+        gps_fix_type=message.gps_fix.fix_type,
+        gnss_fix_ok=message.gnss_fix_ok,
+        diff_soln=message.diff_soln,
+        carrier_solution=message.carr_soln.status,
+        invalid_llh=message.invalid_llh,
+    )
+    return nav_pvt_from_ros(normalized, receive_monotonic_ns=receive_monotonic_ns)
+
+
+def nav_hp_pos_llh_from_ublox_ros(
+    message, *, process_session_id, connection_generation, gps_week,
+    receive_monotonic_ns,
+):
+    normalized = _upstream_context_message(
+        message, process_session_id=process_session_id,
+        connection_generation=connection_generation, gps_week=gps_week,
+        receive_monotonic_ns=receive_monotonic_ns,
+        version=message.version,
+        invalid_lon=message.invalid_lon, invalid_lat=message.invalid_lat,
+        invalid_height=message.invalid_height, invalid_hmsl=message.invalid_hmsl,
+        invalid_lon_hp=message.invalid_lon_hp, invalid_lat_hp=message.invalid_lat_hp,
+        invalid_height_hp=message.invalid_height_hp, invalid_hmsl_hp=message.invalid_hmsl_hp,
+        lon=message.lon, lat=message.lat, height_mm=message.height,
+        hmsl_mm=message.hmsl, lon_hp=message.lon_hp, lat_hp=message.lat_hp,
+        height_hp=message.height_hp, hmsl_hp=message.hmsl_hp,
+        h_acc=message.h_acc, v_acc=message.v_acc,
+    )
+    return nav_hp_pos_llh_from_ros(normalized, receive_monotonic_ns=receive_monotonic_ns)
+
+
+def nav_cov_from_ublox_ros(
+    message, *, process_session_id, connection_generation, gps_week,
+    receive_monotonic_ns,
+):
+    normalized = _upstream_context_message(
+        message, process_session_id=process_session_id,
+        connection_generation=connection_generation, gps_week=gps_week,
+        receive_monotonic_ns=receive_monotonic_ns,
+        version=message.version, pos_cor_valid=message.pos_cor_valid,
+        vel_cor_valid=message.vel_cor_valid,
+        pos_cov_nn=message.pos_cov_nn, pos_cov_ne=message.pos_cov_ne,
+        pos_cov_nd=message.pos_cov_nd, pos_cov_ee=message.pos_cov_ee,
+        pos_cov_ed=message.pos_cov_ed, pos_cov_dd=message.pos_cov_dd,
+    )
+    return nav_cov_from_ros(normalized, receive_monotonic_ns=receive_monotonic_ns)
+
+
+def nav_status_from_ublox_ros(
+    message, *, process_session_id, connection_generation, gps_week,
+    receive_monotonic_ns,
+):
+    normalized = _upstream_context_message(
+        message, process_session_id=process_session_id,
+        connection_generation=connection_generation, gps_week=gps_week,
+        receive_monotonic_ns=receive_monotonic_ns,
+        gps_fix_type=message.gps_fix.fix_type,
+        gps_fix_ok=message.gps_fix_ok, diff_soln=message.diff_soln,
+        wkn_set=message.wkn_set, tow_set=message.tow_set,
+        diff_corr=message.diff_corr, carrier_solution_valid=message.carr_soln_valid,
+        carrier_solution=message.carr_soln.status,
+        map_matching_status=message.map_matching.status,
+        psm_state=message.psm.state, spoof_det_state=message.spoof_det.state,
+        ttff=message.ttff, msss=message.msss,
+    )
+    return nav_status_from_ros(normalized, receive_monotonic_ns=receive_monotonic_ns)
 
 
 def _optional_from_ros(message, valid_name, value_name, minimum, maximum):
