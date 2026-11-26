@@ -6,7 +6,15 @@
 - 项目分支：nav
 - 目标：定义可独立单测的 USB byte-stream decoder，替换“一个 libusb transfer 就是一条协议消息”的假设。
 
-## 0. 当前实现状态（2026-11-26）\n\n已新增 `navigation/ubx_rtcm_stream/`，当前实现仅覆盖 UBX 与 RTCM3 的纯 C++17 增量解析，不依赖 ROS/libusb。支持分片/拼接、checksum/CRC24Q、noise resync、generation reset 和基础统计。独立 CMake/CTest 的 8 组测试已在本地 GCC 14.2 + ASan/UBSan 下通过；CI workflow 已添加，实际 Actions 结果待核验。NMEA 仍未实现；本实现不包含 USB callback、ROS publisher、线程安全队列或 transfer lifecycle 修复。实现与测试路径见仓库 `navigation/ubx_rtcm_stream/`。\n\n## 1. 设计约束
+## 0. 当前实现状态（2026-11-26）
+
+已新增 `navigation/ubx_rtcm_stream/`，当前实现覆盖 UBX、RTCM3 与 NMEA 的纯 C++17 增量解析，不依赖 ROS/libusb。UBX 使用 CK_A/CK_B，RTCM3 使用 CRC24Q；NMEA 支持 CR/LF/CRLF、XOR checksum、Valid/Absent 状态和可配置 checksum-required 策略。三类协议共用有界 buffer、分片/拼接、noise resync、generation reset 与 frame sequence。
+
+本地 GCC 14.2 + ASan/UBSan 构建通过，10 组测试通过；混合流执行 100 组确定性随机 chunk segmentation，与一次性输入逐帧比较一致。Clang 17 libFuzzer target 已构建，20 秒 smoke fuzz 约 405,298 次输入变异，无崩溃或 sanitizer 报告。上述均为本地容器验证；新增 CI fuzz smoke 尚待 GitHub Actions 实际运行。
+
+尚未接入 ROS/libusb；没有修复 USB callback、UBX/RTCM 队列并发或 transfer lifecycle；没有真实 ZED-F9P capture，也没有目标设备验证。NMEA 句长默认值 1024 是解析器资源策略，不是接收机协议保证，生产配置需按实际输出配置确认。
+
+## 1. 设计约束
 
 1. libusb transfer 是传输层交付单元，不是 UBX/RTCM/NMEA 消息边界。
 2. parser 输入为任意长度 byte span；允许空输入、单字节输入、任意分片和任意拼接。
