@@ -65,10 +65,10 @@
 
 ## 6. 已知限制与后续门禁
 
-- 尚无生产 libusb-1.0 function table binding，也未引入 libusb headers / link dependency。
+- 生产 libusb-1.0 function table binding 已在 Navigation 26 实现；本 Navigation 25 的独立 adapter seam 仍不直接依赖 libusb headers/link。
 - 当前 `handle_events()` 由调用者驱动；生产集成需单独建立 event-loop owner thread，并确保持续处理 callback。
 - 当前 request 只表达 bulk transfer；必须从固定上游逐个映射真实 IN/OUT endpoint、buffer size、timeout、hotplug 和 resubmit 规则。
 - 还需验证 callback status code mapping 与目标 libusb 版本一致，且记录 libusb runtime/development package 的精确版本。
 - 还未在 ROS 2 Jazzy `component_container_mt` 下集成，也未做真实设备拔插/断连/重连、ASan/TSan 设备压力测试。
 
-**本阶段状态：注入式 adapter 第一实现切片已提交；最终 Actions run `45746920823`（head `c5765ea237dc1c62354650d9440934a3795a7b64`）三个 job 全部成功：ASan/UBSan CTest、TSan CTest、Clang libFuzzer smoke。前一轮 run `45746703263` 的 ASan/UBSan 与 TSan build 因 `valid() const` 锁定非 mutable mutex 而失败；将 operation mutex 标记为 mutable 后重跑成功。生产 libusb binding 和真实设备集成未完成。**
+**本阶段状态：注入式 adapter 第一实现切片已提交；最终 Actions run `45746920823`（head `c5765ea237dc1c62354650d9440934a3795a7b64`）三个 job 全部成功：ASan/UBSan CTest、TSan CTest、Clang libFuzzer smoke。前一轮 run `45746703263` 的 ASan/UBSan 与 TSan build 因 `valid() const` 锁定非 mutable mutex 而失败；将 operation mutex 标记为 mutable 后重跑成功。生产 binding 的独立编译由 Navigation 26 CI job 验证；真实 ROS 节点和设备集成未完成。**
