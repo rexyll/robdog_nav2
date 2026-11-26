@@ -78,10 +78,11 @@ class TestMid360CaptureAudit(unittest.TestCase):
 
 
     def test_control_port_time_diagnostics_are_joined_into_capture_report(self):
-        data = b"\x00" + struct.pack("<H", 3) + b"".join([
+        data = b"\x00" + struct.pack("<H", 4) + b"".join([
             control_kv(0x8009, struct.pack("<Q", 1_700_000_000_000_000_100)),
             control_kv(0x800A, struct.pack("<Q", 1_700_000_000_000_000_000)),
             control_kv(0x800B, struct.pack("<q", 100)),
+            control_kv(0x8011, struct.pack("<8I", 0x04020002, 0, 0, 0, 0, 0, 0, 0)),
         ])
         report = audit_packet_records([
             record(control_message(0x0101, data), 56100),
@@ -91,6 +92,8 @@ class TestMid360CaptureAudit(unittest.TestCase):
         observation, = report["control_diagnostic_observations"]
         self.assertEqual(observation["cmd_id"], 0x0101)
         self.assertEqual(observation["diagnostics"]["time_offset"]["value"], 100)
+        hms, = observation["diagnostics"]["hms_code"]["value"]
+        self.assertEqual(hms["abnormal_id_hex"], "0x0402")
         self.assertIn("device-reported snapshot",
                       report["time_semantics"]["diagnostic_time_offset"])
         self.assertIn("PTP/gPTP", report["time_semantics"]["time_type_1"])
