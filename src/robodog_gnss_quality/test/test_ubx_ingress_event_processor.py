@@ -150,6 +150,33 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
         self.assertIsNone(mapping)
         self.assertEqual(processor.stats().decoded_timegps, 1)
 
+    def test_receive_monotonic_timestamp_must_not_move_backwards(self):
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0))
+        generic = make_ubx_frame(0x01, 0x07, b"\\x00\\x01")
+        with self.assertRaisesRegex(EpochPairingError, "receive_monotonic_ns"):
+            processor.process(GnssIngressEvent(
+                event_type="Frame",
+                process_session_id=SESSION,
+                connection_generation=GENERATION,
+                ingress_sequence=1,
+                receive_monotonic_ns=999_999,
+                protocol=0,
+                frame_bytes=generic,
+            ))
+        # Equal timestamps are valid: multiple frames can be decoded from one
+        # USB completion callback and share its callback-entry timestamp.
+        self.assertIsNone(processor.process(GnssIngressEvent(
+            event_type="Frame",
+            process_session_id=SESSION,
+            connection_generation=GENERATION,
+            ingress_sequence=1,
+            receive_monotonic_ns=1_000_000,
+            protocol=0,
+            frame_bytes=generic,
+        )))
+        self.assertEqual(processor.stats().ignored_frames, 1)
+
     def test_mapper_must_enforce_ingress_sequence(self):
         with self.assertRaisesRegex(ValueError, "require ingress_sequence"):
             GnssIngressEventProcessor(UbxReceiverTimeMapper())
