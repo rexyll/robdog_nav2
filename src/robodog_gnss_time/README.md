@@ -251,3 +251,8 @@ This slice only creates the strict message-to-core adapter and its tests. It
 does not yet publish NavSatFix. ROS clock policy, host UTC synchronization,
 antenna static-extrinsic readiness, NavSatFix publication and EKF timeout /
 recovery integration remain separate gates.
+
+
+### Per-epoch quality publication and startup sentinel
+
+The quality node publishes an identity-bearing decision for **every** observation, including consecutive samples whose quality state and metrics remain unchanged. Signature deduplication is limited to repeated watchdog states; otherwise a stable accepted state could starve the downstream exact identity joiner. The one startup `no_data` status has no epoch identity and is ignored only when every identity field and optional metric is at its exact default sentinel. A malformed or partially populated `no_data` message is rejected rather than silently ignored.
