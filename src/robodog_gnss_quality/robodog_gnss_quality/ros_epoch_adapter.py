@@ -161,9 +161,10 @@ class UbxRosEpochAdapter:
         now = self._validate_receive_time(now_monotonic_ns)
         if self._latest_receive_monotonic_ns is None or now > self._latest_receive_monotonic_ns:
             self._latest_receive_monotonic_ns = now
+        effective_now = self._latest_receive_monotonic_ns
         stale = [
             i_tow for i_tow, entry in self._pending.items()
-            if now - entry.first_receive_monotonic_ns > self.max_pending_age_ns
+            if effective_now - entry.first_receive_monotonic_ns > self.max_pending_age_ns
         ]
         for i_tow in stale:
             self._pending.pop(i_tow, None)
