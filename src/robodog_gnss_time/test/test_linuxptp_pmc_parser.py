@@ -157,8 +157,20 @@ sending: GET PORT_DATA_SET
 {clock_identity}-1 seq 12 RESPONSE MANAGEMENT PORT_DATA_SET
     portIdentity {clock_identity}-1
     portState SLAVE
+sending: GET PARENT_DATA_SET
+{clock_identity}-0 seq 13 RESPONSE MANAGEMENT PARENT_DATA_SET
+    parentPortIdentity 080027.fffe.1db84e-2
+    parentStats 0
+    observedParentOffsetScaledLogVariance 0xffff
+    observedParentClockPhaseChangeRate 0x7fffffff
+    grandmasterPriority1 128
+    gm.ClockClass 6
+    gm.ClockAccuracy 0x21
+    gm.OffsetScaledLogVariance 0x0000
+    grandmasterPriority2 128
+    grandmasterIdentity 080027.fffe.d9e453
 sending: GET TIME_PROPERTIES_DATA_SET
-{clock_identity}-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET
+{clock_identity}-0 seq 14 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET
     currentUtcOffset 37
     leap61 0
     leap59 0
@@ -167,6 +179,18 @@ sending: GET TIME_PROPERTIES_DATA_SET
     timeTraceable 1
     frequencyTraceable 1
     timeSource 0x20
+sending: GET DEFAULT_DATA_SET
+{clock_identity}-0 seq 15 RESPONSE MANAGEMENT DEFAULT_DATA_SET
+    twoStepFlag 1
+    slaveOnly 0
+    numberPorts 1
+    priority1 128
+    clockClass 248
+    clockAccuracy 0xfe
+    offsetScaledLogVariance 0xffff
+    priority2 128
+    clockIdentity {clock_identity}
+    domainNumber 0
 """
 
 
@@ -180,17 +204,20 @@ def test_response_envelope_preserves_clock_port_and_sequence_identity():
         envelope.values["portState"] = "MASTER"
 
 
-def test_snapshot_joins_exactly_four_datasets_by_clock_identity():
+def test_snapshot_joins_exactly_six_datasets_by_clock_identity():
     snapshot = parse_pmc_snapshot(_snapshot_output())
     assert snapshot.clock_identity == "080027.fffe.7f327b"
     assert set(snapshot.responses) == {
-        "TIME_STATUS_NP", "CURRENT_DATA_SET", "PORT_DATA_SET",
-        "TIME_PROPERTIES_DATA_SET",
+        "TIME_STATUS_NP", "CURRENT_DATA_SET", "PORT_DATA_SET", "PARENT_DATA_SET",
+        "TIME_PROPERTIES_DATA_SET", "DEFAULT_DATA_SET",
     }
     assert snapshot.responses["TIME_STATUS_NP"].sequence_id == 10
     assert snapshot.responses["CURRENT_DATA_SET"].sequence_id == 11
     assert snapshot.responses["PORT_DATA_SET"].port_number == 1
     assert snapshot.responses["TIME_PROPERTIES_DATA_SET"].values["currentUtcOffset"] == 37
+    assert snapshot.responses["PARENT_DATA_SET"].values["gm.ClockAccuracy"] == 0x21
+    assert snapshot.responses["DEFAULT_DATA_SET"].values["domainNumber"] == 0
+    assert snapshot.responses["DEFAULT_DATA_SET"].values["twoStepFlag"] is True
 
 
 def test_snapshot_rejects_mixed_responder_clock_identities():
@@ -285,3 +312,60 @@ def test_port_data_set_rejects_non_integer_log_interval():
     )
     with pytest.raises(ValueError, match="logSyncInterval"):
         parse_pmc_response(output, "PORT_DATA_SET")
+
+
+def test_parent_dataset_parses_identity_and_hex_fields():
+    parsed = parse_pmc_response(_snapshot_output(), "PARENT_DATA_SET")
+    assert parsed["parentPortIdentity"] == "080027.fffe.1db84e-2"
+    assert parsed["observedParentOffsetScaledLogVariance"] == 0xffff
+    assert parsed["observedParentClockPhaseChangeRate"] == 0x7fffffff
+    assert parsed["grandmasterIdentity"] == "080027.fffe.d9e453"
+
+
+def test_default_dataset_parses_local_clock_identity_domain_and_flags():
+    parsed = parse_pmc_response(_snapshot_output(), "DEFAULT_DATA_SET")
+    assert parsed["clockIdentity"] == "080027.fffe.7f327b"
+    assert parsed["domainNumber"] == 0
+    assert parsed["twoStepFlag"] is True
+    assert parsed["slaveOnly"] is False
+    assert parsed["clockAccuracy"] == 0xfe
+    assert parsed["offsetScaledLogVariance"] == 0xffff
+
+
+def test_default_dataset_clock_identity_must_match_response_header():
+    output = _snapshot_output().replace(
+        "clockIdentity 080027.fffe.7f327b",
+        "clockIdentity 080028.fffe.7f327b",
+    )
+    with pytest.raises(ValueError, match="DEFAULT_DATA_SET clockIdentity"):
+        parse_pmc_response_envelope(output, "DEFAULT_DATA_SET")
+
+
+def test_snapshot_rejects_parent_gm_identity_mismatch_when_gm_present():
+    output = _snapshot_output().replace(
+        "grandmasterIdentity 080027.fffe.d9e453",
+        "grandmasterIdentity 080028.fffe.d9e453",
+    )
+    with pytest.raises(ValueError, match="grandmaster identities differ"):
+        parse_pmc_snapshot(output)
+
+
+def test_snapshot_does_not_infer_gm_identity_when_gm_is_not_present():
+    output = _snapshot_output().replace(
+        "gmPresent true",
+        "gmPresent false",
+    ).replace(
+        "grandmasterIdentity 080027.fffe.d9e453",
+        "grandmasterIdentity 080028.fffe.d9e453",
+    )
+    snapshot = parse_pmc_snapshot(output)
+    assert snapshot.responses["TIME_STATUS_NP"].values["gmPresent"] is False
+
+
+def test_parent_dataset_rejects_malformed_hex_field():
+    output = _snapshot_output().replace(
+        "observedParentClockPhaseChangeRate 0x7fffffff",
+        "observedParentClockPhaseChangeRate 7fffffff",
+    )
+    with pytest.raises(ValueError, match="hexadecimal integer"):
+        parse_pmc_response(output, "PARENT_DATA_SET")
