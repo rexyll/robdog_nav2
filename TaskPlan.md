@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.187
+- 文档版本：v0.3.188
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -992,3 +992,6 @@
 
 
 - 固定版 UBX ROS 消息字段适配器 CI 验收（2026-11-26 / v0.3.187）：Actions run 45754335767，nav head 518e0efff52d1785052501e620a0a2b0fa42e721，Humble/Jammy、Jazzy/Noble 两个矩阵全部 success。覆盖 strict field decoder、reserved carrier solution fail-closed、HPPOSLLH precision/flags、NAV-COV finite/validity、NAV-STATUS quality fields 和 bool covariance rejection。真实 rclpy subscription、time mapper、NavSatFix publication 尚未实现。
+
+
+- GNSS ROS 四消息历元缓存与 validated time mapping adapter（2026-11-26 / v0.3.188）：新增纯 Python UbxRosEpochAdapter + UbxSourceTimeMapping，将已解码 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS records 与独立 receiver-time mapper 输出按 exact iTOW 组合。支持 records/mapping 任意先后到达、LRU capacity、stale expiry、conflicting duplicate/mapping retirement、explicit source_clock_id generation fence。区分 source GPS time validity 与 UTC stamp validity；GPS source mapping 有效但 UTC/leap-second mapping 无效时仍保留该差异，不允许下游伪造 NavSatFix UTC header。新增 9 组测试覆盖消息先后顺序、invalid mapping、generation、duplicate、capacity/stale、UTC validity split、mapping conflict 和 reset。实现提交：module 24707e07a6251ff2a030a214fda37dadf8b14b5d；test 0185d09bbf53c5ea00978a84ea705f2caafaa2e9；package export、README、Navigation 36 随后提交。该层不产生 receiver time mapping；固定版 driver 缺少 NAV-TIMEGPS/NAV-TIMELS，live rclpy subscriptions、NavSatFix publisher 与实际 mapper 仍未实现。CI 待 Humble/Jazzy 运行。
