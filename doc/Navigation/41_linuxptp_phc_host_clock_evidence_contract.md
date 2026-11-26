@@ -414,7 +414,7 @@ collector 输出 `clock_step_trace_capabilities`。盘点器仅读取现有 proc
 - 此次盘点没有开始 tracing，因此没有 event buffer、lost-event counter、
   syscall entry/exit 配对、timex 用户内存读取、PID/fd 生命周期或 PHC
   fd→`/dev/ptpN` 解析证据。它只为下一阶段方案选型提供能力边界。
-- `systemctl --version` 只记录 systemd 版本信息，不证明 journald
+- `systemctl --version` 是可选诊断命令；其缺失/失败只令该项 unavailable，不单独降低核心 PTP inventory 的 collection_status。它只记录 systemd 版本信息，不证明 journald
   runtime namespace、日志保留或 service 配置正确；具体 service 的
   `LogNamespace` 等仍按显式配置 service 的既有采集路径获取。
 - 本轮 GitHub Actions 合成测试不是 Orin 实机验证。目标 Orin 的内核版本、
