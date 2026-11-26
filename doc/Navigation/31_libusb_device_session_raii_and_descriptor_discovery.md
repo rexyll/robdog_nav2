@@ -51,4 +51,4 @@ Fake API 测试覆盖：
 
 ## 5. CI 记录
 
-首次完整构建发现测试文件遗漏 `LibusbCancelResult` 的 using 声明，导致 ASan/UBSan 与 TSan build 失败；该错误已在后续提交修正。当前修复后代码的 Actions 结果仍需等待并按最新 head 核验，不能把先前失败或旧 head 的结果记作通过。
+首次完整构建发现测试文件遗漏 `LibusbCancelResult` 的 using 声明，导致 ASan/UBSan 与 TSan build 失败；该错误已在后续提交修正。修复后 Actions run `45751154284`（head `869a169513f0f6db6aefd5c51a8c6eb7b51295ba`）四项 job 全部成功：ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile。该 head 已包含本切片的代码、测试和 max-packet 校验；后续 `9308020bd9ec77926321c48b3b0264bd5e2552f4` 仅更新 README/文档，相关 workflow run `45751248926` 正在执行，最终仍以最新 head 的 run 为最终证据。
