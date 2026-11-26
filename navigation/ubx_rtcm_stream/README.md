@@ -50,6 +50,6 @@ Lifecycle tracker tests are included in the same CTest suite. The tracker is a s
 
 ## Generation-fenced ingress event stream
 
-`GnssUsbStream` publishes a single ordered stream of `GenerationStarted`, `Frame`, `DeviceLost`, `TransportFault`, and `Stopped` events via `try_pop_event()`. Each event carries process session ID, USB connection generation, ingress sequence, and host monotonic receive timestamp. Lifecycle events cannot be silently dropped: under pressure they evict the oldest frame, and a control-only overflow fails closed. `try_pop_frame()` is a legacy convenience API that discards control events; do not use it in a generation/reset-aware consumer.
+`GnssUsbStream` publishes a single ordered stream of `GenerationStarted`, `Frame`, `DeviceLost`, `TransportFault`, and `Stopped` events via `try_pop_event()`. Each event carries process session ID, USB connection generation, ingress sequence, and host monotonic receive timestamp. `dropped_frame_events_total` is a per-event sequence-prefix watermark: it counts only evictions whose dropped frame sequence precedes that event, and later drops never rewrite earlier events. Lifecycle events cannot be silently dropped: under pressure they evict the oldest frame, and a control-only overflow fails closed. `try_pop_frame()` is a legacy convenience API that discards control events; do not use it in a generation/reset-aware consumer.
 
 See [GNSS ingress event queue](include/robodog_protocol/gnss_ingress_queue.hpp) and [ingress queue tests](tests/test_gnss_ingress_queue.cpp).
