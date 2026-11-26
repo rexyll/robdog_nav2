@@ -108,6 +108,14 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertFalse(mismatch.utc_stamp_valid)
         self.assertIn("differs", mismatch.validity_reason)
 
+    def test_beidou_leap_source_is_adjusted_to_gps_utc_before_cross_check(self):
+        m = mapper(trusted_leap_sources={4})
+        m.add_timegps(timegps(leap=18), 100)
+        result = m.add_timels(timels(source=4, leap=4), 110)
+        self.assertTrue(result.utc_stamp_valid)
+        self.assertEqual(result.leap_seconds, 18)
+        self.assertEqual(result.reported_leap_seconds, 4)
+
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(valid=0x03), 100)
