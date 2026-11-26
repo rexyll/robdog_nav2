@@ -65,6 +65,7 @@ def _config(**overrides):
         "interface": "enp2s0",
         "domain_number": 5,
         "pmc_socket": "/run/ptp4l",
+        "transport_specific": 0,
         "ptp4l_service": "ptp4l.service",
         "phc2sys_service": "phc2sys.service",
         "chrony_service": "chrony.service",
@@ -75,13 +76,13 @@ def _config(**overrides):
 
 def test_config_requires_explicit_interface_domain_and_socket():
     with pytest.raises(ValueError):
-        LinuxPtpHostEvidenceConfig("", 0, "/run/ptp4l")
+        LinuxPtpHostEvidenceConfig("", 0, "/run/ptp4l", 0)
     with pytest.raises(ValueError):
-        LinuxPtpHostEvidenceConfig("eth0", True, "/run/ptp4l")
+        LinuxPtpHostEvidenceConfig("eth0", True, "/run/ptp4l", 0)
     with pytest.raises(ValueError):
-        LinuxPtpHostEvidenceConfig("eth0", 256, "/run/ptp4l")
+        LinuxPtpHostEvidenceConfig("eth0", 256, "/run/ptp4l", 0)
     with pytest.raises(ValueError):
-        LinuxPtpHostEvidenceConfig("eth0", 0, "ptp4l.sock")
+        LinuxPtpHostEvidenceConfig("eth0", 0, "ptp4l.sock", 0)
 
 
 def test_config_rejects_invalid_service_unit_and_timeout():
@@ -105,6 +106,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     pmc_call = next(call for call in calls if call[0][0] == "pmc")
     pmc_argv, pmc_kwargs = pmc_call
     commands = pmc_argv[pmc_argv.index("-b") + 2:]
+    assert pmc_argv[pmc_argv.index("-t") + 1] == "0x0"
     assert commands == [
         "GET TIME_STATUS_NP",
         "GET CURRENT_DATA_SET",
@@ -159,8 +161,14 @@ def test_collector_does_not_guess_service_names_when_not_configured():
         stdout = _pmc_output() if argv[0] == "pmc" else ""
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
-    config = LinuxPtpHostEvidenceConfig("eth0", 5, "/run/custom-ptp.sock")
+    config = LinuxPtpHostEvidenceConfig("eth0", 5, "/run/custom-ptp.sock", 0)
     report = collect_linuxptp_host_evidence(config, runner=runner)
     assert not any(argv[0] in {"systemctl", "journalctl"} for argv in calls)
     assert report["interface"] == "eth0"
     assert report["pmc_socket"] == "/run/custom-ptp.sock"
+
+
+@pytest.mark.parametrize("transport_specific", [True, -1, 16, "0"])
+def test_config_rejects_invalid_transport_specific(transport_specific):
+    with pytest.raises(ValueError):
+        _config(transport_specific=transport_specific)
