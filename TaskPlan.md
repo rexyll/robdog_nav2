@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.170
+- 文档版本：v0.3.171
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -945,3 +945,5 @@
 - 注入式 libusb transfer adapter 第一实现切片（2026-11-26 / v0.3.169）：发现现有 `IUsbTransferTransport::submit(id,generation,completion)` 缺少 endpoint、方向、buffer 和 timeout，不能完整表达固定上游 GNSS bulk IN/OUT 请求；因此未将 fake interface 伪装成真实 libusb 接入，而新增独立 `LibusbTransferTransport` 与可注入 `Api` function table。实现 heap-owned transfer Context、submit 前 pending registry 登记、同步 fill/submit 失败回滚、cancel 成功后保留 pending ownership、native callback 只记录终态、handle_events 返回后释放 native transfer、completion 在 operation mutex 外调用、callbacks_in_flight close barrier、NO_DEVICE 等终态统一清理。新增 fake API tests，覆盖 Completed/actual_length 截断、同步 submit failure、cancel failure 后 NO_DEVICE callback、异步 cancel drain、completion 重入 submit 和 callback 期间拒绝 close。新增 Navigation 25 并加入索引。此实现不依赖 libusb headers/link，不包含生产 libusb-1.0 binding，也不创建 event thread；真实 endpoint/timeout/resubmit 映射、libusb context/event thread ownership、ROS 2 component_container_mt、目标 libusb 版本和物理 F9P 测试仍未完成。最新 CI run 45746703263（head 783e1ff109d367ad03e059ff8d585893bd501e62）待结果；后续文档提交会触发同 workflow 再次运行，需以最终 TaskPlan commit 对应的 run 为验收证据。
 
 - 注入式 libusb adapter sanitizer CI 闭环与首轮失败修复（2026-11-26 / v0.3.170）：首轮 run `45746703263` 的 Clang libFuzzer 成功，但 ASan/UBSan 与 TSan 在编译 adapter 测试时失败；从 job logs 定位为 `valid() const` 试图锁定非 mutable `operation_mutex_`，不是 sanitizer 报告或运行时数据竞争。已将 mutex 标记为 mutable，修复提交 `c5765ea237dc1c62354650d9440934a3795a7b64`。修复后 Actions run `45746920823` 对应最终代码提交，三个 job 全部 completed/success：ASan/UBSan configure/build/CTest、Clang libFuzzer configure/build/20s smoke、TSan configure/build/CTest。新增测试覆盖 callback reentrancy（completion 中再次 submit）及 callback in-flight 时 close barrier。CI 仅验证无 libusb link 的 injected function table seam 和 synthetic fake API；不能证明生产 libusb wrapper、真实 USB callback 或 F9P 设备已通过。
+
+- libusb-1.0 生产 API function-table binding 首个实现（2026-11-26 / v0.3.171）：在注入式 adapter seam 上新增 `make_libusb_api(libusb_context*)`，映射 alloc/free/fill/submit/cancel/handle_events/close 到 libusb-1.0。为 native `void(libusb_transfer*)` callback 与 adapter 的 opaque callback 签名增加 heap-owned CallbackBridge；native callback 删除 Bridge 后只调用 adapter trampoline，adapter 仍在 handle_events 返回后才释放 native transfer 和 Context；同步 submit failure 由 binding 回收未被 callback 消费的 Bridge。新增可选 CMake target `ROBODOG_BUILD_LIBUSB_BINDING=ON`，通过 pkg-config 查找 `libusb-1.0`；默认 standalone tests 不增加 libusb 依赖。新增 Navigation 26，并增加 Actions job 安装 Ubuntu runner 的 `libusb-1.0-0-dev` 后只编译 binding target。当前 run 45747349543（head e2d8810473cd040c70e605a373416249fbfb1665）正在验证；无论编译通过与否，此阶段均未执行真实 USB transfer，未集成上游 GNSS ROS node，也未管理 libusb_context 生命周期、interface/hotplug 或设备断连重连。
