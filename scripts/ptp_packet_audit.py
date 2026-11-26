@@ -359,10 +359,12 @@ class PtpAnnounceAudit:
 class PtpCorrelationAudit:
     """Bounded message-pair correlator; reports presence/pairing, not clock accuracy."""
 
-    def __init__(self, *, max_pending: int = 4096):
-        if max_pending < 1:
-            raise ValueError("max_pending must be positive")
+    def __init__(self, *, max_pending: int = 4096,
+                 max_capture_windows: int = 4096):
+        if max_pending < 1 or max_capture_windows < 1:
+            raise ValueError("PTP audit bounds must be positive")
         self.max_pending = max_pending
+        self.max_capture_windows = max_capture_windows
         self.counts = Counter()
         self.message_types = Counter()
         self.domains = Counter()
@@ -435,6 +437,9 @@ class PtpCorrelationAudit:
                           message.domain_number)
             window = self.capture_windows.get(window_key)
             if window is None:
+                if len(self.capture_windows) >= self.max_capture_windows:
+                    self.capture_windows.pop(next(iter(self.capture_windows)))
+                    self.counts["evicted_ptp_capture_windows"] += 1
                 self.capture_windows[window_key] = {
                     "section_index": message.section_index,
                     "interface_id": message.interface_id,
@@ -550,6 +555,7 @@ class PtpCorrelationAudit:
             "ptp_capture_windows": [
                 dict(value) for _, value in sorted(self.capture_windows.items())
             ],
+            "ptp_capture_window_limit": self.max_capture_windows,
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
                 "delay_req_waiting_delay_resp": len(self.pending_delay_req),
