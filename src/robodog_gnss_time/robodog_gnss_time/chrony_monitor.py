@@ -49,7 +49,7 @@ def parse_chrony_tracking(output: str):
     # print dotted-quad IPv4. A trailing name is tolerated for older releases.
     reference_token = reference_id.split()[0]
     if not (re.fullmatch(r"[0-9A-Fa-f]{8}", reference_token)
-            or re.fullmatch(r"(?:\\d{1,3}\\.){3}\\d{1,3}", reference_token)):
+            or re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}", reference_token)):
         raise ValueError("unsupported Chrony Reference ID format")
     if "." in reference_token and any(int(part) > 255 for part in reference_token.split(".")):
         raise ValueError("Chrony IPv4 Reference ID octet outside range")
@@ -72,7 +72,7 @@ def parse_chrony_tracking(output: str):
     dispersion_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_dispersion)
     if not dispersion_match:
         raise ValueError("unsupported Chrony Root dispersion format")
-    delay_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_delay)
+    delay_match = re.fullmatch(r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_delay)
     if not delay_match:
         raise ValueError("unsupported Chrony Root delay format")
     root_delay_ns = _seconds_to_ns(delay_match.group(1).lstrip("+").lstrip("-"))
