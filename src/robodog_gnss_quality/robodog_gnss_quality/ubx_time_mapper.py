@@ -412,7 +412,10 @@ class UbxReceiverTimeMapper:
         else:
             self._utc_untrusted_epochs += 1
         self._paired_epochs += 1
-        source_clock_id = (\n            f"{self._session_id}:connection:{self._connection_generation}"\n            f":gps-week:{normalized_week}"\n        )
+        source_clock_id = (
+            f"{self._session_id}:connection:{self._connection_generation}"
+            f":gps-week:{normalized_week}"
+        )
         return UbxSourceTimeMapping(
             i_tow_ms=gps.i_tow_ms,
             source_timestamp_ns=source_timestamp_ns,
