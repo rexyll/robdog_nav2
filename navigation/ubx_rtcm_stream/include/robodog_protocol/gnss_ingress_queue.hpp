@@ -29,6 +29,8 @@ struct GnssIngressEvent {
   std::uint64_t connection_generation{0};
   std::uint64_t ingress_sequence{0};
   std::uint64_t receive_monotonic_ns{0};
+  // Cumulative DropOldest count sampled when the consumer pops this event.
+  std::uint64_t dropped_frame_events_total{0};
   std::optional<Frame> frame;
 };
 
@@ -218,6 +220,7 @@ class GnssIngressQueue {
     if (events_.empty()) return std::nullopt;
     GnssIngressEvent event = std::move(events_.front());
     events_.pop_front();
+    event.dropped_frame_events_total = stats_.dropped_oldest_frame_events;
     if (event.type == GnssIngressEventType::Frame) {
       ++stats_.popped_frame_events;
     } else {
