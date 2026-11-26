@@ -21,7 +21,10 @@ class GnssReceiverTimeNode(Node):
         ingress_topic = self.declare_parameter("ingress_topic", "/gnss/ingress").value
         mapping_topic = self.declare_parameter("mapping_topic", "/gnss/receiver_time").value
         qos_depth = self.declare_parameter("qos_depth", 256).value
-        trusted_sources = self.declare_parameter(\n            "trusted_leap_sources", [],\n            ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER_ARRAY),\n        ).value
+        trusted_sources = self.declare_parameter(
+            "trusted_leap_sources", [],
+            ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER_ARRAY),
+        ).value
         if not isinstance(ingress_topic, str) or not ingress_topic.strip():
             raise ValueError("ingress_topic must be a non-empty string")
         if not isinstance(mapping_topic, str) or not mapping_topic.strip():
