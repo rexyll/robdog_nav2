@@ -85,6 +85,8 @@ def decode_nav_hp_pos_llh_message(
 
 
 def _finite_float(name: str, value: object) -> float:
+    if isinstance(value, bool):
+        raise EpochPairingError(f"{name} must be a finite numeric value, not bool")
     try:
         converted = float(value)
     except (TypeError, ValueError, OverflowError) as exc:
