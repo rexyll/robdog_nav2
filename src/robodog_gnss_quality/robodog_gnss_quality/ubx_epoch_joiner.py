@@ -114,23 +114,6 @@ class UbxFourMessageEpochJoiner:
         """Clear all epoch state and explicitly begin a validated receiver epoch."""
         if not isinstance(source_clock_id, str) or not source_clock_id.strip():
             raise EpochPairingError("source_clock_id must be a non-empty generation ID")
-        process_session_id = getattr(message, "process_session_id", None)
-        connection_generation = getattr(message, "connection_generation", None)
-        if not isinstance(process_session_id, str) or not process_session_id.strip():
-            raise EpochPairingError("UBX epoch record must carry process_session_id")
-        if (
-            isinstance(connection_generation, bool)
-            or not isinstance(connection_generation, int)
-            or connection_generation < 0
-        ):
-            raise EpochPairingError("UBX epoch record must carry a valid connection_generation")
-        expected_prefix = (
-            f"{process_session_id}:connection:{connection_generation}:gps-week:"
-        )
-        if not source_clock_id.startswith(expected_prefix):
-            raise EpochPairingError(
-                "stale process_session_id/connection_generation does not match source_clock_id"
-            )
         self._source_clock_id = source_clock_id
         self._requires_explicit_generation = False
         self._pending.clear()
@@ -234,6 +217,23 @@ class UbxFourMessageEpochJoiner:
             raise EpochPairingError(f"{kind} must use its matching immutable UBX epoch record")
         if not isinstance(source_clock_id, str) or not source_clock_id.strip():
             raise EpochPairingError("source_clock_id must be a non-empty generation ID")
+        process_session_id = getattr(message, "process_session_id", None)
+        connection_generation = getattr(message, "connection_generation", None)
+        if not isinstance(process_session_id, str) or not process_session_id.strip():
+            raise EpochPairingError("UBX epoch record must carry process_session_id")
+        if (
+            isinstance(connection_generation, bool)
+            or not isinstance(connection_generation, int)
+            or connection_generation < 0
+        ):
+            raise EpochPairingError("UBX epoch record must carry a valid connection_generation")
+        expected_prefix = (
+            f"{process_session_id}:connection:{connection_generation}:gps-week:"
+        )
+        if not source_clock_id.startswith(expected_prefix):
+            raise EpochPairingError(
+                "stale process_session_id/connection_generation does not match source_clock_id"
+            )
         if (
             isinstance(source_timestamp_ns, bool)
             or not isinstance(source_timestamp_ns, int)
