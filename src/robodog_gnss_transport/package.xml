@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>robodog_gnss_transport</name>
+  <version>0.1.0</version>
+  <description>ROS 2 publisher node for ordered GNSS USB ingress events.</description>
+  <maintainer email="maintainers@example.invalid">RobDog Nav2 maintainers</maintainer>
+  <license>UNSPECIFIED</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>robodog_gnss_interfaces</depend>
+  <depend>libusb-1.0</depend>
+  <test_depend>ament_cmake_gtest</test_depend>
+  <export><build_type>ament_cmake</build_type></export>
+</package>
