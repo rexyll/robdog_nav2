@@ -18,6 +18,7 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     config = "\n".join([
         "CONFIG_FTRACE=y",
         "CONFIG_TRACEPOINTS=y",
+        "CONFIG_FTRACE_SYSCALLS=y",
         "# CONFIG_HAVE_SYSCALL_TRACEPOINTS is not set",
         "CONFIG_BPF_SYSCALL=y",
         "# CONFIG_DEBUG_INFO_BTF is not set",
@@ -49,6 +50,7 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
         "name: sys_exit_clock_adjtime\nformat:\n"
         "\tfield:long ret; offset:16; size:8;\n",
     )
+    _write(tmp_path / "sys/kernel/debug/tracing/available_events", "")
     _write(tmp_path / "sys/kernel/btf/vmlinux", "btf")
 
     report = collect_linux_kernel_trace_capabilities(
@@ -63,6 +65,7 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     assert report["btf"]["status"] == "present_readable"
     tracefs = report["tracefs"][0]
     assert tracefs["mounts"][0]["filesystem_type"] == "tracefs"
+    assert report["tracefs"][1]["mounts"][0]["filesystem_type"] == "debugfs"
     assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["status"] == "available"
     assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["format_fields"] == [
         "common_type", "__syscall_nr", "which_clock", "tx",
