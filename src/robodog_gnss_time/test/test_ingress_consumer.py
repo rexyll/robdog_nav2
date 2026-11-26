@@ -44,9 +44,18 @@ def test_consumer_latches_invalid_event_and_rejects_every_later_event():
 
 
 def test_consumer_latches_mapping_publisher_failure():
+    class EmitsMappingProcessor(GnssIngressEventProcessor):
+        def process(self, _event):
+            return object()
+
     def fail_publish(_mapping):
         raise RuntimeError("publisher failure")
 
-    consumer = GnssIngressConsumer(processor(), fail_publish)
-    assert consumer.handle_ros_message(lifecycle_message(0, 0)) is None
-    assert consumer.faulted is False
+    consumer = GnssIngressConsumer(EmitsMappingProcessor(
+        UbxReceiverTimeMapper(require_ingress_sequence=True)
+    ), fail_publish)
+    with pytest.raises(RuntimeError, match="publisher failure"):
+        consumer.handle_ros_message(lifecycle_message(0, 0))
+    assert consumer.faulted is True
+    with pytest.raises(RuntimeError, match="consumer is faulted"):
+        consumer.handle_ros_message(lifecycle_message(4, 1))
