@@ -263,10 +263,10 @@ def test_snapshot_compares_clock_identity_case_insensitively():
 def test_port_data_set_parses_signed_log_intervals_as_integers():
     output = _snapshot_output().replace(
         "portState SLAVE",
-        "portState SLAVE\\n    logMinDelayReqInterval -3\\n"
-        "    logAnnounceInterval 2\\n    logSyncInterval -1\\n"
-        "    logMinPdelayReqInterval -4\\n    delayMechanism 2\\n"
-        "    peerMeanPathDelay -125\\n    announceReceiptTimeout 3\\n"
+        "portState SLAVE\n    logMinDelayReqInterval -3\n"
+        "    logAnnounceInterval 2\n    logSyncInterval -1\n"
+        "    logMinPdelayReqInterval -4\n    delayMechanism 2\n"
+        "    peerMeanPathDelay -125\n    announceReceiptTimeout 3\n"
         "    versionNumber 2",
     )
     parsed = parse_pmc_response(output, "PORT_DATA_SET")
@@ -281,7 +281,7 @@ def test_port_data_set_parses_signed_log_intervals_as_integers():
 def test_port_data_set_rejects_non_integer_log_interval():
     output = _snapshot_output().replace(
         "portState SLAVE",
-        "portState SLAVE\\n    logSyncInterval unknown",
+        "portState SLAVE\n    logSyncInterval unknown",
     )
     with pytest.raises(ValueError, match="logSyncInterval"):
         parse_pmc_response(output, "PORT_DATA_SET")
