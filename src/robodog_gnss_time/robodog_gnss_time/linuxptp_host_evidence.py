@@ -32,6 +32,7 @@ class LinuxPtpHostEvidenceConfig:
     domain_number: int
     pmc_socket: str
     transport_specific: int
+    target_port_identity: str = ""
     timeout_s: float = 10.0
     ptp4l_service: str = ""
     phc2sys_service: str = ""
@@ -51,6 +52,13 @@ class LinuxPtpHostEvidenceConfig:
             raise ValueError("transport_specific must be an integer")
         if not 0 <= self.transport_specific <= 15:
             raise ValueError("transport_specific must fit the PTP four-bit field")
+        if self.target_port_identity:
+            match = re.fullmatch(
+                r"([0-9A-Fa-f]{6}\.[0-9A-Fa-f]{4}\.[0-9A-Fa-f]{6})-([0-9]+)",
+                self.target_port_identity,
+            )
+            if not match or not 1 <= int(match.group(2), 10) <= 65535:
+                raise ValueError("target_port_identity must be an explicit LinuxPTP clockIdentity-portNumber")
         if not isinstance(self.pmc_socket, str) or not os.path.isabs(self.pmc_socket):
             raise ValueError("pmc_socket must be an explicit absolute Unix socket path")
         if len(os.fsencode(self.pmc_socket)) >= 108:
@@ -155,8 +163,13 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     ]
     pmc_argv = [
         "pmc", "-u", "-s", config.pmc_socket, "-d", str(config.domain_number),
-        "-t", f"0x{config.transport_specific:x}", "-b", "0", *_PMC_GET_COMMANDS,
+        "-t", f"0x{config.transport_specific:x}", "-b", "0",
     ]
+    if config.target_port_identity:
+        # TARGET changes only pmc client-side destination selection; it is not
+        # a PTP SET/CMD management operation and does not alter clock state.
+        pmc_argv.append(f"TARGET {config.target_port_identity}")
+    pmc_argv.extend(_PMC_GET_COMMANDS)
     pmc_result = _run_readonly_command(
         "pmc_get_snapshot", pmc_argv, config.timeout_s, runner=runner,
     )
@@ -197,6 +210,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "interface": config.interface,
         "expected_ptp_domain_number": config.domain_number,
         "expected_transport_specific": config.transport_specific,
+        "expected_target_port_identity": config.target_port_identity or None,
         "pmc_socket": config.pmc_socket,
         "collection_monotonic_start_ns": collection_start,
         "collection_realtime_start_ns": realtime_start,
@@ -224,6 +238,7 @@ def main(argv=None):
     parser.add_argument("--domain", required=True, type=int)
     parser.add_argument("--pmc-socket", required=True)
     parser.add_argument("--transport-specific", required=True, type=lambda value: int(value, 0))
+    parser.add_argument("--target-port-identity", default="")
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument("--ptp4l-service", default="")
     parser.add_argument("--phc2sys-service", default="")
@@ -236,6 +251,7 @@ def main(argv=None):
         domain_number=args.domain,
         pmc_socket=args.pmc_socket,
         transport_specific=args.transport_specific,
+        target_port_identity=args.target_port_identity,
         timeout_s=args.timeout,
         ptp4l_service=args.ptp4l_service,
         phc2sys_service=args.phc2sys_service,
