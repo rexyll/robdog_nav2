@@ -52,3 +52,19 @@ Actions run 45753122570（head 12bddcfd96d31673127afd66f66b434e0f7fa393）四项
 - hotplug/reconnect、generation rollover 的真实设备行为。
 
 后续要先锁定设备 MON-VER/descriptor/firmware，再将 Frame queue 接入 GNSS ROS 2 component，并按既有 validity/time mapping 审计规则实现消息解码与发布。
+
+
+## 7. Ordered ingress lifecycle events and callback identity
+
+`GnssUsbStream` now exposes `try_pop_event()` over one bounded event stream shared by decoded frames and lifecycle transitions. Every event carries immutable `process_session_id`, `connection_generation`, a monotonically increasing `ingress_sequence` assigned while holding the queue mutex, and host `steady_clock` receive time in nanoseconds. Event types are `GenerationStarted`, `Frame`, `DeviceLost`, `TransportFault`, and `Stopped`.
+
+- `process_session_id` is required configuration and must be unique for one process lifetime; it is not guessed from iTOW or ROS Header.stamp.
+- `GenerationStarted` is enqueued before the first IN read is submitted.
+- Frame events are stamped at USB completion callback entry; all frames parsed from one transfer share that callback receive time while retaining their decoder frame sequence.
+- `DeviceLost` / `TransportFault` closes the current generation's frame-ingress gate before remaining transfers are cancelled; callbacks arriving afterward cannot enqueue frames.
+- `Stopped` is appended only after transfer callbacks have drained and runtime shutdown succeeds.
+- New generations advance connection_generation; old-generation callbacks are rejected. `ingress_sequence` does not reset across generations.
+- Frame overflow follows the configured DropOldest/RejectNewest policy. Lifecycle control events take priority and may evict the oldest frame; if a full queue contains only control events, it fails closed and increments `control_event_overflow_failures` rather than silently dropping a lifecycle transition.
+- Legacy `try_pop_frame()` is retained only for frame-only consumers and consumes/discards control events. Any consumer implementing reset coordination must use `try_pop_event()` and process the event stream in sequence order.
+
+The event queue and GnssUsbStream synthetic tests run under ASan/UBSan, TSan, libFuzzer smoke, and production libusb binding compile CI. This proves the queue/API behavior with fake transport only; it does not prove a real ROS executor/DDS callback barrier or physical USB disconnect behavior.
