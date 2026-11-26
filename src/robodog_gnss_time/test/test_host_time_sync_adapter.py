@@ -64,12 +64,16 @@ def test_rejects_replayed_or_reordered_sequence_and_monotonic_sample():
         adapter.decode(message(sample_sequence=2, sample_monotonic_ns=10_000_000))
 
 
-def test_rejects_bool_alias_and_invalid_uint64_fields():
+def test_rejects_bool_alias_and_rosidl_out_of_range_uint64_fields():
     adapter = HostTimeSyncStatusAdapter(expected_host_boot_id="boot-abc")
     with pytest.raises(ValueError):
         adapter.decode(message(uncertainty_ns=True))
     with pytest.raises(ValueError):
-        adapter.decode(message(sample_sequence=-1))
+        adapter.decode(message(sample_sequence=True))
+    # Generated ROSIDL uint64 setters reject negative values before the
+    # adapter can receive such a message.
+    with pytest.raises(AssertionError):
+        message(sample_sequence=-1)
 
 
 def test_rejects_wrong_message_type_and_empty_expected_boot_id():
