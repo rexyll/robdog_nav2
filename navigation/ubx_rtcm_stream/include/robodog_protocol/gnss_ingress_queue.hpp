@@ -29,7 +29,8 @@ struct GnssIngressEvent {
   std::uint64_t connection_generation{0};
   std::uint64_t ingress_sequence{0};
   std::uint64_t receive_monotonic_ns{0};
-  // Cumulative DropOldest count sampled when the consumer pops this event.
+  // Prefix count of DropOldest frame evictions whose dropped frame sequence
+  // precedes this event's ingress_sequence. Later drops never rewrite earlier events.
   std::uint64_t dropped_frame_events_total{0};
   std::optional<Frame> frame;
 };
