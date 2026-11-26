@@ -120,7 +120,10 @@ def _mount_inventory(path, mountinfo):
             if separator + 1 >= len(fields):
                 continue
             mountpoint = os.path.normpath(_decode_mount_path(fields[4]))
-            if mountpoint == target or target.startswith(mountpoint.rstrip(os.sep) + os.sep):
+            if mountpoint == target or (
+                mountpoint != os.sep
+                and target.startswith(mountpoint.rstrip(os.sep) + os.sep)
+            ):
                 mounts.append({
                     "mountpoint": mountpoint,
                     "filesystem_type": fields[separator + 1],
