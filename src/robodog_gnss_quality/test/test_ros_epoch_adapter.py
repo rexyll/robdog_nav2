@@ -22,23 +22,23 @@ GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:
 
 
 def pvt(i_tow=1000, receive=100, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
-    return UbxNavPvtEpoch(session_id, generation, i_tow, True, CarrierSolution.FIXED, receive)
+    return UbxNavPvtEpoch(session_id, generation, GPS_WEEK, i_tow, True, CarrierSolution.FIXED, receive)
 
 
 def position(i_tow=1000, receive=105, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
     return UbxNavHpPosLlhEpoch(
-        session_id, generation,
+        session_id, generation, GPS_WEEK,
         i_tow, -1220000000, 370000000, 15000, 0, 0, 0,
         False, False, False, False, False, False, receive,
     )
 
 
 def covariance(i_tow=1000, receive=110, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
-    return UbxNavCovEpoch(session_id, generation, i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
+    return UbxNavCovEpoch(session_id, generation, GPS_WEEK, i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
 
 
 def status(i_tow=1000, receive=115, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
-    return UbxNavStatusEpoch(session_id, generation, i_tow, True, True, CarrierSolution.FIXED, receive)
+    return UbxNavStatusEpoch(session_id, generation, GPS_WEEK, i_tow, True, True, CarrierSolution.FIXED, receive)
 
 
 def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
@@ -233,10 +233,27 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
             a.add_pvt(old_record)
         self.assertEqual(a.stale_context_rejections, 1)
         new_record = UbxNavPvtEpoch(
-            PROCESS_SESSION_ID, new_generation, 1000, True,
+            PROCESS_SESSION_ID, new_generation, GPS_WEEK, 1000, True,
             CarrierSolution.FIXED, 101
         )
         self.assertIsNone(a.add_pvt(new_record))
+
+    def test_old_gps_week_callback_is_rejected_after_week_rollover(self):
+        a = adapter()
+        old_record = pvt()
+        new_week = GPS_WEEK + 1
+        new_clock = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:{new_week}"
+        a.begin_generation(
+            new_clock, process_session_id=PROCESS_SESSION_ID,
+            connection_generation=CONNECTION_GENERATION, gps_week=new_week
+        )
+        with self.assertRaisesRegex(EpochPairingError, "stale process_session_id/connection_generation"):
+            a.add_pvt(old_record)
+        fresh = UbxNavPvtEpoch(
+            PROCESS_SESSION_ID, CONNECTION_GENERATION, new_week, 1000, True,
+            CarrierSolution.FIXED, 101
+        )
+        self.assertIsNone(a.add_pvt(fresh))
 
     def test_reset_requires_explicit_new_generation(self):
         a = adapter()
