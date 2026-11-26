@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <exception>
+#include <thread>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -33,6 +34,11 @@ enum class LibusbCancelResult {
   NotFound,
   DeviceLost,
   Failed
+};
+
+struct LibusbCancelRequestResult {
+  std::uint64_t transfer_id{};
+  LibusbCancelResult result{LibusbCancelResult::Failed};
 };
 
 enum class UsbTransferDirection { In, Out };
@@ -95,7 +101,7 @@ public:
   {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     const bool endpoint_is_in = (request.endpoint & 0x80u) != 0;
-    if (!api_valid() || closed_ || !completion ||
+    if (!api_valid() || closed_ || !accepting_submissions_ || !completion ||
         endpoint_is_in != (request.direction == UsbTransferDirection::In) ||
         (request.endpoint & 0x70u) != 0 || (request.endpoint & 0x0fu) == 0 || request.buffer.size() >
         static_cast<std::size_t>(0x7fffffff)) return false;
@@ -148,30 +154,54 @@ public:
 
   LibusbCancelResult cancel_detailed(std::uint64_t id) {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-    if (closed_) return LibusbCancelResult::Failed;
+    return cancel_locked(id);
+  }
 
-    NativeTransfer transfer = nullptr;
+  std::vector<LibusbCancelRequestResult> cancel_all_detailed() {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    std::vector<std::uint64_t> ids;
     {
-      // operation_mutex_ serializes submit, event pumping and close, so the
-      // transfer remains owned by pending_ after this registry lock is released.
-      // The native cancel call must not hold registry_mutex_: observers such as
-      // pending_count() need not block behind a libusb API call.
       std::lock_guard<std::mutex> registry_lock(registry_mutex_);
-      auto it = pending_.find(id);
-      if (it == pending_.end() || it->second->callback_seen) {
-        return LibusbCancelResult::NotPending;
-      }
-      transfer = it->second->transfer;
+      ids.reserve(pending_.size());
+      for (const auto & entry : pending_) ids.push_back(entry.first);
     }
+    std::vector<LibusbCancelRequestResult> results;
+    results.reserve(ids.size());
+    for (const auto id : ids) results.push_back({id, cancel_locked(id)});
+    return results;
+  }
 
-    // libusb_cancel_transfer() is asynchronous. None of its error returns
-    // authorize freeing the transfer; callback drain remains the only terminal
-    // ownership-release path for a successfully submitted transfer.
-    const int rc = api_.cancel_transfer(transfer);
-    if (rc == api_.success_code) return LibusbCancelResult::Requested;
-    if (rc == api_.cancel_not_found_code) return LibusbCancelResult::NotFound;
-    if (rc == api_.cancel_no_device_code) return LibusbCancelResult::DeviceLost;
-    return LibusbCancelResult::Failed;
+  void stop_submissions() {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    accepting_submissions_ = false;
+  }
+
+  bool drained() const {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    if (callbacks_in_flight_ != 0) return false;
+    std::lock_guard<std::mutex> registry_lock(registry_mutex_);
+    return pending_.empty();
+  }
+
+  bool bind_event_thread() {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    if (event_thread_bound_) return event_thread_id_ == std::this_thread::get_id();
+    event_thread_id_ = std::this_thread::get_id();
+    event_thread_bound_ = true;
+    return true;
+  }
+
+  bool unbind_event_thread() {
+    std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    if (!event_thread_bound_ || event_thread_id_ != std::this_thread::get_id() ||
+        callbacks_in_flight_ != 0) return false;
+    {
+      std::lock_guard<std::mutex> registry_lock(registry_mutex_);
+      if (!pending_.empty()) return false;
+    }
+    event_thread_id_ = std::thread::id{};
+    event_thread_bound_ = false;
+    return true;
   }
 
   bool cancel(std::uint64_t id) {
@@ -183,7 +213,8 @@ public:
     int rc = -1;
     {
       std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-      if (closed_ || !api_valid()) return -1;
+      if (closed_ || !api_valid() ||
+          (event_thread_bound_ && event_thread_id_ != std::this_thread::get_id())) return -1;
       rc = api_.handle_events(timeout_ms);
       drained = take_callbacks_after_event_pump();
       for (auto & context : drained) {
@@ -243,6 +274,24 @@ public:
   }
 
 private:
+  LibusbCancelResult cancel_locked(std::uint64_t id) {
+    if (closed_) return LibusbCancelResult::Failed;
+    NativeTransfer transfer = nullptr;
+    {
+      // Keep the registry critical section separate from the native API call.
+      // operation_mutex_ prevents poll/close from invalidating this pointer.
+      std::lock_guard<std::mutex> registry_lock(registry_mutex_);
+      auto it = pending_.find(id);
+      if (it == pending_.end() || it->second->callback_seen) return LibusbCancelResult::NotPending;
+      transfer = it->second->transfer;
+    }
+    const int rc = api_.cancel_transfer(transfer);
+    if (rc == api_.success_code) return LibusbCancelResult::Requested;
+    if (rc == api_.cancel_not_found_code) return LibusbCancelResult::NotFound;
+    if (rc == api_.cancel_no_device_code) return LibusbCancelResult::DeviceLost;
+    return LibusbCancelResult::Failed;
+  }
+
   bool api_valid() const {
     return api_.alloc_transfer && api_.free_transfer && api_.fill_bulk_transfer &&
            api_.submit_transfer && api_.cancel_transfer && api_.handle_events &&
@@ -313,6 +362,9 @@ private:
   mutable std::mutex operation_mutex_;
   std::map<std::uint64_t, std::unique_ptr<Context>> pending_;
   bool closed_{false};
+  bool accepting_submissions_{true};
+  bool event_thread_bound_{false};
+  std::thread::id event_thread_id_{};
   std::size_t callbacks_in_flight_{0};
 };
 
