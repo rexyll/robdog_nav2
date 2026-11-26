@@ -81,6 +81,11 @@ target_link_libraries(test_gnss_usb_stream PRIVATE robodog_ubx_rtcm_stream Threa
 target_compile_options(test_gnss_usb_stream PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME gnss_usb_stream_tests COMMAND test_gnss_usb_stream)
 
+add_executable(test_gnss_ingress_queue tests/test_gnss_ingress_queue.cpp)
+target_link_libraries(test_gnss_ingress_queue PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
+target_compile_options(test_gnss_ingress_queue PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME gnss_ingress_queue_tests COMMAND test_gnss_ingress_queue)
+
 if(ROBODOG_BUILD_LIBUSB_BINDING)
   add_executable(test_libusb_api_binding tests/test_libusb_api_binding.cpp)
   target_link_libraries(test_libusb_api_binding PRIVATE robodog_libusb_binding)
