@@ -155,9 +155,18 @@ public:
       rc = api_.handle_events(timeout_ms);
       drained = take_callbacks_after_event_pump();
       for (auto & context : drained) {
-        const int actual = std::max(0, context->actual_length);
-        if (context->buffer.size() > static_cast<std::size_t>(actual)) {
-          context->buffer.resize(static_cast<std::size_t>(actual));
+        // libusb actual_length is untrusted transport metadata. Never expose a
+        // byte count larger than the submitted buffer, and reject negative
+        // values rather than silently normalizing them to an empty success.
+        const bool invalid_actual_length =
+          context->actual_length < 0 ||
+          static_cast<std::size_t>(context->actual_length) > context->buffer.size();
+        if (invalid_actual_length) {
+          context->native_status = api_.overflow_status;
+          context->actual_length = 0;
+          context->buffer.clear();
+        } else {
+          context->buffer.resize(static_cast<std::size_t>(context->actual_length));
         }
         api_.free_transfer(context->transfer);
         context->transfer = nullptr;
