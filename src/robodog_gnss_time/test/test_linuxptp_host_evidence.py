@@ -1,4 +1,5 @@
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -307,3 +308,55 @@ def test_collector_marks_partial_when_pmc_output_is_malformed():
     assert report["pmc_snapshot_validation"]["status"] == "invalid"
     assert report["collection_status"] == "partial"
     assert "pmc_snapshot_not_valid:invalid" in report["collection_issues"]
+
+
+
+def test_collector_exposes_clock_elapsed_difference_without_sync_verdict():
+    def runner(argv, **kwargs):
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    consistency = report["collection_clock_consistency"]
+    assert consistency["status"] == "measured_no_threshold"
+    assert consistency["monotonic_elapsed_ns"] >= 0
+    assert consistency["realtime_elapsed_ns"] >= 0
+    assert consistency["realtime_minus_monotonic_elapsed_ns"] == (
+        consistency["realtime_elapsed_ns"] - consistency["monotonic_elapsed_ns"]
+    )
+    assert report["host_time_sync_claim"] == "not_evaluated"
+
+
+def test_collector_marks_boot_identity_change_during_collection_partial(monkeypatch):
+    boot_ids = iter(["boot-before", "boot-after"])
+
+    def fake_read_text(self, encoding=None):
+        return next(boot_ids)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+    def runner(argv, **kwargs):
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    assert report["host_boot_id"] == "boot-before"
+    assert report["host_boot_id_after_collection"] == "boot-after"
+    assert report["collection_status"] == "partial"
+    assert "host_boot_id_changed_during_collection" in report["collection_issues"]
+
+
+def test_collector_declares_pmc_dataset_snapshot_non_atomic():
+    def runner(argv, **kwargs):
+        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    observation = report["pmc_snapshot_observation"]
+    assert observation["atomicity"] == "not_guaranteed"
+    assert observation["observation_model"] == "sequential_management_responses"
+    assert observation["simultaneity"] == "not_proven"
+    assert observation["per_dataset_sample_timestamps_available"] is False
+    pmc_command = report["commands"][-1]
+    assert observation["monotonic_start_ns"] == pmc_command["monotonic_start_ns"]
+    assert observation["monotonic_end_ns"] == pmc_command["monotonic_end_ns"]
