@@ -47,24 +47,28 @@ def timels_payload(
 
 
 def gps_epoch(
-    *, receive=100, process_session_id=SESSION_ID, generation=0, **fields
+    *, receive=100, process_session_id=SESSION_ID, generation=0,
+    ingress_sequence=None, **fields
 ) -> UbxNavTimeGpsEpoch:
     return decode_nav_timegps_payload(
         timegps_payload(**fields),
         receive_monotonic_ns=receive,
         process_session_id=process_session_id,
         connection_generation=generation,
+        ingress_sequence=ingress_sequence,
     )
 
 
 def ls_epoch(
-    *, receive=110, process_session_id=SESSION_ID, generation=0, **fields
+    *, receive=110, process_session_id=SESSION_ID, generation=0,
+    ingress_sequence=None, **fields
 ) -> UbxNavTimeLsEpoch:
     return decode_nav_timels_payload(
         timels_payload(**fields),
         receive_monotonic_ns=receive,
         process_session_id=process_session_id,
         connection_generation=generation,
+        ingress_sequence=ingress_sequence,
     )
 
 
@@ -75,29 +79,58 @@ def mapper(**kwargs):
     return result
 
 
-def add_gps(m, receive=100, **fields):
+def add_gps(m, receive=100, ingress_sequence=None, **fields):
     return m.add_timegps(
         gps_epoch(
             receive=receive,
             process_session_id=m.process_session_id,
             generation=m.connection_generation,
+            ingress_sequence=ingress_sequence,
             **fields,
         )
     )
 
 
-def add_ls(m, receive=110, **fields):
+def add_ls(m, receive=110, ingress_sequence=None, **fields):
     return m.add_timels(
         ls_epoch(
             receive=receive,
             process_session_id=m.process_session_id,
             generation=m.connection_generation,
+            ingress_sequence=ingress_sequence,
             **fields,
         )
     )
 
 
 class TestUbxTimeMapper(unittest.TestCase):
+
+    def test_raw_ingress_sequence_is_required_and_strictly_monotonic(self):
+        m = mapper(require_ingress_sequence=True)
+        with self.assertRaisesRegex(EpochPairingError, "missing ingress_sequence"):
+            add_gps(m)
+        add_gps(m, ingress_sequence=100)
+        with self.assertRaisesRegex(EpochPairingError, "stale or reordered ingress_sequence"):
+            add_ls(m, ingress_sequence=99)
+        result = add_ls(m, ingress_sequence=102)
+        self.assertIsNotNone(result)
+        self.assertTrue(result.valid)
+
+    def test_duplicate_ingress_sequence_is_rejected(self):
+        m = mapper(require_ingress_sequence=True)
+        add_gps(m, ingress_sequence=7)
+        with self.assertRaisesRegex(EpochPairingError, "stale or reordered ingress_sequence"):
+            add_ls(m, ingress_sequence=7)
+
+    def test_ingress_sequence_continues_across_connection_generation(self):
+        m = mapper(require_ingress_sequence=True)
+        add_gps(m, ingress_sequence=40)
+        m.begin_session(SESSION_ID, 1)
+        add_gps(m, ingress_sequence=41)
+        result = add_ls(m, ingress_sequence=42)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.connection_generation, 1)
+
     def test_pair_in_either_order_and_convert_utc_only_with_trusted_source(self):
         m = mapper(trusted_leap_sources={2})
         self.assertIsNone(add_gps(m, receive=1_000))
