@@ -223,9 +223,9 @@ def test_config_rejects_invalid_target_port_identity(target):
 def test_collector_preserves_multi_port_snapshot_as_invalid_without_selecting_one():
     output = _pmc_output().replace(
         "sending: GET PARENT_DATA_SET",
-        "080027.fffe.7f327b-2 seq 16 RESPONSE MANAGEMENT PORT_DATA_SET\\n"
-        "    portIdentity 080027.fffe.7f327b-2\\n"
-        "    portState LISTENING\\n"
+        "080027.fffe.7f327b-2 seq 16 RESPONSE MANAGEMENT PORT_DATA_SET\n"
+        "    portIdentity 080027.fffe.7f327b-2\n"
+        "    portState LISTENING\n"
         "sending: GET PARENT_DATA_SET",
     )
 
