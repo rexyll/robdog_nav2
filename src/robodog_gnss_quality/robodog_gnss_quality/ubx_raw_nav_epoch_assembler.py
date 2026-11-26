@@ -146,6 +146,8 @@ class UbxRawNavEpochAssembler:
 
         if kind != "Frame":
             return None
+        if event.frame_connection_generation != event.connection_generation:
+            raise EpochPairingError("frame generation must match event generation")
         raw = decode_ubx_nav_ingress_frame(
             event.frame_bytes,
             protocol=event.protocol,
