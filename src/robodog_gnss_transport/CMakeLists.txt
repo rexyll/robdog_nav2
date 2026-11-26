@@ -18,7 +18,7 @@ add_executable(gnss_usb_transport_node src/gnss_usb_transport_node.cpp)
 target_compile_features(gnss_usb_transport_node PRIVATE cxx_std_17)
 target_compile_options(gnss_usb_transport_node PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(gnss_usb_transport_node PRIVATE include)
-target_link_libraries(gnss_usb_transport_node PRIVATE
+target_link_libraries(gnss_usb_transport_node
   robodog_ubx_rtcm_stream
   robodog_libusb_binding
   Threads::Threads)
@@ -37,7 +37,7 @@ if(BUILD_TESTING)
     test/test_gnss_ingress_message.cpp)
   target_compile_features(test_gnss_ingress_message PRIVATE cxx_std_17)
   target_include_directories(test_gnss_ingress_message PRIVATE include)
-  target_link_libraries(test_gnss_ingress_message PRIVATE
+  target_link_libraries(test_gnss_ingress_message
     robodog_ubx_rtcm_stream
     Threads::Threads)
   ament_target_dependencies(test_gnss_ingress_message
