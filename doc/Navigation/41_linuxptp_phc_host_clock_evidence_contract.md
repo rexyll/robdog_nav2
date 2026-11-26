@@ -188,3 +188,89 @@ properties、ExecStart 和 journal 仍是各自命令执行时的单次只读观
 使用有时间戳的事件流或连续采样，并定义采样周期、丢样检测与时钟域；不得
 把边界比较包装成连续监控保证。
 
+
+
+## 10. ptp4l journald 事件证据与覆盖性边界
+
+采集器对显式配置的服务单元改用 journalctl -u <unit> --since <window>
+--no-pager --output=json --all，保留原始 stdout/stderr，并额外生成
+journal_event_evidence。--output=json 让每条日志成为独立 JSON 对象；
+--all 请求完整字段值，避免 journalctl 默认将超过 4096 字节的字段输出为
+null。解析器保留 _BOOT_ID、__MONOTONIC_TIMESTAMP、
+__REALTIME_TIMESTAMP、__CURSOR、_SYSTEMD_UNIT 和 MESSAGE。
+
+时间戳解释严格区分：
+- __MONOTONIC_TIMESTAMP 是 journald 收到该 entry 时的
+  CLOCK_MONOTONIC 微秒值；必须与 _BOOT_ID 配对。仅当它与本次 collector
+  的 boot ID 相同，才可将微秒乘以 1000，与 collector 的
+  CLOCK_MONOTONIC 纳秒窗口比较。
+- __REALTIME_TIMESTAMP 是 CLOCK_REALTIME 微秒 epoch 值；保留用于原始
+  关联，不将它当成 monotonic 时间，也不把它与采集器 monotonic 绝对值相减
+  来制造精准映射。
+- boot ID 不匹配、缺少/非法时间戳、无效 JSON、日志顺序 monotonic 回退或
+  没有任何有效 entry 均使该 service 的 journal evidence 为 partial；
+  collector 顶层 collection_status 同步降为 partial。
+
+### 10.1 当前已核实的 LinuxPTP message patterns
+
+基于 LinuxPTP 上游 port.c / clock.c 源码中的格式字符串，解析器只识别
+下列明确 pattern，并始终保留原始 MESSAGE：
+
+| 事件类型 | 上游 message 格式 | 解释 |
+|---|---|---|
+| gm_candidate_observed | new foreign master <portIdentity> | 收到一个 foreign-master 候选，不代表它已被 BMC 选为 GM |
+| gm_selected | selected best master clock <clockIdentity> | clock.c 报告选中的 best master |
+| local_clock_selected_as_best_master | selected local clock <clockIdentity> as best master | 本地 clock 被选为 best master |
+| port_state_transition | <port>: <state> to <state> on <event> | port.c port_show_transition() 输出的状态迁移 |
+| master_announce_transmit_timeout | master tx announce timeout | ptp4l master 的 announce 发送定时器；不是 announce 接收超时，也不能据此判定 GM 丢失 |
+
+port.c 的 port_show_transition() 将状态和触发 event 写入同一条 notice，
+因此可记录 from_state、to_state 与 trigger；例如 trigger 为
+ANNOUNCE_RECEIPT_TIMEOUT 时，是一条有明确来源的 port 状态迁移记录。
+解析器不会把 master tx announce timeout 错归类为接收端 announce timeout。
+
+本轮审计的 clock.c servo SERVO_JUMP 路径调用 clockadj_step() 执行时钟
+step，但该调用点没有相应的专用 ptp4l journal message。故当前事件解析器
+**不声称能从 ptp4l journal 完整识别 clock step**，也不将日志中没有
+clock step 字样解释为没有发生 step。若未来要覆盖此类事件，需基于目标
+LinuxPTP 版本和内核时钟调整证据另行定义事件源、字段与时钟域，不能仅添加
+未经源码核验的宽泛正则。
+
+上游源码格式依据：
+- port.c：new foreign master、port_show_transition()、master tx announce timeout：
+  https://github.com/richardcochran/linuxptp/blob/master/port.c
+- clock.c：selected best master clock、selected local clock ... as best master、
+  SERVO_JUMP / clockadj_step()：
+  https://github.com/richardcochran/linuxptp/blob/master/clock.c
+
+### 10.2 查询结果不等于连续日志覆盖
+
+journal_event_evidence.coverage_status 当前固定为 unknown。即使查询成功、
+JSON 全部可解析、返回 0 个匹配事件，也只能说“返回的 entry 中没有识别到
+匹配事件”，不能说“采集窗口内没有 GM 切换/portState 变化/clock step”。
+
+单次 journalctl 成功退出不能证明：
+- 查询范围内所有历史 journal files 都仍保留；
+- 日志未被 vacuum、rotation、磁盘空间策略或 rate limit 丢弃；
+- --since 所覆盖的时间段没有缺口；
+- ptp4l 进程在整个窗口持续运行并持续输出；
+- 日志中未出现的状态变化没有发生。
+
+当前 collector 没有把 journalctl --verify 或 --list-boots 当作窗口连续性
+证明；这些命令即使成功，也不能单独证明目标窗口没有被删除或漏记。解析器
+只检查本次返回 entries 的结构、boot identity 与 monotonic 顺序，不推断
+journal retention 完整性。事件列表的 collection_window_relation 只将
+entry 的 monotonic 时间与 collector 整体 monotonic 起止值比较，不代表
+journal 查询窗口被完整覆盖。
+
+因此，coverage_status=unknown 不因 event_count=0 改变；若需证明事件流
+连续，需要独立的 journald retention/sequence/cursor gap 策略、丢样/限流
+证据以及持续采集机制，并定义可验证的窗口覆盖合同。现阶段 journal 证据
+只能用于发现已保留且已输出的事件，不能用作“无事件”证明。
+
+systemd 字段语义依据：
+- journalctl --output=json、--all 和 JSON 字段编码说明：
+  https://www.freedesktop.org/software/systemd/man/latest/journalctl
+- _BOOT_ID、__MONOTONIC_TIMESTAMP、__REALTIME_TIMESTAMP、__CURSOR 字段说明：
+  https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields
+
