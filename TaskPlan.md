@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.175
+- 文档版本：v0.3.176
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -956,3 +956,6 @@
 
 
 - libusb transfer registry 并发访问修复（2026-11-26 / v0.3.175）：复核 `LibusbTransferTransport::cancel()` 发现其直接访问 `pending_` 而未取得 `registry_mutex_`；`pending_count()` 同时只取得 registry mutex，故 operation mutex 无法保护两者之间的 map 并发读写。现 cancel 固定按 operation → registry 顺序加锁，并新增 cancel 与并发 pending_count 读取测试。新增 `doc/Navigation/29_libusb_transfer_registry_concurrency_audit.md`，更新 Navigation README。代码提交：`8145143fa9c5f06d9b3beb53af370ea920d080f1`；测试提交：`752781799d948bbf85a6adfa37ab7b633eb30286`；文档提交：`7352ba96b9d4fc9596a700887397a6759fe123db`；索引提交：`b5f1640eaa226ba901d842648e2f51a669377989`。本轮尚未取得最新代码对应 CI 结果，TSan 必须在该提交上执行并成功后才能验收。该修复不等于完整 DeviceSession；唯一 event-loop owner thread、设备/接口 RAII、descriptor discovery、hotplug/reconnect、ROS 2 executor 集成与 ZED-F9P 实测仍未完成。
+
+
+- libusb cancel 锁耦合与错误语义修正（2026-11-26 / v0.3.176）：进一步检查 `LibusbTransferTransport` 的锁范围，发现 `cancel()` 虽已补上 registry mutex，但 native `libusb_cancel_transfer()` 仍在 registry 临界区内执行。现改为 operation mutex 串行化 adapter 操作，在 registry 锁内取得稳定 transfer 指针后释放 registry 锁，再调用 native cancel；transfer 在 callback/event-pump drain 前仍留在 pending registry。新增 `LibusbCancelResult` 与 `cancel_detailed()`，区分 Requested、NotPending、LIBUSB_ERROR_NOT_FOUND、LIBUSB_ERROR_NO_DEVICE 和普通 Failed；bool `cancel()` 保留兼容，仅 Requested 返回 true。测试新增 native cancel hook 重入 `pending_count()`（验证 native API 调用不持 registry mutex）、20,000 次并发读取、NOT_FOUND/NO_DEVICE 分类与 pending ownership 保留。代码提交：adapter `a067981d483be400c065a46a309c982b53fdb7e4`；测试 `cde5741de651155c4fb1ff085417d116cdb95f03`；Navigation 30 文档与 README 索引已更新。该指针稳定性依赖同一 libusb context 的 event handling 不得绕过 adapter 并发执行；生产 DeviceSession 必须强制唯一 event-loop owner thread。最新代码对应 Actions 尚待确认，不能提前标记 sanitizer 或 libusb binding CI 通过。真实设备、hotplug/reconnect、ROS 2 executor 与 F9P 测试仍未完成。
