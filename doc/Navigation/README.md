@@ -259,3 +259,5 @@
 - [27 — 固定版 ublox_dgnss USB bulk endpoint 与 transfer 参数映射](27_fixed_ublox_dgnss_usb_endpoint_and_transfer_mapping.md)
 
 - [28 — USB DeviceSession 状态机与 libusb transfer 长度安全合同](28_usb_device_session_design_and_length_safety_contract.md)
+
+- [29 — libusb transfer registry 并发审计与修复记录](29_libusb_transfer_registry_concurrency_audit.md)
