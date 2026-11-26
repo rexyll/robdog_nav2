@@ -69,7 +69,8 @@ def decode_nav_pvt_message(message: object, receive_monotonic_ns: int, *, proces
 
 
 def decode_nav_hp_pos_llh_message(
-    message: object, receive_monotonic_ns: int
+    message: object, receive_monotonic_ns: int, *,
+    process_session_id: str, connection_generation: int
 ) -> UbxNavHpPosLlhEpoch:
     """Decode HPPOSLLH raw integer and validity fields without using Header.stamp."""
     try:
@@ -128,7 +129,8 @@ def decode_nav_cov_message(message: object, receive_monotonic_ns: int, *, proces
 
 
 def decode_nav_status_message(
-    message: object, receive_monotonic_ns: int
+    message: object, receive_monotonic_ns: int, *,
+    process_session_id: str, connection_generation: int
 ) -> UbxNavStatusEpoch:
     """Decode NAV-STATUS cross-check fields required by the four-message joiner."""
     try:
