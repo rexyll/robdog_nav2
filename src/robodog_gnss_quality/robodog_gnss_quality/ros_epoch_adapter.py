@@ -33,6 +33,10 @@ class UbxSourceTimeMapping:
     utc_seconds: Optional[int] = None
     utc_nanoseconds: Optional[int] = None
     validity_reason: str = ""
+    gps_week: Optional[int] = None
+    source_time_accuracy_ns: Optional[int] = None
+    leap_seconds: Optional[int] = None
+    leap_source: Optional[int] = None
 
 
 @dataclass(frozen=True)
