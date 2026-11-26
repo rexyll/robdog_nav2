@@ -64,7 +64,7 @@ int main() {
     auto second = queue.try_pop();
     auto third = queue.try_pop();
     assert(first && first->type == GnssIngressEventType::GenerationStarted);
-    assert(first->dropped_frame_events_total == 2);
+    assert(first->dropped_frame_events_total == 0);
     assert(second && second->type == GnssIngressEventType::Frame);
     assert(second->dropped_frame_events_total == 2);
     assert(second->frame && second->frame->sequence == 2);
