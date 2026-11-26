@@ -68,6 +68,7 @@ bool GnssUsbStream::start()
         std::lock_guard<std::mutex> lock(stats_mutex_);
         ++counters_.submit_failures;
       }
+      (void)ingress_queue_.mark_transport_fault(generation, steady_now_ns());
       if (!runtime_.shutdown(5000)) return false;
       (void)ingress_queue_.close(steady_now_ns());
       return false;
@@ -81,7 +82,7 @@ bool GnssUsbStream::stop(std::uint32_t timeout_ms)
   std::lock_guard<std::mutex> lifecycle_lock(lifecycle_mutex_);
   running_.store(false, std::memory_order_release);
   if (runtime_.is_open() && !runtime_.shutdown(timeout_ms)) return false;
-  frame_queue_.close();
+  (void)ingress_queue_.close(steady_now_ns());
   return true;
 }
 
@@ -174,10 +175,10 @@ void GnssUsbStream::on_completion(
         for (auto & frame : frames) {
           ++decoded;
           const auto result = ingress_queue_.push_frame(std::move(frame), receive_monotonic_ns);
-          if (result == QueuePushResult::AcceptedAfterDroppingOldest) ++drops;
-          else if (result == QueuePushResult::RejectedFull) ++rejections;
-          else if (result == QueuePushResult::RejectedStaleGeneration ||
-                   result == QueuePushResult::RejectedClosed) ++rejections;
+          if (result == GnssIngressPushResult::AcceptedAfterDroppingOldestFrame) ++drops;
+          else if (result == GnssIngressPushResult::RejectedFull) ++rejections;
+          else if (result == GnssIngressPushResult::RejectedStaleGeneration ||
+                   result == GnssIngressPushResult::RejectedClosed) ++rejections;
         }
         std::lock_guard<std::mutex> lock(stats_mutex_);
         counters_.decoded_frames += decoded;
