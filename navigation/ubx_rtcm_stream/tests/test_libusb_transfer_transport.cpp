@@ -28,10 +28,11 @@ struct FakeLibusb {
   int close_count{0};
   int free_count{0};
   std::deque<FakeTransfer *> events;
+  std::vector<FakeTransfer *> allocated;
 
   LibusbTransferTransport::Api api() {
     LibusbTransferTransport::Api a;
-    a.alloc_transfer = [](int) -> void * { return new FakeTransfer(); };
+    a.alloc_transfer = [this](int) -> void * { auto * p = new FakeTransfer(); allocated.push_back(p); return p; };
     a.free_transfer = [this](void * p) {
       ++free_count;
       delete static_cast<FakeTransfer *>(p);
@@ -67,8 +68,11 @@ struct FakeLibusb {
     return a;
   }
 
-  void complete(FakeTransfer * t, int status, int actual) {
-    t->status = status; t->actual_length = actual; events.push_back(t);
+  void complete_next(int status, int actual) {
+    for (auto * t : allocated) {
+      if (t->pending) { t->status = status; t->actual_length = actual; events.push_back(t); return; }
+    }
+    assert(false && "no pending fake transfer");
   }
 };
 
@@ -90,18 +94,13 @@ int main() {
         assert(data.size() == 4 && actual == 4);
       }));
     assert(transport.pending_count() == 1);
-    auto * native = static_cast<FakeTransfer *>(nullptr);
-    // The fake API owns no hidden transfer list; the pending transfer is
-    // reached through the queued callback setup by a synthetic completion.
-    // Use cancellation to enqueue its terminal event.
-    assert(transport.cancel(1));
+    fake.complete_next(0, 4);
     assert(transport.poll_events() == 0);
     assert(called);
     assert(fake.free_count == 1);
     assert(transport.pending_count() == 0);
     assert(transport.close());
     assert(fake.close_count == 1);
-    (void)native;
   }
   {
     FakeLibusb fake;
@@ -130,11 +129,7 @@ int main() {
     assert(!transport.cancel(3));
     assert(transport.pending_count() == 1);
     // A failed cancel does not free ownership; the eventual NO_DEVICE callback does.
-    // Complete through the fake's native event queue using a second test hook below.
-    assert(!transport.close());
-    // Force a cancellation terminal callback after restoring a successful cancel.
-    fake.cancel_result = 0;
-    assert(transport.cancel(3));
+    fake.complete_next(5, 0);
     assert(transport.poll_events() == 0);
     assert(called);
     assert(fake.free_count == 1);
