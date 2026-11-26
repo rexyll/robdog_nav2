@@ -187,6 +187,7 @@ public:
 
   bool bind_event_thread() {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
+    if (closed_ || !api_valid()) return false;
     if (event_thread_bound_) return event_thread_id_ == std::this_thread::get_id();
     event_thread_id_ = std::this_thread::get_id();
     event_thread_bound_ = true;
@@ -259,7 +260,7 @@ public:
   bool close() {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     if (closed_) return true;
-    if (callbacks_in_flight_ != 0) return false;
+    if (event_thread_bound_ || callbacks_in_flight_ != 0) return false;
     {
       std::lock_guard<std::mutex> lock(registry_mutex_);
       if (!pending_.empty()) return false;
