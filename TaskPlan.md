@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.188
+- 文档版本：v0.3.189
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -995,3 +995,6 @@
 
 
 - GNSS ROS 四消息历元缓存与 validated time mapping adapter（2026-11-26 / v0.3.188）：新增纯 Python UbxRosEpochAdapter + UbxSourceTimeMapping，将已解码 NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS records 与独立 receiver-time mapper 输出按 exact iTOW 组合。支持 records/mapping 任意先后到达、LRU capacity、stale expiry、conflicting duplicate/mapping retirement、explicit source_clock_id generation fence。区分 source GPS time validity 与 UTC stamp validity；GPS source mapping 有效但 UTC/leap-second mapping 无效时仍保留该差异，不允许下游伪造 NavSatFix UTC header。新增 9 组测试覆盖消息先后顺序、invalid mapping、generation、duplicate、capacity/stale、UTC validity split、mapping conflict 和 reset。实现提交：module 24707e07a6251ff2a030a214fda37dadf8b14b5d；test 0185d09bbf53c5ea00978a84ea705f2caafaa2e9；package export、README、Navigation 36 随后提交。该层不产生 receiver time mapping；固定版 driver 缺少 NAV-TIMEGPS/NAV-TIMELS，live rclpy subscriptions、NavSatFix publisher 与实际 mapper 仍未实现。CI 待 Humble/Jazzy 运行。
+
+
+- GNSS ROS epoch/time mapping adapter 缓存与并发验收（2026-11-26 / v0.3.189）：UbxRosEpochAdapter 增加 RLock，允许 rclpy MultiThreadedExecutor 风格的并发 topic callbacks 串行化 exact-iTOW state；mapping 和四类 records 任意先后到达，需 explicit begin_generation(source_clock_id)，valid source mapping 与 UTC stamp validity 分离。CI 曾发现 stale expiry 测试暴露 iTOW resurrection：watermark 推进过期 pending 后同一次 _entry 可能重新创建相同 iTOW。修复为 stale tombstone 二次检查、expiry 使用最大 monotonic watermark、first_receive 取 mapping/records 中最早 callback time。Humble/Jammy + Jazzy/Noble 两个 CI runs 45755029444 与 45755029355 对应 head 4fbbf078bb0f83b657c78c0b87365282769d831e 均全部 success。该层仍不产生真实 time mapping；NAV-TIMEGPS/NAV-TIMELS parser、rclpy node、NavSatFix publisher 与设备/ROS 实测仍未完成。
