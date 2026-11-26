@@ -87,8 +87,6 @@ class HostTimeSyncStatusAdapter:
             raise ValueError("leap_status must be a non-empty string")
         if isinstance(message.stratum, bool) or not isinstance(message.stratum, int) or not 0 <= message.stratum <= 255:
             raise ValueError("stratum must be uint8")
-        if not isinstance(message.leap_status, str) or not message.leap_status.strip():
-            raise ValueError("leap_status must be a non-empty string")
         reference_id = message.reference_id.strip()
         leap_status = message.leap_status.strip()
         if self._STATE_MAP[message.state] == "synchronized":
