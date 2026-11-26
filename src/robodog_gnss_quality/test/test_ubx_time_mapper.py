@@ -158,7 +158,7 @@ class TestUbxTimeMapper(unittest.TestCase):
         result = m.add_timels(timels(valid=0x01), 110)
         self.assertTrue(result.utc_stamp_valid)
         self.assertFalse(result.leap_event_valid)
-        self.assertEqual(result.time_to_leap_event_seconds, 86_400)
+        self.assertIsNone(result.time_to_leap_event_seconds)
 
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
