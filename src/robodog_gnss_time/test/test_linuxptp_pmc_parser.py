@@ -1,6 +1,6 @@
 import pytest
 
-from robodog_gnss_time.linuxptp_pmc_parser import parse_pmc_response
+from robodog_gnss_time.linuxptp_pmc_parser import (\n    parse_pmc_response,\n    parse_pmc_response_envelope,\n    parse_pmc_snapshot,\n)
 
 
 def test_parse_time_status_np_keeps_ptp_master_offset_as_separate_clock_domain():
@@ -127,4 +127,97 @@ gmPresent true
 gmIdentity 080027.fffe.d9e453
 """
     with pytest.raises(ValueError):
-        parse_pmc_response(output, "TIME_STATUS_NP")
+        parse_pmc_response(output, "TIME_STATUS_NP")\n
+
+def _snapshot_output(clock_identity="080027.fffe.7f327b"):
+    return f"""sending: GET TIME_STATUS_NP
+{clock_identity}-0 seq 10 RESPONSE MANAGEMENT TIME_STATUS_NP
+    master_offset -20
+    gmPresent true
+    gmIdentity 080027.fffe.d9e453
+sending: GET CURRENT_DATA_SET
+{clock_identity}-0 seq 11 RESPONSE MANAGEMENT CURRENT_DATA_SET
+    stepsRemoved 1
+    offsetFromMaster 20.0
+    meanPathDelay 300.0
+sending: GET PORT_DATA_SET
+{clock_identity}-1 seq 12 RESPONSE MANAGEMENT PORT_DATA_SET
+    portIdentity {clock_identity}-1
+    portState SLAVE
+sending: GET TIME_PROPERTIES_DATA_SET
+{clock_identity}-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET
+    currentUtcOffset 37
+    leap61 0
+    leap59 0
+    currentUtcOffsetValid 1
+    ptpTimescale 1
+    timeTraceable 1
+    frequencyTraceable 1
+    timeSource 0x20
+"""
+
+
+def test_response_envelope_preserves_clock_port_and_sequence_identity():
+    envelope = parse_pmc_response_envelope(_snapshot_output(), "PORT_DATA_SET")
+    assert envelope.clock_identity == "080027.fffe.7f327b"
+    assert envelope.port_number == 1
+    assert envelope.sequence_id == 12
+    assert envelope.values["portState"] == "SLAVE"
+    with pytest.raises(TypeError):
+        envelope.values["portState"] = "MASTER"
+
+
+def test_snapshot_joins_exactly_four_datasets_by_clock_identity():
+    snapshot = parse_pmc_snapshot(_snapshot_output())
+    assert snapshot.clock_identity == "080027.fffe.7f327b"
+    assert set(snapshot.responses) == {
+        "TIME_STATUS_NP", "CURRENT_DATA_SET", "PORT_DATA_SET",
+        "TIME_PROPERTIES_DATA_SET",
+    }
+    assert snapshot.responses["TIME_STATUS_NP"].sequence_id == 10
+    assert snapshot.responses["CURRENT_DATA_SET"].sequence_id == 11
+    assert snapshot.responses["PORT_DATA_SET"].port_number == 1
+    assert snapshot.responses["TIME_PROPERTIES_DATA_SET"].values["currentUtcOffset"] == 37
+
+
+def test_snapshot_rejects_mixed_responder_clock_identities():
+    output = _snapshot_output().replace(
+        "080027.fffe.7f327b-0 seq 11",
+        "080028.fffe.7f327b-0 seq 11",
+    )
+    with pytest.raises(ValueError, match="different PTP clock identities"):
+        parse_pmc_snapshot(output)
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda output: output.replace(
+        "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
+        "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT UNKNOWN_DATA_SET",
+    ),
+    lambda output: output.replace(
+        "sending: GET TIME_PROPERTIES_DATA_SET\n",
+        "",
+    ),
+    lambda output: output.replace(
+        "sending: GET CURRENT_DATA_SET\n",
+        "sending: GET CURRENT_DATA_SET\n080027.fffe.7f327b-0 seq 14 RESPONSE MANAGEMENT CURRENT_DATA_SET\nstepsRemoved 1\noffsetFromMaster 20.0\nmeanPathDelay 300.0\n",
+    ),
+])
+def test_snapshot_rejects_missing_duplicate_or_unsupported_dataset(mutation):
+    with pytest.raises(ValueError):
+        parse_pmc_snapshot(mutation(_snapshot_output()))
+
+
+def test_response_envelope_rejects_uint16_identity_overflow():
+    output = _snapshot_output().replace(
+        "080027.fffe.7f327b-0 seq 10",
+        "080027.fffe.7f327b-65536 seq 10",
+    )
+    with pytest.raises(ValueError, match="uint16"):
+        parse_pmc_response_envelope(output, "TIME_STATUS_NP")
+
+
+def test_legacy_parser_keeps_dataset_dictionary_api():
+    parsed = parse_pmc_response(_snapshot_output(), "TIME_STATUS_NP")
+    assert isinstance(parsed, dict)
+    assert parsed["master_offset"] == -20
