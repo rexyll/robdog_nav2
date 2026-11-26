@@ -119,6 +119,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert pmc_kwargs["shell"] is False
     assert report["pmc_snapshot_validation"]["status"] == "valid"
     assert report["pmc_snapshot_validation"]["clock_identity"] == "080027.fffe.7f327b"
+    assert report["expected_transport_specific"] == 0
     assert report["host_time_sync_claim"] == "not_evaluated"
     assert report["evidence_kind"] == "read_only_linuxptp_host_inventory"
     assert all(call[1]["shell"] is False for call in calls)
