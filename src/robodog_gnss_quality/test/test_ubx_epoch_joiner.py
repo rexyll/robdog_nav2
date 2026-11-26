@@ -251,7 +251,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "begin_generation"):
             joiner.add_position(
                 make_position(),
-                source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451"",
+                source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451",
                 source_timestamp_ns=2_000_000,
             )
         self.assertEqual(joiner.pending_count, 1)
@@ -259,7 +259,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         joiner.begin_generation(f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451")
         self.assertEqual(joiner.pending_count, 0)
         self.assertIsNone(joiner.add_pvt(
-            make_pvt(), source_clock_id="zed_f9p_week_2451_receiver_generation_0",
+            make_pvt(), source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451",
             source_timestamp_ns=2_000_000,
         ))
 
