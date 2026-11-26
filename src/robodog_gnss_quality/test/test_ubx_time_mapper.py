@@ -157,6 +157,14 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertEqual(result.time_to_leap_event_seconds, 1)
         self.assertIn("transition guard window", result.validity_reason)
 
+    def test_negative_or_unrepresentable_gps_utc_leap_offset_blocks_utc(self):
+        m = mapper(trusted_leap_sources={2})
+        m.add_timegps(timegps(leap=-1), 100)
+        result = m.add_timels(timels(leap=-1), 110)
+        self.assertTrue(result.valid)
+        self.assertFalse(result.utc_stamp_valid)
+        self.assertIn("outside 0..127", result.validity_reason)
+
     def test_timegps_leap_flag_and_timels_validity_are_both_required(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(valid=0x03), 100)
