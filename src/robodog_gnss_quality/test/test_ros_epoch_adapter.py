@@ -15,26 +15,30 @@ from robodog_gnss_quality.ubx_nav_pvt import (
 )
 
 
-GENERATION = "f9p-week-2450-boot-3"
+PROCESS_SESSION_ID = "f9p-process-session-17"
+CONNECTION_GENERATION = 3
+GPS_WEEK = 2450
+GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:{GPS_WEEK}"
 
 
 def pvt(i_tow=1000, receive=100):
-    return UbxNavPvtEpoch(i_tow, True, CarrierSolution.FIXED, receive)
+    return UbxNavPvtEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, CarrierSolution.FIXED, receive)
 
 
 def position(i_tow=1000, receive=105):
     return UbxNavHpPosLlhEpoch(
+        PROCESS_SESSION_ID, CONNECTION_GENERATION,
         i_tow, -1220000000, 370000000, 15000, 0, 0, 0,
         False, False, False, False, False, False, receive,
     )
 
 
 def covariance(i_tow=1000, receive=110):
-    return UbxNavCovEpoch(i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
+    return UbxNavCovEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
 
 
 def status(i_tow=1000, receive=115):
-    return UbxNavStatusEpoch(i_tow, True, True, CarrierSolution.FIXED, receive)
+    return UbxNavStatusEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, True, CarrierSolution.FIXED, receive)
 
 
 def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
@@ -64,7 +68,7 @@ def adapter(**overrides):
     )
     values.update(overrides)
     result = UbxRosEpochAdapter(**values)
-    result.begin_generation(GENERATION)
+    result.begin_generation(\n        GENERATION, process_session_id=PROCESS_SESSION_ID,\n        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK\n    )
     return result
 
 
@@ -103,17 +107,21 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
 
     def test_source_clock_change_requires_explicit_generation(self):
         a = adapter()
+        next_clock = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451"
         with self.assertRaisesRegex(EpochPairingError, "call begin_generation"):
-            a.add_time_mapping(mapping(clock_id="week-2451-boot-3"))
-        a.begin_generation("week-2451-boot-3")
-        result = a.add_time_mapping(mapping(clock_id="week-2451-boot-3"))
+            a.add_time_mapping(mapping(clock_id=next_clock, gps_week=2451))
+        a.begin_generation(
+            next_clock, process_session_id=PROCESS_SESSION_ID,
+            connection_generation=CONNECTION_GENERATION, gps_week=2451
+        )
+        result = a.add_time_mapping(mapping(clock_id=next_clock, gps_week=2451))
         self.assertIsNone(result)
 
     def test_conflicting_duplicate_retires_epoch(self):
         a = adapter()
         a.add_pvt(pvt())
         with self.assertRaisesRegex(EpochPairingError, "conflicting duplicate"):
-            a.add_pvt(UbxNavPvtEpoch(1000, False, CarrierSolution.FIXED, 101))
+            a.add_pvt(UbxNavPvtEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, 1000, False, CarrierSolution.FIXED, 101))
         self.assertEqual(a.pending_count, 0)
         self.assertEqual(a.rejected_conflict, 1)
 
