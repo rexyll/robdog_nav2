@@ -626,7 +626,7 @@ def test_collector_marks_non_default_journal_namespace_not_queried_partial():
         elif argv[0] == "journalctl" and "-u" in argv:
             stdout = _journal_output()
         elif argv[0] == "systemctl" and any("LogNamespace" in arg for arg in argv):
-            stdout = "LogNamespace=ptp-logs\\n"
+            stdout = "LogNamespace=ptp-logs\n"
         else:
             stdout = "read-only context sample"
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
