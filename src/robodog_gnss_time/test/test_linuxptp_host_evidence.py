@@ -6,6 +6,7 @@ import pytest
 from robodog_gnss_time.linuxptp_host_evidence import (
     LinuxPtpHostEvidenceConfig,
     collect_linuxptp_host_evidence,
+    parse_linuxptp_journal_evidence,
 )
 
 
@@ -76,6 +77,22 @@ def _config(**overrides):
     return LinuxPtpHostEvidenceConfig(**values)
 
 
+
+def _journal_output(boot_id=None, message="ptp4l: port 1: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT"):
+    if boot_id is None:
+        boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
+    import json
+    return json.dumps({
+        "_BOOT_ID": boot_id,
+        "__MONOTONIC_TIMESTAMP": "1000000",
+        "__REALTIME_TIMESTAMP": "1795700000000000",
+        "__CURSOR": "s=cursor",
+        "_SYSTEMD_UNIT": "ptp4l.service",
+        "MESSAGE": message,
+    }) + "\n"
+
+
+
 def test_config_requires_explicit_interface_domain_and_socket():
     with pytest.raises(ValueError):
         LinuxPtpHostEvidenceConfig("", 0, "/run/ptp4l", 0)
@@ -101,7 +118,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
 
     def runner(argv, **kwargs):
         calls.append((argv, kwargs))
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -134,7 +151,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
 
 def test_collector_rejects_snapshot_domain_mismatch_without_claiming_sync():
     def runner(argv, **kwargs):
-        stdout = _pmc_output(domain_number=4) if argv[0] == "pmc" else ""
+        stdout = _pmc_output(domain_number=4) if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -233,7 +250,7 @@ def test_collector_preserves_multi_port_snapshot_as_invalid_without_selecting_on
     )
 
     def runner(argv, **kwargs):
-        stdout = output if argv[0] == "pmc" else ""
+        stdout = output if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -300,7 +317,7 @@ def test_collector_marks_partial_when_pmc_command_or_snapshot_is_invalid():
 
 def test_collector_marks_partial_when_pmc_output_is_malformed():
     def runner(argv, **kwargs):
-        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else "read-only sample"
+        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else (_journal_output("boot-before") if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -394,6 +411,8 @@ def test_collector_marks_changed_gm_identity_between_boundaries_partial():
                 stdout = stdout.replace(
                     "080027.fffe.d9e453", "080027.fffe.d9e454"
                 )
+        elif argv[0] == "journalctl":
+            stdout = _journal_output("boot-before")
         else:
             stdout = "read-only sample"
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
@@ -419,3 +438,65 @@ def test_collector_marks_unavailable_ptp_identity_baseline_partial():
     assert report["pmc_identity_boundary_before_validation"]["status"] == "not_run"
     assert report["pmc_identity_boundary_comparison"]["status"] == "unavailable"
     assert report["collection_status"] == "partial"
+
+
+def test_journal_parser_extracts_ptp4l_gm_port_and_announce_events():
+    boot = "boot-before"
+    messages = [
+        "eth0: new foreign master 080027.fffe.d9e453-1",
+        "selected best master clock 080027.fffe.d9e453",
+        "eth0: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT",
+        "eth0: master tx announce timeout",
+    ]
+    import json
+    lines = []
+    for index, message in enumerate(messages):
+        lines.append(json.dumps({
+            "_BOOT_ID": boot,
+            "__MONOTONIC_TIMESTAMP": str(1000000 + index),
+            "__REALTIME_TIMESTAMP": str(1795700000000000 + index),
+            "MESSAGE": message,
+        }))
+    evidence = parse_linuxptp_journal_evidence("\n".join(lines), boot)
+    assert evidence["status"] == "parsed"
+    assert [event["type"] for event in evidence["events"]] == [
+        "gm_candidate_observed", "gm_selected", "port_state_transition",
+        "master_announce_transmit_timeout",
+    ]
+    assert evidence["coverage_status"] == "unknown"
+    assert "does not prove" in evidence["absence_interpretation"]
+    assert evidence["events"][-1]["interpretation"].startswith("ptp4l master announce")
+
+
+def test_journal_parser_fails_closed_on_wrong_boot_or_missing_monotonic():
+    import json
+    wrong_boot = json.dumps({
+        "_BOOT_ID": "other-boot", "__MONOTONIC_TIMESTAMP": "1",
+        "__REALTIME_TIMESTAMP": "2", "MESSAGE": "selected best master clock 080027.fffe.d9e453",
+    })
+    missing_mono = json.dumps({
+        "_BOOT_ID": "boot-before", "__REALTIME_TIMESTAMP": "2", "MESSAGE": "benign",
+    })
+    evidence = parse_linuxptp_journal_evidence(
+        wrong_boot + "\n" + missing_mono, "boot-before"
+    )
+    assert evidence["status"] == "partial"
+    assert evidence["entry_count"] == 0
+    assert "journal_boot_id_mismatch:1" in evidence["issues"]
+    assert "journal_monotonic_timestamp_invalid:2" in evidence["issues"]
+
+
+def test_journal_parser_does_not_claim_stability_when_no_event_is_present():
+    evidence = parse_linuxptp_journal_evidence(
+        _journal_output(message="ptp4l: port 1: periodic status"), "boot-before"
+    )
+    assert evidence["status"] == "parsed"
+    assert evidence["event_count"] == 0
+    assert evidence["coverage_status"] == "unknown"
+    assert "does not prove" in evidence["absence_interpretation"]
+
+
+def test_journal_parser_rejects_malformed_json():
+    evidence = parse_linuxptp_journal_evidence("{not-json}", "boot-before")
+    assert evidence["status"] == "partial"
+    assert "journal_json_invalid_line:1" in evidence["issues"]
