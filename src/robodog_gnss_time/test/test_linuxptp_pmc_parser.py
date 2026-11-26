@@ -199,10 +199,7 @@ def test_snapshot_rejects_mixed_responder_clock_identities():
         "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
         "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT UNKNOWN_DATA_SET",
     ),
-    lambda output: output.replace(
-        "sending: GET TIME_PROPERTIES_DATA_SET\n",
-        "",
-    ),
+    lambda output: output.split("sending: GET TIME_PROPERTIES_DATA_SET", 1)[0],
     lambda output: output.replace(
         "sending: GET CURRENT_DATA_SET\n",
         "sending: GET CURRENT_DATA_SET\n080027.fffe.7f327b-0 seq 14 RESPONSE MANAGEMENT CURRENT_DATA_SET\nstepsRemoved 1\noffsetFromMaster 20.0\nmeanPathDelay 300.0\n",
