@@ -176,6 +176,7 @@ def make_nav_cov(**overrides):
     values = dict(
         process_session_id="legacy-ubx-test-session",
         connection_generation=0,
+        gps_week=2450,
         i_tow_ms=345_000,
         pos_cor_valid=True,
         pos_cov_nn=1.0,
@@ -194,6 +195,7 @@ def make_nav_status(**overrides):
     values = dict(
         process_session_id="legacy-ubx-test-session",
         connection_generation=0,
+        gps_week=2450,
         i_tow_ms=345_000,
         gnss_fix_ok=True,
         carrier_solution_valid=True,
@@ -258,6 +260,25 @@ class TestRawUbxEpochJoin(unittest.TestCase):
                 -0.3, -0.2, 3.0,
             ),
         )
+
+
+    def test_four_message_join_rejects_cross_week_or_cross_session_records(self):
+        cases = (
+            {"pvt": make_raw_pvt(gps_week=2451)},
+            {"position": make_hpposllh(gps_week=2451)},
+            {"covariance": make_nav_cov(gps_week=2451)},
+            {"status": make_nav_status(gps_week=2451)},
+            {"status": make_nav_status(process_session_id="other-session")},
+            {"covariance": make_nav_cov(connection_generation=1)},
+        )
+        for overrides in cases:
+            with self.subTest(message=next(iter(overrides))):
+                with self.assertRaisesRegex(EpochPairingError, "session, connection generation and GPS week"):
+                    make_raw_observation(**overrides)
+
+    def test_four_message_source_clock_id_must_match_record_context(self):
+        with self.assertRaisesRegex(EpochPairingError, "source_clock_id does not match"):
+            make_raw_observation(source_clock_id="some-other-clock")
 
     def test_exact_itow_required_across_each_message_type(self):
         cases = (
