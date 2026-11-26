@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.201
+- 文档版本：v0.3.202
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -304,6 +304,7 @@
 5. 保持 Dynamic03 GT provenance gate：不排序/去重原始 GT，不将 2,594 行候选用于 APE/RPE；在 RTK/GT 来源、时钟、天线杆臂和 frame semantics 证据闭环前，不运行或宣称精度验收。
 6. 保持 x86_64、通用 ARM64 build、Jetson Orin 实机 build、仿真、真实 bag 回放、HIL、真实机器狗验证分级；不得混称。
 7. N9 专项验收前不回 main、不合并本专项成果；完成后先做差异/风险/CI/回归审查，再形成回 main 的提案。
+8. GNSS raw-time ingress 下一切片：在 C++ `GnssIngressEvent` 上游建立严格 UBX frame envelope decoder，校验 protocol/class/id/declared length/checksum，并把 NAV-TIMEGPS/NAV-TIMELS frame payload 与 event 的 process_session_id、connection_generation、ingress_sequence、receive_monotonic_ns 一起转换为 typed time records；Python mapper 增加可选但在 raw ingress 路径必需的 ingress_sequence monotonic fence，测试乱序 callback、重复 sequence、跨 generation stale callback。此后才设计 ROSIDL/rclcpp component；package SPDX license/maintainer 未经治理确认前，不增加 ROS runtime package/dependencies。
 
 ---
 
