@@ -19,7 +19,8 @@ LibusbEventLoop::~LibusbEventLoop()
 
 bool LibusbEventLoop::start()
 {
-  std::lock_guard<std::mutex> lock(mutex_);
+  std::lock_guard<std::mutex> shutdown_lock(shutdown_mutex_);
+  std::unique_lock<std::mutex> lock(mutex_);
   if (started_ || worker_.joinable()) return false;
   stopping_.store(false, std::memory_order_release);
   last_event_error_ = 0;
@@ -42,31 +43,18 @@ bool LibusbEventLoop::start()
 
 bool LibusbEventLoop::shutdown(std::uint32_t timeout_ms)
 {
+  std::lock_guard<std::mutex> shutdown_lock(shutdown_mutex_);
+  bool join_failed_startup = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     if (worker_.joinable() && worker_.get_id() == std::this_thread::get_id()) return false;
     if (!started_) {
-      // A worker that failed during startup has already exited; join it here.
-      if (worker_.joinable()) {
-        // The join is performed after releasing mutex_ below.
-      } else {
-        return transport_.drained();
-      }
+      if (worker_.joinable()) join_failed_startup = true;
+      else return transport_.drained();
     }
   }
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (!started_) {
-      if (worker_.joinable()) {
-        // join outside the lock
-      } else {
-        return transport_.drained();
-      }
-    }
-  }
-  if (!started_) {
-    if (worker_.joinable()) worker_.join();
+  if (join_failed_startup) {
+    worker_.join();
     return transport_.drained();
   }
 
