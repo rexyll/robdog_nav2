@@ -34,6 +34,8 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
     sensor_time_observations = {}
     control_diagnostic_observations = []
     control_diagnostic_errors = Counter()
+    hms_previous_by_source = {}
+    hms_lifecycle_observations = []
     ptp_audit = PtpCaptureAudit()
     interfaces = defaultdict(lambda: {"packets": 0, "capture_timestamp_min_ns": None,
                                        "capture_timestamp_max_ns": None})
@@ -96,6 +98,61 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
                                 "lidar_diag_status", "hms_code",
                             }
                         }
+                        if (message.cmd_id == 0x0102 and message.cmd_type == 0
+                                and "hms_code" in selected):
+                            source_key = (
+                                datagram.section_index, datagram.interface_id,
+                                datagram.source_ip, datagram.source_port,
+                                datagram.destination_ip, datagram.destination_port,
+                            )
+                            slots_by_raw = defaultdict(list)
+                            for code in selected["hms_code"]["value"]:
+                                slots_by_raw[code["raw"]].append(code["slot"])
+                            previous = hms_previous_by_source.get(source_key, {})
+                            current = {raw: tuple(sorted(slots))
+                                       for raw, slots in slots_by_raw.items()}
+                            appeared = sorted(set(current) - set(previous))
+                            disappeared = sorted(set(previous) - set(current))
+                            slot_changes = [
+                                {"raw_hex": f"0x{raw:08x}",
+                                 "previous_slots": list(previous[raw]),
+                                 "current_slots": list(current[raw])}
+                                for raw in sorted(set(current) & set(previous))
+                                if current[raw] != previous[raw]
+                            ]
+                            if len(hms_lifecycle_observations) < 4096:
+                                hms_lifecycle_observations.append({
+                                    "capture_timestamp_ns": datagram.capture_timestamp_ns,
+                                    "section_index": datagram.section_index,
+                                    "interface_id": datagram.interface_id,
+                                    "source": f"{datagram.source_ip}:{datagram.source_port}",
+                                    "destination": f"{datagram.destination_ip}:{datagram.destination_port}",
+                                    "sequence_number": message.sequence_number,
+                                    "active_codes": [
+                                        {"raw": raw, "raw_hex": f"0x{raw:08x}",
+                                         "slots": list(current[raw]),
+                                         "slot_count": len(current[raw])}
+                                        for raw in sorted(current)
+                                    ],
+                                    "appeared_in_snapshot": [f"0x{raw:08x}" for raw in appeared],
+                                    "no_longer_observed_in_snapshot": [f"0x{raw:08x}" for raw in disappeared],
+                                    "slot_or_multiplicity_changes": slot_changes,
+                                    "time_sync_diagnostics": {
+                                        name: selected[name].get("value")
+                                        for name in ("local_time_now", "last_sync_time",
+                                                     "time_offset", "time_sync_type")
+                                        if name in selected
+                                    },
+                                    "interpretation": (
+                                        "Snapshot comparison only. A code absent from this "
+                                        "complete HMS key is no longer observed in this snapshot; "
+                                        "this is not vendor-confirmed recovery. Slot order is "
+                                        "not treated as fault identity."
+                                    ),
+                                })
+                            else:
+                                counts["truncated_hms_lifecycle_observations"] += 1
+                            hms_previous_by_source[source_key] = current
                         if selected:
                             if len(control_diagnostic_observations) < 4096:
                                 control_diagnostic_observations.append({
@@ -261,6 +318,9 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
         "ptp_audit": ptp_report,
         "sensor_time_observations": sensor_observations,
         "control_diagnostic_observations": control_diagnostic_observations,
+        "hms_lifecycle_observations": hms_lifecycle_observations,
+        "hms_lifecycle_observation_limit": 4096,
+        "hms_lifecycle_observation_truncated": counts["truncated_hms_lifecycle_observations"],
         "control_diagnostic_observation_limit": 4096,
         "control_diagnostic_observation_truncated": counts[
             "truncated_control_diagnostic_observations"
@@ -294,6 +354,11 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
                 "key 0x800B is signed local_time_now minus synchronization-source time "
                 "(t0 - t1), in ns; it is a device-reported snapshot, not an independently "
                 "validated accuracy or live-lock measurement."
+            ),
+            "hms_lifecycle": (
+                "compares consecutive 0x0102 snapshots per capture interface and UDP flow; "
+                "a missing HMS key creates no empty snapshot; disappearance from a present "
+                "0x8011 key means not observed in that snapshot, not confirmed recovery"
             ),
             "diagnostic_last_sync_time": (
                 "key 0x800A is the last master-time sample (PTP Follow_Up t1 or GPS PPS edge); "
