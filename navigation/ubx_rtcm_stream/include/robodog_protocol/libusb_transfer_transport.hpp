@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <exception>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -70,7 +71,7 @@ public:
   LibusbTransferTransport(const LibusbTransferTransport &) = delete;
   LibusbTransferTransport & operator=(const LibusbTransferTransport &) = delete;
 
-  ~LibusbTransferTransport() { (void)close(); }
+  ~LibusbTransferTransport() { if (!close()) std::terminate(); }
 
   bool valid() const {
     return api_.alloc_transfer && api_.free_transfer && api_.fill_bulk_transfer &&
@@ -111,22 +112,16 @@ public:
       pending_.emplace(id, std::move(context));
     }
 
-    auto it = pending_.find(id);
-    auto & owned = *it->second;
-    const std::uint8_t transfer_type =
-      request.direction == UsbTransferDirection::In ? 0x80 : 0x00;
-    const std::uint8_t endpoint = static_cast<std::uint8_t>(
-      (request.endpoint & 0x0f) | transfer_type);
-    const int length = static_cast<int>(owned.buffer.size());
+    const int length = static_cast<int>(raw->buffer.size());
     const int fill_rc = api_.fill_bulk_transfer(
-      owned.transfer, device_handle_, endpoint, owned.buffer.data(), length,
+      raw->transfer, device_handle_, request.endpoint, raw->buffer.data(), length,
       request.timeout_ms, &LibusbTransferTransport::callback_trampoline, raw);
     if (fill_rc != api_.success_code) {
       release_unsubmitted(id);
       return false;
     }
 
-    const int submit_rc = api_.submit_transfer(owned.transfer);
+    const int submit_rc = api_.submit_transfer(raw->transfer);
     if (submit_rc != api_.success_code) {
       // A synchronous submit failure means libusb did not take ownership and
       // no completion callback is expected. This is the only post-registration
