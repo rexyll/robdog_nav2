@@ -76,6 +76,7 @@ private:
   std::atomic<bool> device_lost_{false};
   std::atomic<std::uint64_t> generation_{0};
   std::atomic<std::uint64_t> next_transfer_id_{1};
+  mutable std::mutex lifecycle_mutex_;
   mutable std::mutex decoder_mutex_;
   mutable std::mutex stats_mutex_;
   GnssUsbStreamStats counters_;
