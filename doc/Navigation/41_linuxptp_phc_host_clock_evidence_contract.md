@@ -274,3 +274,88 @@ systemd 字段语义依据：
 - _BOOT_ID、__MONOTONIC_TIMESTAMP、__REALTIME_TIMESTAMP、__CURSOR 字段说明：
   https://www.freedesktop.org/software/systemd/man/latest/systemd.journal-fields
 
+
+
+## 11. journald 保留/丢失上下文与时钟调整事件源审计（schema v3）
+
+schema v3 将 journal query 的时间语义与 collector 命令执行时间分开：
+- 每个 service journal query 保留 since_argument、显式 until_argument=null
+  （即没有传入 --until）、journalctl 调用的 realtime/monotonic 起止值，
+  并标记 human_since_expression_normalized=false。当前默认 --since 15 min ago
+  是交给 journalctl 解释的相对时间表达式；collector 不把它伪装成精确的
+  CLOCK_MONOTONIC 窗口。
+- 每条 entry 的 journal_command_execution_relation 只表示该 entry 的
+  __MONOTONIC_TIMESTAMP 是否落在执行该条 journalctl 命令的窄时间区间内。
+  它不是 --since 查询窗口内/外判断，更不是 collector 全部任务的窗口。
+- journal_storage_context 另行保留只读诊断命令原始输出：合并后的
+  systemd/journald.conf（systemd-analyze cat-config）、journalctl
+  --disk-usage、journalctl --list-boots，以及每个显式目标 service 的
+  systemctl cat。这些诊断命令为可选上下文；不可用会令该 context 标为
+  partial，但不单独使核心 PTP inventory 失败。
+
+### 11.1 丢失与限流通知
+
+systemd message catalog 为以下事件定义稳定 MESSAGE_ID：
+- a596d6fe7bfa4994828e72309e95d61e：service 日志因 rate limit 被抑制；
+  解析器额外提取 Suppressed N messages from <unit> 中的计数和受影响 unit。
+- e9bf28d037fff184e6ae669a370e694725：journal 报告 kernel messages missed；
+  解析器保留 N_DROPPED（若该字段存在）。
+
+采集器单独查询 systemd-journald.service 的 suppression records，避免只查询
+ptp4l/phc2sys 时漏掉 journald 自身产生的限流通知。出现上述记录是明确的
+丢失/抑制证据；没有出现并不证明没有丢失，因为通知自身也可能不在查询范围、
+已轮转/清理或被其他机制丢弃。全局配置、service unit drop-in、disk usage、
+boot inventory 和 suppression events 都只是诊断上下文，coverage_status
+仍固定为 unknown。Storage=persistent 也不保证无限保留；容量、保留期限、
+可用磁盘、轮转和 service 级 LogRateLimitIntervalSec= /
+LogRateLimitBurst= 都会影响可用日志。systemd 还说明 service 级限流设置
+覆盖 journald 全局默认值。
+
+### 11.2 CLOCK_REALTIME / PHC step 的独立证据路线
+
+LinuxPTP phc2sys.c 的 update_clock() 在 SERVO_JUMP 时调用
+clockadj_step(clock->clkid, -offset)；clockadj.c 以
+ADJ_SETOFFSET | ADJ_NANO 调用 clock_adjtime()。clkid 可以代表
+CLOCK_REALTIME，也可以是通过 /dev/ptpN 文件描述符构造的动态 PHC clock ID。
+clockadj_step() 成功路径本身不输出一条专用“step succeeded”日志；因此
+不能仅从 phc2sys journal 的普通 servo 状态行或没有 failed-to-step 日志，
+反推是否发生 step 或目标 clock 是什么。
+
+后续可靠事件捕获候选：
+1. 在目标内核实际提供的 syscall tracepoint 上，成对记录
+   clock_adjtime / adjtimex / clock_settime / settimeofday 的 entry 和
+   exit；采集 syscall 时间戳、PID/TGID、comm、clockid、返回值和 boot identity。
+2. 对 clock_adjtime，若要区分 ADJ_SETOFFSET、ADJ_OFFSET、
+   ADJ_FREQUENCY，还必须在 syscall entry 时安全读取并记录用户态 struct timex
+   的 modes 及相关字段；仅记录 syscall 参数中的用户指针不够。
+3. 对动态 PHC clock ID，必须在事件时刻把 clockid 关联回实际 fd 和
+   /dev/ptpN（并处理 fd close/reuse）；不可只根据数值猜 PHC index。
+4. 记录 syscall exit 的 errno/返回值，以区分请求尝试、内核接受和失败。
+   记录调用者身份、可执行文件、内核版本、tracepoint format/BTF 与丢事件统计。
+5. 对 PHC adjtime / adjfine 与 CLOCK_REALTIME 的修改分别归档；不要把
+   PHC step、system wall-clock step、frequency slew 和 phase correction 混为一类。
+
+Linux audit syscall 规则可以作为调用者与 syscall 参数的辅助审计，但它不能
+直接解引用 struct timex * 并完整记录 modes / time 内容，因此单靠 audit
+记录不足以区分 ADJ_SETOFFSET 与频率/相位调整。eBPF syscall entry/exit
+探针可作为进一步验证的候选，但需针对目标 Orin kernel 配置、BTF/tracepoint
+可用性、用户内存读取失败、ring-buffer/perf-buffer 丢事件和 PHC fd 映射做
+明确的完整性合同。当前 v0.3.249 尚未启用任何 tracing、audit rule 或
+eBPF 程序；不改变主机状态，只记录证据设计和后续验收条件。
+
+### 11.3 上游依据
+
+- systemd journald.conf：Storage、size/retention 与全局 RateLimit 配置：
+  https://www.freedesktop.org/software/systemd/man/latest/journald.conf.html
+- systemd exec：service 级 LogRateLimitIntervalSec /
+  LogRateLimitBurst 覆盖规则：
+  https://freedesktop.org/software/systemd/man/latest/systemd.exec.html
+- systemd catalog：rate-limit suppression 与 missed kernel message 的 MESSAGE_ID：
+  https://github.com/systemd/systemd/blob/main/catalog/systemd.catalog.in
+- LinuxPTP phc2sys.c 与 clockadj.c：
+  https://github.com/richardcochran/linuxptp/blob/master/phc2sys.c
+  https://github.com/richardcochran/linuxptp/blob/master/clockadj.c
+- Linux kernel event tracing：可用 tracepoints 由目标 kernel 的
+  available_events / event format 文件决定，不能假定每个内核都有同一事件集合：
+  https://www.kernel.org/doc/html/latest/trace/events.html
+
