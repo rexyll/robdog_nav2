@@ -274,6 +274,75 @@ class TestUbxIngressEventProcessor(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "sentinel"):
             GnssIngressEvent.from_ros_message(message)
 
+    def test_event_enum_fields_reject_bool_and_float_aliases(self):
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0))
+        generic = make_ubx_frame(0x01, 0x07, b"\\x00\\x01")
+        with self.assertRaisesRegex(EpochPairingError, "checksum status"):
+            processor.process(GnssIngressEvent(
+                event_type="Frame",
+                process_session_id=SESSION,
+                connection_generation=GENERATION,
+                ingress_sequence=1,
+                receive_monotonic_ns=1_001_000,
+                protocol=0,
+                checksum_status=True,
+                frame_sequence=1,
+                frame_connection_generation=GENERATION,
+                frame_bytes=generic,
+            ))
+
+        processor = make_processor()
+        processor.process(event("GenerationStarted", 0))
+        with self.assertRaisesRegex(EpochPairingError, "supported protocol"):
+            processor.process(GnssIngressEvent(
+                event_type="Frame",
+                process_session_id=SESSION,
+                connection_generation=GENERATION,
+                ingress_sequence=1,
+                receive_monotonic_ns=1_001_000,
+                protocol=0.0,
+                checksum_status=1,
+                frame_sequence=1,
+                frame_connection_generation=GENERATION,
+                frame_bytes=generic,
+            ))
+
+    def test_ros_message_requires_exact_uint_types_and_ranges(self):
+        from types import SimpleNamespace
+
+        base = dict(
+            event_type=0,
+            process_session_id=SESSION,
+            connection_generation=GENERATION,
+            ingress_sequence=0,
+            receive_monotonic_ns=1_000_000,
+            dropped_frame_events_total=0,
+            protocol=255,
+            checksum_status=0,
+            frame_sequence=0,
+            frame_connection_generation=0,
+            frame_bytes=[],
+        )
+        for field, invalid in (
+            ("event_type", 0.0),
+            ("connection_generation", True),
+            ("ingress_sequence", -1),
+            ("receive_monotonic_ns", 1.5),
+            ("dropped_frame_events_total", False),
+            ("protocol", 255.0),
+            ("checksum_status", False),
+            ("frame_sequence", -1),
+            ("frame_connection_generation", 0.0),
+        ):
+            message = SimpleNamespace(**{**base, field: invalid})
+            with self.subTest(field=field), self.assertRaises(EpochPairingError):
+                GnssIngressEvent.from_ros_message(message)
+
+        malformed_bytes = SimpleNamespace(**{**base, "frame_bytes": [256]})
+        with self.assertRaisesRegex(EpochPairingError, "frame_bytes"):
+            GnssIngressEvent.from_ros_message(malformed_bytes)
+
     def test_mapper_must_enforce_ingress_sequence(self):
         with self.assertRaisesRegex(ValueError, "require ingress_sequence"):
             GnssIngressEventProcessor(UbxReceiverTimeMapper())
