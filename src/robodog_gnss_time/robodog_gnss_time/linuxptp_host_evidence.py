@@ -453,6 +453,34 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
                 "realtime_query_end_ns": command_result["realtime_end_ns"],
                 "human_since_expression_normalized": False,
             }
+            unit_config = next(
+                (item for item in journal_context_results
+                 if item["name"] == "unit_logging_config:" + service_name), None,
+            )
+            namespace_match = (
+                re.search(r"^LogNamespace=(.*)$", unit_config["stdout"], re.MULTILINE)
+                if unit_config and unit_config["status"] == "ok" else None
+            )
+            namespace = namespace_match.group(1).strip() if namespace_match else None
+            if namespace is None:
+                journal_event_evidence[service_name]["namespace_observation"] = {
+                    "status": "unknown",
+                    "interpretation": "Could not establish the service journal namespace from systemd properties.",
+                }
+            elif namespace:
+                journal_event_evidence[service_name]["namespace_observation"] = {
+                    "status": "non_default_not_queried",
+                    "namespace": namespace,
+                    "interpretation": "Current query uses the default namespace; this service's configured journal namespace was not queried.",
+                }
+                journal_event_evidence[service_name]["status"] = "partial"
+                journal_event_evidence[service_name]["issues"].append(
+                    "journal_namespace_not_queried:" + namespace
+                )
+            else:
+                journal_event_evidence[service_name]["namespace_observation"] = {
+                    "status": "default_namespace_observed",
+                }
         else:
             journal_event_evidence[service_name] = {
                 "status": "unavailable", "entry_count": 0, "event_count": 0,
