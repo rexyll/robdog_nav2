@@ -83,6 +83,8 @@ class HostTimeSyncStatusAdapter:
             raise ValueError("sample_monotonic_ns must strictly increase")
         if not isinstance(message.reference_id, str) or not message.reference_id.strip():
             raise ValueError("reference_id must be a non-empty string")
+        if not isinstance(message.leap_status, str) or not message.leap_status.strip():
+            raise ValueError("leap_status must be a non-empty string")
         if isinstance(message.stratum, bool) or not isinstance(message.stratum, int) or not 0 <= message.stratum <= 255:
             raise ValueError("stratum must be uint8")
         if not isinstance(message.leap_status, str) or not message.leap_status.strip():
