@@ -5,6 +5,7 @@ option(ROBODOG_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorS
 option(ROBODOG_BUILD_FUZZER "Build the libFuzzer byte-stream target (Clang only)" OFF)
 option(ROBODOG_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
 option(ROBODOG_BUILD_LIBUSB_BINDING "Build the production libusb-1.0 function-table binding" OFF)
+option(ROBODOG_BUILD_TESTS "Build standalone CTest targets" ON)
 
 if(ROBODOG_ENABLE_TSAN AND ROBODOG_ENABLE_SANITIZERS)
   message(FATAL_ERROR "ThreadSanitizer cannot be combined with AddressSanitizer")
@@ -28,7 +29,7 @@ endif()
 
 if(ROBODOG_BUILD_LIBUSB_BINDING)
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+  pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET GLOBAL libusb-1.0)
   add_library(robodog_libusb_binding src/libusb_api_binding.cpp)
   target_include_directories(robodog_libusb_binding PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
@@ -38,6 +39,7 @@ if(ROBODOG_BUILD_LIBUSB_BINDING)
     robodog_ubx_rtcm_stream PkgConfig::LIBUSB)
 endif()
 
+if(ROBODOG_BUILD_TESTS)
 find_package(Threads REQUIRED)
 
 enable_testing()
@@ -97,6 +99,8 @@ add_executable(stream_decoder_tests tests/test_stream_decoder.cpp)
 target_link_libraries(stream_decoder_tests PRIVATE robodog_ubx_rtcm_stream)
 target_compile_options(stream_decoder_tests PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME stream_decoder_tests COMMAND stream_decoder_tests)
+
+endif()  # ROBODOG_BUILD_TESTS
 
 if(ROBODOG_BUILD_FUZZER)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
