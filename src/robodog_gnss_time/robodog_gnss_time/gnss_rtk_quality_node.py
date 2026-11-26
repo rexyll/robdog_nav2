@@ -14,6 +14,7 @@ from robodog_gnss_quality.quality_gate import (
     CovarianceType,
     GnssObservation as CoreObservation,
     GateConfig,
+    QualityDecision,
     RejectionReason,
     RtkQualityGate,
 )
@@ -124,7 +125,7 @@ class GnssRtkQualityNode(Node):
         self._fault = None
         self._max_fix_age_ns = max_fix_age_ns
         self._watchdog = self.create_timer(
-            min(max_fix_age_ns / 4_000_000_000.0, 0.1), self._on_watchdog
+            max(0.001, min(max_fix_age_ns / 4_000_000_000.0, 0.1)), self._on_watchdog
         )
         initial = GnssQualityStatus()
         initial.qualified = False
@@ -174,25 +175,34 @@ class GnssRtkQualityNode(Node):
             observation, context = observation_from_ros(message)
             receive_ns = observation.receive_monotonic_ns
             if self._last_receive_ns is not None and receive_ns <= self._last_receive_ns:
-                raise ValueError("observation receive_monotonic_ns must be strictly increasing")
+                decision = QualityDecision(
+                    qualified=False,
+                    reason=RejectionReason.OUT_OF_ORDER,
+                    consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
+                )
+                self._publish_decision(observation, context, decision)
+                return
+            expected_clock_id = (
+                f"{context[0]}:connection:{context[1]}:gps-week:{context[2]}"
+            )
+            if observation.source_clock_id != expected_clock_id:
+                raise ValueError("source_clock_id does not match observation session/generation/GPS week")
             if self._active_context is not None:
                 old_session, old_generation, old_week, _ = self._active_context
                 if context[0] == old_session and context[1] < old_generation:
-                    decision = type("Rejected", (), {
-                        "qualified": False, "reason": RejectionReason.OUT_OF_ORDER,
-                        "consecutive_fixed_samples": self._gate.consecutive_fixed_samples,
-                        "horizontal_std_m": None, "vertical_std_m": None,
-                        "estimated_speed_mps": None,
-                    })()
+                    decision = QualityDecision(
+                        qualified=False,
+                        reason=RejectionReason.OUT_OF_ORDER,
+                        consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
+                    )
                     self._publish_decision(observation, context, decision)
                     return
                 if context[0] == old_session and context[1] == old_generation and context[2] < old_week:
-                    decision = type("Rejected", (), {
-                        "qualified": False, "reason": RejectionReason.OUT_OF_ORDER,
-                        "consecutive_fixed_samples": self._gate.consecutive_fixed_samples,
-                        "horizontal_std_m": None, "vertical_std_m": None,
-                        "estimated_speed_mps": None,
-                    })()
+                    decision = QualityDecision(
+                        qualified=False,
+                        reason=RejectionReason.OUT_OF_ORDER,
+                        consecutive_fixed_samples=self._gate.consecutive_fixed_samples,
+                    )
                     self._publish_decision(observation, context, decision)
                     return
             if context[:3] != (self._active_context[:3] if self._active_context else None):
