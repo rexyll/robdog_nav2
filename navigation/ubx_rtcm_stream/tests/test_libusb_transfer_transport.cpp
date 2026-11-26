@@ -169,6 +169,48 @@ int main() {
   }
 
   {
+    // A native actual_length larger than the submitted buffer is rejected.
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.endpoint = 0x85;
+    request.direction = UsbTransferDirection::In;
+    request.buffer.resize(4);
+    bool called = false;
+    assert(transport.submit(40, 9, request,
+      [&](auto, auto, LibusbCompletionStatus status, auto data, int actual) {
+        called = true;
+        assert(status == LibusbCompletionStatus::Overflow);
+        assert(data.empty() && actual == 0);
+      }));
+    fake.complete_next(0, 5);
+    assert(transport.poll_events() == 0);
+    assert(called && transport.pending_count() == 0);
+    assert(transport.close());
+  }
+
+  {
+    // A negative native actual_length is rejected as malformed metadata.
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.endpoint = 0x86;
+    request.direction = UsbTransferDirection::In;
+    request.buffer.resize(4);
+    bool called = false;
+    assert(transport.submit(41, 9, request,
+      [&](auto, auto, LibusbCompletionStatus status, auto data, int actual) {
+        called = true;
+        assert(status == LibusbCompletionStatus::Overflow);
+        assert(data.empty() && actual == 0);
+      }));
+    fake.complete_next(0, -1);
+    assert(transport.poll_events() == 0);
+    assert(called && transport.pending_count() == 0);
+    assert(transport.close());
+  }
+
+  {
     FakeLibusb fake;
     LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
     LibusbTransferRequest request;
