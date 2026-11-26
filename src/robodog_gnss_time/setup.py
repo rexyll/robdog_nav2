@@ -23,6 +23,7 @@ setup(
             "gnss_observation_node = robodog_gnss_time.gnss_observation_node:main",
             "gnss_rtk_quality_node = robodog_gnss_time.gnss_rtk_quality_node:main",
             "host_time_sync_node = robodog_gnss_time.host_time_sync_node:main",
+            "robodog_linuxptp_host_evidence = robodog_gnss_time.linuxptp_host_evidence:main",
         ],
     },
 )
