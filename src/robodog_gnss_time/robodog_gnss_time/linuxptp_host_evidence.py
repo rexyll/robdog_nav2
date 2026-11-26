@@ -9,6 +9,7 @@ import re
 import subprocess
 import time
 
+from .linux_kernel_trace_capabilities import collect_linux_kernel_trace_capabilities
 from .linuxptp_pmc_parser import (
     parse_pmc_snapshot,
     validate_pmc_snapshot_domain,
@@ -325,6 +326,7 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
 
     commands = [
         ("timedatectl", ["timedatectl", "show"]),
+        ("systemd_version", ["systemctl", "--version"]),
         ("ethtool_timestamping", ["ethtool", "-T", config.interface]),
         ("chrony_tracking", ["chronyc", "-n", "tracking"]),
         ("chrony_sources", ["chronyc", "-n", "sources", "-v"]),
@@ -577,8 +579,14 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         )
     collection_status = "complete" if not collection_issues else "partial"
 
+    systemd_version_result = next(
+        (item for item in all_command_results if item["name"] == "systemd_version"),
+        None,
+    )
+    kernel_trace_capabilities = collect_linux_kernel_trace_capabilities()
+
     return {
-        "schema_version": 3,
+        "schema_version": 4,
         "evidence_kind": "read_only_linuxptp_host_inventory",
         "host_boot_id": boot_id,
         "host_boot_id_error": boot_id_error,
@@ -622,6 +630,8 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "pmc_identity_boundary_comparison": pmc_boundary_comparison,
         "journal_event_evidence": journal_event_evidence,
         "journal_storage_context": journal_storage_context,
+        "systemd_version_evidence": systemd_version_result,
+        "clock_step_trace_capabilities": kernel_trace_capabilities,
         "collection_status": collection_status,
         "collection_issues": collection_issues,
         "host_time_sync_claim": "not_evaluated",
