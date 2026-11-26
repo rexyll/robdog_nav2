@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.207
+- 文档版本：v0.3.208
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1052,3 +1052,6 @@
 
 
 - GNSS ingress stop 后迟到终态 callback 防护（2026-11-26 / v0.3.207）：继续检查 DeviceLost/TransportFault 与 Stopped 的时序，补充一个边界：即使正常 DeviceRuntime callback drain 合同要求 Stopped 之后不应再有回调，队列 API 仍应拒绝在 Stopped 后追加新的终态事件，防止调用层误用或异常晚到通知污染生命周期序列。`mark_device_lost()` / `mark_transport_fault()` 现在在 close 已提交且不存在待重试 terminal cause 时拒绝事件；此前因队列满而已保留 terminal type 的事件仍可重试。新增测试验证正常 `GenerationStarted → Stopped` 后，迟到 DeviceLost 和 TransportFault 均被拒绝，且不会新增 control event。代码 commits：header `91599bed4a9bdfa8dde41b5c8601c2f4cb2f3881`、test `ab33426a8b8062700a78e95d98a82e049a9aaedf`；doc/Navigation/34 §10 已更新。上一完整代码 head `525087e5c9b6ce7ceaf7980323b9055f1b6b7a28` 的 Actions run `45764307051` 全四 job success（ASan/UBSan CTest 10/10、TSan 10/10、Clang libFuzzer、libusb binding）；本次 late-callback 修改的最终 head `ab33426a8b8062700a78e95d98a82e049a9aaedf` 对应 run `45764506375` pending，header commit run `45764498865` 正在执行。尚未将新修改标记 CI 通过。下一步取得最终 head 完整 CI 结果；然后对 GnssUsbStream restart、queue drain、first-terminal/Stopped 顺序做跨组件集成测试，之后进入 C++→ROS 2 bridge 的 executor/DDS ingress fencing 设计与实现，继续只在 nav 分支。
+
+
+- GNSS ingress terminal-event idempotence CI 验收（2026-11-26 / v0.3.208）：最终 queue code/test head `ab33426a8b8062700a78e95d98a82e049a9aaedf` 对应 Actions run `45764506375`，四个 job 全部 success：GCC C++17 + ASan/UBSan CTest 10/10、ThreadSanitizer CTest 10/10、Clang libFuzzer smoke、production libusb 1.0 binding compile/CTest 1/1。该 head 覆盖 first-terminal-cause-wins、同类终态重复 callback 幂等、冲突终态拒绝、terminal event 入队失败后重试、active generation 替换拒绝、GenerationStarted admission 失败不修改 current_generation、Stopped 后迟到终态 callback 拒绝。上一代码 head `525087e5...` 的 run `45764307051` 也全成功；本次以 `45764506375` 作为最终队列逻辑证据。注意测试仅是 standalone synthetic queue，不等于多真实 USB completion 的设备行为。下一步新增 GnssUsbStream 完整 stop→restart 集成测试，确认 Stopped 与下一代 GenerationStarted 的全局 ingress_sequence 连续、generation 单调递增、decoder partial state 不跨代；之后再进入 ROS 2 bridge。
