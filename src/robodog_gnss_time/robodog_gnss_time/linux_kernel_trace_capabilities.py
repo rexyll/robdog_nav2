@@ -34,8 +34,8 @@ _SYSCALL_EVENTS = (
     "sys_enter_settimeofday",
     "sys_exit_settimeofday",
 )
-_FIELD_RE = re.compile(r"^\\s*field:[^;]+\\s+([A-Za-z_][A-Za-z0-9_]*)(?:\\[[^]]+\\])?;")
-_MOUNT_ESCAPE_RE = re.compile(r"\\\\([0-7]{3})")
+_FIELD_RE = re.compile(r"^\s*field:[^;]+\s+([A-Za-z_][A-Za-z0-9_]*)(?:\[[^]]+\])?;")
+_MOUNT_ESCAPE_RE = re.compile(r"\\([0-7]{3})")
 
 
 def _decode_mount_path(value):
