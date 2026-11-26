@@ -124,11 +124,12 @@ class TestUbxTimeMapper(unittest.TestCase):
     def test_current_leap_validity_is_independent_of_event_schedule_and_guard(self):
         m = mapper(trusted_leap_sources={2})
         m.add_timegps(timegps(), 100)
-        no_event_time = m.add_timels(timels(valid=0x01), 110)
+        no_event_time = m.add_timels(timels(valid=0x01, change=2), 110)
         self.assertTrue(no_event_time.valid)
         self.assertTrue(no_event_time.utc_stamp_valid)
         self.assertFalse(no_event_time.leap_event_valid)
         self.assertIsNone(no_event_time.time_to_leap_event_seconds)
+        self.assertTrue(no_event_time.utc_stamp_valid)
 
         for offset in (-1, 0, 1):
             guarded = mapper(trusted_leap_sources={2})
