@@ -103,6 +103,33 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
                 connection_generation=CONNECTION_GENERATION, gps_week=32768
             )
 
+
+    def test_all_four_decoders_reject_invalid_gps_week_context(self):
+        decoders = (
+            lambda week: decode_nav_pvt_message(
+                pvt(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=week
+            ),
+            lambda week: decode_nav_hp_pos_llh_message(
+                hppos(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=week
+            ),
+            lambda week: decode_nav_cov_message(
+                cov(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=week
+            ),
+            lambda week: decode_nav_status_message(
+                status(), 10, process_session_id=PROCESS_SESSION_ID,
+                connection_generation=CONNECTION_GENERATION, gps_week=week
+            ),
+        )
+        for index, decode in enumerate(decoders):
+            with self.subTest(decoder=index):
+                with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+                    decode(True)
+                with self.assertRaisesRegex(EpochPairingError, "gps_week"):
+                    decode(32768)
+
     def test_decode_pvt_carrier_solution_values(self):
         self.assertEqual(decode_pvt(pvt(0), 10).carrier_solution,
                          CarrierSolution.NO_SOLUTION)
@@ -120,6 +147,10 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         self.assertEqual((decoded.height_mm, decoded.height_hp), (3000, -4))
         self.assertFalse(decoded.invalid_lon)
         self.assertEqual(decoded.receive_monotonic_ns, 11)
+        self.assertEqual(
+            (decoded.process_session_id, decoded.connection_generation, decoded.gps_week),
+            (PROCESS_SESSION_ID, CONNECTION_GENERATION, GPS_WEEK),
+        )
 
     def test_decode_covariance_and_status(self):
         decoded_cov = decode_cov(cov(), 12)
@@ -129,6 +160,10 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
         self.assertTrue(decoded_status.gnss_fix_ok)
         self.assertTrue(decoded_status.carrier_solution_valid)
         self.assertEqual(decoded_status.carrier_solution, CarrierSolution.FIXED)
+        self.assertEqual(
+            (decoded_status.process_session_id, decoded_status.connection_generation, decoded_status.gps_week),
+            (PROCESS_SESSION_ID, CONNECTION_GENERATION, GPS_WEEK),
+        )
 
     def test_rejects_invalid_itow_receive_time_and_boolean_types(self):
         invalid = pvt()
