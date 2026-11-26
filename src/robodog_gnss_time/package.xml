@@ -6,7 +6,8 @@
   <maintainer email="maintainers@example.invalid">RobDog Nav2 maintainers</maintainer>
   <license>UNSPECIFIED</license>
   <buildtool_depend>ament_python</buildtool_depend>
-  <exec_depend>rclpy</exec_depend>\n  <exec_depend>rcl_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>rcl_interfaces</exec_depend>
   <exec_depend>robodog_gnss_interfaces</exec_depend>
   <exec_depend>robodog_gnss_quality</exec_depend>
   <test_depend>python3-pytest</test_depend>
