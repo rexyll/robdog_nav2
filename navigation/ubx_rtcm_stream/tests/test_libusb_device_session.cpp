@@ -11,6 +11,7 @@ using robodog_protocol::UsbDeviceSessionConfig;
 
 struct FakeDeviceApi {
   int active{1};
+  int kernel_driver_not_supported{-12};
   int claim_result{0};
   int alt_result{0};
   int release_result{0};
@@ -45,6 +46,7 @@ struct FakeDeviceApi {
     a.claim_interface = [this](void *, int) { ++claim_count; return claim_result; };
     a.release_interface = [this](void *, int) { ++release_count; return release_result; };
     a.set_alternate_setting = [this](void *, int, int) { return alt_result; };
+    a.kernel_driver_not_supported_code = kernel_driver_not_supported;
     return a;
   }
 };
@@ -71,6 +73,15 @@ int main() {
     assert(!session.open(config));
     assert(fake.claim_count == 0);
     assert(fake.close_count == 1 && fake.exit_count == 1);
+  }
+  {
+    FakeDeviceApi fake;
+    fake.active = fake.kernel_driver_not_supported;
+    LibusbDeviceSession session(fake.api());
+    assert(session.open(config));
+    assert(fake.detach_count == 0);
+    assert(session.close());
+    assert(fake.attach_count == 0);
   }
   {
     FakeDeviceApi fake;
