@@ -83,6 +83,25 @@ int main() {
   }
 
   {
+    GnssIngressQueue queue(1, OverflowPolicy::DropOldest, "process-E");
+    assert(queue.begin_generation(1, 10));
+    // The only slot is occupied by GenerationStarted. stop must report that
+    // Stopped could not be recorded, and a later retry must succeed after drain.
+    assert(!queue.close(20));
+    assert(queue.stats().closed);
+    assert(!queue.stats().stopped_event_recorded);
+    auto started = queue.try_pop();
+    assert(started && started->type == GnssIngressEventType::GenerationStarted);
+    assert(queue.close(30));
+    assert(queue.stats().stopped_event_recorded);
+    auto stopped = queue.try_pop();
+    assert(stopped && stopped->type == GnssIngressEventType::Stopped);
+    assert(stopped->ingress_sequence == 1);
+    assert(queue.close(40));
+    assert(queue.stats().accepted_control_events == 2);
+  }
+
+  {
     GnssIngressQueue queue(2, OverflowPolicy::RejectNewest, "process-D");
     assert(queue.begin_generation(1, 1));
     assert(queue.push_frame(frame(0, 1), 2) == GnssIngressPushResult::Accepted);
