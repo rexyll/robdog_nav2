@@ -154,7 +154,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert all(command.startswith("GET ") for command in commands)
     assert pmc_kwargs["shell"] is False
     assert report["pmc_snapshot_validation"]["status"] == "valid"
-    assert report["schema_version"] == 3
+    assert report["schema_version"] == 4
     assert report["pmc_snapshot_validation"]["clock_identity"] == "080027.fffe.7f327b"
     assert report["expected_transport_specific"] == 0
     assert report["expected_target_port_identity"] is None
@@ -617,6 +617,9 @@ def test_optional_journal_context_failure_does_not_claim_or_break_core_inventory
     assert report["journal_storage_context"]["status"] == "partial"
     assert report["journal_storage_context"]["coverage_status"] == "unknown"
     assert report["collection_status"] == "complete"
+    assert "clock_step_trace_capabilities" in report
+    assert "kernel_config_sources" in report["clock_step_trace_capabilities"]
+    assert report["systemd_version_evidence"]["name"] == "systemd_version"
 
 
 def test_collector_marks_non_default_journal_namespace_not_queried_partial():
