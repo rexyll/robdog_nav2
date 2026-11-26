@@ -76,11 +76,21 @@ public:
     return stale ? CallbackDisposition::StaleGeneration : CallbackDisposition::Drained;
   }
 
-  bool submission_failed(std::uint64_t id) {\n    std::lock_guard<std::mutex> lock(mutex_);\n    auto it = records_.find(id);\n    if (it == records_.end() || it->second.state != TransferState::Submitted) return false;\n    it->second.state = TransferState::SubmitFailed;\n    cv_.notify_all();\n    return true;\n  }\n\n  bool release(std::uint64_t id) {
+  bool submission_failed(std::uint64_t id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = records_.find(id);
+    if (it == records_.end() || it->second.state != TransferState::Submitted) return false;
+    it->second.state = TransferState::SubmitFailed;
+    cv_.notify_all();
+    return true;
+  }
+
+  bool release(std::uint64_t id) {
     std::lock_guard<std::mutex> lock(mutex_);
     auto it = records_.find(id);
     if (it == records_.end()) return false;
     if (it->second.state != TransferState::CallbackDrained &&
+        it->second.state != TransferState::SubmitFailed &&
         it->second.state != TransferState::Allocated) return false;
     it->second.state = TransferState::Released;
     cv_.notify_all();
