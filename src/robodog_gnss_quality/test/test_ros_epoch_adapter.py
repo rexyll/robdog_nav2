@@ -21,24 +21,24 @@ GPS_WEEK = 2450
 GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:{GPS_WEEK}"
 
 
-def pvt(i_tow=1000, receive=100):
-    return UbxNavPvtEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, CarrierSolution.FIXED, receive)
+def pvt(i_tow=1000, receive=100, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
+    return UbxNavPvtEpoch(session_id, generation, i_tow, True, CarrierSolution.FIXED, receive)
 
 
-def position(i_tow=1000, receive=105):
+def position(i_tow=1000, receive=105, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
     return UbxNavHpPosLlhEpoch(
-        PROCESS_SESSION_ID, CONNECTION_GENERATION,
+        session_id, generation,
         i_tow, -1220000000, 370000000, 15000, 0, 0, 0,
         False, False, False, False, False, False, receive,
     )
 
 
-def covariance(i_tow=1000, receive=110):
-    return UbxNavCovEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
+def covariance(i_tow=1000, receive=110, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
+    return UbxNavCovEpoch(session_id, generation, i_tow, True, 1.0, 0.1, 0.2, 2.0, 0.3, 3.0, receive)
 
 
-def status(i_tow=1000, receive=115):
-    return UbxNavStatusEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, i_tow, True, True, CarrierSolution.FIXED, receive)
+def status(i_tow=1000, receive=115, session_id=PROCESS_SESSION_ID, generation=CONNECTION_GENERATION):
+    return UbxNavStatusEpoch(session_id, generation, i_tow, True, True, CarrierSolution.FIXED, receive)
 
 
 def mapping(i_tow=1000, receive=120, source_time=10_000_000, valid=True,
@@ -150,10 +150,10 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
     def test_utc_stamp_may_remain_unavailable_even_with_valid_gps_mapping(self):
         a = adapter()
         for record, add in (
-            (pvt(), a.add_pvt),
-            (position(), a.add_position),
-            (covariance(), a.add_covariance),
-            (status(), a.add_status),
+            (pvt(session_id="f9p-session", generation=3), a.add_pvt),
+            (position(session_id="f9p-session", generation=3), a.add_position),
+            (covariance(session_id="f9p-session", generation=3), a.add_covariance),
+            (status(session_id="f9p-session", generation=3), a.add_status),
         ):
             add(record)
         result = a.add_time_mapping(mapping(utc_valid=False))
