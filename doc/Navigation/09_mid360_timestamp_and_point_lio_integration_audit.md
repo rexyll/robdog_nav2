@@ -488,3 +488,16 @@ Livox 当前 MID-360 文档列出三种同步方式：IEEE 1588v2.0 UDP/IP PTP�
 - 同一 domain 多个 Announce GM identity 触发多 GM 候选风险，而不输出“已选 GM”结论。
 
 部署基线应优先明确选择一种与 MID-360 相符的时间同步模式，并确保网络中只有预期的单一 master 时钟体系；具体选择 IEEE 1588v2.0 UDP/IP 或 gPTP L2，需根据 Orin 网卡/交换机支持、其他传感器兼容性和实际拓扑验证后冻结。不能在没有硬件证据时预先宣称哪一种已可用。
+
+
+### 17.5 gPTP profile 专属语义：不能套用 Announce/BMCA
+
+Livox 的 gPTP 说明进一步限定其实现遵循 AUTOSAR Time Sync over Ethernet 对 IEEE 802.1AS 的车载应用要求：取消 Announce、 不支持 BMCA，master 侧不发送 Delay_Req；由 domain controller 担任 master，Livox 设备担任 slave。该 profile 的链路延迟/offset 计算流程与 PTPv2.0 UDP/IP 的 E2E Delay_Req/Delay_Resp 交换不同。<Cite refs={ ["turn968707view0"] } />
+
+因此：
+- `multiple_gm_candidates_by_domain` 仅对抓包中实际出现 Announce 的 Announce-based PTP profile 有意义，**不能用于 gPTP AUTOSAR profile 的 GM 选举/切换判断**。
+- 新增 `ethernet_l2_sync_source_observations`，按 section/interface/domain/sourcePortIdentity 汇总 L2 Sync 与 Follow_Up 观察；若同一域观察到多个 L2 Sync source identity，报告 `multiple_ethernet_l2_sync_sources_by_domain`，仅表示多个报文发送者，不宣称存在多个活动 GM 或设备已选中某个 source。
+- gPTP 的真实 master 选择证据应来自网络 domain-controller 配置、交换机/端口状态、MID-360 设备状态和同步时间戳/offset 证据；当前工具尚未解析 AUTOSAR profile TLV、domain controller 管理状态或设备 vendor-specific 状态。
+- 当前 PTPv2.0 Announce audit 与 gPTP L2 Sync source audit 分开呈现；不得将 PTPv2.0 的 BMCA/foreign-master timeout 测试直接当作 gPTP profile 验收。
+
+新增合成测试覆盖 L2 Sync/Follow_Up source identity 汇总、多 source 风险边界，以及 Announce 多 GM 报告明确排除 gPTP BMCA 结论。真实 domain controller / gPTP profile 状态仍未验证。
