@@ -294,3 +294,5 @@
 - [36 — NAV-TIMEGPS/NAV-TIMELS raw payload decoder with session context](36_ubx_nav_timegps_timels_payload_decoder.md)
 
 - [38 — GNSS ROS 2 transport publisher、subscriber match gate 与 DDS 生命周期合同](38_gnss_ros2_transport_publisher_and_qos_contract.md)
+
+- [GNSS RTK quality ROS runtime](39_gnss_rtk_quality_ros_runtime.md)
