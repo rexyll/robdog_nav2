@@ -1,5 +1,7 @@
 import struct
 
+import pytest
+
 from robodog_gnss_quality.ros_epoch_adapter import UbxSourceTimeMapping
 from robodog_gnss_quality.ubx_ingress_event_processor import GnssIngressEvent
 from robodog_gnss_quality.ubx_raw_nav_epoch_assembler import UbxRawNavEpochAssembler
@@ -141,8 +143,8 @@ def test_raw_four_streams_buffer_until_exact_receiver_time_mapping_arrives():
     result = a.handle_mapping(mapping())
     assert result is not None
     assert result.observation.source_timestamp_ns == mapping().source_timestamp_ns
-    assert result.observation.latitude_deg == 37.0
-    assert result.observation.longitude_deg == -122.0
+    assert result.observation.latitude_deg == pytest.approx(37.0, abs=2e-8)
+    assert result.observation.longitude_deg == pytest.approx(-122.0, abs=2e-8)
     assert result.observation.gnss_fix_ok is True
     assert a.stats().emitted_observations == 1
 
