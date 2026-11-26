@@ -235,3 +235,7 @@
 - [UBX/RTCM3 parser tests](../../navigation/ubx_rtcm_stream/tests/test_stream_decoder.cpp)
 
 - [20 — UBX/RTCM3 有界 ingress queue、generation fence 与 TSan 合同](20_ubx_rtcm_bounded_ingress_queue_design_and_tsan_contract.md)
+
+- [21 — libusb transfer 生命周期状态机与 fake-transport 验收合同](21_ubx_dgnss_libusb_transfer_lifecycle_and_fake_transport_contract.md)
+- [Transfer lifecycle tracker](../../navigation/ubx_rtcm_stream/include/robodog_protocol/transfer_lifecycle.hpp)
+- [Transfer lifecycle synthetic tests](../../navigation/ubx_rtcm_stream/tests/test_transfer_lifecycle.cpp)

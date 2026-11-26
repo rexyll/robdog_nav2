@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.162
+- 文档版本：v0.3.163
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -924,3 +924,6 @@
 
 
 - 有界 ingress queue 三路 CI 验证闭环（2026-11-26 / v0.3.162）：GitHub Actions run 45742626968 success（head f96071d4df0e092e99b9cc971a8f3be50056901e，https://github.com/rexyll/robdog_nav2/actions/runs/45742626968）。三个 job 全部通过：ThreadSanitizer bounded queue concurrency tests（Configure/Build/TSan CTest）、Clang libFuzzer smoke（Configure/Build/20 秒 fuzz）、C++17 parser ASan/UBSan（Configure/Build/CTest）。TSan job 覆盖 4 producer + 1 consumer、4000 帧传输与多 producer overflow；该结果仅证明独立 queue 原语在合成并发测试中通过，不是上游 libusb transfer_queue 或真实 component_container_mt 驱动验收。当前 parser+queue 原语均有本地 sanitizer 与 GitHub Actions 证据；下一阶段建立 fake transport seam、transfer ownership/RAII 生命周期模型与可重复 detach/cancel/shutdown 测试，再按固定版 ublox_dgnss 源码接入 ROS 2 Jazzy。
+
+
+- libusb transfer 生命周期状态机首个实现切片（2026-11-26 / v0.3.163）：复核固定上游 `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` 的 `usb.hpp` / `usb.cpp` / `ublox_dgnss_node.cpp`。确认 IN/OUT `NO_DEVICE` callback 提前 return、普通 bool completed 跨线程访问、transfer queue 锁外 size 读取、持队列锁 cancel 后立即 clear、shutdown 缺少可见 callback drain barrier，以及 submit 成功后才登记 queue 的竞态窗口。新增独立 transport-neutral `TransferLifecycle` 状态机：Allocated→Submitted→CancelRequested→CallbackDrained→Released；禁止 callback drain 前释放；shutdown 停止新登记并返回需 cancel 的 transfer；generation rollover 要求旧代全部 released；stale callback 仍必须完成 drain。新增 4 组测试，覆盖 premature release、cancel 幂等、shutdown gate/drain/generation rollover、stale/duplicate callback，以及 200 轮 cancel-vs-callback 并发竞态。扩展 standalone CMake/CTest。GCC C++17 本地 ASan/UBSan 测试通过；GCC ThreadSanitizer 测试通过（无 race 报告）。新增 `doc/Navigation/21_ubx_dgnss_libusb_transfer_lifecycle_and_fake_transport_contract.md`，记录上游静态证据、状态机和后续 fake transport 适配要求。代码与文档均仅提交到 `nav`；本轮尚未实现完整 fake libusb transport、RAII libusb adapter、ROS 2 component integration，也未修改上游驱动。GitHub Actions 对新 CTest target 的运行结果待确认；不将本地合成状态机测试表述为真实 libusb/设备验收。

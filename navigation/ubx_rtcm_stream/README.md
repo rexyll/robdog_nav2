@@ -9,9 +9,10 @@ This is a transport- and ROS-independent C++17 incremental parser for the parser
 - Arbitrary chunk boundaries, concatenated UBX/RTCM3/NMEA frames, noise skipping, checksum-failure resynchronization, connection-generation reset, frame sequence metadata, and bounded decoder storage.
 - NMEA CR, LF and CRLF termination; XOR checksum validation; explicit `Valid` / `Absent` status; optional policy requiring a checksum; configurable sentence length ceiling.
 - A non-blocking bounded frame queue with explicit DropOldest / RejectNewest policy, connection-generation fencing, close/drain semantics, and synchronized counters.
+- A transport-neutral USB transfer lifecycle tracker with cancel-request, callback-drain, release gating, shutdown barrier, and generation rollover.
 - No ROS 2, libusb, or external test-framework dependency.
 
-NMEA framing and deterministic randomized segmentation tests are implemented. ROS/libusb integration, production queue synchronization, and USB transfer lifecycle handling are not implemented.
+NMEA framing, deterministic randomized segmentation tests, bounded queue tests, and the independent transfer lifecycle tracker are implemented. ROS/libusb integration and production transfer ownership/callback draining are not implemented.
 
 ## Build and test
 
@@ -39,3 +40,5 @@ TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build/ubx_rtcm_stream-tsan --outpu
 ```
 
 The UBX payload ceiling is a deployment policy. The default permits the full uint16 protocol field; production configuration must set a smaller value only after the target F9P output-message whitelist and memory budget are established.
+
+Lifecycle tracker tests are included in the same CTest suite. The tracker is a state-machine test seam only; it does not call libusb or own real transfers.

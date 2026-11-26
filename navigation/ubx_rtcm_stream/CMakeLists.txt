@@ -33,6 +33,11 @@ target_link_libraries(test_bounded_frame_queue PRIVATE robodog_ubx_rtcm_stream T
 target_compile_options(test_bounded_frame_queue PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME bounded_frame_queue_tests COMMAND test_bounded_frame_queue)
 
+add_executable(test_transfer_lifecycle tests/test_transfer_lifecycle.cpp)
+target_link_libraries(test_transfer_lifecycle PRIVATE robodog_ubx_rtcm_stream Threads::Threads)
+target_compile_options(test_transfer_lifecycle PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME transfer_lifecycle_tests COMMAND test_transfer_lifecycle)
+
 add_executable(stream_decoder_tests tests/test_stream_decoder.cpp)
 target_link_libraries(stream_decoder_tests PRIVATE robodog_ubx_rtcm_stream)
 target_compile_options(stream_decoder_tests PRIVATE -Wall -Wextra -Wpedantic)
