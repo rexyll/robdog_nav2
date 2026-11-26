@@ -78,7 +78,7 @@ def _config(**overrides):
 
 
 
-def _journal_output(boot_id=None, message="ptp4l: port 1: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT"):
+def _journal_output(boot_id=None, message="eth0: LISTENING to SLAVE on ANNOUNCE_RECEIPT_TIMEOUT"):
     if boot_id is None:
         boot_id = Path("/proc/sys/kernel/random/boot_id").read_text(encoding="ascii").strip()
     import json
