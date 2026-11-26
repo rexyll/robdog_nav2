@@ -4,6 +4,7 @@ project(robodog_ubx_rtcm_stream LANGUAGES CXX)
 option(ROBODOG_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(ROBODOG_BUILD_FUZZER "Build the libFuzzer byte-stream target (Clang only)" OFF)
 option(ROBODOG_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
+option(ROBODOG_BUILD_LIBUSB_BINDING "Build the production libusb-1.0 function-table binding" OFF)
 
 if(ROBODOG_ENABLE_TSAN AND ROBODOG_ENABLE_SANITIZERS)
   message(FATAL_ERROR "ThreadSanitizer cannot be combined with AddressSanitizer")
@@ -23,6 +24,18 @@ endif()
 if(ROBODOG_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(robodog_ubx_rtcm_stream PUBLIC -fsanitize=address,undefined -fno-omit-frame-pointer)
   target_link_options(robodog_ubx_rtcm_stream PUBLIC -fsanitize=address,undefined)
+endif()
+
+if(ROBODOG_BUILD_LIBUSB_BINDING)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBUSB REQUIRED IMPORTED_TARGET libusb-1.0)
+  add_library(robodog_libusb_binding src/libusb_api_binding.cpp)
+  target_include_directories(robodog_libusb_binding PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+  target_compile_features(robodog_libusb_binding PUBLIC cxx_std_17)
+  target_compile_options(robodog_libusb_binding PRIVATE -Wall -Wextra -Wpedantic)
+  target_link_libraries(robodog_libusb_binding PUBLIC
+    robodog_ubx_rtcm_stream PkgConfig::LIBUSB)
 endif()
 
 find_package(Threads REQUIRED)
