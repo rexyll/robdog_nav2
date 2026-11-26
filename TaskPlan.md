@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.206
+- 文档版本：v0.3.207
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1049,3 +1049,6 @@
 
 
 - GNSS ingress per-generation terminal event 幂等与 generation transition 原子性（2026-11-26 / v0.3.206）：继续审计多个并发 IN transfer 在同一 generation 上相继报告 NO_DEVICE/fatal status 的路径，发现旧 `mark_device_lost()` / `mark_transport_fault()` 可重复追加终态控制事件，且首个终态事件因控制队列满而入队失败时，没有保存其类型供重试；`begin_generation()` 也会先修改 active generation，再尝试追加 GenerationStarted，可能出现 generation 已切换但生命周期事件缺失。已实现每代 first-terminal-cause-wins：DeviceLost 与 TransportFault 互斥，重复同类 callback 幂等，不同类后续事件拒绝；终态控制事件入队失败保留 type，允许同类重试，close() 会先 flush pending terminal event 再写 Stopped；新 generation 只能在上一代 terminal event 已记录或 Stopped 已记录后启动；GenerationStarted 容量准入先检查，失败时不修改 current_generation。新增测试覆盖终态 callback 重复/冲突、终态事件满队列重试、active generation 禁止替换、GenerationStarted 入队失败不改变 generation。代码 commits：header `6d21bfb9ff458d6fd3f4f80142c1b6a5328df1a2`、terminal tests `2a6b3f96c412caa1bb513c837508003376c28244`、atomic generation admission `5e92191ac58578c34f7fdba8ba7416f0a7482180`、generation atomicity tests `525087e5c9b6ce7ceaf7980323b9055f1b6b7a28`；doc/Navigation/34 §9 已更新。CI run `45764222163` 对 header commit 已 success；run `45764230311` 的 tests commit 仍在运行；generation admission commit run `45764302116` 因后续 push 取消；最终 tests commit run `45764307051` pending。最终 head 完整 ASan/UBSan、TSan、Clang fuzzer、libusb binding 矩阵尚未通过验收。下一步检查最终 run 的失败/结果，再审查事件队列 restart/terminal semantics 与真实 ROS bridge 边界；继续只在 nav 分支。
+
+
+- GNSS ingress stop 后迟到终态 callback 防护（2026-11-26 / v0.3.207）：继续检查 DeviceLost/TransportFault 与 Stopped 的时序，补充一个边界：即使正常 DeviceRuntime callback drain 合同要求 Stopped 之后不应再有回调，队列 API 仍应拒绝在 Stopped 后追加新的终态事件，防止调用层误用或异常晚到通知污染生命周期序列。`mark_device_lost()` / `mark_transport_fault()` 现在在 close 已提交且不存在待重试 terminal cause 时拒绝事件；此前因队列满而已保留 terminal type 的事件仍可重试。新增测试验证正常 `GenerationStarted → Stopped` 后，迟到 DeviceLost 和 TransportFault 均被拒绝，且不会新增 control event。代码 commits：header `91599bed4a9bdfa8dde41b5c8601c2f4cb2f3881`、test `ab33426a8b8062700a78e95d98a82e049a9aaedf`；doc/Navigation/34 §10 已更新。上一完整代码 head `525087e5c9b6ce7ceaf7980323b9055f1b6b7a28` 的 Actions run `45764307051` 全四 job success（ASan/UBSan CTest 10/10、TSan 10/10、Clang libFuzzer、libusb binding）；本次 late-callback 修改的最终 head `ab33426a8b8062700a78e95d98a82e049a9aaedf` 对应 run `45764506375` pending，header commit run `45764498865` 正在执行。尚未将新修改标记 CI 通过。下一步取得最终 head 完整 CI 结果；然后对 GnssUsbStream restart、queue drain、first-terminal/Stopped 顺序做跨组件集成测试，之后进入 C++→ROS 2 bridge 的 executor/DDS ingress fencing 设计与实现，继续只在 nav 分支。
