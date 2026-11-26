@@ -69,7 +69,8 @@ public:
   }
   ~GnssUsbTransportNode() override {
     if (stream_ && !stream_->stop(5000)) {
-      RCLCPP_FATAL(get_logger(), "GNSS USB callback drain timed out; refusing unsafe transport teardown");
+      RCLCPP_FATAL(get_logger(),
+          "GNSS USB shutdown did not complete cleanly (callback drain or lifecycle queue close); refusing unsafe transport teardown");
     }
     stop_publisher_.store(true, std::memory_order_release);
     if (publisher_thread_.joinable()) publisher_thread_.join();
@@ -77,6 +78,15 @@ public:
 private:
   void publish_events() noexcept {
     for (;;) {
+      // Keep the bounded ingress queue authoritative until at least one
+      // subscriber is matched. This preserves GenerationStarted for a
+      // late-starting consumer instead of publishing into an unobserved DDS
+      // writer history. During shutdown, drain regardless of match count.
+      if (!stop_publisher_.load(std::memory_order_acquire) &&
+          publisher_->get_subscription_count() == 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        continue;
+      }
       auto event = stream_->try_pop_event();
       if (event) {
         try { publisher_->publish(to_ros_message(*event)); }
