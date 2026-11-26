@@ -118,7 +118,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
 
     def runner(argv, **kwargs):
         calls.append((argv, kwargs))
-        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else (_journal_output() if argv[0] == "journalctl" else "read-only sample"))
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -279,7 +279,7 @@ def test_collector_rejects_response_not_matching_explicit_target_port():
 
 def test_collector_marks_inventory_complete_only_when_all_evidence_is_present():
     def runner(argv, **kwargs):
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -292,7 +292,7 @@ def test_collector_marks_partial_when_any_requested_host_command_fails():
     def runner(argv, **kwargs):
         if argv[0] == "chronyc":
             return subprocess.CompletedProcess(argv, 2, stdout="", stderr="chronyd unavailable")
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -306,7 +306,7 @@ def test_collector_marks_partial_when_pmc_command_or_snapshot_is_invalid():
     def runner(argv, **kwargs):
         if argv[0] == "pmc":
             return subprocess.CompletedProcess(argv, 1, stdout="", stderr="socket unavailable")
-        return subprocess.CompletedProcess(argv, 0, stdout="read-only sample", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout=(_journal_output() if argv[0] == "journalctl" else "read-only sample"), stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
     assert report["pmc_snapshot_validation"]["status"] == "not_run"
@@ -317,7 +317,7 @@ def test_collector_marks_partial_when_pmc_command_or_snapshot_is_invalid():
 
 def test_collector_marks_partial_when_pmc_output_is_malformed():
     def runner(argv, **kwargs):
-        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
+        stdout = "not a LinuxPTP response" if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else (_journal_output() if argv[0] == "journalctl" else "read-only sample"))
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -330,7 +330,7 @@ def test_collector_marks_partial_when_pmc_output_is_malformed():
 
 def test_collector_exposes_clock_elapsed_difference_without_sync_verdict():
     def runner(argv, **kwargs):
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -353,7 +353,10 @@ def test_collector_marks_boot_identity_change_during_collection_partial(monkeypa
     monkeypatch.setattr(Path, "read_text", fake_read_text)
 
     def runner(argv, **kwargs):
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        if argv[0] == "journalctl":
+            stdout = _journal_output("boot-before")
+        else:
+            stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -365,7 +368,7 @@ def test_collector_marks_boot_identity_change_during_collection_partial(monkeypa
 
 def test_collector_declares_pmc_dataset_snapshot_non_atomic():
     def runner(argv, **kwargs):
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -384,7 +387,7 @@ def test_collector_compares_ptp_identity_at_collection_boundaries():
 
     def runner(argv, **kwargs):
         calls.append(argv)
-        stdout = _pmc_output() if argv[0] == "pmc" else "read-only sample"
+        stdout = _pmc_output() if argv[0] == "pmc" else (_journal_output() if argv[0] == "journalctl" else "read-only sample")
         return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
@@ -432,7 +435,7 @@ def test_collector_marks_unavailable_ptp_identity_baseline_partial():
     def runner(argv, **kwargs):
         if argv[0] == "pmc":
             return subprocess.CompletedProcess(argv, 1, stdout="", stderr="socket unavailable")
-        return subprocess.CompletedProcess(argv, 0, stdout="read-only sample", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout=(_journal_output() if argv[0] == "journalctl" else "read-only sample"), stderr="")
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
     assert report["pmc_identity_boundary_before_validation"]["status"] == "not_run"
