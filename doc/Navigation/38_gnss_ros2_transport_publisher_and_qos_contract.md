@@ -89,11 +89,12 @@ The first publisher slice contains:
   and checks strict event sequence order;
 - Humble/Jammy and Jazzy/Noble build/test CI.
 
-Latest dedicated transport CI before subscriber-match gating and the ROS
-delivery test: run `45769917130`, both distributions successful; each
-distribution built the node and passed 6 conversion tests. The newer
-subscriber-match gate and delivery test are awaiting the latest CI run and
-must not be marked passed until that run completes.
+Dedicated transport CI run `45771062207` passed on Humble/Jammy and Jazzy/Noble.
+Each distribution built the node, passed 6 conversion tests and the reliable
+ROS publisher/subscriber worker-thread ordering test; CTest 2/2 and colcon
+summary 9 tests, 0 errors, 0 failures, 0 skipped. The subscriber-match gate
+was also built/tested on both distributions. This remains synthetic ROS
+middleware validation, not a physical USB or receiver integration result.
 
 Not yet validated:
 - physical ZED-F9P USB enumeration, permissions, endpoint profile, and sustained
