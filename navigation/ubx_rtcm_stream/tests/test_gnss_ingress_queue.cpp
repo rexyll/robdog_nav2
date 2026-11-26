@@ -132,6 +132,23 @@ int main() {
   }
 
   {
+    GnssIngressQueue queue(1, OverflowPolicy::DropOldest, "process-H");
+    assert(queue.begin_generation(1, 10));
+    assert(!queue.mark_device_lost(1, 11));
+    auto started = queue.try_pop();
+    assert(started && started->type == GnssIngressEventType::GenerationStarted);
+    assert(queue.mark_device_lost(1, 12));
+    assert(!queue.begin_generation(2, 13));  // no room for GenerationStarted
+    assert(queue.stats().current_generation == 1);  // rejected start is atomic
+    auto lost = queue.try_pop();
+    assert(lost && lost->type == GnssIngressEventType::DeviceLost);
+    assert(queue.begin_generation(2, 14));
+    auto next = queue.try_pop();
+    assert(next && next->type == GnssIngressEventType::GenerationStarted);
+    assert(next->connection_generation == 2);
+  }
+
+  {
     GnssIngressQueue queue(2, OverflowPolicy::RejectNewest, "process-D");
     assert(queue.begin_generation(1, 1));
     assert(queue.push_frame(frame(0, 1), 2) == GnssIngressPushResult::Accepted);
