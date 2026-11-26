@@ -17,7 +17,11 @@ from pcapng_reader import PcapngError, iter_capture_packets
 from ptp_packet_audit import PtpCaptureAudit
 
 
-def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
+def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
+                         max_sensor_time_observations=4096,
+                         max_ptp_sensor_co_observations=4096):
+    if max_sensor_time_observations < 1 or max_ptp_sensor_co_observations < 1:
+        raise ValueError("sensor time observation bounds must be positive")
     counts = Counter()
     streams = Counter()
     payload_errors = Counter()
@@ -88,6 +92,9 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
         )
         observation = sensor_time_observations.get(observation_key)
         if observation is None:
+            if len(sensor_time_observations) >= max_sensor_time_observations:
+                sensor_time_observations.pop(next(iter(sensor_time_observations)))
+                counts["evicted_sensor_time_observations"] += 1
             observation = {
                 "section_index": datagram.section_index,
                 "interface_id": datagram.interface_id,
@@ -172,6 +179,9 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
                 continue
             if (sensor_min <= ptp_window["capture_timestamp_max_ns"]
                     and ptp_window["capture_timestamp_min_ns"] <= sensor_max):
+                if len(co_observations) >= max_ptp_sensor_co_observations:
+                    counts["truncated_ptp_sensor_co_observations"] += 1
+                    continue
                 co_observations.append({
                     "sensor_stream": sensor["stream"],
                     "sensor_source": sensor["source"],
@@ -210,7 +220,13 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
         "interfaces": dict(interfaces),
         "ptp_audit": ptp_report,
         "sensor_time_observations": sensor_observations,
+        "sensor_time_observation_evictions": counts["evicted_sensor_time_observations"],
+        "sensor_time_observation_limit": max_sensor_time_observations,
         "ptp_sensor_timebase_co_observations": co_observations,
+        "ptp_sensor_co_observation_truncated": counts[
+            "truncated_ptp_sensor_co_observations"
+        ],
+        "ptp_sensor_co_observation_limit": max_ptp_sensor_co_observations,
         "point_cloud_sequence_audits": {
             "|".join(map(str, key)): audit.report()
             for key, audit in sequence_audits.items()
