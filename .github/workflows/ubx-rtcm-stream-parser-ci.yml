@@ -34,3 +34,20 @@ jobs:
           ASAN_OPTIONS: detect_leaks=1
           UBSAN_OPTIONS: print_stacktrace=1
         run: ctest --test-dir build/ubx_rtcm_stream --output-on-failure
+
+  fuzz-smoke:
+    name: Clang libFuzzer smoke test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Clang fuzzer
+        env:
+          CC: clang
+          CXX: clang++
+        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-fuzz -DROBODOG_BUILD_FUZZER=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build fuzzer
+        run: cmake --build build/ubx_rtcm_stream-fuzz --target stream_decoder_fuzz --parallel 2
+      - name: Run bounded fuzz smoke
+        run: timeout 30s build/ubx_rtcm_stream-fuzz/stream_decoder_fuzz -max_total_time=20 -max_len=4096
