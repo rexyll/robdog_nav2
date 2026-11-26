@@ -27,6 +27,14 @@ enum class LibusbCompletionStatus {
   Unknown
 };
 
+enum class LibusbCancelResult {
+  Requested,
+  NotPending,
+  NotFound,
+  DeviceLost,
+  Failed
+};
+
 enum class UsbTransferDirection { In, Out };
 
 struct LibusbTransferRequest {
@@ -64,6 +72,8 @@ public:
     int stall_status{4};
     int no_device_status{5};
     int overflow_status{6};
+    int cancel_not_found_code{-5};
+    int cancel_no_device_code{-4};
   };
 
   LibusbTransferTransport(Api api, void * device_handle)
@@ -136,15 +146,36 @@ public:
     return true;
   }
 
-  bool cancel(std::uint64_t id) {
+  LibusbCancelResult cancel_detailed(std::uint64_t id) {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
-    if (closed_) return false;
-    std::lock_guard<std::mutex> registry_lock(registry_mutex_);
-    auto it = pending_.find(id);
-    if (it == pending_.end() || it->second->callback_seen) return false;
-    // A successful cancel is only a request. Ownership remains pending until
-    // the callback is dispatched by handle_events().
-    return api_.cancel_transfer(it->second->transfer) == api_.success_code;
+    if (closed_) return LibusbCancelResult::Failed;
+
+    NativeTransfer transfer = nullptr;
+    {
+      // operation_mutex_ serializes submit, event pumping and close, so the
+      // transfer remains owned by pending_ after this registry lock is released.
+      // The native cancel call must not hold registry_mutex_: observers such as
+      // pending_count() need not block behind a libusb API call.
+      std::lock_guard<std::mutex> registry_lock(registry_mutex_);
+      auto it = pending_.find(id);
+      if (it == pending_.end() || it->second->callback_seen) {
+        return LibusbCancelResult::NotPending;
+      }
+      transfer = it->second->transfer;
+    }
+
+    // libusb_cancel_transfer() is asynchronous. None of its error returns
+    // authorize freeing the transfer; callback drain remains the only terminal
+    // ownership-release path for a successfully submitted transfer.
+    const int rc = api_.cancel_transfer(transfer);
+    if (rc == api_.success_code) return LibusbCancelResult::Requested;
+    if (rc == api_.cancel_not_found_code) return LibusbCancelResult::NotFound;
+    if (rc == api_.cancel_no_device_code) return LibusbCancelResult::DeviceLost;
+    return LibusbCancelResult::Failed;
+  }
+
+  bool cancel(std::uint64_t id) {
+    return cancel_detailed(id) == LibusbCancelResult::Requested;
   }
 
   int poll_events(unsigned int timeout_ms = 0) {
