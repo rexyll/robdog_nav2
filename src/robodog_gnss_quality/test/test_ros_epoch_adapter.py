@@ -1,5 +1,6 @@
 import unittest
 from dataclasses import replace
+from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 
 from robodog_gnss_quality import CarrierSolution
@@ -125,7 +126,7 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         a = adapter()
         a.add_pvt(pvt())
         with self.assertRaisesRegex(EpochPairingError, "conflicting duplicate"):
-            a.add_pvt(UbxNavPvtEpoch(PROCESS_SESSION_ID, CONNECTION_GENERATION, 1000, False, CarrierSolution.FIXED, 101))
+            a.add_pvt(replace(pvt(), gnss_fix_ok=False, receive_monotonic_ns=101))
         self.assertEqual(a.pending_count, 0)
         self.assertEqual(a.rejected_conflict, 1)
 
