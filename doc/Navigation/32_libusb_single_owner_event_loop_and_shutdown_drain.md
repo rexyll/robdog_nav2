@@ -58,4 +58,4 @@
 
 ## 6. CI 状态
 
-本轮代码已触发 Actions；必须以最新 event-loop 代码 head 的 ASan/UBSan、TSan、Clang libFuzzer 和 libusb binding job 全部成功作为 synthetic gate 验收。真实 USB/ROS 2/F9P 验收仍是后续独立阶段。
+Actions run `45751870160`（head `e1816a6f00cc2a47586485cff723104a4ce580c0`）四项 job 全部成功：ASan/UBSan、TSan、Clang libFuzzer、生产 libusb binding compile。该 run 覆盖 event-loop worker、submission gate、cancel-all、owner-thread poll guard 与 fake shutdown drain 测试。后续 `19f8b44f13d13c19c7a018316bc703b43f12cdfa` 仅更新 README，相关 run `45752089840` 排队中。真实 USB/ROS 2/F9P 验收仍是后续独立阶段。
