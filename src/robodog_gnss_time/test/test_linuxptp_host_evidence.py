@@ -643,3 +643,23 @@ def test_collector_marks_non_default_journal_namespace_not_queried_partial():
     assert "journal_evidence_not_parsed:ptp4l.service:partial" in report["collection_issues"]
 
 
+
+
+def test_optional_systemd_version_probe_failure_does_not_break_core_inventory():
+    def runner(argv, **kwargs):
+        if argv[0] == "pmc":
+            return subprocess.CompletedProcess(argv, 0, stdout=_pmc_output(), stderr="")
+        if argv == ["systemctl", "--version"]:
+            raise FileNotFoundError("systemctl unavailable")
+        if argv[0] == "journalctl":
+            return subprocess.CompletedProcess(argv, 0, stdout=_journal_output(), stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="read-only sample", stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+
+    assert report["systemd_version_evidence"]["status"] == "unavailable"
+    assert report["collection_status"] == "complete"
+    assert not any(
+        issue.startswith("command_not_ok:systemd_version:")
+        for issue in report["collection_issues"]
+    )
