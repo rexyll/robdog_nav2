@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 
 from robodog_gnss_quality import CarrierSolution
 from robodog_gnss_quality.ubx_epoch_joiner import UbxFourMessageEpochJoiner
@@ -151,9 +152,9 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         joiner = make_joiner()
         records = (
             ("pvt", make_pvt(gps_week=GPS_WEEK - 1)),
-            ("position", make_position()),
-            ("covariance", make_covariance()),
-            ("status", make_status()),
+            ("position", replace(make_position(), gps_week=GPS_WEEK - 1)),
+            ("covariance", replace(make_covariance(), gps_week=GPS_WEEK - 1)),
+            ("status", replace(make_status(), gps_week=GPS_WEEK - 1)),
         )
         for kind, record in records:
             with self.subTest(kind=kind):
