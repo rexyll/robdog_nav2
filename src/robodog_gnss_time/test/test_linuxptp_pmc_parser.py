@@ -226,3 +226,30 @@ def test_legacy_parser_keeps_dataset_dictionary_api():
     parsed = parse_pmc_response(_snapshot_output(), "TIME_STATUS_NP")
     assert isinstance(parsed, dict)
     assert parsed["master_offset"] == -20
+
+
+def test_port_dataset_identity_must_match_response_header():
+    output = _snapshot_output().replace(
+        "portIdentity 080027.fffe.7f327b-1",
+        "portIdentity 080027.fffe.7f327b-2",
+    )
+    with pytest.raises(ValueError, match="portIdentity"):
+        parse_pmc_response_envelope(output, "PORT_DATA_SET")
+
+
+def test_snapshot_rejects_reused_management_sequence_id():
+    output = _snapshot_output().replace(
+        "080027.fffe.7f327b-0 seq 13 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
+        "080027.fffe.7f327b-0 seq 12 RESPONSE MANAGEMENT TIME_PROPERTIES_DATA_SET",
+    )
+    with pytest.raises(ValueError, match="sequence IDs are not unique"):
+        parse_pmc_snapshot(output)
+
+
+def test_snapshot_compares_clock_identity_case_insensitively():
+    output = _snapshot_output().replace(
+        "080027.fffe.7f327b-0 seq 11",
+        "080027.FFFE.7F327B-0 seq 11",
+    )
+    snapshot = parse_pmc_snapshot(output)
+    assert snapshot.clock_identity == "080027.fffe.7f327b"
