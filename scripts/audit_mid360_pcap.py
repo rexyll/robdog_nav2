@@ -93,7 +93,7 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None,
                             if item.get("name") in {
                                 "local_time_now", "last_sync_time",
                                 "time_offset", "time_sync_type",
-                                "lidar_diag_status",
+                                "lidar_diag_status", "hms_code",
                             }
                         }
                         if selected:
