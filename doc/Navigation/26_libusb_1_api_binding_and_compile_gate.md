@@ -20,7 +20,7 @@
 | handle_events | `libusb_handle_events_timeout_completed` |
 | close_device | `libusb_close` |
 
-status mapping 直接使用 libusb transfer status enum；同步 API success 使用 `LIBUSB_SUCCESS`。
+status mapping 直接使用 libusb transfer status enum；同步 API success 使用 `LIBUSB_SUCCESS`。bulk request 的 `transfer_flags` 也会写入 native `libusb_transfer::flags`，以保留上游 OUT transfer 的 `LIBUSB_TRANSFER_SHORT_NOT_OK`。
 
 ## 2. Native callback bridge
 
@@ -48,7 +48,7 @@ libusb callback 签名是 `void(libusb_transfer*)`，而 transport-neutral adapt
 
 默认 standalone parser/fake tests 不要求安装 libusb。启用 `ROBODOG_BUILD_LIBUSB_BINDING=ON` 后，CMake 使用 pkg-config 查找 `libusb-1.0` 并构建 `robodog_libusb_binding`。
 
-新增 GitHub Actions job 安装 Ubuntu runner 的 `libusb-1.0-0-dev`，只编译生产 binding target。该 job 的作用是证明实际 libusb headers 和链接依赖可用，并不运行 USB transfer，也不代表目标部署设备的 libusb 版本已锁定。
+新增 GitHub Actions job 安装 Ubuntu runner 的 `libusb-1.0-0-dev`，编译生产 binding 和 native callback bridge smoke test。smoke test 直接调用 native transfer callback 字段，验证 Bridge 把 status/actual_length/user_data 传回 adapter callback，并验证 never-submitted transfer 的 Bridge 清理。该 job 不运行 USB 总线 transfer，也不代表目标部署设备的 libusb 版本已锁定。
 
 ## 5. 未完成项
 
