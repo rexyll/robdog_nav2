@@ -296,6 +296,41 @@ def build_observation_from_ubx_epochs(
         raise EpochPairingError(
             "source_clock_id must identify the GPS week and receiver clock generation"
         )
+
+    # iTOW wraps every GPS week. All four records must carry the same full
+    # receiver context before this stateless helper is allowed to join them.
+    context_records = (
+        ("NAV-PVT", pvt),
+        ("NAV-HPPOSLLH", position),
+        ("NAV-COV", covariance),
+        ("NAV-STATUS", status),
+    )
+    contexts = []
+    for name, record in context_records:
+        process_id = getattr(record, "process_session_id", None)
+        connection_id = getattr(record, "connection_generation", None)
+        gps_week = getattr(record, "gps_week", None)
+        if not isinstance(process_id, str) or not process_id.strip():
+            raise EpochPairingError(f"{name} must carry a non-empty process_session_id")
+        if (isinstance(connection_id, bool) or not isinstance(connection_id, int)
+                or connection_id < 0):
+            raise EpochPairingError(f"{name} must carry a valid connection_generation")
+        if (isinstance(gps_week, bool) or not isinstance(gps_week, int)
+                or not 0 <= gps_week <= 32767):
+            raise EpochPairingError(f"{name} must carry a valid gps_week")
+        contexts.append((process_id, connection_id, gps_week))
+    if len(set(contexts)) != 1:
+        raise EpochPairingError(
+            "NAV-PVT/HPPOSLLH/NAV-COV/NAV-STATUS session, connection generation and GPS week must match"
+        )
+    process_id, connection_id, gps_week = contexts[0]
+    expected_clock_id = (
+        f"{process_id}:connection:{connection_id}:gps-week:{gps_week}"
+    )
+    if source_clock_id != expected_clock_id:
+        raise EpochPairingError(
+            "source_clock_id does not match the four UBX records' session/generation/gps_week"
+        )
     if (
         isinstance(source_timestamp_ns, bool)
         or not isinstance(source_timestamp_ns, int)
