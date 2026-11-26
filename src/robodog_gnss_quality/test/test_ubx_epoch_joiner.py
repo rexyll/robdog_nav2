@@ -250,6 +250,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
                 make_pvt(receive=101).__class__(
                     process_session_id=PROCESS_SESSION_ID,
                     connection_generation=CONNECTION_GENERATION,
+                    gps_week=GPS_WEEK,
                     i_tow_ms=1000,
                     gnss_fix_ok=False,
                     carrier_solution=CarrierSolution.FIXED,
@@ -291,7 +292,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         joiner.begin_generation(f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451")
         self.assertEqual(joiner.pending_count, 0)
         self.assertIsNone(joiner.add_pvt(
-            make_pvt(), source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451",
+            make_pvt(gps_week=2451), source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451",
             source_timestamp_ns=2_000_000,
         ))
 
