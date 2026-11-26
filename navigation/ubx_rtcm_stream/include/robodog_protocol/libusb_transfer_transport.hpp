@@ -34,6 +34,7 @@ struct LibusbTransferRequest {
   UsbTransferDirection direction{UsbTransferDirection::In};
   std::vector<std::uint8_t> buffer;
   unsigned int timeout_ms{};
+  std::uint8_t transfer_flags{};
 };
 
 class LibusbTransferTransport {
@@ -49,7 +50,7 @@ public:
     std::function<void(NativeTransfer)> free_transfer;
     std::function<int(
       NativeTransfer, void *, std::uint8_t, std::uint8_t *,
-      int, unsigned int, NativeCallback, void *)> fill_bulk_transfer;
+      int, unsigned int, std::uint8_t, NativeCallback, void *)> fill_bulk_transfer;
     std::function<int(NativeTransfer)> submit_transfer;
     std::function<int(NativeTransfer)> cancel_transfer;
     std::function<int(unsigned int)> handle_events;
@@ -117,7 +118,8 @@ public:
     const int length = static_cast<int>(raw->buffer.size());
     const int fill_rc = api_.fill_bulk_transfer(
       raw->transfer, device_handle_, request.endpoint, raw->buffer.data(), length,
-      request.timeout_ms, &LibusbTransferTransport::callback_trampoline, raw);
+      request.timeout_ms, request.transfer_flags,
+      &LibusbTransferTransport::callback_trampoline, raw);
     if (fill_rc != api_.success_code) {
       release_unsubmitted(id);
       return false;
