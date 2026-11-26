@@ -286,3 +286,5 @@
 - [35 — GNSS ROS 历元回调并发与接收机代际屏障合同](35_gnss_ros_epoch_callback_concurrency_and_generation_barrier.md)
 
 - [36 — UBX-NAV-TIMEGPS / UBX-NAV-TIMELS payload 解码器](36_ubx_nav_timegps_timels_payload_decoder.md)
+
+- [37 — UBX-NAV-TIMEGPS / NAV-TIMELS receiver time mapper](37_ubx_timegps_timels_receiver_time_mapper.md)
