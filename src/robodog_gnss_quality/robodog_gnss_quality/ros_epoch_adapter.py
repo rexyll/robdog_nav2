@@ -38,6 +38,8 @@ class UbxSourceTimeMapping:
     leap_seconds: Optional[int] = None
     leap_source: Optional[int] = None
     reported_leap_seconds: Optional[int] = None
+    leap_event_valid: bool = False
+    time_to_leap_event_seconds: Optional[int] = None
 
 
 @dataclass(frozen=True)
