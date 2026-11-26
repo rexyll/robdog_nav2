@@ -199,7 +199,10 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
     def test_time_mapping_context_is_preserved_in_result(self):
         source_id = "f9p-session:connection:3:gps-week:2450"
         a = adapter()
-        a.begin_generation(source_id)
+        a.begin_generation(
+            source_id, process_session_id="f9p-session",
+            connection_generation=3, gps_week=2450
+        )
         for record, add in (
             (pvt(), a.add_pvt),
             (position(), a.add_position),
@@ -217,12 +220,32 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         self.assertEqual(result.time_mapping.process_session_id, "f9p-session")
         self.assertEqual(result.time_mapping.connection_generation, 3)
 
+    def test_old_generation_ros_callback_is_rejected_after_reconnect(self):
+        a = adapter()
+        old_record = pvt()
+        new_generation = CONNECTION_GENERATION + 1
+        new_clock = f"{PROCESS_SESSION_ID}:connection:{new_generation}:gps-week:{GPS_WEEK}"
+        a.begin_generation(
+            new_clock, process_session_id=PROCESS_SESSION_ID,
+            connection_generation=new_generation, gps_week=GPS_WEEK
+        )
+        with self.assertRaisesRegex(EpochPairingError, "stale process_session_id/connection_generation"):
+            a.add_pvt(old_record)
+        new_record = UbxNavPvtEpoch(
+            PROCESS_SESSION_ID, new_generation, 1000, True,
+            CarrierSolution.FIXED, 101
+        )
+        self.assertIsNone(a.add_pvt(new_record))
+
     def test_reset_requires_explicit_new_generation(self):
         a = adapter()
         a.reset()
         with self.assertRaisesRegex(EpochPairingError, "begin_generation"):
             a.add_pvt(pvt())
-        a.begin_generation(GENERATION)
+        a.begin_generation(
+            GENERATION, process_session_id=PROCESS_SESSION_ID,
+            connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK
+        )
         self.assertIsNone(a.add_pvt(pvt()))
 
 
