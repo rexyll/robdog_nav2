@@ -31,6 +31,7 @@ struct FakeLibusb {
   int close_count{0};
   int free_count{0};
   std::uint8_t last_transfer_flags{0};
+  std::function<void()> on_cancel;
   std::deque<FakeTransfer *> events;
   std::vector<FakeTransfer *> allocated;
 
@@ -56,6 +57,7 @@ struct FakeLibusb {
       return 0;
     };
     a.cancel_transfer = [this](void * p) {
+      if (on_cancel) on_cancel();
       auto * t = static_cast<FakeTransfer *>(p);
       if (cancel_result != 0) return cancel_result;
       t->status = 3; t->actual_length = 0; events.push_back(t);
@@ -254,10 +256,36 @@ int main() {
         (void)transport.pending_count();
       }
     });
+    // The fake native API calls back into the independent registry observer.
+    // This would deadlock if cancel() retained registry_mutex_ across the
+    // native libusb_cancel_transfer() call.
+    std::size_t observed_during_native_cancel = 0;
+    fake.on_cancel = [&] { observed_during_native_cancel = transport.pending_count(); };
     start.store(true, std::memory_order_release);
     assert(transport.cancel(50));
     observer.join();
+    assert(observed_during_native_cancel == 1);
     assert(transport.pending_count() == 1);
+    assert(transport.poll_events() == 0);
+    assert(transport.pending_count() == 0);
+    assert(transport.close());
+  }
+
+  {
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.endpoint = 0x89;
+    request.direction = UsbTransferDirection::In;
+    request.buffer.resize(8);
+    assert(transport.submit(60, 1, request, [](auto, auto, auto, auto, auto) {}));
+    fake.cancel_result = -5;
+    assert(transport.cancel_detailed(60) == LibusbCancelResult::NotFound);
+    assert(transport.pending_count() == 1);
+    fake.cancel_result = -4;
+    assert(transport.cancel_detailed(60) == LibusbCancelResult::DeviceLost);
+    assert(transport.pending_count() == 1);
+    fake.complete_next(5, 0);
     assert(transport.poll_events() == 0);
     assert(transport.pending_count() == 0);
     assert(transport.close());
