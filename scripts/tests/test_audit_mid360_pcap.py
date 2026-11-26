@@ -33,9 +33,9 @@ def raw_ipv4_udp(payload, source_port, destination_port=45000):
     return bytes(ip) + udp
 
 
-def record(payload, port, *, truncated=False):
+def record(payload, port, *, truncated=False, timestamp=123):
     frame = raw_ipv4_udp(payload, port)
-    return PcapngPacket(0, 0, 101, 123, 123, len(frame), len(frame) + int(truncated),
+    return PcapngPacket(0, 0, 101, timestamp, timestamp, len(frame), len(frame) + int(truncated),
                         frame, True, truncated)
 
 
@@ -97,6 +97,48 @@ class TestMid360CaptureAudit(unittest.TestCase):
         self.assertIn("device-reported snapshot",
                       report["time_semantics"]["diagnostic_time_offset"])
         self.assertIn("PTP/gPTP", report["time_semantics"]["time_type_1"])
+
+    def test_hms_lifecycle_compares_code_identity_not_slot_and_tracks_multiplicity(self):
+        def push(codes, timestamp):
+            data = struct.pack("<HH", 1, 0) + control_kv(
+                0x8011, struct.pack("<8I", *codes)
+            )
+            return record(control_message(0x0102, data, cmd_type=0),
+                          56200, timestamp=timestamp)
+
+        report = audit_packet_records([
+            push([0x04020002, 0x04020002, 0, 0, 0, 0, 0, 0], 100),
+            push([0, 0x04020002, 0, 0, 0, 0, 0, 0], 200),
+            push([0, 0, 0, 0, 0, 0, 0, 0], 300),
+        ])
+        first, moved, gone = report["hms_lifecycle_observations"]
+        self.assertEqual(first["active_codes"][0]["slot_count"], 2)
+        self.assertEqual(moved["appeared_in_snapshot"], [])
+        self.assertEqual(moved["no_longer_observed_in_snapshot"], [])
+        self.assertEqual(moved["slot_or_multiplicity_changes"][0]["previous_slots"], [0, 1])
+        self.assertEqual(moved["slot_or_multiplicity_changes"][0]["current_slots"], [1])
+        self.assertEqual(gone["no_longer_observed_in_snapshot"], ["0x04020002"])
+        self.assertIn("not vendor-confirmed recovery", gone["interpretation"])
+
+    def test_hms_key_absence_does_not_create_a_clear_transition(self):
+        def push_with_hms(codes, timestamp):
+            data = struct.pack("<HH", 1, 0) + control_kv(
+                0x8011, struct.pack("<8I", *codes)
+            )
+            return record(control_message(0x0102, data, cmd_type=0),
+                          56200, timestamp=timestamp)
+
+        missing_key_data = struct.pack("<HH", 0, 0)
+        report = audit_packet_records([
+            push_with_hms([0x04020002, 0, 0, 0, 0, 0, 0, 0], 100),
+            record(control_message(0x0102, missing_key_data, cmd_type=0),
+                   56200, timestamp=200),
+            push_with_hms([0x04020002, 0, 0, 0, 0, 0, 0, 0], 300),
+        ])
+        self.assertEqual(len(report["hms_lifecycle_observations"]), 2)
+        self.assertEqual(
+            report["hms_lifecycle_observations"][1]["no_longer_observed_in_snapshot"], []
+        )
 
     def test_pointcloud_sequence_gap_and_reordered_recovery(self):
         report = audit_packet_records([
