@@ -96,3 +96,13 @@ def test_rejects_missing_chrony_reference_or_leap_evidence():
         adapter.decode(message(reference_id=""))
     with pytest.raises(ValueError):
         adapter.decode(message(leap_status=""))
+
+
+def test_synchronized_state_requires_healthy_chrony_diagnostics():
+    adapter = HostTimeSyncStatusAdapter(expected_host_boot_id="boot-abc")
+    with pytest.raises(ValueError):
+        adapter.decode(message(stratum=16))
+    with pytest.raises(ValueError):
+        adapter.decode(message(leap_status="Not synchronised"))
+    with pytest.raises(ValueError):
+        adapter.decode(message(reference_id="00000000"))
