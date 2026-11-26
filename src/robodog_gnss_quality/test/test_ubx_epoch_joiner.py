@@ -16,10 +16,10 @@ CONNECTION_GENERATION = 0
 GENERATION = f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2450"
 
 
-def make_pvt(i_tow=1000, receive=100):
+def make_pvt(i_tow=1000, receive=100, process_session_id=PROCESS_SESSION_ID, connection_generation=CONNECTION_GENERATION):
     return UbxNavPvtEpoch(
-        process_session_id=PROCESS_SESSION_ID,
-        connection_generation=CONNECTION_GENERATION,
+        process_session_id=process_session_id,
+        connection_generation=connection_generation,
         i_tow_ms=i_tow,
         gnss_fix_ok=True,
         carrier_solution=CarrierSolution.FIXED,
@@ -251,7 +251,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         with self.assertRaisesRegex(EpochPairingError, "begin_generation"):
             joiner.add_position(
                 make_position(),
-                source_clock_id="zed_f9p_week_2451_receiver_generation_0",
+                source_clock_id=f"{PROCESS_SESSION_ID}:connection:{CONNECTION_GENERATION}:gps-week:2451"",
                 source_timestamp_ns=2_000_000,
             )
         self.assertEqual(joiner.pending_count, 1)
@@ -438,7 +438,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         self.assertEqual(joiner.retired_count, 0)
         self.assertEqual(joiner.evicted_capacity, 1)
 
-        new_generation = "zed_f9p_week_2451_receiver_generation_1"
+        new_generation = f"{PROCESS_SESSION_ID}:connection:1:gps-week:2451"
         joiner.begin_generation(new_generation)
         with self.assertRaisesRegex(EpochPairingError, "source_clock_id changed"):
             joiner.add_pvt(
@@ -453,7 +453,7 @@ class TestUbxFourMessageEpochJoiner(unittest.TestCase):
         # The current generation can accept a fresh sample after the stale
         # callback was rejected, without inheriting old epoch cache state.
         self.assertIsNone(joiner.add_pvt(
-            make_pvt(1002, 121),
+            make_pvt(1002, 121, connection_generation=1),
             source_clock_id=new_generation,
             source_timestamp_ns=4_000_000,
         ))
