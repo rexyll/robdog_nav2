@@ -250,9 +250,10 @@ def parse_linuxptp_journal_evidence(stdout, expected_boot_id, window_start_ns=No
             "are not established by this parser."
         ),
         "clock_domain_note": (
-            "__MONOTONIC_TIMESTAMP is microseconds since boot and must be paired with _BOOT_ID; "
-            "__REALTIME_TIMESTAMP is CLOCK_REALTIME microseconds. Neither is directly "
-            "interchangeable with collector CLOCK_MONOTONIC absolute nanoseconds."
+            "__MONOTONIC_TIMESTAMP is CLOCK_MONOTONIC microseconds since boot and may be "
+            "compared with collector CLOCK_MONOTONIC nanoseconds after multiplying "
+            "by 1000, but only when _BOOT_ID matches. __REALTIME_TIMESTAMP is a "
+            "separate CLOCK_REALTIME microsecond value."
         ),
     }
 
@@ -325,24 +326,6 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         _run_readonly_command(name, argv, config.timeout_s, runner=runner)
         for name, argv in commands
     ]
-    journal_event_evidence = {}
-    for command_result in results:
-        if not command_result["name"].startswith("journal:"):
-            continue
-        service_name = command_result["name"].split(":", 1)[1]
-        if command_result["status"] == "ok":
-            journal_event_evidence[service_name] = parse_linuxptp_journal_evidence(
-                command_result["stdout"], boot_id,
-                command_result["monotonic_start_ns"], command_result["monotonic_end_ns"],
-            )
-        else:
-            journal_event_evidence[service_name] = {
-                "status": "unavailable", "entry_count": 0, "event_count": 0,
-                "entries": [], "events": [], "issues": ["journal_command_not_ok"],
-                "coverage_status": "unknown",
-                "absence_interpretation": "Journal command unavailable; no absence or stability claim is possible.",
-            }
-
     # TARGET, when configured, changes only pmc client-side destination
     # selection; it is not a remote SET/CMD management operation.
     pmc_result = _run_readonly_command(
@@ -398,6 +381,23 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
 
     monotonic_elapsed_ns = collection_end - collection_start
     realtime_elapsed_ns = realtime_end - realtime_start
+    journal_event_evidence = {}
+    for command_result in results:
+        if not command_result["name"].startswith("journal:"):
+            continue
+        service_name = command_result["name"].split(":", 1)[1]
+        if command_result["status"] == "ok":
+            journal_event_evidence[service_name] = parse_linuxptp_journal_evidence(
+                command_result["stdout"], boot_id, collection_start, collection_end,
+            )
+        else:
+            journal_event_evidence[service_name] = {
+                "status": "unavailable", "entry_count": 0, "event_count": 0,
+                "entries": [], "events": [], "issues": ["journal_command_not_ok"],
+                "coverage_status": "unknown",
+                "absence_interpretation": "Journal command unavailable; no absence or stability claim is possible.",
+            }
+
     realtime_minus_monotonic_elapsed_ns = (
         realtime_elapsed_ns - monotonic_elapsed_ns
     )
