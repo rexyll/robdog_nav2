@@ -382,6 +382,34 @@ Announce sequence gap 同样可能来自 capture drop、过滤、镜像口丢包
 
 新增合成测试覆盖：同一 domain 的竞争 GM 声明、不同 domain 隔离、单一 announcing source 的 GM identity 变化、sequence gap/late observation、bounded source/candidate state。合成测试不等于真实 GM failover 或 gPTP profile 互操作测试。
 
+
+### 15.5 Sync / Follow_Up、Delay 与 correctionField 时间戳关联
+
+`PtpCorrelationAudit` 现保留最多 32 组 timestamp exchange 样本，而不只输出配对数量：
+- two-step Sync / Follow_Up：分别保留 Sync 的 originTimestamp、Sync correctionField、Follow_Up preciseOriginTimestamp、Follow_Up correctionField，以及 capture timestamp、sourcePortIdentity、sequenceId、transport/interface。
+- E2E Delay_Req / Delay_Resp：保留请求的 originTimestamp、响应的 receiveTimestamp、两条消息 correctionField 和身份字段。
+- Pdelay：在 Pdelay_Resp_Follow_Up 到达时保留完整 Req / Resp / Follow_Up 三消息交换，包括 requestReceiptTimestamp、responseOriginTimestamp 与各自 correctionField。
+
+IEEE 1588 two-step Sync 的 Follow_Up 使用与 Sync 相同的 sourcePortIdentity 和 sequenceId；preciseOriginTimestamp 表示关联 Sync 的精确发送事件时间。两条消息的 correctionField 必须结合解释，不能只取 Follow_Up 时间戳。标准中 two-step Sync correctionField 初始为零，Follow_Up correctionField 可承载透明时钟 residence-time 修正。<Cite refs={["turn422545view0","turn308239search3"]} />
+
+E2E meanPathDelay 不能只靠 Delay_Req / Delay_Resp 两个报文求出。还需要接收端 Sync ingress event timestamp (t2)、Delay_Req 本地 egress event timestamp (t3)，并结合 master 侧时间戳、correctionField 和 Delay_Resp receiveTimestamp。普通 PCAP capture timestamp 不等于 NIC hardware event timestamp，因此本工具不从抓包时间差计算 offset 或 meanPathDelay。<Cite refs={["turn422545view0"]} />
+
+Pdelay 的完整计算同样需要本地请求发送和响应接收/发送事件时间戳，并区分 one-step 与 two-step response。本工具只保留报文中可见的时间戳和 correctionField，不推导链路延迟。所有 exchange 样本有数量上限；超出只累计 eviction 计数。
+
+新增合成测试验证 Sync/FU 精确时间戳、正负 correctionField、E2E request/response 时间戳与 capture timestamp 分离，以及 Pdelay 三消息样本。它们验证 parser/correlator 行为，不是硬件时间戳证据。
+
+### 15.6 Orin 运行态交叉证据采集
+
+目标 Orin 上需同时采集以下证据：
+- `ethtool -T <interface>`：该网卡驱动声明的 SO_TIMESTAMPING / hardware TX/RX timestamp 能力；这不证明运行时已使用硬件时间戳。
+- `/sys/class/net/<interface>/device/ptp*`、`/sys/class/ptp/ptp*` 与 `/dev/ptp*`：网卡接口到 PHC 的实际映射。
+- `ptp4l` 配置、日志与端口状态：核对 domain、transport、delay_mechanism、timestamping 模式、port state、servo 与 GM 身份。
+- `pmc`：建议同一采样时刻查询 `GET PORT_DATA_SET`、`GET PARENT_DATA_SET`、`GET CURRENT_DATA_SET`、`GET TIME_STATUS_NP`（NP 项须按目标 LinuxPTP 版本确认）。LinuxPTP PMC 文档列出这些 management IDs，并说明 GET 会读取对应 dataset。<Cite refs={["turn626721view1"]} />
+- `phc2sys` 日志与命令行：证明 PHC 与 CLOCK_REALTIME 的同步方向、source/sink clock 与 servo 状态；不能用 ptp4l 锁定替代系统时钟同步证明。
+- PTP/MID-360 原始 PCAP、网卡/PHC 映射、host inventory 与 ptp4l/phc2sys/pmc 结果需带同一 UTC 采集时间，才能进行交叉关联。
+
+仓库的 `tools/collect_ptp_host_inventory.sh` 是只读盘点工具，不启动或配置 PTP 服务。实机证据仍待用户在目标 Orin/载板上运行后提供。
+
 ### 15.3 解释边界
 
 PTP 报文出现、Sync/Follow_Up 配对成功或 Announce 指向某个 grandmaster，均**不证明**：
