@@ -67,3 +67,19 @@ jobs:
         env:
           TSAN_OPTIONS: halt_on_error=1
         run: ctest --test-dir build/ubx_rtcm_stream-tsan --output-on-failure
+
+  libusb-production-binding:
+    name: Production libusb-1.0 binding compile
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install libusb development package
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libusb-1.0-0-dev
+      - name: Configure optional production binding
+        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-libusb -DROBODOG_BUILD_LIBUSB_BINDING=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build production binding
+        run: cmake --build build/ubx_rtcm_stream-libusb --target robodog_libusb_binding --parallel 2
