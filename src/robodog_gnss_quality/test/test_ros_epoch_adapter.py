@@ -1,4 +1,5 @@
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 from robodog_gnss_quality import CarrierSolution
 from robodog_gnss_quality.ros_epoch_adapter import (
@@ -151,6 +152,22 @@ class TestUbxRosEpochAdapter(unittest.TestCase):
         a.add_time_mapping(mapping())
         with self.assertRaisesRegex(EpochPairingError, "conflicting receiver-time"):
             a.add_time_mapping(mapping(source_time=10_000_001))
+        self.assertEqual(a.pending_count, 0)
+
+    def test_concurrent_topic_callbacks_emit_one_observation(self):
+        a = adapter()
+        operations = (
+            lambda: a.add_pvt(pvt()),
+            lambda: a.add_position(position()),
+            lambda: a.add_covariance(covariance()),
+            lambda: a.add_status(status()),
+            lambda: a.add_time_mapping(mapping()),
+        )
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            results = list(executor.map(lambda operation: operation(), operations))
+        emitted = [result for result in results if result is not None]
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(emitted[0].observation.source_timestamp_ns, 10_000_000)
         self.assertEqual(a.pending_count, 0)
 
     def test_reset_requires_explicit_new_generation(self):
