@@ -3,6 +3,8 @@
 import rclpy
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
+from rclpy.logging import get_logger
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
 from robodog_gnss_interfaces.msg import GnssIngressEvent, GnssReceiverTime
 from robodog_gnss_quality.ubx_ingress_event_processor import GnssIngressEventProcessor
@@ -19,7 +21,7 @@ class GnssReceiverTimeNode(Node):
         ingress_topic = self.declare_parameter("ingress_topic", "/gnss/ingress").value
         mapping_topic = self.declare_parameter("mapping_topic", "/gnss/receiver_time").value
         qos_depth = self.declare_parameter("qos_depth", 256).value
-        trusted_sources = self.declare_parameter("trusted_leap_sources", []).value
+        trusted_sources = self.declare_parameter(\n            "trusted_leap_sources", [],\n            ParameterDescriptor(type=ParameterType.PARAMETER_INTEGER_ARRAY),\n        ).value
         if not isinstance(ingress_topic, str) or not ingress_topic.strip():
             raise ValueError("ingress_topic must be a non-empty string")
         if not isinstance(mapping_topic, str) or not mapping_topic.strip():
@@ -78,7 +80,7 @@ def main(args=None):
         if node._consumer.faulted:
             result = 2
     except Exception as exc:
-        rclpy.get_logger("gnss_receiver_time").fatal(
+        get_logger("gnss_receiver_time").fatal(
             f"GNSS receiver-time node failed: {type(exc).__name__}: {exc}"
         )
         result = 1
