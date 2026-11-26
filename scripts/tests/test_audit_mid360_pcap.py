@@ -78,7 +78,7 @@ class TestMid360CaptureAudit(unittest.TestCase):
 
 
     def test_control_port_time_diagnostics_are_joined_into_capture_report(self):
-        data = b"\\x00" + struct.pack("<H", 3) + b"".join([
+        data = b"\x00" + struct.pack("<H", 3) + b"".join([
             control_kv(0x8009, struct.pack("<Q", 1_700_000_000_000_000_100)),
             control_kv(0x800A, struct.pack("<Q", 1_700_000_000_000_000_000)),
             control_kv(0x800B, struct.pack("<q", 100)),
