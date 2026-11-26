@@ -137,6 +137,7 @@ def test_collector_uses_get_only_argv_and_preserves_raw_snapshot_evidence():
     assert all(command.startswith("GET ") for command in commands)
     assert pmc_kwargs["shell"] is False
     assert report["pmc_snapshot_validation"]["status"] == "valid"
+    assert report["schema_version"] == 2
     assert report["pmc_snapshot_validation"]["clock_identity"] == "080027.fffe.7f327b"
     assert report["expected_transport_specific"] == 0
     assert report["expected_target_port_identity"] is None
