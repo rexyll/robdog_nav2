@@ -28,6 +28,7 @@ class GnssIngressEvent:
     connection_generation: int
     ingress_sequence: int
     receive_monotonic_ns: int
+    dropped_frame_events_total: int = 0
     protocol: Optional[Union[str, int]] = None
     frame_bytes: Optional[bytes] = None
 
@@ -59,6 +60,8 @@ class GnssIngressEventProcessor:
         self._connection_generation: Optional[int] = None
         self._last_ingress_sequence: Optional[int] = None
         self._last_receive_monotonic_ns: Optional[int] = None
+        self._last_dropped_frame_events_total = 0
+        self._pending_dropped_frame_events = 0
         self._active = False
         self._terminal_type: Optional[str] = None
         self._stopped = False
@@ -81,6 +84,7 @@ class GnssIngressEventProcessor:
             ("connection_generation", event.connection_generation),
             ("ingress_sequence", event.ingress_sequence),
             ("receive_monotonic_ns", event.receive_monotonic_ns),
+            ("dropped_frame_events_total", event.dropped_frame_events_total),
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise EpochPairingError(f"{name} must be a non-negative integer")
@@ -108,6 +112,8 @@ class GnssIngressEventProcessor:
                 self._connection_generation = None
                 self._last_ingress_sequence = None
                 self._last_receive_monotonic_ns = None
+                self._last_dropped_frame_events_total = 0
+                self._pending_dropped_frame_events = 0
                 self._active = False
                 self._terminal_type = None
                 self._stopped = False
@@ -125,6 +131,27 @@ class GnssIngressEventProcessor:
             ):
                 raise EpochPairingError(
                     "ingress receive_monotonic_ns moved backwards"
+                )
+            if event.dropped_frame_events_total < self._last_dropped_frame_events_total:
+                raise EpochPairingError("dropped_frame_events_total moved backwards")
+            if self._last_ingress_sequence is None:
+                if event.event_type != "GenerationStarted" or event.ingress_sequence != 0:
+                    raise EpochPairingError(
+                        "first ingress event must be GenerationStarted with sequence 0"
+                    )
+                missing_sequences = 0
+            else:
+                missing_sequences = event.ingress_sequence - self._last_ingress_sequence - 1
+            drop_delta = event.dropped_frame_events_total - self._last_dropped_frame_events_total
+            pending_drops = self._pending_dropped_frame_events + drop_delta
+            if missing_sequences > pending_drops:
+                raise EpochPairingError(
+                    "ingress sequence gap is not explained by dropped frame events"
+                )
+            pending_drops -= missing_sequences
+            if event.event_type in ("DeviceLost", "TransportFault", "Stopped") and pending_drops:
+                raise EpochPairingError(
+                    "terminal ingress event leaves unexplained dropped-frame watermark"
                 )
 
             if event.event_type == "GenerationStarted":
@@ -162,6 +189,8 @@ class GnssIngressEventProcessor:
             # strictly newer in the source event stream.
             self._last_ingress_sequence = event.ingress_sequence
             self._last_receive_monotonic_ns = event.receive_monotonic_ns
+            self._last_dropped_frame_events_total = event.dropped_frame_events_total
+            self._pending_dropped_frame_events = pending_drops
             self._processed_events += 1
 
             if event.event_type == "Frame":
