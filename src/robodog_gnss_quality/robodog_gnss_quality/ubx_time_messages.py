@@ -5,8 +5,9 @@ It performs structural/range validation only; it does not promote receiver time
 or leap-second data to trusted mapping inputs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import struct
+from typing import Optional
 
 from .ubx_nav_pvt import EpochPairingError, UBX_GPS_WEEK_MS
 
@@ -44,7 +45,8 @@ def _i32(data: bytes, offset: int) -> int:
 
 
 def _validate_context(receive_monotonic_ns: int, process_session_id: str,
-                      connection_generation: int) -> None:
+                      connection_generation: int,
+                      ingress_sequence: Optional[int]) -> None:
     if (isinstance(receive_monotonic_ns, bool)
             or not isinstance(receive_monotonic_ns, int)
             or receive_monotonic_ns < 0):
@@ -55,6 +57,12 @@ def _validate_context(receive_monotonic_ns: int, process_session_id: str,
             or not isinstance(connection_generation, int)
             or connection_generation < 0):
         raise EpochPairingError("connection_generation must be a non-negative integer")
+    if ingress_sequence is not None and (
+        isinstance(ingress_sequence, bool)
+        or not isinstance(ingress_sequence, int)
+        or ingress_sequence < 0
+    ):
+        raise EpochPairingError("ingress_sequence must be a non-negative integer or None")
 
 
 def _validate_payload(payload: bytes, expected_length: int, message_name: str) -> bytes:
@@ -88,6 +96,7 @@ class UbxNavTimeGpsEpoch:
     receive_monotonic_ns: int
     process_session_id: str
     connection_generation: int
+    ingress_sequence: Optional[int] = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -110,11 +119,13 @@ class UbxNavTimeLsEpoch:
     receive_monotonic_ns: int
     process_session_id: str
     connection_generation: int
+    ingress_sequence: Optional[int] = field(default=None, compare=False)
 
 
 def decode_nav_timegps_payload(
     payload: bytes, *, receive_monotonic_ns: int,
     process_session_id: str, connection_generation: int,
+    ingress_sequence: Optional[int] = None,
 ) -> UbxNavTimeGpsEpoch:
     """Decode the 16-byte UBX-NAV-TIMEGPS payload (class 0x01, ID 0x20).
 
@@ -122,7 +133,8 @@ def decode_nav_timegps_payload(
     signed fields; validity is independent for TOW, week and leap seconds.
     """
     data = _validate_payload(payload, NAV_TIMEGPS_PAYLOAD_LENGTH, "NAV-TIMEGPS")
-    _validate_context(receive_monotonic_ns, process_session_id, connection_generation)
+    _validate_context(receive_monotonic_ns, process_session_id, connection_generation,
+                      ingress_sequence)
     i_tow = _u32(data, 0)
     _validate_itow(i_tow, "NAV-TIMEGPS")
     f_tow = _i32(data, 4)
@@ -143,12 +155,14 @@ def decode_nav_timegps_payload(
         receive_monotonic_ns=receive_monotonic_ns,
         process_session_id=process_session_id,
         connection_generation=connection_generation,
+        ingress_sequence=ingress_sequence,
     )
 
 
 def decode_nav_timels_payload(
     payload: bytes, *, receive_monotonic_ns: int,
     process_session_id: str, connection_generation: int,
+    ingress_sequence: Optional[int] = None,
 ) -> UbxNavTimeLsEpoch:
     """Decode the 24-byte UBX-NAV-TIMELS payload (class 0x01, ID 0x26).
 
@@ -156,7 +170,8 @@ def decode_nav_timels_payload(
     event validity remain separate; source IDs are preserved as raw values.
     """
     data = _validate_payload(payload, NAV_TIMELS_PAYLOAD_LENGTH, "NAV-TIMELS")
-    _validate_context(receive_monotonic_ns, process_session_id, connection_generation)
+    _validate_context(receive_monotonic_ns, process_session_id, connection_generation,
+                      ingress_sequence)
     i_tow = _u32(data, 0)
     _validate_itow(i_tow, "NAV-TIMELS")
     version = _u8(data, 4)
@@ -182,4 +197,5 @@ def decode_nav_timels_payload(
         receive_monotonic_ns=receive_monotonic_ns,
         process_session_id=process_session_id,
         connection_generation=connection_generation,
+        ingress_sequence=ingress_sequence,
     )
