@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.161
+- 文档版本：v0.3.162
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -921,3 +921,6 @@
 
 
 - UBX/RTCM3 有界 ingress queue 与 generation fence（2026-11-26 / v0.3.161）：新增 BoundedFrameQueue 独立 C++17 原语，采用统一 mutex 保护 push/try_pop/stats/close/reset；支持显式 DropOldest / RejectNewest、有限容量、generation mismatch 拒绝、generation reset 清队列、close 后拒绝新 push 并允许 drain、high-watermark 与 drop/reject 计数。新增 5 组队列测试：两种 overflow policy、generation fence、close/drain、4 producer + 1 consumer 传输 4000 帧、多 producer overflow 容量/计数。CMake 新增 Threads、独立 ThreadSanitizer 开关及 TSan/ASan 互斥；parser CI 新增 TSan job。新增 doc/Navigation/20_ubx_rtcm_bounded_ingress_queue_design_and_tsan_contract.md 与 README 索引。代码提交：CMake/TSan d37f00c78fa9dccf17c1d8d5def9acc6e59dd03c；queue API 109eb47868e6367069552af3d7f2e2992a67eb14；tests f4cbd4f8038045505f72432575ad681623045aed；CI f96071d4df0e092e99b9cc971a8f3be50056901e；Navigation 20 e307cd2322eef430902df6ea5cedc802c326ae52；README 33009e7d6d1841daa7fd054f99e08b2e58caefb8 / 27551497cb2703ceb7e5a6693858193eba78c8c1。本地 GCC 14.2 + ASan/UBSan CTest 2/2 passed；GCC 14.2 + ThreadSanitizer CTest 2/2 passed，TSAN_OPTIONS=halt_on_error=1，无 data-race 报告。GitHub Actions TSan job 尚待本轮运行确认。队列原语不代表已修复上游 ublox_dgnss 的 transfer_queue、callback cleanup、cancel callback drain 或 ROS 2 executor 集成；这些仍是待实现/验证 Gate。
+
+
+- 有界 ingress queue 三路 CI 验证闭环（2026-11-26 / v0.3.162）：GitHub Actions run 45742626968 success（head f96071d4df0e092e99b9cc971a8f3be50056901e，https://github.com/rexyll/robdog_nav2/actions/runs/45742626968）。三个 job 全部通过：ThreadSanitizer bounded queue concurrency tests（Configure/Build/TSan CTest）、Clang libFuzzer smoke（Configure/Build/20 秒 fuzz）、C++17 parser ASan/UBSan（Configure/Build/CTest）。TSan job 覆盖 4 producer + 1 consumer、4000 帧传输与多 producer overflow；该结果仅证明独立 queue 原语在合成并发测试中通过，不是上游 libusb transfer_queue 或真实 component_container_mt 驱动验收。当前 parser+queue 原语均有本地 sanitizer 与 GitHub Actions 证据；下一阶段建立 fake transport seam、transfer ownership/RAII 生命周期模型与可重复 detach/cancel/shutdown 测试，再按固定版 ublox_dgnss 源码接入 ROS 2 Jazzy。
