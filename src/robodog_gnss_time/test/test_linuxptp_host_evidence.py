@@ -618,3 +618,25 @@ def test_optional_journal_context_failure_does_not_claim_or_break_core_inventory
     assert report["journal_storage_context"]["coverage_status"] == "unknown"
     assert report["collection_status"] == "complete"
 
+
+def test_collector_marks_non_default_journal_namespace_not_queried_partial():
+    def runner(argv, **kwargs):
+        if argv[0] == "pmc":
+            stdout = _pmc_output()
+        elif argv[0] == "journalctl" and "-u" in argv:
+            stdout = _journal_output()
+        elif argv[0] == "systemctl" and any("LogNamespace" in arg for arg in argv):
+            stdout = "LogNamespace=ptp-logs\\n"
+        else:
+            stdout = "read-only context sample"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    report = collect_linuxptp_host_evidence(_config(), runner=runner)
+    evidence = report["journal_event_evidence"]["ptp4l.service"]
+    assert evidence["namespace_observation"]["status"] == "non_default_not_queried"
+    assert evidence["namespace_observation"]["namespace"] == "ptp-logs"
+    assert "journal_namespace_not_queried:ptp-logs" in evidence["issues"]
+    assert report["collection_status"] == "partial"
+    assert "journal_evidence_not_parsed:ptp4l.service:partial" in report["collection_issues"]
+
+
