@@ -28,7 +28,7 @@ class GnssObservationNode(Node):
             "nav_cov_topic": "/gnss/nav_cov",
             "nav_status_topic": "/gnss/nav_status",
             "receiver_time_topic": "/gnss/receiver_time",
-            "observation_topic": "/gnss/observation",
+            "observation_topic": "/gnss/observation_decoded",
         }
         topics = {
             name: self.declare_parameter(name, default).value
