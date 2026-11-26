@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.193
+- 文档版本：v0.3.194
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1010,3 +1010,5 @@
 
 
 - UTC leap-transition ambiguity guard（2026-11-26 / v0.3.192）：审查 UbxReceiverTimeMapper 的 UTC POSIX stamp 生成路径，发现仅以当前 GPS−UTC offset 换算 Unix timestamp，无法表达 UTC 23:59:60，正闰秒瞬间可能与下一正常秒映射到相同 POSIX 时间。已加严 fail-closed：UTC stamp 还要求 NAV-TIMELS validTimeToLsEvent；timeToLsEvent ∈ {-1,0,+1} s 的保守切换 guard window 不输出 UTC stamp，但 GPST source timestamp 仍可 valid；source 0 firmware default 从 allowlist 中禁止，allowlist 仅允许显式 source ID 1..8。新增测试覆盖 event validity 缺失、±1s guard、guard 外恢复和 source 0 拒绝。更新 doc/Navigation/37。该策略避免把 leap second 伪装成普通 POSIX second；sec=60 leap-aware civil representation / transition evidence API 仍待实现。当前测试提交 `3dd6b350804eac3e29933bd50909b4bc6059470e` 与 mapper 修复提交 `a78b6f460c4a569943a4e42b11cdbd7720cfb9bc` 将由后续 CI 验证，尚未标记通过。
+
+- GNSS leap-source/event validity 最终分层（2026-11-26 / v0.3.194）：对 NAV-TIMELS 当前 offset 与未来/最近 leap-event 字段做独立语义校验。UTC stamp 要求 TIMEGPS leapSValid、TIMELS validCurrLs、显式可信 source、source-adjusted GPS−UTC offset 处于 0..127 且与 TIMEGPS.leapS 一致；validTimeToLsEvent 只控制 event countdown 的可用性与 ±1s transition guard，不是当前 offset 的替代 validity。event flag 无效时 countdown 置 null，不单独否定 validCurrLs；lsChange 仅在 validTimeToLsEvent=true 时校验 {-1,0,+1}，避免无效 future-event 字段污染 current offset。source 0 firmware default 不可 allowlist；BDS source 4 +14s normalization 保留。测试扩展覆盖 invalid event payload 与 valid current offset 独立、event countdown omitted、负/超范围 GPS−UTC offset fail-closed、source0 拒绝。CI run `45756103543`（commit `c0b20ce631f0692cb6bcec2de06f36fb9de18cd5`）Humble/Jazzy 两项成功，覆盖 error-contract 对齐之前的修复；最新完整测试/fixture 与 source0 wording commits `b74ebf295419999f3557a052a57a6e884739c6ac`、`f34820c1c61ecd45411c81060b86bbb192554580`、`f498fe4b83f8f525c2a12867c0e206d70351d5b3`、`caced3828e9c5a7116c32211d6b422d285099907` 对应 CI 仍在运行，尚未作为通过证据。此前多轮失败根因已逐项定位：undefined leap_event_near、UbxSourceTimeMapping 缺 event metadata、错误信息与 regex 不一致、测试 fixture 缺 change 参数；不将失败 run 计入验收。R06/HPG protocol profile 与目标 ZED-F9P MON-VER 仍需对齐，真实 raw USB/ROS ingress、receiver session generation fence、sec=60 civil representation 和实机 leap transition 验证仍未完成。
