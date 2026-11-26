@@ -154,3 +154,8 @@ The adapter deliberately ignores ROS `header.stamp`: the caller must supply `tim
 `ros_epoch_adapter.py` adds a bounded, generation-fenced buffer between the four decoded UBX ROS message streams and the exact-iTOW joiner. It accepts records in any order and holds them until a separately validated `UbxSourceTimeMapping` for that exact iTOW arrives. The mapping carries receiver `source_timestamp_ns`, `source_clock_id`, and separate UTC-stamp validity/fields. A GPS-time mapping may be valid while UTC conversion remains unavailable; downstream code must not publish a ROS NavSatFix with an invalid UTC stamp.
 
 The adapter requires `begin_generation()` after the mapper has validated a new GPS week/receiver boot generation. It never derives time from iTOW or ROS Header.stamp, and rejects unexpected clock IDs, conflicting mappings, conflicting duplicate records, stale/capacity-evicted epochs, and invalid mappings. This is still a pure Python adapter contract; the NAV-TIMEGPS/NAV-TIMELS parser and live ROS mapper publisher remain unimplemented.
+
+
+## UBX time payload parsing
+
+`ubx_time_messages.py` strictly decodes the pinned protocol-27.10 layout for UBX-NAV-TIMEGPS (16-byte payload) and UBX-NAV-TIMELS (24-byte payload). It preserves signed fields, raw validity bytes, reserved bits/bytes, process session ID, connection generation, and host monotonic receive time. This is a structural decoder only: validity/source policy, GPS week expansion, UTC conversion, exact epoch joining and live receiver integration remain separate gates.
