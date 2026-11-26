@@ -1,8 +1,10 @@
 from pathlib import Path
 import gzip
 
+from robodog_gnss_time import linux_kernel_trace_capabilities as capability_module
 from robodog_gnss_time.linux_kernel_trace_capabilities import (
     collect_linux_kernel_trace_capabilities,
+    main,
 )
 
 
@@ -91,3 +93,21 @@ def test_capability_audit_fails_closed_when_kernel_artifacts_are_missing(tmp_pat
     )
     assert report["candidate_syscall_events"]
     assert "No tracefs mount" in report["interpretation"]
+
+
+
+def test_standalone_cli_writes_json_report_without_ptp_arguments(tmp_path, capsys, monkeypatch):
+    expected = {"status": "observed", "candidate_syscall_events": ["sys_enter_clock_adjtime"]}
+    monkeypatch.setattr(
+        capability_module,
+        "collect_linux_kernel_trace_capabilities",
+        lambda root="/", kernel_release=None: expected,
+    )
+    output = tmp_path / "kernel-capabilities.json"
+
+    assert main(["--root", str(tmp_path), "--kernel-release", "6.1-test", "--output", str(output)]) == 0
+    assert __import__("json").loads(output.read_text(encoding="utf-8")) == expected
+
+    assert main(["--root", str(tmp_path)]) == 0
+    printed = capsys.readouterr().out
+    assert __import__("json").loads(printed) == expected
