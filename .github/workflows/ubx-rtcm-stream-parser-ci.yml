@@ -51,3 +51,19 @@ jobs:
         run: cmake --build build/ubx_rtcm_stream-fuzz --target stream_decoder_fuzz --parallel 2
       - name: Run bounded fuzz smoke
         run: timeout 30s build/ubx_rtcm_stream-fuzz/stream_decoder_fuzz -max_total_time=20 -max_len=4096
+
+  thread-sanitizer:
+    name: ThreadSanitizer bounded queue concurrency tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure ThreadSanitizer
+        run: cmake -S navigation/ubx_rtcm_stream -B build/ubx_rtcm_stream-tsan -DROBODOG_ENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build
+        run: cmake --build build/ubx_rtcm_stream-tsan --parallel 2
+      - name: Run concurrency and parser tests
+        env:
+          TSAN_OPTIONS: halt_on_error=1
+        run: ctest --test-dir build/ubx_rtcm_stream-tsan --output-on-failure
