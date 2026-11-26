@@ -44,6 +44,7 @@ struct GnssIngressQueueStats {
   std::size_t current_size{0};
   std::size_t current_frame_events{0};
   std::size_t high_watermark{0};
+  std::size_t frame_high_watermark{0};
   std::uint64_t current_generation{0};
   std::uint64_t next_ingress_sequence{0};
   bool has_generation{false};
@@ -72,7 +73,9 @@ class GnssIngressQueue {
       : capacity_(capacity), frame_overflow_policy_(frame_overflow_policy),
         process_session_id_(std::move(process_session_id)) {
     if (capacity_ == 0) throw std::invalid_argument("ingress queue capacity must be > 0");
-    if (process_session_id_.empty()) {
+    if (process_session_id_.empty() ||
+        std::all_of(process_session_id_.begin(), process_session_id_.end(),
+                    [](unsigned char c) { return c == ' ' || c == '\\t'; })) {
       throw std::invalid_argument("process_session_id must be non-empty");
     }
   }
@@ -122,6 +125,8 @@ class GnssIngressQueue {
     event.frame = std::move(frame);
     events_.push_back(std::move(event));
     ++stats_.accepted_frame_events;
+    stats_.frame_high_watermark = std::max(
+        stats_.frame_high_watermark, frame_event_count_locked());
     update_watermark_locked();
     return dropped ? GnssIngressPushResult::AcceptedAfterDroppingOldestFrame
                    : GnssIngressPushResult::Accepted;
@@ -202,7 +207,7 @@ class GnssIngressQueue {
     result.rejected_stale_generation = stats_.rejected_stale_generation;
     result.rejected_closed = stats_.rejected_closed;
     result.current_size = frame_event_count_locked();
-    result.high_watermark = stats_.high_watermark;
+    result.high_watermark = stats_.frame_high_watermark;
     result.closed = closed_;
     result.connection_generation = current_generation_;
     return result;
