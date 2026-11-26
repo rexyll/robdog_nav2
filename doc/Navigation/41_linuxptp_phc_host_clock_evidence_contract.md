@@ -114,7 +114,7 @@ journalctl -u ptp4l -u phc2sys -u chrony --since '15 min ago' --no-pager
 
 LinuxPTP `pmc(8)` 文档说明默认 management command 会发往所有 port，`TARGET` 可将后续请求限定到一个 clock/port。上游 `pmc_common.c` 的 help 明确语法为 `TARGET [portIdentity]` 或 `TARGET *`；`pmc_do_command()` 将 TARGET 交给本地 `parse_target()`，后者只更新 pmc client 的目标 `PortIdentity`，不是发往远端 clock 的 SET/CMD 管理动作。上游 `util.c:str2pid()` 规定 portIdentity 格式为 `xxxxxx.xxxx.xxxxxx-portNumber`，portNumber 解析为 uint16。
 
-当前 collector 增加可选 `--target-port-identity`，只接受已验证的 clockIdentity-portNumber（port 1..65535），并在六条 GET 之前加入单个 `TARGET <portIdentity>` argv。未提供时仍保持默认 all-ports 查询；若返回多个同类 response，parser fail-closed 并保留原始输出。禁止自动选择第一个端口，也不使用 `TARGET *` 伪装为单端口选择。只有目标 interface/ptp4l 实例的 portIdentity 已由配置或设备证据确认时，才允许传入该参数；不因 CI fixture 中的 identity 推断目标机 identity。
+当前 collector 增加可选 `--target-port-identity`，只接受已验证的 clockIdentity-portNumber（port 1..65535），并在六条 GET 之前加入单个 `TARGET <portIdentity>` argv。未提供时仍保持默认 all-ports 查询；若返回多个同类 response，parser fail-closed 并保留原始输出。若显式配置 TARGET，采集器还会把返回的 `PORT_DATA_SET.portIdentity` 与目标值做大小写不敏感的精确比较；不匹配时 snapshot 标记 invalid。禁止自动选择第一个端口，也不使用 `TARGET *` 伪装为单端口选择。只有目标 interface/ptp4l 实例的 portIdentity 已由配置或设备证据确认时，才允许传入该参数；不因 CI fixture 中的 identity 推断目标机 identity。
 
 上游源码：
 - https://github.com/richardcochran/linuxptp/blob/master/pmc_common.c （TARGET help、local target dispatch）
