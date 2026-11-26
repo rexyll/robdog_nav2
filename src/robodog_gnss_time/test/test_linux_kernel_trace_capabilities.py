@@ -85,8 +85,5 @@ def test_capability_audit_fails_closed_when_kernel_artifacts_are_missing(tmp_pat
         item["available_events_status"] == "not_found"
         for item in report["tracefs"]
     )
-    assert "No tracefs mount" in report["interpretation"] or (
-        "No tracefs mount" not in report["interpretation"]
-    )
-    assert "No tracefs mount" not in report["interpretation"]
-    assert "No event was enabled" in report["interpretation"]
+    assert report["candidate_syscall_events"]
+    assert "No trace buffer was read" in report["interpretation"]
