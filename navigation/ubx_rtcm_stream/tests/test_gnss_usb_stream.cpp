@@ -130,7 +130,7 @@ int main() {
   assert(stream.start());
   assert(fake.pending_count() == 2);
 
-  // UBX-NAV-PVT header with zero payload and valid Fletcher checksum.
+  // Generic zero-payload UBX frame with a valid Fletcher checksum.
   const std::vector<std::uint8_t> ubx{0xB5, 0x62, 0x01, 0x07, 0x00, 0x00, 0x08, 0x19};
   assert(fake.inject(ubx));
 
