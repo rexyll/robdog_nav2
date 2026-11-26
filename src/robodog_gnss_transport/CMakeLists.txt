@@ -47,6 +47,9 @@ if(BUILD_TESTING)
     test/test_gnss_ingress_ros_delivery.cpp)
   target_include_directories(test_gnss_ingress_ros_delivery PRIVATE include)
   target_compile_features(test_gnss_ingress_ros_delivery PRIVATE cxx_std_17)
+  target_link_libraries(test_gnss_ingress_ros_delivery
+    robodog_ubx_rtcm_stream
+    Threads::Threads)
   ament_target_dependencies(test_gnss_ingress_ros_delivery
     rclcpp
     robodog_gnss_interfaces)
