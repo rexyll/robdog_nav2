@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from robodog_gnss_quality.ubx_nav_pvt import EpochPairingError
 
 from robodog_gnss_quality.ubx_ingress_event_processor import GnssIngressEventProcessor
 from robodog_gnss_quality.ubx_time_mapper import UbxReceiverTimeMapper
@@ -36,7 +37,7 @@ def test_consumer_accepts_generation_and_stopped_events():
 
 def test_consumer_latches_invalid_event_and_rejects_every_later_event():
     consumer = GnssIngressConsumer(processor(), lambda mapping: None)
-    with pytest.raises(Exception):
+    with pytest.raises(EpochPairingError):
         consumer.handle_ros_message(lifecycle_message(4, 0))
     assert consumer.faulted is True
     with pytest.raises(RuntimeError, match="consumer is faulted"):
