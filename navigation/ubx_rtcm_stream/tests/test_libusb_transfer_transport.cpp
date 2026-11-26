@@ -163,5 +163,30 @@ int main() {
     assert(fake.free_count == 1);
     assert(transport.close());
   }
+
+  {
+    FakeLibusb fake;
+    LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
+    LibusbTransferRequest request;
+    request.endpoint = 0x84;
+    request.direction = UsbTransferDirection::In;
+    request.buffer.resize(4);
+    bool second_submitted = false;
+    bool close_rejected_during_callback = false;
+    assert(transport.submit(5, 8, request,
+      [&](auto, auto, auto, auto, auto) {
+        close_rejected_during_callback = !transport.close();
+        second_submitted = transport.submit(6, 8, request,
+          [](auto, auto, auto, auto, auto) {});
+      }));
+    fake.complete_next(0, 4);
+    assert(transport.poll_events() == 0);
+    assert(close_rejected_during_callback && second_submitted);
+    assert(transport.pending_count() == 1);
+    fake.complete_next(0, 4);
+    assert(transport.poll_events() == 0);
+    assert(transport.pending_count() == 0);
+    assert(transport.close());
+  }
   return 0;
 }
