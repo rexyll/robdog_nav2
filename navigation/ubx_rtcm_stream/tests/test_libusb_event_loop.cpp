@@ -75,6 +75,7 @@ int main() {
   LibusbTransferTransport transport(fake.api(), reinterpret_cast<void *>(0x1));
   LibusbEventLoop loop(transport, 2);
   assert(loop.start());
+  assert(!transport.close());  // Device handle cannot close while event owner is active.
 
   // start() returns only after the worker has bound the event-loop owner.
   // A second thread cannot pump the same context.
