@@ -38,8 +38,9 @@ def timels(i_tow=1000, source=2, leap=18, valid=0x03, version=0, time_to_event=8
 
 
 def mapper(**kwargs):
+    connection_generation = kwargs.pop("connection_generation", 0)
     result = UbxReceiverTimeMapper(**kwargs)
-    result.begin_session("f9p-usb-session-17")
+    result.begin_session("f9p-usb-session-17", connection_generation)
     return result
 
 
@@ -212,6 +213,25 @@ class TestUbxTimeMapper(unittest.TestCase):
         self.assertNotEqual(first.source_clock_id, second.source_clock_id)
         self.assertIn("gps-week:2450", first.source_clock_id)
         self.assertIn("gps-week:2451", second.source_clock_id)
+
+    def test_connection_generation_is_part_of_source_clock_identity(self):
+        m = mapper(trusted_leap_sources={2}, connection_generation=7)
+        m.add_timegps(timegps(), 100)
+        first = m.add_timels(timels(), 110)
+        self.assertIn(":connection:7:gps-week:2450", first.source_clock_id)
+
+        m.begin_session("f9p-usb-session-17", connection_generation=8)
+        m.add_timegps(timegps(), 200)
+        second = m.add_timels(timels(), 210)
+        self.assertIn(":connection:8:gps-week:2450", second.source_clock_id)
+        self.assertNotEqual(first.source_clock_id, second.source_clock_id)
+
+    def test_connection_generation_must_be_non_negative_integer(self):
+        m = UbxReceiverTimeMapper()
+        for generation in (-1, True, 1.5):
+            with self.subTest(generation=generation):
+                with self.assertRaisesRegex(EpochPairingError, "connection_generation"):
+                    m.begin_session("f9p-usb-session-17", generation)
 
     def test_invalid_gps_time_flags_do_not_emit_mapping(self):
         m = mapper(trusted_leap_sources={2})
