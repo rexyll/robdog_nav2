@@ -5,7 +5,19 @@
 #include <cstdint>
 
 namespace {
-void noop_callback(void *, int, int, void *) {}
+bool callback_called = false;
+int callback_status = -1;
+int callback_actual_length = -1;
+void * callback_user_data = nullptr;
+void * callback_transfer = nullptr;
+
+void capture_callback(void * transfer, int status, int actual_length, void * user_data) {
+  callback_called = true;
+  callback_status = status;
+  callback_actual_length = actual_length;
+  callback_user_data = user_data;
+  callback_transfer = transfer;
+}
 }
 
 int main()
@@ -25,12 +37,27 @@ int main()
   std::array<std::uint8_t, 16> buffer{};
   const int fill_result = api.fill_bulk_transfer(
     transfer, nullptr, 0x81, buffer.data(), static_cast<int>(buffer.size()),
-    250, 0, &noop_callback, reinterpret_cast<void *>(0x1234));
+    250, 0, &capture_callback, reinterpret_cast<void *>(0x1234));
   assert(fill_result == LIBUSB_SUCCESS);
 
-  // No submit/callback is attempted: free_transfer must safely reclaim the
-  // unconsumed native callback bridge in this never-submitted state.
+  transfer->status = LIBUSB_TRANSFER_COMPLETED;
+  transfer->actual_length = 6;
+  transfer->callback(transfer);  // Exercise the native-signature bridge directly.
+  assert(callback_called);
+  assert(callback_status == LIBUSB_TRANSFER_COMPLETED);
+  assert(callback_actual_length == 6);
+  assert(callback_user_data == reinterpret_cast<void *>(0x1234));
+  assert(callback_transfer == transfer);
+  assert(transfer->user_data == nullptr);
   api.free_transfer(transfer);
+
+  // Also verify the never-submitted path reclaims a bridge still in user_data.
+  auto * unsubmitted = static_cast<libusb_transfer *>(api.alloc_transfer(0));
+  assert(unsubmitted != nullptr);
+  assert(api.fill_bulk_transfer(
+    unsubmitted, nullptr, 0x01, buffer.data(), static_cast<int>(buffer.size()),
+    250, 0, &capture_callback, reinterpret_cast<void *>(0x5678)) == LIBUSB_SUCCESS);
+  api.free_transfer(unsubmitted);
   libusb_exit(context);
   return 0;
 }
