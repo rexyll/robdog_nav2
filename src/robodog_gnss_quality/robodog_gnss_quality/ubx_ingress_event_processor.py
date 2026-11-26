@@ -1,8 +1,7 @@
 """Ordered lifecycle consumer for raw GNSS ingress events.
 
-This transport-independent processor mirrors GnssIngressEvent from the C++
-USB stream. It serializes lifecycle and frame events before forwarding only
-NAV-TIMEGPS/NAV-TIMELS records to the canonical receiver-time mapper.
+This transport-independent processor mirrors the C++ GnssIngressEvent and
+the ROS robodog_gnss_interfaces/GnssIngressEvent wire contract.
 """
 
 from dataclasses import dataclass
@@ -10,7 +9,6 @@ from typing import Optional, Union
 
 from .ubx_nav_pvt import EpochPairingError
 from .ubx_ingress_adapter import (
-    PROTOCOL_UBX,
     UbxTimeIngressRecord,
     decode_ubx_time_ingress_frame,
 )
@@ -19,18 +17,73 @@ from .ubx_time_messages import UbxNavTimeGpsEpoch, UbxNavTimeLsEpoch
 from .ros_epoch_adapter import UbxSourceTimeMapping
 
 
+_EVENT_ID_TO_NAME = {
+    0: "GenerationStarted",
+    1: "Frame",
+    2: "DeviceLost",
+    3: "TransportFault",
+    4: "Stopped",
+}
+_EVENT_NAME_TO_ID = {value: key for key, value in _EVENT_ID_TO_NAME.items()}
+
+
 @dataclass(frozen=True)
 class GnssIngressEvent:
-    """Python representation of one C++ GnssIngressEvent."""
+    """Python representation of one C++/ROS ordered ingress event."""
 
-    event_type: str
+    event_type: Union[str, int]
     process_session_id: str
     connection_generation: int
     ingress_sequence: int
     receive_monotonic_ns: int
     dropped_frame_events_total: int = 0
     protocol: Optional[Union[str, int]] = None
+    checksum_status: Optional[int] = None
+    frame_sequence: Optional[int] = None
+    frame_connection_generation: Optional[int] = None
     frame_bytes: Optional[bytes] = None
+
+    @classmethod
+    def from_ros_message(cls, message: object) -> "GnssIngressEvent":
+        """Convert generated ROSIDL message without importing its package."""
+        event_type = getattr(message, "event_type", None)
+        if isinstance(event_type, bool) or event_type not in _EVENT_ID_TO_NAME:
+            raise EpochPairingError("ROS ingress message has unknown event_type")
+        kind = _EVENT_ID_TO_NAME[event_type]
+        protocol = getattr(message, "protocol", None)
+        checksum_status = getattr(message, "checksum_status", None)
+        frame_sequence = getattr(message, "frame_sequence", None)
+        frame_generation = getattr(message, "frame_connection_generation", None)
+        frame_bytes = bytes(getattr(message, "frame_bytes", b""))
+        if kind == "Frame":
+            return cls(
+                event_type=kind,
+                process_session_id=message.process_session_id,
+                connection_generation=message.connection_generation,
+                ingress_sequence=message.ingress_sequence,
+                receive_monotonic_ns=message.receive_monotonic_ns,
+                dropped_frame_events_total=message.dropped_frame_events_total,
+                protocol=protocol,
+                checksum_status=checksum_status,
+                frame_sequence=frame_sequence,
+                frame_connection_generation=frame_generation,
+                frame_bytes=frame_bytes,
+            )
+        if (
+            protocol != 255 or checksum_status != 0 or frame_sequence != 0
+            or frame_generation != 0 or frame_bytes
+        ):
+            raise EpochPairingError(
+                "ROS lifecycle event must use empty-frame sentinel fields"
+            )
+        return cls(
+            event_type=kind,
+            process_session_id=message.process_session_id,
+            connection_generation=message.connection_generation,
+            ingress_sequence=message.ingress_sequence,
+            receive_monotonic_ns=message.receive_monotonic_ns,
+            dropped_frame_events_total=message.dropped_frame_events_total,
+        )
 
 
 @dataclass(frozen=True)
@@ -46,9 +99,7 @@ class GnssIngressProcessorStats:
 class GnssIngressEventProcessor:
     """Consume one ordered event stream and fence mapper state by lifecycle."""
 
-    _EVENT_TYPES = {
-        "GenerationStarted", "Frame", "DeviceLost", "TransportFault", "Stopped"
-    }
+    _EVENT_TYPES = set(_EVENT_NAME_TO_ID)
 
     def __init__(self, mapper: UbxReceiverTimeMapper) -> None:
         if not isinstance(mapper, UbxReceiverTimeMapper):
@@ -73,11 +124,24 @@ class GnssIngressEventProcessor:
         self._rejected_events = 0
 
     @staticmethod
-    def _validate_event(event: GnssIngressEvent) -> None:
+    def _event_kind(value: Union[str, int]) -> str:
+        if isinstance(value, bool):
+            raise EpochPairingError("event_type must be a known string or uint8 enum")
+        if isinstance(value, int):
+            kind = _EVENT_ID_TO_NAME.get(value)
+        elif isinstance(value, str):
+            kind = value if value in _EVENT_NAME_TO_ID else None
+        else:
+            kind = None
+        if kind is None:
+            raise EpochPairingError("unknown GNSS ingress event_type")
+        return kind
+
+    @classmethod
+    def _validate_event(cls, event: GnssIngressEvent) -> str:
         if not isinstance(event, GnssIngressEvent):
             raise EpochPairingError("event must be a GnssIngressEvent")
-        if event.event_type not in GnssIngressEventProcessor._EVENT_TYPES:
-            raise EpochPairingError("unknown GNSS ingress event_type")
+        kind = cls._event_kind(event.event_type)
         if not isinstance(event.process_session_id, str) or not event.process_session_id.strip():
             raise EpochPairingError("process_session_id must be a non-empty string")
         for name, value in (
@@ -88,23 +152,39 @@ class GnssIngressEventProcessor:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
                 raise EpochPairingError(f"{name} must be a non-negative integer")
-        if event.event_type == "Frame":
-            if event.protocol is None:
-                raise EpochPairingError("Frame event requires protocol")
+        if kind == "Frame":
+            if isinstance(event.protocol, bool) or event.protocol not in (0, 1, 2, "ubx", "rtcm3", "nmea"):
+                raise EpochPairingError("Frame event requires a supported protocol")
             if not isinstance(event.frame_bytes, (bytes, bytearray, memoryview)):
                 raise EpochPairingError("Frame event requires bytes-like frame_bytes")
-        elif event.protocol is not None or event.frame_bytes is not None:
+            if event.checksum_status not in (1, 2):
+                raise EpochPairingError("Frame event requires a valid/absent checksum status")
+            if event.protocol in (0, 1, "ubx", "rtcm3") and event.checksum_status != 1:
+                raise EpochPairingError("UBX/RTCM3 frames must have a valid checksum")
+            if isinstance(event.frame_sequence, bool) or not isinstance(event.frame_sequence, int) or event.frame_sequence < 0:
+                raise EpochPairingError("Frame event requires a non-negative frame_sequence")
+            if (
+                isinstance(event.frame_connection_generation, bool)
+                or not isinstance(event.frame_connection_generation, int)
+                or event.frame_connection_generation != event.connection_generation
+            ):
+                raise EpochPairingError("frame generation must match event generation")
+        elif any(value is not None for value in (
+            event.protocol, event.checksum_status, event.frame_sequence,
+            event.frame_connection_generation, event.frame_bytes
+        )):
             raise EpochPairingError("lifecycle events must not carry frame data")
+        return kind
 
     def process(self, event: GnssIngressEvent) -> Optional[UbxSourceTimeMapping]:
         """Consume one event. Returns a mapping only when TIMEGPS/TIMELS pair."""
         try:
-            self._validate_event(event)
+            kind = self._validate_event(event)
             if (
                 self._process_session_id is not None
                 and event.process_session_id != self._process_session_id
             ):
-                if event.event_type != "GenerationStarted":
+                if kind != "GenerationStarted":
                     raise EpochPairingError(
                         "new process_session_id must begin with GenerationStarted"
                     )
@@ -122,20 +202,17 @@ class GnssIngressEventProcessor:
                 self._last_ingress_sequence is not None
                 and event.ingress_sequence <= self._last_ingress_sequence
             ):
-                raise EpochPairingError(
-                    "stale or reordered ingress event sequence"
-                )
+                raise EpochPairingError("stale or reordered ingress event sequence")
             if (
                 self._last_receive_monotonic_ns is not None
                 and event.receive_monotonic_ns < self._last_receive_monotonic_ns
             ):
-                raise EpochPairingError(
-                    "ingress receive_monotonic_ns moved backwards"
-                )
+                raise EpochPairingError("ingress receive_monotonic_ns moved backwards")
             if event.dropped_frame_events_total < self._last_dropped_frame_events_total:
                 raise EpochPairingError("dropped_frame_events_total moved backwards")
+
             if self._last_ingress_sequence is None:
-                if event.event_type != "GenerationStarted" or event.ingress_sequence != 0:
+                if kind != "GenerationStarted" or event.ingress_sequence != 0:
                     raise EpochPairingError(
                         "first ingress event must be GenerationStarted with sequence 0"
                     )
@@ -149,12 +226,12 @@ class GnssIngressEventProcessor:
                     "ingress sequence gap is not explained by dropped frame events"
                 )
             pending_drops -= missing_sequences
-            if event.event_type in ("DeviceLost", "TransportFault", "Stopped") and pending_drops:
+            if kind in ("DeviceLost", "TransportFault", "Stopped") and pending_drops:
                 raise EpochPairingError(
                     "terminal ingress event leaves unexplained dropped-frame watermark"
                 )
 
-            if event.event_type == "GenerationStarted":
+            if kind == "GenerationStarted":
                 if self._process_session_id == event.process_session_id:
                     if (
                         self._connection_generation is not None
@@ -175,25 +252,22 @@ class GnssIngressEventProcessor:
                 self._active = True
                 self._terminal_type = None
                 self._stopped = False
-            else:
-                if (
-                    self._process_session_id != event.process_session_id
-                    or self._connection_generation != event.connection_generation
-                ):
-                    raise EpochPairingError(
-                        "event process_session_id/connection_generation is stale"
-                    )
+            elif (
+                self._process_session_id != event.process_session_id
+                or self._connection_generation != event.connection_generation
+            ):
+                raise EpochPairingError(
+                    "event process_session_id/connection_generation is stale"
+                )
 
-            # Sequence is consumed even if a well-formed Frame is not a time
-            # message or its payload is rejected. The next event must still be
-            # strictly newer in the source event stream.
+            # Consume source sequence even if a valid frame is not a time message.
             self._last_ingress_sequence = event.ingress_sequence
             self._last_receive_monotonic_ns = event.receive_monotonic_ns
             self._last_dropped_frame_events_total = event.dropped_frame_events_total
             self._pending_dropped_frame_events = pending_drops
             self._processed_events += 1
 
-            if event.event_type == "Frame":
+            if kind == "Frame":
                 if not self._active or self._terminal_type is not None or self._stopped:
                     raise EpochPairingError("Frame event arrived outside active generation")
                 record = decode_ubx_time_ingress_frame(
@@ -212,15 +286,15 @@ class GnssIngressEventProcessor:
                     self._emitted_mappings += 1
                 return mapping
 
-            if event.event_type in ("DeviceLost", "TransportFault"):
+            if kind in ("DeviceLost", "TransportFault"):
                 if not self._active or self._terminal_type is not None:
                     raise EpochPairingError("duplicate or out-of-order terminal event")
-                self._terminal_type = event.event_type
+                self._terminal_type = kind
                 self._active = False
                 self.mapper.reset()
                 return None
 
-            if event.event_type == "Stopped":
+            if kind == "Stopped":
                 if self._stopped:
                     raise EpochPairingError("duplicate Stopped event")
                 if self._active:
