@@ -35,6 +35,7 @@ private:
   const unsigned int poll_timeout_ms_;
   std::atomic<bool> stopping_{false};
   mutable std::mutex mutex_;
+  std::mutex shutdown_mutex_;
   std::condition_variable condition_;
   std::thread worker_;
   bool started_{false};
