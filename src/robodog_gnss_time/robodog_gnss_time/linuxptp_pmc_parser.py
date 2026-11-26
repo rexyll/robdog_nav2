@@ -9,8 +9,8 @@ import re
 
 
 _HEADER = re.compile(
-    r"^\\s*[0-9A-Fa-f:.]+-[0-9]+\\s+seq\\s+[0-9]+\\s+"
-    r"RESPONSE MANAGEMENT ([A-Z0-9_]+)\\s*$"
+    r"^\s*[0-9A-Fa-f:.]+-[0-9]+\s+seq\s+[0-9]+\s+"
+    r"RESPONSE MANAGEMENT ([A-Z0-9_]+)\s*$"
 )
 _DATASET_FIELDS = {
     "TIME_STATUS_NP": {
@@ -93,7 +93,7 @@ def parse_pmc_response(output: str, dataset: str):
                 raise ValueError(f"{dataset}.{key} must be a boolean flag")
             parsed[key] = raw in {"1", "true"}
         elif key in _INT_FIELDS:
-            if not re.fullmatch(r"[+-]?\\d+", raw):
+            if not re.fullmatch(r"[+-]?\d+", raw):
                 raise ValueError(f"{dataset}.{key} must be an integer")
             parsed[key] = int(raw, 10)
         elif key in _DECIMAL_FIELDS:
