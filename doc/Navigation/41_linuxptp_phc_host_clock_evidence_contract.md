@@ -108,7 +108,7 @@ journalctl -u ptp4l -u phc2sys -u chrony --since '15 min ago' --no-pager
 
 ## 6. 实施 Gate
 
-在目标机拓扑与输出格式未确认前，不新增 LinuxPTP parser 或 ROS producer，避免把版本差异、socket/domain、PTP profile、GM traceability 和 phc2sys sink direction 写成猜测。取得真实样本后，先做 parser fixtures 与 fail-closed state model，再做只读采集器；禁止任何 clock adjustment side effect。
+现已新增 transport-independent `linuxptp_pmc_parser.py`，仅解析四种只读 GET response dataset（TIME_STATUS_NP、CURRENT_DATA_SET、PORT_DATA_SET、TIME_PROPERTIES_DATA_SET），严格校验 header/required fields/types/duplicates/unknown fields；它不执行 pmc、不连接 socket、不推断 PHC/UTC、不发布 HostTimeSyncStatus。由于目标机拓扑与版本输出仍未确认，暂不新增 LinuxPTP ROS producer。取得目标 Orin 原始样本后，先核验 socket/domain/port/profile 与真实字段差异，再建立 fail-closed state model 和只读 collector；禁止任何 clock adjustment side effect。
 
 ## 7. 上游参考
 
