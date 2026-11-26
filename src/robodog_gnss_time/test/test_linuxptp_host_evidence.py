@@ -585,7 +585,7 @@ def test_collector_records_journal_storage_context_without_claiming_coverage():
 
     report = collect_linuxptp_host_evidence(_config(), runner=runner)
     context = report["journal_storage_context"]
-    assert report["schema_version"] == 3
+    assert report["schema_version"] == 4
     assert context["status"] == "observed"
     assert context["coverage_status"] == "unknown"
     assert context["suppression_evidence"]["events"][0]["type"] == "journal_rate_limit_suppression"
