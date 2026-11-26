@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.167
+- 文档版本：v0.3.168
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -938,3 +938,6 @@
 
 
 - Fake USB transport 并发与 sanitizer CI 验证闭环（2026-11-26 / v0.3.167）：Actions run `45744875124` success，三个 job 全部通过：ThreadSanitizer bounded queue + transfer lifecycle + fake transport CTest、ASan/UBSan parser+queue+lifecycle+fake transport CTest、Clang libFuzzer smoke。该轮包含 100 轮 submit-vs-shutdown 并发竞态、event generation snapshot、terminal event deduplication。新增 Navigation 23，依据 libusb 官方异步 I/O 文档确认：cancel_transfer 是异步请求，callback 在后续 event handling 中执行；cancel 返回不代表 cancellation complete；callback 被调用前 free transfer 属于 undefined behavior；callback 运行于 event-handling context，不得调用会尝试处理事件的阻塞/重入 API；应用必须持续调用 libusb event handling 才能推进 transfer completion。由此把真实 adapter 设计收敛为单一 event-loop owner、pending registration-before-submit、callback-only finalizer、cancel→event-pump→callback-drain→join→free/close。以上为 API contract 设计依据，真实 libusb adapter、ROS 2 component_container_mt 与设备断连验证仍未实施。
+
+
+- 固定版 ublox_dgnss 真实 libusb adapter 源码映射与设计（2026-11-26 / v0.3.168）：继续对固定上游 `aussierobots/ublox_dgnss@9d4f5addbc72d092c57dde99b20712258e96e81e` 的 `usb.cpp`、`usb.hpp`、`ublox_dgnss_node.cpp`、CMake 与 package metadata 做逐函数审计。确认 libusb 依赖通过 pkg-config 的 `libusb-1.0` 查找并链接 `usb-1.0`，package.xml 仅声明 `libusb-1.0-dev`，无版本 pin 或下限；因此目标镜像实际 libusb 版本仍是构建证据缺口。确认 `transfer_t` 拥有 libusb_transfer 与 buffer，`user_data` 持有堆分配的 shared_ptr wrapper；同步 submit failure 未显式释放该 wrapper；submit 成功后才登记 queue，存在 callback 先于 queue 登记的窗口；IN/OUT callback 的 NO_DEVICE 提前 return（OUT 的 ERROR 也提前 return）会绕过统一 cleanup；普通 bool completed 跨 callback/queue 线程读写；queue size 在锁外访问；shutdown 在持队列锁 cancel 后立即 clear，可能在 callback drain 前释放仍被 libusb 使用的 transfer/buffer；close_devh 之后立即 close handle，未建立 callback drain barrier。进一步确认 ROS USB event 由 10ms MutuallyExclusive timer 调用 `libusb_handle_events_timeout`，但 USB submit、初始化、订阅/服务写入与 shutdown 并不都属于同一 callback group，因此不能将该 timer group 等同于全局 libusb 单线程模型。上述均为固定源码静态确认的生命周期/并发风险，不是实际 UAF、死锁或断连复现。新增 Navigation 24，规定真实 adapter 必须使用稳定 heap-owned transfer context、pending registry-before-submit、统一 callback finalizer、显式 stop-resubmit/cancel/event-pump/drain/join/close 顺序，并通过可注入 LibusbApi function table 做 fake API 单测后再接 ROS 2。尚未实现真实 adapter、未 pin libusb 版本、未运行 ROS 2 Jazzy component_container_mt 或 F9P 设备测试；不把静态审计表述为修复完成。
