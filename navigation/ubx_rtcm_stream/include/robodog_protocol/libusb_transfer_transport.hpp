@@ -139,6 +139,7 @@ public:
   bool cancel(std::uint64_t id) {
     std::lock_guard<std::mutex> operation_lock(operation_mutex_);
     if (closed_) return false;
+    std::lock_guard<std::mutex> registry_lock(registry_mutex_);
     auto it = pending_.find(id);
     if (it == pending_.end() || it->second->callback_seen) return false;
     // A successful cancel is only a request. Ownership remains pending until
