@@ -164,7 +164,7 @@ class UbxReceiverTimeMapper:
             isinstance(source, bool) or not isinstance(source, int) or not 1 <= source <= 8
             for source in trusted_leap_sources
         ):
-            raise ValueError("firmware default 0 is never trusted; allowlist only accepts explicit NAV-TIMELS source IDs 1..8")
+            raise ValueError("source 0 is firmware default and is never trusted; allowlist only accepts explicit NAV-TIMELS source IDs 1..8")
         if (isinstance(leap_event_guard_seconds, bool) or
                 not isinstance(leap_event_guard_seconds, int) or leap_event_guard_seconds < 0):
             raise ValueError("leap_event_guard_seconds must be a non-negative integer")
