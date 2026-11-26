@@ -209,12 +209,38 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
             pmc_validation = {"status": "invalid", "error": str(exc)}
 
     # A syntactically valid PTP snapshot is only one part of the host
-    # inventory. Never label a report complete when any explicitly requested
-    # host command failed or the boot identity could not be captured.
+    # inventory. The six GET responses are sequential observations returned
+    # by one pmc process; the management protocol output carries no common
+    # sample instant, so do not describe them as an atomic snapshot.
     all_command_results = results + [pmc_result]
+    ptp_device_paths = sorted(glob.glob("/dev/ptp*"))
+    sysfs_ptp_paths = sorted(glob.glob(
+        f"/sys/class/net/{config.interface}/device/ptp/ptp*"
+    ))
+    try:
+        boot_id_after = Path("/proc/sys/kernel/random/boot_id").read_text(
+            encoding="ascii"
+        ).strip()
+        boot_id_after_error = None
+    except OSError as exc:
+        boot_id_after = None
+        boot_id_after_error = str(exc)
+    collection_end = time.monotonic_ns()
+    realtime_end = time.time_ns()
+
+    monotonic_elapsed_ns = collection_end - collection_start
+    realtime_elapsed_ns = realtime_end - realtime_start
+    realtime_minus_monotonic_elapsed_ns = (
+        realtime_elapsed_ns - monotonic_elapsed_ns
+    )
+
     collection_issues = []
     if not boot_id:
         collection_issues.append("host_boot_id_unavailable")
+    if not boot_id_after:
+        collection_issues.append("host_boot_id_unavailable_after_collection")
+    elif boot_id and boot_id_after != boot_id:
+        collection_issues.append("host_boot_id_changed_during_collection")
     for command_result in all_command_results:
         if command_result["status"] != "ok":
             collection_issues.append(
@@ -226,17 +252,13 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         )
     collection_status = "complete" if not collection_issues else "partial"
 
-    ptp_device_paths = sorted(glob.glob("/dev/ptp*"))
-    sysfs_ptp_paths = sorted(glob.glob(
-        f"/sys/class/net/{config.interface}/device/ptp/ptp*"
-    ))
-    collection_end = time.monotonic_ns()
-    realtime_end = time.time_ns()
     return {
         "schema_version": 1,
         "evidence_kind": "read_only_linuxptp_host_inventory",
         "host_boot_id": boot_id,
         "host_boot_id_error": boot_id_error,
+        "host_boot_id_after_collection": boot_id_after,
+        "host_boot_id_after_collection_error": boot_id_after_error,
         "interface": config.interface,
         "expected_ptp_domain_number": config.domain_number,
         "expected_transport_specific": config.transport_specific,
@@ -246,6 +268,27 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
         "collection_realtime_start_ns": realtime_start,
         "collection_monotonic_end_ns": collection_end,
         "collection_realtime_end_ns": realtime_end,
+        "collection_clock_consistency": {
+            "status": "measured_no_threshold",
+            "monotonic_elapsed_ns": monotonic_elapsed_ns,
+            "realtime_elapsed_ns": realtime_elapsed_ns,
+            "realtime_minus_monotonic_elapsed_ns": (
+                realtime_minus_monotonic_elapsed_ns
+            ),
+            "interpretation": (
+                "Raw elapsed-time difference only; includes realtime clock "
+                "slew/step and sampling-call overhead. No threshold or "
+                "synchronization verdict is applied."
+            ),
+        },
+        "pmc_snapshot_observation": {
+            "atomicity": "not_guaranteed",
+            "observation_model": "sequential_management_responses",
+            "simultaneity": "not_proven",
+            "monotonic_start_ns": pmc_result["monotonic_start_ns"],
+            "monotonic_end_ns": pmc_result["monotonic_end_ns"],
+            "per_dataset_sample_timestamps_available": False,
+        },
         "ptp_device_paths": ptp_device_paths,
         "interface_sysfs_ptp_paths": [os.path.realpath(path) for path in sysfs_ptp_paths],
         "commands": all_command_results,
