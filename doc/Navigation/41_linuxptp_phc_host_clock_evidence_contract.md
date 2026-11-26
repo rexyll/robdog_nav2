@@ -370,3 +370,70 @@ eBPF 程序；不改变主机状态，只记录证据设计和后续验收条件
   available_events / event format 文件决定，不能假定每个内核都有同一事件集合：
   https://www.kernel.org/doc/html/latest/trace/events.html
 
+
+
+## 12. 目标内核 tracing 能力只读盘点（v0.3.250）
+
+为决定后续是否能在 Orin 上可靠捕获 CLOCK_REALTIME / PHC 调整事件，新增
+`linux_kernel_trace_capabilities.py` 只读盘点器，并由 LinuxPTP host evidence
+collector 输出 `clock_step_trace_capabilities`。盘点器仅读取现有 procfs/sysfs
+文件，不运行 mount、trace-cmd、perf、bpftool 或 BPF loader，也不写 tracefs
+控制文件。
+
+### 12.1 采集范围
+
+- 记录运行内核 release、machine、system，以及盘点自身的
+  CLOCK_MONOTONIC / CLOCK_REALTIME 起止时间。
+- 读取 `/proc/config.gz` 与 `/boot/config-<uname -r>`（若存在），仅摘录
+  FTRACE、TRACEPOINTS、HAVE_SYSCALL_TRACEPOINTS、BPF、BPF_SYSCALL、
+  DEBUG_INFO_BTF、IKCONFIG、IKCONFIG_PROC、PERF_EVENTS、KPROBE_EVENTS 等
+  相关配置。配置文件缺失、权限不足和读取错误分别保留状态。
+- 读取 `/proc/self/mountinfo`，识别
+  `/sys/kernel/tracing` 与 `/sys/kernel/debug/tracing` 的挂载信息。
+- 读取每个候选 tracefs 的 `available_events`，仅针对实际列出的
+  `syscalls:sys_enter/exit_clock_adjtime`、`adjtimex`、
+  `clock_settime`、`settimeofday` 读取各自 `format` 文件；报告实际字段
+  名和原始 format，不把不同内核/架构的字段布局写死。
+- 对 `/sys/kernel/btf/vmlinux` 只检查存在性、可读性和文件大小，不加载或
+  解析 BTF。collector 另执行只读 `systemctl --version` 并保留原始输出。
+
+### 12.2 状态与证据边界
+
+- `available` 仅表示事件名出现在该内核的 `available_events` 且其
+  `format` 文件可读；`not_listed` 表示在成功读取的列表中未出现；
+  `unknown` 表示列表本身不可读。不得将三者混为“内核不支持”。
+- `/proc/config.gz` 是构建内核时使用的配置快照，仅当
+  `CONFIG_IKCONFIG_PROC` 启用时才会提供；`/boot/config-<release>`
+  可能缺失或与当前运行内核不匹配。配置内容不等同于运行时 tracepoint
+  可用性，实际事件仍以目标内核 `available_events` 与 `format` 为准。
+- BTF 文件存在/可读不证明 BTF 内容有效、BPF verifier 会接受目标程序、
+  当前进程具有加载权限或用户态内存读取一定成功。
+- tracefs 未挂载、权限不足或事件未列出时，不尝试自动挂载、不提升权限，
+  不写入 enable/set_event/filter/trigger；也不据此排除 kprobe、perf 或其他
+  厂商专用 instrumentation。
+- 此次盘点没有开始 tracing，因此没有 event buffer、lost-event counter、
+  syscall entry/exit 配对、timex 用户内存读取、PID/fd 生命周期或 PHC
+  fd→`/dev/ptpN` 解析证据。它只为下一阶段方案选型提供能力边界。
+- `systemctl --version` 只记录 systemd 版本信息，不证明 journald
+  runtime namespace、日志保留或 service 配置正确；具体 service 的
+  `LogNamespace` 等仍按显式配置 service 的既有采集路径获取。
+- 本轮 GitHub Actions 合成测试不是 Orin 实机验证。目标 Orin 的内核版本、
+  config、BTF、tracefs、syscall event format、systemd 版本及访问权限仍需
+  用户提供原始报告/现场执行结果，状态为“需要实物/授权，未完成”。
+
+### 12.3 上游依据
+
+- Linux kernel Event Tracing：`available_events` 与 event `format` 是目标
+  内核实际事件/字段的发现依据：
+  https://www.kernel.org/doc/html/latest/trace/events.html
+- Linux man-pages `proc_config.gz(5)`：`/proc/config.gz` 提供构建当前内核
+  所用配置，并依赖 `CONFIG_IKCONFIG_PROC`：
+  https://man7.org/linux/man-pages/man5/proc_config.gz.5.html
+- Linux kernel `init/Kconfig`：`IKCONFIG` 与 `IKCONFIG_PROC` 配置定义：
+  https://github.com/torvalds/linux/blob/master/init/Kconfig
+- Linux kernel BTF 文档：BTF 是 BPF 类型/调试信息格式，不能以文件存在
+  代替 BPF 程序加载/验证：
+  https://docs.kernel.org/bpf/btf.html
+- libbpf overview：运行内核 BTF 暴露路径
+  `/sys/kernel/btf/vmlinux`：
+  https://docs.kernel.org/next/bpf/libbpf/libbpf_overview.html
