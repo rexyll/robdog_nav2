@@ -20,6 +20,9 @@ int main() {
     assert(queue.mark_device_lost(1, 130));
     assert(queue.push_frame(frame(2, 1), 140) == GnssIngressPushResult::RejectedClosed);
     assert(queue.begin_generation(2, 150));
+    assert(!queue.begin_generation(2, 155));
+    assert(queue.push_frame(frame(1, 1), 156) ==
+           GnssIngressPushResult::RejectedStaleGeneration);
     assert(queue.push_frame(frame(0, 2), 160) == GnssIngressPushResult::Accepted);
 
     std::vector<GnssIngressEvent> events;
@@ -44,6 +47,7 @@ int main() {
     assert(stats.accepted_control_events == 3);
     assert(stats.accepted_frame_events == 3);
     assert(stats.rejected_closed == 1);
+    assert(stats.rejected_stale_generation == 1);
     assert(stats.current_size == 0);
     assert(stats.next_ingress_sequence == 6);
   }
