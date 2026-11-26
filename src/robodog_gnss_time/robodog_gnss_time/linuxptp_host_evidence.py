@@ -569,6 +569,10 @@ def collect_linuxptp_host_evidence(config: LinuxPtpHostEvidenceConfig, runner=No
     elif boot_id and boot_id_after != boot_id:
         collection_issues.append("host_boot_id_changed_during_collection")
     for command_result in [pmc_boundary_before] + results + [pmc_result]:
+        # systemd version is optional diagnostic context, not a prerequisite
+        # for the core PTP host inventory.
+        if command_result["name"] == "systemd_version":
+            continue
         if command_result["status"] != "ok":
             collection_issues.append(
                 f"command_not_ok:{command_result['name']}:{command_result['status']}"
