@@ -22,6 +22,7 @@ class ClockPolicyReason(str, Enum):
     MONOTONIC_TIME_INVALID = "monotonic_time_invalid"
     HOST_SYNC_UNKNOWN = "host_sync_unknown"
     HOST_SYNC_SOURCE_MISSING = "host_sync_source_missing"
+    HOST_SYNC_SOURCE_UNTRUSTED = "host_sync_source_untrusted"
     HOST_SYNC_SAMPLE_STALE = "host_sync_sample_stale"
     HOST_SYNC_OFFSET_INVALID = "host_sync_offset_invalid"
     HOST_SYNC_UNCERTAINTY_INVALID = "host_sync_uncertainty_invalid"
@@ -34,6 +35,7 @@ class ClockPolicyConfig:
 
     max_host_utc_error_ns: int
     max_sync_sample_age_ns: int
+    trusted_host_sync_sources: frozenset
 
     def __post_init__(self):
         for name, value in (
@@ -42,6 +44,10 @@ class ClockPolicyConfig:
         ):
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
+        if not isinstance(self.trusted_host_sync_sources, (set, frozenset)) or not self.trusted_host_sync_sources:
+            raise ValueError("trusted_host_sync_sources must be a non-empty set")
+        if any(not isinstance(source, str) or not source.strip() for source in self.trusted_host_sync_sources):
+            raise ValueError("trusted host sync source IDs must be non-empty strings")
 
 
 @dataclass(frozen=True)
@@ -104,6 +110,8 @@ class RosSystemTimeUtcPolicy:
             return ClockPolicyDecision(False, ClockPolicyReason.HOST_SYNC_UNKNOWN)
         if not isinstance(sample.host_sync_source, str) or not sample.host_sync_source.strip():
             return ClockPolicyDecision(False, ClockPolicyReason.HOST_SYNC_SOURCE_MISSING)
+        if sample.host_sync_source not in self.config.trusted_host_sync_sources:
+            return ClockPolicyDecision(False, ClockPolicyReason.HOST_SYNC_SOURCE_UNTRUSTED)
         if not self._unsigned_integer(sample.host_sync_sample_monotonic_ns):
             return ClockPolicyDecision(False, ClockPolicyReason.MONOTONIC_TIME_INVALID)
         if sample.host_sync_sample_monotonic_ns > now_monotonic_ns:
