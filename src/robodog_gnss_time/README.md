@@ -330,7 +330,11 @@ apply a separate freshness/uncertainty policy. It preserves `master_offset`
 as PTP clock-to-GM evidence and does not convert it into host
 SystemTime-to-UTC offset.
 
-The parser is not a pmc command runner, does not connect to a ptp4l socket,
+The parser uses the upstream `pmc.c` formatter's types: CURRENT_DATA_SET
+offset/path-delay values and TIME_STATUS_NP cumulative rate are preserved as
+finite `Decimal`; PORT_DATA_SET log intervals, delay mechanism, peer mean
+path delay and version/timeout fields are parsed as integers, including signed
+log intervals. The parser is not a pmc command runner, does not connect to a ptp4l socket,
 does not know the target PTP domain/interface/PHC, and does not publish
 `HostTimeSyncStatus`. It is a parser/test slice only; a future collector must
 first use the target machine's verified socket/domain/profile and separately
