@@ -24,6 +24,7 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
     data_types = Counter()
     time_types = Counter()
     sequence_audits = {}
+    sensor_time_observations = {}
     ptp_audit = PtpCaptureAudit()
     interfaces = defaultdict(lambda: {"packets": 0, "capture_timestamp_min_ns": None,
                                        "capture_timestamp_max_ns": None})
@@ -80,6 +81,45 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
         counts[f"valid_{stream_name}_payloads"] += 1
         data_types[str(payload.data_type)] += 1
         time_types[str(payload.time_type)] += 1
+        observation_key = (
+            datagram.section_index, datagram.interface_id, stream_name,
+            datagram.source_ip, datagram.source_port, datagram.destination_ip,
+            datagram.destination_port, payload.time_type,
+        )
+        observation = sensor_time_observations.get(observation_key)
+        if observation is None:
+            observation = {
+                "section_index": datagram.section_index,
+                "interface_id": datagram.interface_id,
+                "stream": stream_name,
+                "source": f"{datagram.source_ip}:{datagram.source_port}",
+                "destination": f"{datagram.destination_ip}:{datagram.destination_port}",
+                "time_type": payload.time_type,
+                "packet_count": 0,
+                "sensor_timestamp_min_ns": payload.timestamp_ns,
+                "sensor_timestamp_max_ns": payload.timestamp_ns,
+                "capture_timestamp_min_ns": datagram.capture_timestamp_ns,
+                "capture_timestamp_max_ns": datagram.capture_timestamp_ns,
+            }
+            sensor_time_observations[observation_key] = observation
+        observation["packet_count"] += 1
+        observation["sensor_timestamp_min_ns"] = min(
+            observation["sensor_timestamp_min_ns"], payload.timestamp_ns
+        )
+        observation["sensor_timestamp_max_ns"] = max(
+            observation["sensor_timestamp_max_ns"], payload.timestamp_ns
+        )
+        if datagram.capture_timestamp_ns is not None:
+            old_min = observation["capture_timestamp_min_ns"]
+            old_max = observation["capture_timestamp_max_ns"]
+            observation["capture_timestamp_min_ns"] = (
+                datagram.capture_timestamp_ns if old_min is None
+                else min(old_min, datagram.capture_timestamp_ns)
+            )
+            observation["capture_timestamp_max_ns"] = (
+                datagram.capture_timestamp_ns if old_max is None
+                else max(old_max, datagram.capture_timestamp_ns)
+            )
         sequence_event = None
         if stream_name == "point_cloud" and direction == "lidar_to_host":
             flow_key = (
@@ -116,6 +156,37 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
                 "section_index": datagram.section_index,
             })
 
+    ptp_report = ptp_audit.report()
+    sensor_observations = [
+        dict(value) for _, value in sorted(sensor_time_observations.items())
+    ]
+    co_observations = []
+    for sensor in sensor_observations:
+        sensor_min = sensor["capture_timestamp_min_ns"]
+        sensor_max = sensor["capture_timestamp_max_ns"]
+        if sensor_min is None or sensor_max is None:
+            continue
+        for ptp_window in ptp_report.get("ptp_capture_windows", []):
+            if (sensor["section_index"] != ptp_window["section_index"]
+                    or sensor["interface_id"] != ptp_window["interface_id"]):
+                continue
+            if (sensor_min <= ptp_window["capture_timestamp_max_ns"]
+                    and ptp_window["capture_timestamp_min_ns"] <= sensor_max):
+                co_observations.append({
+                    "sensor_stream": sensor["stream"],
+                    "sensor_source": sensor["source"],
+                    "sensor_destination": sensor["destination"],
+                    "sensor_time_type": sensor["time_type"],
+                    "section_index": sensor["section_index"],
+                    "interface_id": sensor["interface_id"],
+                    "ptp_domain_number_observed": ptp_window["domain_number"],
+                    "ptp_capture_messages": ptp_window["ptp_messages"],
+                    "interpretation": (
+                        "Co-observed on the same capture interface with overlapping "
+                        "capture-file time windows only; this does not bind the sensor "
+                        "clock to this PTP domain or prove synchronization."
+                    ),
+                })
     return {
         "capture_packets": counts["capture_packets"],
         "dispositions": {k.removeprefix("disposition_"): v for k, v in counts.items()
@@ -137,7 +208,9 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
             "host_to_lidar": counts["direction_host_to_lidar"],
         },
         "interfaces": dict(interfaces),
-        "ptp_audit": ptp_audit.report(),
+        "ptp_audit": ptp_report,
+        "sensor_time_observations": sensor_observations,
+        "ptp_sensor_timebase_co_observations": co_observations,
         "point_cloud_sequence_audits": {
             "|".join(map(str, key)): audit.report()
             for key, audit in sequence_audits.items()
@@ -150,6 +223,11 @@ def audit_packet_records(packets, *, lidar_ip=None, host_ports=None):
         "time_semantics": {
             "capture_timestamp_ns": "capture-file timestamp; not LiDAR sensor time",
             "sensor_timestamp_ns": "MID-360 payload timestamp; clock domain follows time_type",
+            "time_type_1": "sensor declares PTP/gPTP master time; observed PTP domain is not inferred",
+            "ptp_sensor_co_observation": (
+                "same capture section/interface and overlapping capture-file time windows; "
+                "not proof of clock-domain binding, lock, or synchronization"
+            ),
             "delta_is_network_latency": False,
         },
     }
