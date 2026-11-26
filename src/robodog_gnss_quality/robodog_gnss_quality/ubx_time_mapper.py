@@ -158,10 +158,10 @@ class UbxReceiverTimeMapper:
             if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                 raise ValueError(f"{name} must be a positive integer")
         if any(
-            isinstance(source, bool) or not isinstance(source, int) or not 0 <= source <= 8
+            isinstance(source, bool) or not isinstance(source, int) or not 1 <= source <= 8
             for source in trusted_leap_sources
         ):
-            raise ValueError("trusted leap sources must be explicit NAV-TIMELS source IDs 0..8")
+            raise ValueError("trusted leap sources must be explicit NAV-TIMELS source IDs 1..8; source 0 is firmware default and is never trusted")
         self.trusted_leap_sources = frozenset(trusted_leap_sources)
         self.max_pending_epochs = max_pending_epochs
         self.max_pair_receive_skew_ns = max_pair_receive_skew_ns
