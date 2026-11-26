@@ -121,9 +121,7 @@ def test_capacity_and_expiry_retire_incomplete_pairs():
     j.add_observation(identity(i_tow=100), observation(), now_monotonic_ns=1000)
     j.add_observation(identity(i_tow=101), observation(), now_monotonic_ns=1010)
     assert j.stats().capacity_evictions == 1
-    j.expire_stale(1200) if hasattr(j, "expire_stale") else j.add_observation(
-        identity(i_tow=102), observation(), now_monotonic_ns=1200
-    )
+    j.expire_stale(1200)
     assert j.stats().expired_observations >= 1
     assert j.stats().pending_observations == 0
 
