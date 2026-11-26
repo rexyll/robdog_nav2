@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.198
+- 文档版本：v0.3.199
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1027,3 +1027,6 @@
 
 
 - 四路 UBX ROS 消息的 process/connection generation fence（2026-11-26 / v0.3.198）：UbxNavPvtEpoch、UbxNavHpPosLlhEpoch、UbxNavCovEpoch、UbxNavStatusEpoch 现在都携带 process_session_id 与 connection_generation；ros_message_adapter 的四个 decoder 必须显式接收并验证这两个上下文；UbxRosEpochAdapter.begin_generation 要求明确 process/session、connection_generation、gps_week，消息和 time mapping 进入 pending cache 前都必须匹配 active session/generation/week；stale_context_rejections 可观测；UbxFourMessageEpochJoiner 对每条记录检查其 process/generation 与 source_clock_id 前缀一致。旧连接回调被拒绝测试已加入。Actions run `45757990351`，head `3a65c214245ce85258d233e8683159fd40c8c8ab`，Humble/Jammy、Jazzy/Noble 两项全部 success，每项 133 tests、0 failures。注意：本版本消息记录还没有独立 gps_week 字段，joiner 当前只检查 process/generation 前缀；GPS week rollover 时的旧 callback 仍需下一切片补齐 gps_week context 与有序 barrier。
+
+
+- 四路 UBX epoch 完整 GPS-week fence（2026-11-26 / v0.3.199）：将 GPS week 从 NAV-PVT 单路上下文扩展为四路统一上下文。`ros_message_adapter.py` 四个 decoder 在 callback decode 前统一校验 process_session_id、connection_generation、gps_week，并把三者写入 PVT/HPPOSLLH/COV/STATUS immutable records；修复此前 HPPOSLLH/COV/STATUS 调用 `_context()` 时遗漏 gps_week 参数的运行时错误。`UbxRosEpochAdapter` 对四路记录及 time mapping 检查 active process/generation/week；`UbxFourMessageEpochJoiner` 检查每条记录 gps_week 与 canonical source_clock_id 精确一致。进一步补强无缓存入口 `build_observation_from_ubx_epochs()`：四条记录必须属于相同 process session、USB connection generation、GPS week，source_clock_id 必须精确为 `{process}:connection:{generation}:gps-week:{week}`，防止调用方绕过 joiner 后跨周拼接。测试补齐所有 dataclass fixtures 的 gps_week；覆盖四路 decoder 输出/拒绝 bool 与越界 week、四路 joiner stale-week、ROS adapter week rollover 后四路旧 callback 全拒绝而新周 records 可进入 cache、direct builder 跨周/跨 session/跨 connection/source-clock mismatch fail-closed。此前失败 runs `45759342219`、`45759346942` 及后续 runs 已定位为数据类新增 week 字段后的旧 fixtures 未同步、旧周 rollover fixture、以及后三路 ROS decoder context 漏传；不计入通过证据。当前代码/测试 commits `15ee11512a2194fc374066fe8bac43aa7cb101fa`、`8d3b57780f0f048634def3f64ff85868a9cd124d`、`53180da507da31278902e9c8b88971a5872843ee`、`dd2bf7a1dbeb398e4b9c3670e5c9ec8b4c58fa40`、`5ec1c2ad26579a44f570801c6efeb3b901ff3fab`、`7e8c64f12cb4c8634408f14ce80fc54337b262b8`、`341deb8fa5151668aa7285d6cefc7ee98a6d7a44`、`c2803262e76bbffd9d0621aea1adf51d28f46e2c`、`473c355e03dd492147045297f641f97dfcccb9be`、`26f1ae07d2202d1f6d8b72db5e2c20b8f21e0112`、`afd9fc290db35e9922d3c6cf503a3003d0275271`。最终 Humble/Jazzy CI 尚待最新 head 运行完成，未标记通过。该纯 Python context fence 不等于 ROS DDS queued callback executor barrier；真实 callback ingress must capture immutable session/generation/week at receipt and drain old callbacks before activation of new generation。
