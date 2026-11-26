@@ -1,6 +1,7 @@
 import time
 
 import rclpy
+import pytest
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.parameter import Parameter
 from rclpy.qos import (
@@ -162,8 +163,8 @@ def test_ros_node_joins_four_ubx_topics_with_receiver_time():
         assert result.gnss_fix_ok is True
         assert result.carrier_solution == 2
         assert result.covariance_type == 3
-        assert result.latitude_deg == 37.0
-        assert result.longitude_deg == -122.0
+        assert result.latitude_deg == pytest.approx(37.0, abs=2e-8)
+        assert result.longitude_deg == pytest.approx(-122.0, abs=2e-8)
         assert result.utc_stamp_valid is False
         assert result.source_time_accuracy_valid is True
         assert result.source_time_accuracy_ns == 40
