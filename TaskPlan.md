@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.221
+- 文档版本：v0.3.222
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1091,3 +1091,6 @@
 
 
 - GNSS exact-epoch observation → RTK quality gate ROS runtime 第一实现（2026-11-26 / v0.3.221）：在不向 transport-independent `robodog_gnss_quality` 引入 rclpy 的前提下，于 `robodog_gnss_time` 增加 `gnss_rtk_quality_node`，订阅原始 USB ingress 路径生成的 `GnssObservation`，发布 `GnssQualityStatus`。新增 ROSIDL decision contract，携带 qualified/reason、连续 Fixed 恢复样本数、水平/垂直标准差、估计速度的 validity+value，以及 iTOW/GPS week/session/generation/source clock/GPST/host monotonic identity。节点严格校验 source_clock_id 必须等于 `{session}:connection:{generation}:gps-week:{week}`；host monotonic receive time 必须递增；同一 session 内禁止 connection generation 或 GPS week 回退；上下文前进时重置质量恢复状态；旧 generation/旧 week/乱序 observation 输出 OUT_OF_ORDER 且不污染当前 gate。SingleThreadedExecutor + Reliable/Volatile/KeepLast；host-monotonic watchdog 在 observation 超过 max_fix_age 后撤销 qualified 并输出 FIX_STALE，避免停止数据流后保留上一次 qualified 状态。新增 ROS runtime integration tests 覆盖连续 3 个 Fixed epoch 恢复、watchdog stale revoke、旧 generation 回退隔离。开发默认参数 max age 200 ms、水平 std 0.25 m、垂直 std 0.5 m、speed 5 m/s、连续 3 个 Fixed 仅为测试占位值，不是 ZED-F9P 精度声明或生产门限；真实门限必须依据实测与系统安全分析设定。节点只发布质量决策，不发布 NavSatFix/TF、不接入 EKF、不授权机器人运动。代码 commits：quality status ROSIDL `69afb15ed8ee412f2f8e7841101989d5a1d138d0`、接口 CMake `b84def8a2f36df614e4b51fde8b17acdebefb6e8`、quality node `15c6338d1e8d558addcca454e168628c059b3808` 后续修正 `d1c13c357a8d3a3013026a5ba32fa8580d15f97a`、setup entrypoint `ec7f906a4365782c4172468e0e30b208a37b8204`、integration tests `73c32cafb1d3d61a72ef5141ff5e4a06b877822c`；本条文档更新不改变代码行为。Dedicated `gnss-time-node-ci.yml` 将对 Humble/Jammy 与 Jazzy/Noble 运行完整 package tests，结果尚待取得。根 LICENSE 缺失、接口/runtime 包 `UNSPECIFIED` 仍是治理阻塞；真实 ZED-F9P、RTK correction link、DDS overload、NavSatFix/localization consumer、机器人闭环均未验证。
+
+
+- GNSS RTK quality gate ROS runtime Humble/Jazzy CI 验收（2026-11-26 / v0.3.222）：最终代码与测试 head `3ce7e49ecb10278351fcb41bb4db4f3f5d42245e` 对应 dedicated workflow `.github/workflows/gnss-time-node-ci.yml` run `45811368885`，Humble/Jammy 与 Jazzy/Noble 两 job 全部 success，每个环境 25 tests passed（0 failures）。新增 integration tests 已在两发行版验证 3 个连续 Fixed observation 后输出 qualified=true、超过 max_fix_age 后 watchdog 输出 FIX_STALE 并撤销 qualified、旧 connection generation 回退输出 OUT_OF_ORDER 且不重置当前 generation 的连续样本计数。期间失败 runs `45810573391`、`45811012740` 根因为测试清理 helper 命名为 `teardown` 被 pytest 当成 xunit teardown hook 自动调用，随后漏改一个调用点；已统一改名 `cleanup_nodes`，最终 run 通过。该 CI 仅验证 synthetic ROS messages/runtime，默认参数仍为开发占位值；不代表 ZED-F9P 实测精度、RTK correction link、DDS overload、NavSatFix/TF/EKF 或机器人导航验证。当前只发布质量状态，不输出 NavSatFix、不授权运动。根 LICENSE 缺失，接口与 runtime package 的 `UNSPECIFIED` 仍不是授权。
