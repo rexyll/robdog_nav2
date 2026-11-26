@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.154
+- 文档版本：v0.3.155
 - 更新日期：2026-11-26
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -906,3 +906,4 @@
 - Executor 证据补充：固定 commit 的 `ublox_dgnss/launch/ublox_rover_hpposllh.launch.py` 明确使用 `rclcpp_components/component_container_mt`。该标准 launch 下，USB-events timer 与 UBX timer 属不同 MutuallyExclusive callback groups，可由 MultiThreadedExecutor 并行调度；因此 USB callback push 与 UBX timer 无锁 size/index read 构成部署配置可触发的 node-level queue 并发缺陷（静态确认），但尚无 TSAN/压力测试运行时复现。详见 doc/Navigation/18 §5.6。
 - USB/RTCM 审计第三轮（2026-11-26）：RTCM ingress 当前要求 `buf[1] == 0x00`，但 RTCM3 第二 header byte 的低 2 bit 是 10-bit payload length 高位，故合法 payload 长度 256–1023 的帧会被拒绝；当前未按声明长度拆分/缓存 RTCM3 frame，未发现 CRC24Q 校验后再发布。RTCM queue 与 UBX queue 一样，timer 无锁 size/index 读取、仅 pop 加锁；在 `component_container_mt` 标准 launch 下属于静态确认的 executor 并发缺陷（未 TSAN 复现）。UBX `Frame::from_buf_build()` 还缺 `size>=8` 与 `size==declared_payload+8` 预检，必须在 Frame 对象解析/暴露 payload 前完成边界校验。详见 doc/Navigation/18 §5.7–5.8。未改动上游驱动、未构建或运行测试。
 - libusb transfer 生命周期审计补充（2026-11-26）：`transfer_queue_` 的 cleanup/count 函数在 mutex 外先读 `size()`，仍构成 deque 并发访问风险；`transfer_t::completed` 为普通 bool，callback 写入与队列锁内读取未使用同一同步协议。`callback_in/out()` 对 `LIBUSB_TRANSFER_NO_DEVICE` 提前 return，跳过 user_data delete/completed 标记，存在资源泄漏/队列状态不一致路径。shutdown 当前为 stop event processing → cancel transfers → clear queue → close handle/context，未看到 cancel callback drain/barrier；需设计 stop-submit/cancel/pump events/drain/release/close 生命周期屏障。取消期间锁竞争风险依赖 libusb callback 线程调度，未确认死锁。详见 doc/Navigation/18 §5.9。未构建/测试。
+- 新增设计合同 `doc/Navigation/19_ubx_rtcm_nmea_stream_parser_design_and_test_contract.md`，定义纯 C++ bounded incremental stream decoder 的 UBX/RTCM3/NMEA framing、length/checksum、resync、connection generation、队列边界、统计指标和单元/ASan/UBSan/fuzz/TSAN/断连测试合同；新增 `doc/Navigation/README.md` 索引。该文档为设计合同，尚未实现或测试。当前已确认：UBX/RTCM 两个队列均有 MT executor 下的无锁读取问题；RTCM header length high bits 被错误限制为 0，且 CRC24Q 未在发布前验证；USB transfer lifecycle 仍需修复。详见 Navigation/18 §5.7–5.9 与 Navigation/19。
