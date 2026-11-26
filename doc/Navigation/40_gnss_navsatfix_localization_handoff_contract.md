@@ -152,3 +152,29 @@ The policy deliberately does not run `chronyc`, inspect PHC state, infer synchro
 ## 8. HostTimeSyncStatus interface and adapter
 
 The interface package now defines `HostTimeSyncStatus.msg` with explicit state, source ID, Linux boot ID, signed SystemTime-minus-UTC offset, uncertainty, CLOCK_MONOTONIC sample timestamp and per-boot sequence. `HostTimeSyncStatusAdapter` checks the expected active boot ID and rejects malformed or unknown states, replayed/reordered sequence, and non-increasing monotonic samples. Non-synchronized states remain explicit fail-closed evidence. This does not implement a chrony/ptp4l/PHC monitor and does not prove the values are true; the monitor process and deployment allowlist remain a separate trust boundary.
+
+
+## 9. Initial Chrony host-time producer
+
+The first read-only producer now exists as `host_time_sync_node`. It reads the
+Linux boot ID and `CLOCK_MONOTONIC` sample time locally and executes
+`chronyc -n tracking` without a shell. It reports source ID, signed
+SystemTime-minus-NTP offset, a conservative uncertainty estimate (root
+dispersion + half root delay), reference ID, stratum, leap status and a
+per-process sequence. It does not change clock state.
+
+The producer reports `synchronized` only for Chrony Leap status `Normal`,
+stratum 1..15, a nonzero reference ID, and an offset-plus-uncertainty bound
+within the mandatory deployment-configured budget. Command failures,
+timeouts, malformed output and missing boot identity are fail-closed. The ROS
+adapter additionally checks the Chrony diagnostics before preserving a
+synchronized state.
+
+This is a Chrony-specific first implementation. It does not support LinuxPTP
+`pmc` / `ptp4l` / `phc2sys`, does not read PHC hardware, and does not prove
+PHC-to-SystemTime discipline or upstream UTC traceability. The deployment
+source ID is not automatically trusted: the immutable policy allowlist and
+timing thresholds still require architecture review. No real target-host
+Chrony or Orin timing measurement has been collected; NavSatFix remains
+blocked until those checks, the exact observation/quality join, leap trust and
+antenna TF readiness all pass.
