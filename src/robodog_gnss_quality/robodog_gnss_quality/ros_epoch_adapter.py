@@ -7,6 +7,7 @@ It never derives receiver time from ROS Header.stamp or iTOW alone.
 
 from collections import OrderedDict
 from dataclasses import dataclass, replace
+from threading import RLock
 from typing import Dict, Optional
 
 from .quality_gate import GnssObservation
@@ -85,6 +86,7 @@ class UbxRosEpochAdapter:
             max_pair_receive_skew_ns=max_pair_receive_skew_ns,
             max_pending_age_ns=max_pending_age_ns,
         )
+        self._lock = RLock()
         self._source_clock_id: Optional[str] = None
         self._pending: OrderedDict[int, _PendingEpoch] = OrderedDict()
         self._retired: OrderedDict[int, str] = OrderedDict()
@@ -97,27 +99,33 @@ class UbxRosEpochAdapter:
 
     @property
     def source_clock_id(self) -> Optional[str]:
-        return self._source_clock_id
+        with self._lock:
+            return self._source_clock_id
 
     @property
     def pending_count(self) -> int:
-        return len(self._pending)
+        with self._lock:
+            return len(self._pending)
 
     @property
     def evicted_capacity(self) -> int:
-        return self._evicted_capacity
+        with self._lock:
+            return self._evicted_capacity
 
     @property
     def evicted_stale(self) -> int:
-        return self._evicted_stale
+        with self._lock:
+            return self._evicted_stale
 
     @property
     def rejected_conflict(self) -> int:
-        return self._rejected_conflict
+        with self._lock:
+            return self._rejected_conflict
 
     @property
     def invalid_mappings(self) -> int:
-        return self._invalid_mappings
+        with self._lock:
+            return self._invalid_mappings
 
     def _retire(self, i_tow_ms: int, reason: str) -> None:
         self._retired[i_tow_ms] = reason
@@ -126,6 +134,10 @@ class UbxRosEpochAdapter:
             self._retired.popitem(last=False)
 
     def begin_generation(self, source_clock_id: str) -> None:
+        with self._lock:
+            self._begin_generation_locked(source_clock_id)
+
+    def _begin_generation_locked(self, source_clock_id: str) -> None:
         if not isinstance(source_clock_id, str) or not source_clock_id.strip():
             raise EpochPairingError("source_clock_id must be a non-empty generation ID")
         self._source_clock_id = source_clock_id
@@ -135,6 +147,10 @@ class UbxRosEpochAdapter:
         self.joiner.begin_generation(source_clock_id)
 
     def reset(self) -> None:
+        with self._lock:
+            self._reset_locked()
+
+    def _reset_locked(self) -> None:
         self._source_clock_id = None
         self._pending.clear()
         self._retired.clear()
@@ -158,6 +174,10 @@ class UbxRosEpochAdapter:
         return value
 
     def expire_stale(self, now_monotonic_ns: int) -> int:
+        with self._lock:
+            return self._expire_stale_locked(now_monotonic_ns)
+
+    def _expire_stale_locked(self, now_monotonic_ns: int) -> int:
         now = self._validate_receive_time(now_monotonic_ns)
         if self._latest_receive_monotonic_ns is None or now > self._latest_receive_monotonic_ns:
             self._latest_receive_monotonic_ns = now
@@ -198,6 +218,10 @@ class UbxRosEpochAdapter:
         return self._pending.get(i_tow_ms)
 
     def _add_message(self, kind: str, message: object) -> Optional[UbxRosEpochResult]:
+        with self._lock:
+            return self._add_message_locked(kind, message)
+
+    def _add_message_locked(self, kind: str, message: object) -> Optional[UbxRosEpochResult]:
         if self._source_clock_id is None:
             raise EpochPairingError("begin_generation() is required before accepting UBX records")
         expected = self._TYPES[kind]
@@ -234,6 +258,12 @@ class UbxRosEpochAdapter:
         return self._add_message("status", message)
 
     def add_time_mapping(
+        self, mapping: UbxSourceTimeMapping
+    ) -> Optional[UbxRosEpochResult]:
+        with self._lock:
+            return self._add_time_mapping_locked(mapping)
+
+    def _add_time_mapping_locked(
         self, mapping: UbxSourceTimeMapping
     ) -> Optional[UbxRosEpochResult]:
         if not isinstance(mapping, UbxSourceTimeMapping):
