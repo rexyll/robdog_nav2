@@ -16,3 +16,8 @@ uint64 uncertainty_ns
 uint64 sample_monotonic_ns
 # Strictly increasing per host boot and monitor instance.
 uint64 sample_sequence
+
+# Chrony diagnostics; retained for audit and source-transition detection.
+string reference_id
+uint8 stratum
+string leap_status
