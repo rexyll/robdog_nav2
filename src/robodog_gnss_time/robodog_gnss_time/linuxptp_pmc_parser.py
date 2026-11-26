@@ -48,9 +48,13 @@ _INT_FIELDS = {
     "master_offset", "ingress_time", "gmTimeBaseIndicator", "stepsRemoved",
     "currentUtcOffset", "leap61", "leap59", "currentUtcOffsetValid",
     "ptpTimescale", "timeTraceable", "frequencyTraceable",
-    "announceReceiptTimeout", "versionNumber",
+    "announceReceiptTimeout", "versionNumber", "scaledLastGmPhaseChange",
+    "logMinDelayReqInterval", "logAnnounceInterval", "logSyncInterval",
+    "logMinPdelayReqInterval", "delayMechanism", "peerMeanPathDelay",
 }
-_DECIMAL_FIELDS = {"offsetFromMaster", "meanPathDelay", "peerMeanPathDelay"}
+_DECIMAL_FIELDS = {
+    "offsetFromMaster", "meanPathDelay", "cumulativeScaledRateOffset",
+}
 
 
 @dataclass(frozen=True)
