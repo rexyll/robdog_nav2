@@ -56,7 +56,7 @@ bool LibusbDeviceSession::open(const UsbDeviceSessionConfig & config)
   }
 
   const int active = api_.kernel_driver_active(device_, claimed_interface_);
-  if (active < 0) {
+  if (active < 0 && active != api_.kernel_driver_not_supported_code) {
     last_error_ = active;
     (void)close();
     return false;
