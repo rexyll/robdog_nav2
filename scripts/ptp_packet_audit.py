@@ -375,6 +375,7 @@ class PtpCorrelationAudit:
         self.pending_pdelay_resp = {}
         self.exchange_samples = []
         self.max_exchange_samples = 32
+        self.capture_windows = {}
 
     @staticmethod
     def _timestamp_fields(message: PtpMessage) -> dict:
@@ -429,6 +430,27 @@ class PtpCorrelationAudit:
         if message.grandmaster_identity is not None:
             self.grandmasters[message.grandmaster_identity] += 1
         self.announce_audit.observe(message)
+        if message.capture_timestamp_ns is not None:
+            window_key = (message.section_index, message.interface_id,
+                          message.domain_number)
+            window = self.capture_windows.get(window_key)
+            if window is None:
+                self.capture_windows[window_key] = {
+                    "section_index": message.section_index,
+                    "interface_id": message.interface_id,
+                    "domain_number": message.domain_number,
+                    "ptp_messages": 1,
+                    "capture_timestamp_min_ns": message.capture_timestamp_ns,
+                    "capture_timestamp_max_ns": message.capture_timestamp_ns,
+                }
+            else:
+                window["ptp_messages"] += 1
+                window["capture_timestamp_min_ns"] = min(
+                    window["capture_timestamp_min_ns"], message.capture_timestamp_ns
+                )
+                window["capture_timestamp_max_ns"] = max(
+                    window["capture_timestamp_max_ns"], message.capture_timestamp_ns
+                )
         if message.transport.startswith("udp/"):
             expected = (
                 PTP_EVENT_PORT if message.message_type in EVENT_MESSAGE_TYPES
@@ -495,18 +517,22 @@ class PtpCorrelationAudit:
         elif message.message_type == 10 and message.requesting_port_identity:
             request_key = (message.domain_number,
                            message.requesting_port_identity, message.sequence_id)
-            response_exchange = self.pending_pdelay_resp.pop(request_key, None)
+            response_exchange = self.pending_pdelay_resp.get(request_key)
             if response_exchange is not None:
                 request_message, response_message = response_exchange
-                self.counts["pdelay_resp_follow_up_pairs"] += 1
-                self._record_exchange(
-                    "peer_delay_response_follow_up",
-                    {"pdelay_req": request_message,
-                     "pdelay_resp": response_message,
-                     "pdelay_resp_follow_up": message},
-                    domain_number=message.domain_number,
-                    sequence_id=message.sequence_id,
-                )
+                if message.source_port_identity != response_message.source_port_identity:
+                    self.counts["pdelay_resp_follow_up_responder_mismatch"] += 1
+                else:
+                    self.pending_pdelay_resp.pop(request_key, None)
+                    self.counts["pdelay_resp_follow_up_pairs"] += 1
+                    self._record_exchange(
+                        "peer_delay_response_follow_up",
+                        {"pdelay_req": request_message,
+                         "pdelay_resp": response_message,
+                         "pdelay_resp_follow_up": message},
+                        domain_number=message.domain_number,
+                        sequence_id=message.sequence_id,
+                    )
             else:
                 self.counts["orphan_pdelay_resp_follow_up"] += 1
 
@@ -521,6 +547,9 @@ class PtpCorrelationAudit:
             "correlations": dict(self.counts),
             "timestamp_exchange_samples": list(self.exchange_samples),
             "timestamp_exchange_sample_limit": self.max_exchange_samples,
+            "ptp_capture_windows": [
+                dict(value) for _, value in sorted(self.capture_windows.items())
+            ],
             "unmatched_at_end": {
                 "two_step_sync_waiting_follow_up": len(self.pending_sync),
                 "delay_req_waiting_delay_resp": len(self.pending_delay_req),
