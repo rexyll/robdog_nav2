@@ -3,7 +3,9 @@
 This module inspects existing procfs/sysfs files only. It never mounts tracefs,
 enables events, writes trace controls, loads BPF, or changes host configuration.
 """
+import argparse
 import gzip
+import json
 import os
 from pathlib import Path
 import platform
@@ -233,3 +235,41 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
             "session, eBPF load, or host configuration change was attempted."
         ),
     }
+
+
+
+def main(argv=None):
+    """Emit a standalone, read-only kernel tracing capability report."""
+    parser = argparse.ArgumentParser(
+        description="Inventory Linux kernel clock-step tracing capabilities without enabling tracing."
+    )
+    parser.add_argument(
+        "--root",
+        default="/",
+        help="Root directory for procfs/sysfs fixture inspection (default: live host root).",
+    )
+    parser.add_argument(
+        "--kernel-release",
+        default=None,
+        help="Kernel release used to locate /boot/config-<release>; defaults to running kernel.",
+    )
+    parser.add_argument(
+        "--output",
+        default="",
+        help="Optional JSON output path; otherwise print the report to stdout.",
+    )
+    args = parser.parse_args(argv)
+    report = collect_linux_kernel_trace_capabilities(
+        root=args.root,
+        kernel_release=args.kernel_release,
+    )
+    rendered = json.dumps(report, indent=2, sort_keys=True)
+    if args.output:
+        Path(args.output).write_text(rendered + "\\n", encoding="utf-8")
+    else:
+        print(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
