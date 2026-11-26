@@ -159,3 +159,10 @@ The adapter requires `begin_generation()` after the mapper has validated a new G
 ## UBX time payload parsing
 
 `ubx_time_messages.py` strictly decodes the pinned protocol-27.10 layout for UBX-NAV-TIMEGPS (16-byte payload) and UBX-NAV-TIMELS (24-byte payload). It preserves signed fields, raw validity bytes, reserved bits/bytes, process session ID, connection generation, and host monotonic receive time. This is a structural decoder only: validity/source policy, GPS week expansion, UTC conversion, exact epoch joining and live receiver integration remain separate gates.
+
+
+## UBX-NAV-TIMEGPS / NAV-TIMELS receiver time mapper
+
+`ubx_time_mapper.py` decodes the fixed F9 HPG 1.32 16-byte NAV-TIMEGPS and 24-byte NAV-TIMELS payloads. It pairs them by exact iTOW, bounds pending state, computes GPS source time from valid week + iTOW + fTOW, and derives UTC only when NAV-TIMEGPS.leapSValid, NAV-TIMELS.validCurrLs, an explicitly trusted srcOfCurrLs, and the source-adjusted leap value all agree. The trusted source allowlist defaults to empty. NAV-TIMELS source 0 is hardcoded and may be outdated; source 4 is BeiDou-UTC and is normalized by +14 seconds before comparison with GPS-UTC. Unknown source 255 cannot be trusted.
+
+The mapper does not use NAV-TIMEUTC as a substitute for NAV-TIMELS. It returns a valid GPS source timestamp with utc_stamp_valid=false when leap information is not trusted; downstream may use the GPST epoch for exact message pairing but must not publish a NavSatFix with a fabricated UTC stamp. The mapper requires an explicit receiver session ID; the output clock ID also includes GPS week so week rollover triggers a new generation fence in the ROS epoch adapter.
