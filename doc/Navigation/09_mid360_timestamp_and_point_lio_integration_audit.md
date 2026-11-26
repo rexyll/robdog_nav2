@@ -459,4 +459,4 @@ sensor timestamp 与 capture timestamp 分开保存，不做相减，也不解�
 - MID-360 time_type 1/2 分别汇总；
 - 同一 capture interface/time window 的 PTP domain 只生成共观测候选，不宣称 domain binding。
 
-这些测试只验证解析器和报告逻辑。真实 MID-360 PTP/gPTP PCAP、目标 Orin PHC/ptp4l/pmc 状态、传感器实际 domain 绑定与时间精度仍未验证。
+这些测试只验证解析器和报告逻辑。PTP capture windows、MID-360 sensor-time observations 与 PTP/sensor co-observation samples 均有数量上限，超限时报告 eviction/truncation 计数，避免流式审计因元数据无限增长。真实 MID-360 PTP/gPTP PCAP、目标 Orin PHC/ptp4l/pmc 状态、传感器实际 domain 绑定与时间精度仍未验证。
