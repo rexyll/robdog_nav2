@@ -208,7 +208,12 @@ def test_collector_does_not_guess_service_names_when_not_configured():
 
     config = LinuxPtpHostEvidenceConfig("eth0", 5, "/run/custom-ptp.sock", 0)
     report = collect_linuxptp_host_evidence(config, runner=runner)
-    assert not any(argv[0] in {"systemctl", "journalctl"} for argv in calls)
+    assert not any(
+        argv[0] == "journalctl"
+        or (argv[0] == "systemctl" and len(argv) > 1 and argv[1] in {"show", "status"})
+        for argv in calls
+    )
+    assert ["systemctl", "--version"] in calls
     assert report["interface"] == "eth0"
     assert report["pmc_socket"] == "/run/custom-ptp.sock"
 
