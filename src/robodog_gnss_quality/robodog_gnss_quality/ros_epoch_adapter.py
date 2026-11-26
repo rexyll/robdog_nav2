@@ -271,13 +271,25 @@ class UbxRosEpochAdapter:
         if not isinstance(message, expected):
             raise EpochPairingError(f"{kind} must use its matching immutable UBX epoch record")
         if (
+            not isinstance(message.process_session_id, str)
+            or not message.process_session_id.strip()
+            or isinstance(message.connection_generation, bool)
+            or not isinstance(message.connection_generation, int)
+            or message.connection_generation < 0
+            or isinstance(message.gps_week, bool)
+            or not isinstance(message.gps_week, int)
+            or not 0 <= message.gps_week <= 32767
+        ):
+            self._stale_context_rejections += 1
+            raise EpochPairingError("UBX ROS record carries invalid session/generation/week context")
+        if (
             message.process_session_id != self._process_session_id
             or message.connection_generation != self._connection_generation
             or message.gps_week != self._gps_week
         ):
             self._stale_context_rejections += 1
             raise EpochPairingError(
-                "stale process_session_id/connection_generation; discard old ROS callback"
+                "stale process_session_id/connection_generation/gps_week; discard old ROS callback"
             )
         i_tow = self._validate_i_tow(message.i_tow_ms)
         receive_ns = self._validate_receive_time(message.receive_monotonic_ns)
@@ -328,6 +340,18 @@ class UbxRosEpochAdapter:
             raise EpochPairingError(
                 "source_clock_id changed; validate receiver week/reset and call begin_generation()"
             )
+        if (
+            not isinstance(mapping.process_session_id, str)
+            or not mapping.process_session_id.strip()
+            or isinstance(mapping.connection_generation, bool)
+            or not isinstance(mapping.connection_generation, int)
+            or mapping.connection_generation < 0
+            or isinstance(mapping.gps_week, bool)
+            or not isinstance(mapping.gps_week, int)
+            or not 0 <= mapping.gps_week <= 32767
+        ):
+            self._stale_context_rejections += 1
+            raise EpochPairingError("time mapping carries invalid session/generation/week context")
         if (
             mapping.process_session_id != self._process_session_id
             or mapping.connection_generation != self._connection_generation
