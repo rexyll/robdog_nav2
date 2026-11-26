@@ -540,3 +540,67 @@ Livox MID-360 官方通信协议 v1.4.12（修订历史标注 2026-09-21）规�
 ### 18.5 合成测试与验证边界
 
 本轮测试向量为人工构造的 UDP payload，不是 Livox 设备原始抓包。CI 仅能证明 parser 对协议合同内的合成字节序列正确拒绝/解码，不能证明设备实际推送了这些字段，也不能证明 PTP 锁定、offset 精度或 gPTP 状态。设备/交换机/Orin 联合抓包和真实 0x0101 查询 ACK 仍为“需要实物/授权，未完成”。
+
+
+## 19. MID-360 HMS 故障诊断码与时间同步异常关联（HMS-001..010）
+
+### 19.1 官方编码合同
+
+Livox 官方 MID-360 HMS 文档说明：HMS（Health Management System）码由雷达周期性主动推送，用于状态通知和故障辅助定位。每个 code 为 uint32，布局为：
+- Byte[3:2]：16-bit abnormal ID；
+- Byte[1]：reserved；
+- Byte[0]：abnormal level。
+
+等级：1=Info，2=Warning，3=Error，4=Fatal；数值越大越严重。官方示例 0x01020002 表示 abnormal ID 0x0102、reserved 0x00、Warning 0x02。通信协议 key 0x8011 hms_code 的长度为 32 bytes，即 8 个 uint32 槽位；零值表示空槽，不输出为活动诊断项。
+
+来源：
+- HMS 编码及代码表：https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/hms_code_mid360.html
+- 控制协议 key 0x8011：https://livox-wiki-en.readthedocs.io/en/latest/tutorials/new_product/mid360/livox_eth_protocol_mid360.html
+
+### 19.2 已录入的官方诊断码
+
+| Abnormal ID | 官方诊断含义 | 处理方向 |
+|---|---|---|
+| 0x0102 / 0x0103 | 环境温度偏高 | 检查环境温度和散热 |
+| 0x0104 | 窗口脏污，点云可靠性可能下降 | 检查并清洁光学窗口 |
+| 0x0105 | 设备升级过程异常 | 检查升级状态，按厂商流程处理 |
+| 0x0111 / 0x0112 / 0x0114 / 0x0115 | 内部器件或环境温度异常 | 检查温度；0x0115 表示设备已停止工作 |
+| 0x0113 | IMU 停止工作 | 按厂商恢复流程处理 |
+| 0x0116 | 外部电压异常 | 检查供电电压 |
+| 0x0117 / 0x0118 | 参数异常 / 内部器件损坏 | 检查配置；器件损坏联系厂商 |
+| 0x0201 | 扫描模块预热 | 等待预热完成 |
+| 0x0210–0x0219 | 扫描模块异常 | Error 时设备尝试恢复；Fatal 时需按厂商流程处理 |
+| 0x021C | 编码盘脏污、转速异常（MID-360L） | 型号限定，不直接套用到 MID-360 |
+| 0x0304 | TIA DC 异常，测距点云可能异常 | 按厂商流程排查 |
+| 0x0401 | 通信链路断开后恢复（MID-360S） | 型号限定，检查链路/交换机日志 |
+| 0x0402–0x0409 | PTP、PPS、GPS 时间同步异常 | 对照 §17/§18 的 PTP、GNSS、PHC、设备 offset 证据 |
+| 0x040A | 同时检测到 PTP 与 gPTP | 检查拓扑，只保留预期的单一同步模式 |
+
+完整原始描述与建议以 Livox 官方表为准；本表是面向导航诊断的摘要。对于官方表未列出的 abnormal ID，不推断故障含义。
+
+### 19.3 解析器实现
+
+scripts/livox_mid360_control_parser.py 现在对 key 0x8011 执行严格 32-byte 长度校验，并按 8 个 little-endian uint32 槽位解析：
+- abnormal_id = (raw >> 16) & 0xffff
+- reserved = (raw >> 8) & 0xff
+- level = raw & 0xff
+
+仅非零槽位作为活动诊断项输出，保留原始 code、槽位索引、ID、reserved、等级、官方目录命中结果和建议。未知 ID 或未知等级明确输出 unknown / null，不猜测含义。0x021C 和 0x0401 分别附带 MID-360L / MID-360S 型号范围提示。
+
+PCAP 审计器将 HMS 项纳入 control_diagnostic_observations，使其可与同一抓包中的 time_offset、last_sync_time、PTP/gPTP 报文和点云时间戳共同检查。
+
+### 19.4 时间同步异常关联规则
+
+- 0x0402：检查 PTP master/source 是否停止、时间差是否过大；结合连续 time_offset、last_sync_time、PTP Sync/Follow_Up/Delay 交换、PHC/ptp4l/pmc 证据。
+- 0x0403：与 MID-360 不支持 IEEE 1588v2.1 的厂商约束一致；需确认线上报文/profile 和设备配置，不能只凭 PCAP 某个 PTP 报文版本字段就断言设备锁定在 v2.1。
+- 0x0404、0x0407、0x0408、0x0409：优先检查 GNSS 接收机状态、PPS 电气链路、时间标签有效性和设备端口配置。
+- 0x0405、0x0406：属于较宽泛的同步异常/精度低提示，不能仅据 HMS 码定位到网卡、交换机、GM 或 GNSS 某一组件。
+- 0x040A：与 §17 的混合 UDP/IP PTP 和 Ethernet-L2 PTP 风险指标交叉检查；但 HMS 是设备侧报告，抓包共存观察仍不等于已证明配置原因。
+
+HMS 码是设备报告的诊断线索，不是独立的时钟精度测量，也不等价于安全停机认证。不得自动触发机器人运动控制、传感器重启或切换时钟源；上层系统应将 Warning/Error/Fatal 映射到经系统安全分析批准的降级/停止策略。
+
+### 19.5 测试与证据边界
+
+新增合成测试覆盖 8 槽位、空槽过滤、ID/等级拆解、时间同步码目录、未知 ID/等级保留和错误长度拒绝；PCAP 集成测试覆盖 HMS 与时间诊断字段同一快照输出。
+
+当前没有真实 MID-360 原始 HMS push、故障注入或厂商诊断工具输出。代码表匹配仅证明对官方公开表的静态编码实现，不证明具体硬件故障已被复现或建议已在设备上验证。真实设备抓包、故障触发和各型号固件差异仍为“需要实物/授权，未完成”。
