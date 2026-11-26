@@ -1,6 +1,5 @@
 import unittest
 from dataclasses import replace
-from dataclasses import replace
 from concurrent.futures import ThreadPoolExecutor
 
 from robodog_gnss_quality import CarrierSolution
