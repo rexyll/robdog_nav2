@@ -121,6 +121,21 @@ class TestUbxTimeMessageDecoders(unittest.TestCase):
                 timegps_payload(ftow=500001), receive_monotonic_ns=1,
                 process_session_id=SESSION, connection_generation=1)
 
+
+    def test_ingress_sequence_is_preserved_and_strictly_typed(self):
+        decoded = decode_nav_timegps_payload(
+            timegps_payload(), receive_monotonic_ns=1,
+            process_session_id=SESSION, connection_generation=GENERATION,
+            ingress_sequence=123,
+        )
+        self.assertEqual(decoded.ingress_sequence, 123)
+        with self.assertRaisesRegex(EpochPairingError, "ingress_sequence"):
+            decode_nav_timels_payload(
+                timels_payload(), receive_monotonic_ns=1,
+                process_session_id=SESSION, connection_generation=GENERATION,
+                ingress_sequence=True,
+            )
+
     def test_context_is_mandatory_and_strictly_typed(self):
         for kwargs in (
             {"receive_monotonic_ns": True, "process_session_id": SESSION, "connection_generation": 1},
