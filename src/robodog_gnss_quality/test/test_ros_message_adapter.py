@@ -20,28 +20,28 @@ GPS_WEEK = 2450
 def decode_pvt(message, receive):
     return decode_nav_pvt_message(
         message, receive, process_session_id=PROCESS_SESSION_ID,
-        connection_generation=CONNECTION_GENERATION,
+        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK,
     )
 
 
 def decode_hppos(message, receive):
     return decode_nav_hp_pos_llh_message(
         message, receive, process_session_id=PROCESS_SESSION_ID,
-        connection_generation=CONNECTION_GENERATION,
+        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK,
     )
 
 
 def decode_cov(message, receive):
     return decode_nav_cov_message(
         message, receive, process_session_id=PROCESS_SESSION_ID,
-        connection_generation=CONNECTION_GENERATION,
+        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK,
     )
 
 
 def decode_status(message, receive):
     return decode_nav_status_message(
         message, receive, process_session_id=PROCESS_SESSION_ID,
-        connection_generation=CONNECTION_GENERATION,
+        connection_generation=CONNECTION_GENERATION, gps_week=GPS_WEEK,
     )
 
 
@@ -83,7 +83,7 @@ class TestUbxRosMessageAdapter(unittest.TestCase):
     def test_receiver_context_is_required_and_validated(self):
         with self.assertRaisesRegex(EpochPairingError, "process_session_id"):
             decode_nav_pvt_message(
-                pvt(), 10, process_session_id="", connection_generation=0
+                pvt(), 10, process_session_id="", connection_generation=0, gps_week=GPS_WEEK
             )
         with self.assertRaisesRegex(EpochPairingError, "connection_generation"):
             decode_nav_pvt_message(
