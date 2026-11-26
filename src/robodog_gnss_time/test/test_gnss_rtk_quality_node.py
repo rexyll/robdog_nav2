@@ -76,7 +76,7 @@ def setup_nodes(max_age_ns=500_000_000):
     return node, harness, publisher, received, executor
 
 
-def teardown(node, harness, executor):
+def cleanup_nodes(node, harness, executor):
     executor.remove_node(node)
     executor.remove_node(harness)
     node.destroy_node()
@@ -115,7 +115,7 @@ def test_quality_node_publishes_recovery_acceptance_and_stale_watchdog():
         stale = [item for item in received if item.reason == "fix_stale"][-1]
         assert stale.qualified is False
     finally:
-        teardown(node, harness, executor)
+        cleanup_nodes(node, harness, executor)
 
 
 def test_quality_node_rejects_old_generation_without_resetting_active_gate():
