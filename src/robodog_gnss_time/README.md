@@ -129,3 +129,56 @@ certified to publish these normalized custom contracts.
 The new CI validates synthetic ROS messages and the software join path only;
 it does not establish real driver compatibility, physical ZED-F9P behavior,
 or localization performance.
+
+
+## Preferred raw-USB observation path
+
+The preferred end-to-end path is now integrated into `gnss_receiver_time_node`:
+
+```text
+/gnss/ingress
+  ├─ ordered GenerationStarted / DeviceLost / TransportFault / Stopped
+  ├─ UBX-NAV-TIMEGPS + UBX-NAV-TIMELS
+  │    └─ validated receiver-time mapping
+  └─ UBX-NAV-PVT / HPPOSLLH / COV / STATUS raw frames
+       └─ exact iTOW + same process session / connection generation
+            + matching validated GPS week/time mapping
+              -> /gnss/observation
+```
+
+The node uses `UbxIngressEventProcessor` for ordered lifecycle/time mapping and
+`UbxRawNavEpochAssembler` for raw NAV frame decoding. The raw decoder validates
+UBX envelope/checksum again, requires exact payload lengths and supported
+message versions, and extracts:
+- NAV-PVT class/id `01/07`, 92-byte payload;
+- NAV-HPPOSLLH `01/14`, 36-byte payload with all eight individual invalid bits;
+- NAV-COV `01/36`, 64-byte payload;
+- NAV-STATUS `01/03`, 16-byte payload.
+
+The transport event supplies process session ID, connection generation,
+ingress sequence and host monotonic receive timestamp. GPS week is not guessed
+from iTOW: raw NAV records are held in a bounded pre-mapping cache until a
+valid TIMEGPS/TIMELS mapping with the same iTOW and the same session/generation
+supplies the week. The four decoded epochs then pass through the same
+`UbxRosEpochAdapter` exact join and covariance/quality construction. The
+assembler enforces callback receive skew, cache capacity, expiry, duplicate
+conflict retirement and generation reset.
+
+This raw-ingress path is preferred over the optional `gnss_observation_node`
+decoded-topic path because it has authoritative transport generation metadata.
+The decoded-topic node remains useful when an external driver supplies the
+normalized `GnssNav*` messages, but the pinned `ublox_dgnss` ROSIDL does not
+carry connection generation and therefore needs an independently trusted
+lifecycle bridge before reconnect safety can be claimed.
+
+### Raw-path parameters
+
+`gnss_receiver_time_node` adds:
+- `observation_topic` (default `/gnss/observation`);
+- `max_pending_epochs` (default 64, range 1..4096);
+- `max_pair_receive_skew_ns` (default 250 ms);
+- `max_pending_age_ns` (default 1 s).
+
+The four-stream raw path is synthetic-CI validated; physical ZED-F9P message
+availability, NAV-COV firmware support, output rates, reconnect behavior and
+USB/DDS overload handling remain unverified on target hardware.
