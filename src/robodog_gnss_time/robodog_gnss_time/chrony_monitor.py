@@ -47,6 +47,7 @@ def parse_chrony_tracking(output: str):
     reference_id = _field(lines, "Reference ID")
     stratum_text = _field(lines, "Stratum")
     system_time = _field(lines, "System time")
+    root_delay = _field(lines, "Root delay")
     root_dispersion = _field(lines, "Root dispersion")
     leap_status = _field(lines, "Leap status")
     try:
@@ -63,7 +64,14 @@ def parse_chrony_tracking(output: str):
     dispersion_match = re.fullmatch(r"([+]?(?:\d+(?:\.\d*)?|\.\d+)) seconds", root_dispersion)
     if not dispersion_match:
         raise ValueError("unsupported Chrony Root dispersion format")
-    uncertainty_ns = _seconds_to_ns(dispersion_match.group(1).lstrip("+"))
+    delay_match = re.fullmatch(r"([+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)) seconds", root_delay)
+    if not delay_match:
+        raise ValueError("unsupported Chrony Root delay format")
+    root_delay_ns = _seconds_to_ns(delay_match.group(1).lstrip("+"))
+    root_dispersion_ns = _seconds_to_ns(dispersion_match.group(1).lstrip("+"))
+    # Use NTP root distance = root dispersion + half root delay; round upward
+    # so conversion to integer nanoseconds never understates the bound.
+    uncertainty_ns = root_dispersion_ns + (root_delay_ns + 1) // 2
     return {
         "reference_id": reference_id,
         "stratum": stratum,
