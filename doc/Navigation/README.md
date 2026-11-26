@@ -288,3 +288,5 @@
 - [36 — UBX-NAV-TIMEGPS / UBX-NAV-TIMELS payload 解码器](36_ubx_nav_timegps_timels_payload_decoder.md)
 
 - [37 — UBX-NAV-TIMEGPS / NAV-TIMELS receiver time mapper](37_ubx_timegps_timels_receiver_time_mapper.md)
+
+- [36 — NAV-TIMEGPS/NAV-TIMELS raw payload decoder with session context](36_ubx_nav_timegps_timels_payload_decoder.md)
