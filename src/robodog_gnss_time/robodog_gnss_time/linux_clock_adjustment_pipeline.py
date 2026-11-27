@@ -139,7 +139,7 @@ def build_clock_adjustment_capture_report(
                 handler_envelopes, "kernel_handler"
             )
         invocation_join = correlate_clock_adjustment_invocation_observations(
-            syscall_invocations, handler_invocations
+            syscall_invocations, handler_invocations, wrapper_contract_id
         )
 
     issues = []
