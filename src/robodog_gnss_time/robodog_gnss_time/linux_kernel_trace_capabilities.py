@@ -5,6 +5,7 @@ enables events, writes trace controls, loads BPF, or changes host configuration.
 """
 import argparse
 import gzip
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -99,13 +100,20 @@ def _read_config_source(path, compressed=False):
 def _btf_observation(path):
     try:
         stat = Path(path).stat()
+        digest = hashlib.sha256()
         with open(path, "rb") as stream:
-            stream.read(1)
+            while True:
+                chunk = stream.read(1024 * 1024)
+                if not chunk:
+                    break
+                digest.update(chunk)
         return {
             "status": "present_readable",
             "path": str(path),
             "size_bytes": stat.st_size,
-            "interpretation": "BTF file presence/readability only; BTF validity and BPF load permission are not tested.",
+            "sha256": digest.hexdigest(),
+            "hash_algorithm": "sha256",
+            "interpretation": "BTF file presence/readability and byte identity only; hash does not validate BTF semantics or BPF load permission.",
         }
     except FileNotFoundError:
         return {"status": "not_found", "path": str(path)}
@@ -399,6 +407,22 @@ def _btf_handler_function_inventory(path):
             "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
             "interpretation": "The vmlinux BTF file is unavailable; no BTF dump was attempted.",
         }
+    version = None
+    version_status = "unknown"
+    try:
+        version_result = subprocess.run(
+            [tool, "version"], check=False, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=5,
+        )
+        if version_result.returncode == 0:
+            version = (version_result.stdout or version_result.stderr).strip()[:1000]
+            version_status = "observed"
+        else:
+            version_status = "command_failed"
+    except subprocess.TimeoutExpired:
+        version_status = "timeout"
+    except OSError:
+        version_status = "execution_error"
     command = [tool, "-j", "btf", "dump", "file", str(path)]
     try:
         completed = subprocess.run(
@@ -426,6 +450,7 @@ def _btf_handler_function_inventory(path):
                 return {
                     "status": parsed["status"],
                     "tool": tool,
+                    "tool_version": {"status": version_status, "value": version},
                     "command": command,
                     "symbols": parsed["symbols"],
                     "interpretation": (
@@ -438,6 +463,7 @@ def _btf_handler_function_inventory(path):
     return {
         "status": status,
         "tool": tool,
+        "tool_version": {"status": version_status, "value": version},
         "command": command,
         "detail": detail,
         "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
@@ -486,26 +512,46 @@ def _runtime_policy_observation(rooted):
 
 
 def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
-    """Inventory config, BTF and syscall tracepoint visibility without changing state."""
+    """Inventory kernel tracing capabilities with explicit host/fixture provenance."""
     start_mono = time.monotonic_ns()
     start_real = time.time_ns()
     root = Path(root)
+    try:
+        root_resolved = root.resolve()
+        is_live_host = root_resolved == Path("/").resolve()
+    except OSError:
+        root_resolved = root
+        is_live_host = False
 
     def rooted(path):
         return root / str(path).lstrip("/")
 
-    release = kernel_release or platform.release()
     uname = platform.uname()
+    if kernel_release:
+        release = kernel_release
+        release_source = "explicit_override"
+    elif is_live_host:
+        release = uname.release
+        release_source = "collector_host_uname"
+    else:
+        release = None
+        release_source = "unknown_for_rootfs_fixture"
+
     mountinfo = _read_text(rooted("/proc/self/mountinfo"))
+    boot_id = _read_text(rooted("/proc/sys/kernel/random/boot_id"))
     config_sources = {
         "proc_config_gz": _read_config_source(rooted("/proc/config.gz"), compressed=True),
-        "boot_config": _read_config_source(rooted(f"/boot/config-{release}")),
+        "boot_config": (
+            _read_config_source(rooted(f"/boot/config-{release}"))
+            if release else {"status": "not_probed", "path": None, "settings": {}}
+        ),
     }
     tracefs = [
         _tracefs_observation(rooted("/sys/kernel/tracing"), mountinfo, root=root),
         _tracefs_observation(rooted("/sys/kernel/debug/tracing"), mountinfo, root=root),
     ]
-    btf = _btf_observation(rooted("/sys/kernel/btf/vmlinux"))
+    btf_path = rooted("/sys/kernel/btf/vmlinux")
+    btf = _btf_observation(btf_path)
     handler_symbols = [
         _handler_symbol_observation(rooted("/sys/kernel/tracing")),
         _handler_symbol_observation(rooted("/sys/kernel/debug/tracing")),
@@ -521,13 +567,30 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
     end_mono = time.monotonic_ns()
     end_real = time.time_ns()
     return {
+        "schema_version": 2,
         "status": status,
+        "collection_mode": "live_host" if is_live_host else "rootfs_fixture",
+        "collection_root": str(root_resolved),
         "kernel": {
             "release": release,
+            "release_source": release_source,
+            "machine": uname.machine if is_live_host else None,
+            "system": uname.system if is_live_host else None,
+            "boot_id": boot_id["content"].strip() if boot_id["status"] == "ok" else None,
+            "boot_id_status": boot_id["status"],
+        },
+        "collector_host": {
+            "release": uname.release,
             "machine": uname.machine,
             "system": uname.system,
+            "note": (
+                "Same process/kernel as target observations."
+                if is_live_host else
+                "Collector host metadata only; not attributed to the rootfs fixture target."
+            ),
         },
         "collection_clock": {
+            "clock_ids": {"monotonic": "CLOCK_MONOTONIC", "realtime": "CLOCK_REALTIME"},
             "monotonic_start_ns": start_mono,
             "realtime_start_ns": start_real,
             "monotonic_end_ns": end_mono,
@@ -535,22 +598,22 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         },
         "kernel_config_sources": config_sources,
         "btf": btf,
-        "btf_handler_functions": _btf_handler_function_inventory(rooted("/sys/kernel/btf/vmlinux")),
+        "btf_handler_functions": _btf_handler_function_inventory(btf_path),
         "handler_function_symbols": handler_symbols,
         "runtime_policy": _runtime_policy_observation(rooted),
         "tracefs": tracefs,
         "candidate_syscall_events": list(_SYSCALL_EVENTS),
         "interpretation": (
-            "Read-only capability inventory only. A missing event/config/BTF observation is not "
-            "proof that no alternative instrumentation exists. Presence does not prove that "
-            "a tracing program can be loaded, that handler symbols are BTF attachable, that "
-            "user-memory reads work, or that events can be captured without loss. Handler "
-            "symbol visibility is not proof of fentry/kprobe attachability. No tracefs mount, "
-            "event enablement, audit rule, perf "
-            "session, eBPF load, or host configuration change was attempted."
+            "Read-only capability inventory only. collection_mode distinguishes live host from "
+            "rootfs fixture; collector_host metadata is not target metadata for fixtures. A "
+            "missing event/config/BTF observation is not proof that no alternative instrumentation "
+            "exists. Presence does not prove that a tracing program can be loaded, that handler "
+            "symbols are BTF attachable, that user-memory reads work, or that events can be "
+            "captured without loss. Handler symbol visibility is not proof of fentry/kprobe "
+            "attachability. No tracefs mount, event enablement, audit rule, perf session, eBPF "
+            "load, or host configuration change was attempted."
         ),
     }
-
 
 
 def main(argv=None):
