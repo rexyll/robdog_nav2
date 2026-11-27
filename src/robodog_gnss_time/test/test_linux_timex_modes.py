@@ -62,12 +62,12 @@ def test_legacy_multibit_modes_are_decoded_before_individual_bits():
 
 
 def test_unknown_bits_are_preserved_and_not_silently_ignored():
-    result = classify_timex_modes(0x0001 | 0x8000)
+    result = classify_timex_modes(0x0001 | 0x10000)
 
     assert result["classification"] == "contains_unclassified_bits"
     assert result["requested_operations"] == ["offset_adjustment_request"]
-    assert result["unknown_bits_mask"] == 0x8000
-    assert result["unknown_bits_hex"] == "0x00008000"
+    assert result["unknown_bits_mask"] == 0x10000
+    assert result["unknown_bits_hex"] == "0x00010000"
 
 
 def test_conflicting_resolution_modifiers_are_explicit():
