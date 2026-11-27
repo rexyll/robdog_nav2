@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.256
+- 文档版本：v0.3.257
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1306,3 +1306,38 @@
   本轮为固定源码审计与设计更新，不实现/附加内核 hook，不启用 tracing/eBPF，
   不修改系统时钟或 PHC。所有 Orin BTF/ARM64/driver/运行态证据继续标记未完成。
   保持仅 nav 分支，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.257）
+
+- 完成 syscall event reducer 的严格输入类型审计。修复非字符串/unhashable
+  event_type 在 set membership 时可能触发 TypeError 的问题；raw_clockid 若提供
+  必须为 signed 32-bit clockid_t；modes_read_status 必须为有限长度字符串；
+  raw_modes 仅在 status=ok 时接受 uint32，非法记录直接拒绝并计入 malformed。
+- 新增合成测试覆盖 unhashable event_type、raw_clockid 为对象、unhashable
+  modes_read_status、bool raw_modes；更新 Doc44 输入合同。
+- 新增 Doc45：固定 Linux v6.12 源码证明 sys_enter tracepoint 在 syscall handler
+  dispatch 前执行，generic sys_enter 只记录 syscall ID 和参数槽，不解引用用户指针；
+  在 sys_enter 时读 timex 用户内存只能得到 E2a pre-dispatch snapshot，可能因共享内存
+  并发修改而不同于随后 copy_from_user 实际复制的数据。
+- 对照 clock_adjtime()/clock_adjtime32() 与 adjtimex()/adjtimex_time32() 源码，
+  确认 copy/compat conversion 后的 do_clock_adjtime()/do_adjtimex() 是 E2b
+  normalized kernel-owned request 的候选观察点；需 target kernel 的 BTF/fentry/
+  kprobe/符号/权限验证，未在当前项目加载或附加 hook。
+- 明确 handler return 与外层 syscall exit 联合观察可在固定 wrapper 顺序下区分
+  部分 copy-back -EFAULT 情形：若内部 handler 非负而 syscall exit=-EFAULT，
+  则可归因于 handler 后的 copy_to_user 失败；仍不把 handler 返回解释为物理时钟效果。
+- 最新 reducer 代码/测试 head：module `42356694b778941b5000a0c28637d951a8c10f5c` /
+  tests `b202875c9d0b5e10e638fea6db8bd4cf0aa0c034`。GNSS runtime CI run
+  `45919020236`：Humble/Jammy 与 Jazzy/Noble 均 success，各 **193/193 tests passed**
+  （0 errors/failures/skipped）；ROS 2 package CI run `45919020260` 两发行版均 success。
+  更早一次 modes decoder 测试曾因 fixture 将合法 ADJ_OFFSET_SINGLESHOT=0x8001
+  误当未知值失败（run `45918470925`）；测试数据已改为真正未知位 0x10000，
+  后续最终 head 全部通过，不掩盖首次失败。
+- CI 日志仍包含 rosdep 对 `ament_python` key 的 ERROR 提示，但后续报告 required
+  rosdeps installed successfully，pytest 汇总为 193 passed；按非阻断环境提示记录，
+  不将其描述为零 warning。通过结果只覆盖 Ubuntu/ROS Humble+Jazzy 的 Python 合成
+  package tests，不证明目标 Orin/ARM64 内核、BTF、PHC 驱动、运行态事件无丢失或真实
+  clock effect。
+- TaskPlan 版本更新；仅 nav 分支。未加载 eBPF、未启 tracing/audit、未改系统时钟
+  或 PHC，未进行实机验证；N1/N9 未验收，不合并 main。
