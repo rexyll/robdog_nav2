@@ -135,10 +135,14 @@ def correlate_clock_adjustment_observations(syscall_report, handler_report, wrap
           "source-pinned wrapper contract.")}
 
 
-def correlate_clock_adjustment_invocation_observations(syscall_report, handler_report):
+def correlate_clock_adjustment_invocation_observations(
+    syscall_report, handler_report, wrapper_contract_id=None
+):
     """Join schema-v2 pairs by exact producer-supplied parent invocation identity."""
     if not isinstance(syscall_report, dict) or not isinstance(handler_report, dict):
         raise TypeError("reports must be mappings")
+    if wrapper_contract_id not in (None, _CONTRACT):
+        raise ValueError("unknown wrapper_contract_id")
     syscalls = syscall_report.get("pairs")
     handlers = handler_report.get("pairs")
     if not isinstance(syscalls, list) or not isinstance(handlers, list):
@@ -222,6 +226,19 @@ def correlate_clock_adjustment_invocation_observations(syscall_report, handler_r
                            "pair_index": handler_index})
             unjoined.append(handler_index)
             continue
+        syscall_return = syscall.get("raw_return_value")
+        handler_return = handler.get("raw_handler_return")
+        top_level = (
+            syscall["name"] in ("clock_adjtime", "clock_adjtime32")
+            and handler["name"] == "do_clock_adjtime"
+        )
+        copyback = (
+            wrapper_contract_id == _CONTRACT and top_level
+            and isinstance(syscall_return, int) and not isinstance(syscall_return, bool)
+            and syscall_return == -14
+            and isinstance(handler_return, int) and not isinstance(handler_return, bool)
+            and handler_return >= 0
+        )
         joins.append({
             "capture_session_id": syscall["capture_session_id"],
             "boot_id": syscall["boot_id"],
@@ -230,6 +247,10 @@ def correlate_clock_adjustment_invocation_observations(syscall_report, handler_r
             "handler_invocation_id": handler["invocation_id"],
             "syscall": syscall["name"],
             "handler": handler["name"],
+            "raw_syscall_return": syscall_return,
+            "raw_handler_return": handler_return,
+            "copyback_failure_inferred_from_pinned_wrapper": copyback,
+            "wrapper_contract_id": wrapper_contract_id,
             "relation": (
                 "direct_syscall_handler"
                 if syscall["name"] in ("adjtimex", "adjtimex_time32")
@@ -258,6 +279,8 @@ def correlate_clock_adjustment_invocation_observations(syscall_report, handler_r
         "unjoined_handler_pair_indices": sorted(set(unjoined)),
         "issues": issues,
         "identity_join": "exact_parent_syscall_invocation_id",
+        "wrapper_contract_id": wrapper_contract_id,
+        "copyback_inference_enabled": wrapper_contract_id == _CONTRACT,
         "interpretation": (
             "The join uses producer-supplied parent invocation identity and verifies "
             "same task, PID and interval containment. It supports one syscall to "
