@@ -4,7 +4,9 @@ Pure validation/reduction only; this module does not start or own a live collect
 """
 from typing import Any
 
-_SCHEMA_VERSION = 1
+_SUPPORTED_SCHEMA_VERSIONS = {1, 2}
+_SCHEMA_VERSION = 2
+_PARENT_CONTEXT_STATUSES = {"matched", "unavailable", "stack_overflow", "no_active_context"}
 _STREAM_KINDS = {"syscall", "kernel_handler"}
 _LIFECYCLE = (
     "created", "producers_attached", "running", "stop_requested",
@@ -37,7 +39,8 @@ def validate_clock_adjustment_event_envelope(record):
     for name in required_text:
         if not _text(record.get(name)):
             issues.append({"code": "invalid_envelope_identity", "field": name})
-    if record.get("schema_version") != _SCHEMA_VERSION or isinstance(record.get("schema_version"), bool):
+    version = record.get("schema_version")
+    if isinstance(version, bool) or version not in _SUPPORTED_SCHEMA_VERSIONS:
         issues.append({"code": "unsupported_envelope_schema_version"})
     kind = record.get("stream_kind")
     if not isinstance(kind, str) or kind not in _STREAM_KINDS:
@@ -48,6 +51,22 @@ def validate_clock_adjustment_event_envelope(record):
             issues.append({"code": "invalid_envelope_integer", "field": name})
     if _uint(record.get("sequence")) and record["sequence"] == 0:
         issues.append({"code": "zero_event_sequence"})
+    if version == 2:
+        for name in ("task_instance_id", "event_id", "invocation_id"):
+            if not _text(record.get(name)):
+                issues.append({"code": "invalid_invocation_identity", "field": name})
+        if kind == "kernel_handler":
+            status = record.get("parent_context_status")
+            parent = record.get("parent_syscall_invocation_id")
+            if status not in _PARENT_CONTEXT_STATUSES:
+                issues.append({"code": "invalid_parent_context_status"})
+            elif status == "matched":
+                if not _text(parent):
+                    issues.append({"code": "matched_parent_context_missing_id"})
+            elif parent is not None:
+                issues.append({"code": "unavailable_parent_context_has_id"})
+        elif "parent_syscall_invocation_id" in record or "parent_context_status" in record:
+            issues.append({"code": "syscall_envelope_has_handler_parent_fields"})
     payload = record.get("payload")
     if not isinstance(payload, dict):
         issues.append({"code": "invalid_event_payload"})
@@ -55,7 +74,9 @@ def validate_clock_adjustment_event_envelope(record):
         return {"status": "invalid", "issues": issues}
 
     reserved = set(required_text) | {
-        "schema_version", "stream_kind", "cpu", "sequence", "monotonic_ns", "payload"
+        "schema_version", "stream_kind", "cpu", "sequence", "monotonic_ns", "payload",
+        "task_instance_id", "event_id", "invocation_id",
+        "parent_syscall_invocation_id", "parent_context_status",
     }
     if reserved.intersection(payload):
         return {"status": "invalid", "issues": [{"code": "payload_overrides_envelope_field"}]}
@@ -67,6 +88,16 @@ def validate_clock_adjustment_event_envelope(record):
         "sequence": record["sequence"],
         "monotonic_ns": record["monotonic_ns"],
     })
+    if version == 2:
+        event.update({
+            "task_instance_id": record["task_instance_id"],
+            "event_id": record["event_id"],
+            "invocation_id": record["invocation_id"],
+        })
+        if kind == "kernel_handler":
+            event["parent_context_status"] = record["parent_context_status"]
+            if record.get("parent_syscall_invocation_id") is not None:
+                event["parent_syscall_invocation_id"] = record["parent_syscall_invocation_id"]
     expected_types = (
         {"syscall_enter", "syscall_exit"} if kind == "syscall"
         else {"kernel_handler_enter", "kernel_handler_exit"}
@@ -83,6 +114,12 @@ def validate_clock_adjustment_event_envelope(record):
             "stream_kind": kind,
             "cpu": record["cpu"],
             "sequence": record["sequence"],
+            "schema_version": version,
+            **({
+                "task_instance_id": record["task_instance_id"],
+                "event_id": record["event_id"],
+                "invocation_id": record["invocation_id"],
+            } if version == 2 else {}),
         },
         "event": event,
         "issues": [],
