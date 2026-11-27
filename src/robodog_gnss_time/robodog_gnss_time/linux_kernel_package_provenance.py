@@ -102,10 +102,15 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         for row in installed
         if row.get("source_package") and row.get("source_version")
     })
-    kernel_source_identities = identities_for({
+    kernel_code_roles = {
         "kernel_image_unsigned", "kernel_modules",
         "kernel_modules_extra", "kernel_headers", "kernel_buildinfo",
-    })
+    }
+    kernel_code_packages = [
+        row for row in installed
+        if row.get("binary_package_role") in kernel_code_roles
+    ]
+    kernel_source_identities = identities_for(kernel_code_roles)
     signed_image_source_identities = identities_for({"signed_image"})
     # The running image must itself be owned by an installed image package.
     # Ownership of config/modules files is not a substitute for /boot/vmlinuz.
@@ -127,6 +132,11 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         issues.append({"code": "kernel_source_package_identity_unavailable"})
     elif len(kernel_source_identities) > 1:
         issues.append({"code": "multiple_kernel_source_package_identities"})
+    if any(
+        not row.get("source_package") or not row.get("source_version")
+        for row in kernel_code_packages
+    ):
+        issues.append({"code": "installed_kernel_code_package_source_metadata_incomplete"})
     if len(signed_image_source_identities) > 1:
         issues.append({"code": "multiple_signed_image_source_package_identities"})
     status = "observed" if not issues else "partial"
