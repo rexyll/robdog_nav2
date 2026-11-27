@@ -156,7 +156,14 @@ def runtime_snapshot(**overrides):
 
 def test_global_runtime_counters_reconcile_and_idle_task_storage_may_remain():
     initial = runtime_snapshot()
-    final = runtime_snapshot(gauges={
+    final_counters = runtime_counters(
+        task_context_admission_attempts=3, task_context_admitted=3,
+        task_context_create_attempts=3, task_context_create_successes=3,
+        task_context_init_attempts=3, task_context_init_successes=3,
+        task_instance_id_allocation_attempts=3,
+        task_instance_id_allocation_successes=3,
+    )
+    final = runtime_snapshot(counters=final_counters, gauges={
         "active_syscall_invocations": 0,
         "active_handler_invocations": 0,
         "inflight_bpf_callbacks": 0,
