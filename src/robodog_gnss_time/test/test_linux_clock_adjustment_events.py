@@ -190,3 +190,15 @@ def test_invalid_capacity_is_rejected():
         reduce_clock_adjustment_events([], max_pending=0)
     with pytest.raises(TypeError):
         reduce_clock_adjustment_events([], max_pending=True)
+
+
+def test_unhashable_event_type_is_rejected_without_crashing():
+    report = reduce_clock_adjustment_events([
+        {"event_type": ["syscall_enter"], "raw_user_pointer": "must-not-escape"},
+    ])
+
+    assert report["reduction_status"] == "partial"
+    assert report["counts"]["malformed_events"] == 1
+    assert report["issues"][0]["code"] == "unknown_event_type"
+    assert "raw_user_pointer" not in str(report)
+
