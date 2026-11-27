@@ -42,9 +42,11 @@ Raw user pointers, struct addresses, command lines, environment variables and un
 
 ## 3. Correlation identity
 
-The reducer pairs records by the exact tuple:
+The reducer groups records by the exact tuple:
 
 (boot_id, pid_tgid, syscall)
+
+Each key owns a LIFO stack of active syscall invocations. A nested same-thread invocation of the same syscall name is pushed without overwriting the outer invocation; exits consume the most recent entry. This models ordinary same-thread nested execution (for example, a signal handler issuing the same syscall while an earlier invocation is interrupted).
 
 This deliberately includes:
 - boot_id, to prevent records from different kernel boots being joined;
@@ -59,11 +61,7 @@ Entry/exit timestamp order is checked using monotonic_ns. An exit earlier than i
 
 The default pending capacity is 4096. Callers may supply a smaller positive integer for deterministic tests. A capacity overflow drops the new pending entry from the active map, records it as unpaired with reason inflight_capacity_exceeded, increments a counter, and marks the reduction partial.
 
-A second entry with an identical correlation key before an exit:
-- marks the previous pending entry superseded_by_duplicate_entry;
-- increments inflight_overwrite;
-- stores the new entry as the active candidate;
-- marks the reduction partial.
+A second entry with an identical correlation key before an exit is retained as a nested invocation on the per-key LIFO stack. It increments nested_syscall_entries; it does not overwrite the outer entry. The max_pending bound applies to active invocations, not distinct keys. The legacy inflight_overwrite counter remains present for output compatibility and is expected to remain zero under the stack policy. The output is schema version 2 and declares pairing_policy=lifo_same_thread_syscall_stack_without_invocation_cookie.
 
 Malformed records are counted and skipped. Invalid values do not get silently coerced to zero. The reducer rejects a bool as an integer for all numeric fields. event_type must be a string before it is checked against the accepted event set; this prevents an unhashable JSON list/object from raising inside the reducer. raw_clockid, when supplied, must fit signed 32-bit clockid_t; modes_read_status must be a bounded string; raw_modes is accepted only as uint32 when the read status is ok. Invalid typed fields reject the record instead of leaking arbitrary nested objects into output.
 
@@ -99,7 +97,7 @@ The output includes:
 - per-CPU sequence_gaps;
 - stable issues with machine-readable issue codes.
 
-reduction_status is consistent only when the supplied records contain no detected reducer issues. Any malformed record, sequence gap/regression, duplicate entry, orphan exit, unmatched entry, capacity drop or invalid pair ordering makes it partial.
+reduction_status is consistent only when the supplied records contain no detected reducer issues. Any malformed record, sequence gap/regression, sequence duplicate, orphan exit, unmatched entry, capacity drop or invalid pair ordering makes it partial.
 
 Two fields are intentionally fixed:
 - capture_coverage_status=not_assessed
@@ -116,7 +114,7 @@ Tests cover:
 4. other negative return values;
 5. orphan exit;
 6. entry without exit;
-7. duplicate entry overwrite;
+7. nested same-thread syscall LIFO pairing and missing-inner-exit retention;
 8. per-CPU sequence gap;
 9. per-CPU sequence partitioning;
 10. thread identity separation;
