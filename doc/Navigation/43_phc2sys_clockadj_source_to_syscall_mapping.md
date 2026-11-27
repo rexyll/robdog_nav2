@@ -152,7 +152,7 @@ A complete event should still not set clock_effect=applied. Independent PHC/syst
 
 Can continue without Orin:
 - extend the pure request-mode decoder with additional upstream-defined special cases only when verified against the pinned UAPI;
-- implement a generic userspace event-envelope validator and entry/exit reducer using synthetic records;
+- a pure userspace event-envelope reducer is implemented; its input, pairing, loss-indicator and status contracts are documented in Navigation 44;
 - test mode combinations, unknown bits, status-code returns, EFAULT ambiguity, duplicate/orphan exits, event sequence gaps, and malformed input;
 - compare additional stable Linux kernel reference tags without claiming target compatibility.
 
