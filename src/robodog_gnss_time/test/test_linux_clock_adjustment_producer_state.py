@@ -385,7 +385,9 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
             invocation_id = session.allocate_invocation_id(task_id, allocator_kind)
             assert invocation_id is not None
             task_invocation_ids[task_id][record["invocation_id"]] = invocation_id
-            session.begin_invocation(task_id, kind)
+            session.begin_invocation(
+                task_id, "syscall" if kind == "syscall" else "handler"
+            )
         record["task_instance_id"] = task_id
         record["invocation_id"] = task_invocation_ids[task_id][record["invocation_id"]]
         event_id = session.allocate_event_id()
@@ -397,7 +399,9 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
             ]
         (syscall_envelopes if kind == "syscall" else handler_envelopes).append(record)
         if not is_entry:
-            session.end_invocation(task_id, kind)
+            session.end_invocation(
+                task_id, "syscall" if kind == "syscall" else "handler"
+            )
 
     for task_id in task_ids:
         session.release_task_context(task_id)
