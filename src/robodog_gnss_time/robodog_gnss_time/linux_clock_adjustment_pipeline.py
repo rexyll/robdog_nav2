@@ -12,7 +12,7 @@ from .linux_clock_adjustment_joiner import (
     correlate_clock_adjustment_invocation_observations,
 )
 from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
-from .linux_clock_adjustment_invocation_reducer import reduce_clock_adjustment_invocation_events
+from .linux_clock_adjustment_invocation_reducer import (\n    reduce_clock_adjustment_invocation_events,\n    audit_clock_adjustment_event_id_uniqueness,\n)
 
 _COUNTERS = (
     "consumer_records_read", "decode_successes", "decode_failures",
@@ -117,7 +117,7 @@ def build_clock_adjustment_capture_report(
     )
 
     invocation_mode = "not_supplied"
-    syscall_invocations = handler_invocations = invocation_join = None
+    syscall_invocations = handler_invocations = invocation_join = event_id_audit = None
     if syscall_envelopes is not None or handler_envelopes is not None:
         invocation_mode = "schema_v2_required"
         if not isinstance(syscall_envelopes, list) or not isinstance(handler_envelopes, list):
@@ -131,12 +131,19 @@ def build_clock_adjustment_capture_report(
                 "issues": [{"code": "both_invocation_streams_must_be_lists"}],
                 "pairs": [],
             }
+            event_id_audit = {
+                "audit_status": "partial",
+                "issues": [{"code": "both_invocation_streams_must_be_lists"}],
+            }
         else:
             syscall_invocations = reduce_clock_adjustment_invocation_events(
                 syscall_envelopes, "syscall"
             )
             handler_invocations = reduce_clock_adjustment_invocation_events(
                 handler_envelopes, "kernel_handler"
+            )
+            event_id_audit = audit_clock_adjustment_event_id_uniqueness(
+                [syscall_envelopes, handler_envelopes]
             )
         invocation_join = correlate_clock_adjustment_invocation_observations(
             syscall_invocations, handler_invocations, wrapper_contract_id
@@ -183,6 +190,9 @@ def build_clock_adjustment_capture_report(
         gates["invocation_parent_join"] = (
             invocation_join.get("reduction_status") == "consistent"
         )
+        gates["event_id_uniqueness"] = (
+            event_id_audit.get("audit_status") == "consistent"
+        )
 
     for name, passed in gates.items():
         if not passed:
@@ -202,6 +212,7 @@ def build_clock_adjustment_capture_report(
         "syscall_invocation_reduction": syscall_invocations,
         "handler_invocation_reduction": handler_invocations,
         "invocation_parent_join": invocation_join,
+        "event_id_uniqueness": event_id_audit,
         "issues": issues,
         "interpretation": (
             "A consistent report means all supplied offline reducer gates passed. "
