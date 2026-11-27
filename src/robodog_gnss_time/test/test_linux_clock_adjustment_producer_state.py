@@ -70,8 +70,13 @@ def test_handler_copies_exact_parent_syscall_invocation_id():
     state.handler_enter("do_clock_adjtime", 0, 110, raw_modes=1, raw_clockid=0)
     state.handler_exit("do_clock_adjtime", 1, 120, 0)
     state.syscall_exit("clock_adjtime", 0, 130, 0)
-    syscalls = reduce_clock_adjustment_invocation_events(state.emitted, "syscall")
-    handlers = reduce_clock_adjustment_invocation_events(state.emitted, "kernel_handler")
+    syscalls = reduce_clock_adjustment_invocation_events(
+        [x for x in state.emitted if x["stream_kind"] == "syscall"], "syscall"
+    )
+    handlers = reduce_clock_adjustment_invocation_events(
+        [x for x in state.emitted if x["stream_kind"] == "kernel_handler"],
+        "kernel_handler",
+    )
     joined = correlate_clock_adjustment_invocation_observations(syscalls, handlers)
     assert syscalls["reduction_status"] == "consistent"
     assert handlers["reduction_status"] == "consistent"
@@ -88,7 +93,10 @@ def test_nested_handler_overflow_does_not_consume_outer_handler_frame():
     assert state.handler_exit("do_adjtimex", 0, 120, 0) is None
     state.handler_exit("do_clock_adjtime", 0, 125, 0)
     state.syscall_exit("clock_adjtime", 0, 130, 0)
-    handlers = reduce_clock_adjustment_invocation_events(state.emitted, "kernel_handler")
+    handlers = reduce_clock_adjustment_invocation_events(
+        [x for x in state.emitted if x["stream_kind"] == "kernel_handler"],
+        "kernel_handler",
+    )
     assert handlers["reduction_status"] == "consistent"
     assert handlers["counts"]["pairs"] == 1
     assert state.counters["handler_context_stack_overflow"] == 1
