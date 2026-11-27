@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.301
+- 文档版本：v0.3.302
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1783,3 +1783,14 @@
 - 提交：session allocator `4fdf4fc3e557453b64bbac5c4331f7671bb28ae4`；allocator hardening `1ea8863053ef6ab9df945c8c6e2ef0b943b11529`；multi-task tests `7071aa3b2c45500a2c3a7213decefa32fe3a7f7b`；runtime audit integration tests `271ee24739c1c117e465e23555f23dc4c851b969`；Navigation 61 修订 `32299a7855395dfab467b87fa74f76c7b340af58`。
 - 验证边界：这是 multi-task ID/capacity reference model，不模拟真实并行执行、BPF map atomic 指令、内核 task scheduling 或 verifier。CI 等待最新提交最终结果。
 - 下一步：检查 latest CI；若通过，继续扩展 producer state simulator 的跨任务 active invocation / task exit interleaving 和 event stream counter reconciliation；随后再写 BPF C struct/CO-RE pseudo-source review。仅 nav 分支，不合并 main。
+
+
+## 本轮 per-task invocation gauge 与 BPF CO-RE review（2026-11-27 / v0.3.302）
+
+- 将 multi-task session allocator 的 active invocation accounting 从仅 session-global gauge 改为 per-task syscall/handler gauge + session aggregate gauge。task exit 仅扣减该 task 自己的 pending invocation 数，避免把另一个 task 的 active call 错误清零；增加 underflow guards 和 post-detach mutation rejection。
+- 新增两 task interleaving test：task A 带 pending syscall 退出后，task B 的 active syscall gauge 保留为 1；task B 正常结束后 aggregate gauge 才归零。
+- 新增 Navigation 62：BPF Task Storage map topology、BTF value layout、current-task BTF helper、CAP_BPF/GPL-only gate、verifier-safe bounded stack access、event emission ordering、task-exit hook candidate 与 attach section unresolved 的 CO-RE review。刻意不指定 tp/fentry/kprobe section，因 tracefs/function symbol inventory 尚 unknown。
+- 文档提交：Navigation 61 `ccdf60ec8c53541f5af99cf5ca2d6182bb58277f`；Navigation 62 `4a9323e7fba2ccd39cda8b70dde620493f7d3d30`；README index `9437f90b49fac79f944a4b014c32cf83512f306c`。
+- 代码提交：per-task active gauge implementation `c1ebf81f3d7188c02be089cf25e1d77b82fe381b`；tests `fcebb7a0d7faa71ecf274e126d054fed29786ef0`；session/global underflow guard `d9e565a118238c4f88323d92aefb75fe21cfeba5`；interleaved task test `99dd6aa4e24d1489358e33066afd04ca67ddbc1a`。
+- CI：包含 multi-task allocator 的 `e4cb3e1d...` 两项 CI success（GNSS Runtime `45935576758`、ROS 2 Package `45935576836`）；加入 interleaved test 的 `99dd6aa4...` 两项 CI success（GNSS Runtime `45935661228`、ROS 2 Package `45935661186`）。最新 per-task gauge 修订 `d9e565a1...` 的两项 CI 仍在运行，待最终结论。
+- 下一步：最新 CI 通过后，继续审查 session allocator counter deltas 与 producer simulator per-CPU sequence/reserve/submit counters 的合并报告；之后才进入真正 BPF C 编译/Verifier 授权 Gate。仅 nav 分支，不合并 main。
