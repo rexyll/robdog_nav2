@@ -27,7 +27,7 @@
 | E0 能力 | kernel release、available_events、format、BTF、权限 | 目标机存在候选观测入口 | 程序可加载或事件不会丢失 |
 | E1 调用尝试 | syscall entry | 某线程发起了某类 syscall | 请求被内核接受或时钟已改变 |
 | E2 请求内容 | 成功读取并按目标 ABI 解码的 modes/clockid/时间参数 | 请求的操作类别与参数 | 内核实际执行成功 |
-| E3 syscall 结果 | 配对 exit 与 return value | 请求成功返回或以 errno 失败 | 系统时钟/PHC 的实际偏移变化量 |
+| E3 syscall 返回观察 | 配对 exit 与原始 return value | handler 返回非负状态或负 errno 的观测 | 单凭负值（尤其 -EFAULT）不能证明副作用没有发生 |
 | E4 目标解析 | 明确识别 CLOCK_REALTIME，或经过 fd 生命周期追踪确认 PHC 设备 | 请求目标的 clock domain / PHC 设备 | 仅凭 dynamic clockid 数值推断 /dev/ptpN |
 | E5 独立效果 | 独立 clock sample、PHC/系统时钟观测及其误差/时间域说明 | 观测窗口内的时钟变化 | 单凭 syscall 成功断言整个同步链路正确 |
 
@@ -41,7 +41,7 @@
 - `operation_class=unknown_due_to_unreadable_args`
 - `operation_class=unsupported_or_unclassified_mode`
 
-另外分别记录 `syscall_outcome=success|error|unpaired|unknown`、`clock_target=realtime|dynamic_clock_unresolved|other|unknown` 与 `effect_observation=not_measured|observed|inconclusive`。不得将 E1/E2/E3 当成 E5。
+另外分别记录 `syscall_outcome=nonnegative_return|negative_return_effect_ambiguous|unpaired|unknown`、`clock_target=realtime|dynamic_clock_unresolved|other|unknown` 与 `effect_observation=not_measured|observed|inconclusive`。不得将 E1/E2/E3 当成 E5。
 
 ## 3. 候选 syscall 覆盖矩阵
 
@@ -79,7 +79,7 @@ BTF/CO-RE 不能自动解决任意用户态 UAPI 结构布局：libbpf 的 `BPF_
 - offset/freq/time 等后续字段只有在独立 ABI fixture、边界测试和目标机验证完成后才允许启用；
 - 禁止根据常见 struct 布局硬编码跨架构偏移。
 
-`ADJ_SETOFFSET` 可分类为 step 请求；`ADJ_OFFSET`、`ADJ_FREQUENCY` 等分别作为相位/频率调整请求；modes 不包含调整位时可能是只读查询。对未知组合保留原始 modes 与 unknown 分类，不猜测。syscall exit 的非负返回值只表示 syscall 未以负 errno 失败；仍不能单独证明整个时钟同步效果或误差预算合格。
+syscall exit 必须保留原始返回值：非负值可能是 CLOCK_REALTIME 路径返回的 TIME_* 状态码，不一定是 0。特别地，Linux clock_adjtime/adjtimex 包装器在执行时钟处理后还会 copy_to_user；若回传失败可返回 -EFAULT，即使时钟处理可能已经执行。因此负 -EFAULT 不能证明没有副作用；所有返回值都不能单独证明独立时钟效果或误差预算合格。详见专题 43。
 
 ### 4.3 clockid 与 PHC 设备身份
 
