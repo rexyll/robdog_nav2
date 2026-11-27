@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.264
+- 文档版本：v0.3.265
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1418,3 +1418,11 @@
 - CI 日志仍有 rosdep 对 `ament_python` key 的 ERROR 提示，但构建步骤继续完成，pytest 汇总为 261 passed，job 成功；记录为非阻断环境提示，不表述为零 warning。
 - 后续文档/TaskPlan commits：Navigation 49 `82b0b02d825e151557e3445c1a11ffedfbbd3493`；Navigation README `ea3caa19653cb59304931960b3245acc176771f5`；TaskPlan v0.3.263 `55ef6e048d5fa652ce2e36166198e52e9c5d935c`。本次 CI 的代码 head 为 `d21e9960a59815353575a8523aff990ebfabd5ed`。
 - 验证边界不变：CI 只覆盖通用 Ubuntu/ROS 容器中的 Python reducer 与合成测试，不证明 live eBPF producer/consumer、真实 queue/writer 丢失统计、目标 Orin/BSP 内核 hook、instrumentation 全覆盖或 CLOCK_REALTIME/PHC 实际变化。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量补强（2026-11-27 / v0.3.265）
+
+- 复核 unified report 的跨阶段连接后发现仅分别报告 producer received 与 userspace read 计数不足以构成端到端核对；现增加强制交叉门禁：Navigation 48 的 `received_records` 必须等于 pipeline 的 `consumer_records_read`，且 pipeline boot_id 必须与 producer per-CPU snapshot 的 boot_id 集合完全一致。
+- 新增 producer→userspace read count mismatch 和 boot identity mismatch issue/gates；任何不匹配都会使统一报告为 partial。补充合成测试，构造 producer integrity 与 pipeline 各自通过、但跨层计数不一致的情况，验证统一报告仍 fail-closed。
+- 更新 Navigation 49，明确 unified report 现在有七个独立 gate（producer integrity、pipeline accounting、producer→pipeline record count、boot identity、syscall reducer、handler reducer、syscall-handler join）。
+- 补强代码提交：pipeline module `707da93178bc03e59c1e8498f51914aaa397a2aa`；pipeline tests `8f0f4fadadd1465ae797ee92befd0d03e93d8d08`；Navigation 49 `1ef7195d7d47b2fd736f8347e562f6ba89ab22d0`。本轮补强 CI 待最终 head 运行后回填。
