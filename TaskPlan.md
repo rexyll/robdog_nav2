@@ -1908,3 +1908,11 @@
 - 当前结论：Ubuntu Archive InRelease 签名通过；Sources.xz 哈希通过；精确 source package 名称/版本/目录已确认；orig/diff 内容哈希与签名索引一致。结合此前 .dsc 的 uploader-key gpgv Good signature，来源链已大幅闭合；但本地 .dsc 文件哈希与 Sources 记录的最终逐字比对仍待完成，Launchpad uploader fingerprint/授权身份关联也仍待独立确认。
 - 用户此前第一次提取索引时，awk 提前 exit 使 xz 管道收到 SIGPIPE，在 set -euo pipefail 下导致 shell 退出；已改为先完整解压 Sources.txt 再提取记录。该退出不是归档签名或索引完整性错误。
 - 下一步：用户在源文件目录执行 sha256sum linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc，确认值是否为 04d5f9aa67ffefe76a1cf476b5c05feb51a3aeee6844eb9cd4ec1f0878eedf3f；通过后将 source archive provenance gate 标记完成。之后进入 diff 解包与 BPF 相关 Ubuntu patch hunk 静态审计，并单独取回/验证 linux-signed-hwe-7.0 7.0.0-44 source package。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
+
+
+## 本轮 Ubuntu source descriptor 哈希与签名索引最终闭合（2026-11-27 / v0.3.314）
+
+- 用户在 VM 对本地文件 linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc 执行 sha256sum，结果 04d5f9aa67ffefe76a1cf476b5c05feb51a3aeee6844eb9cd4ec1f0878eedf3f，和已通过 Ubuntu Archive InRelease 签名保护的 noble-security Sources.xz 中 linux-hwe-7.0 / 7.0.0-44.44~24.04.1 source record 完全一致（6480 bytes）。
+- 因此当前 linux-hwe-7.0 source package provenance 证据链闭合：Ubuntu Archive InRelease 验签 Good signature；Sources.xz 与 InRelease 中 SHA256 一致；Sources record 精确确认 source package/version/directory 与三项文件哈希；本地 .dsc 哈希与 Sources record 一致；此前 .dsc uploader key gpgv Good signature；orig tarball 和 diff 的实际 SHA256 与 Sources record 及 .dsc 内部声明一致。
+- 信任边界仍需如实保留：uploader 公钥 UID/邮箱与 Launchpad profile 授权身份的独立关联尚未核实；但 Ubuntu Archive 的签名 InRelease→Sources 索引链已独立确认归档中的 .dsc 和源文件哈希。不能把未核实的 Launchpad 身份关联写成已完成。
+- 进入下一阶段：对已验证的 6,551,438-byte Debian diff 执行只读解包/静态定位，先列出所有 BPF 相关 patch 文件和上下文，再逐个审查 Task Storage map/helper、CAP_BPF/token、CAP_PERFMON、GPL-only helper、task-exit cleanup 的 Ubuntu 变更。不得只凭 grep 命中直接下结论；需回到完整 patch hunk 与 upstream source context。并行准备 linux-signed-hwe-7.0 7.0.0-44 source package 的独立签名/哈希验证。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
