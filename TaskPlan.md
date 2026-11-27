@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.268
+- 文档版本：v0.3.269
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1454,3 +1454,12 @@
 - 测试日志仍报告 rosdep `ament_python` key unresolved ERROR，但后续构建和 pytest 全部成功；这是已知非阻断环境提示，不能宣称无 warning。
 - 代码提交：event envelope/lifecycle validator `4a0d4b83dd13cb753b085f182799faa67c92e15a`；validator tests `f1c2472ba72442add4fa0e29822f97df52a61cc0`；unified report lifecycle gate `5b8c450e96997e358cb13022a3a1ce37934253eb`；lifecycle gate tests `e58e3843e6c4bd21cfe498a9537b214e231d952d`。Navigation 50 文档 `acecec3dce0628ab3e0f57afa5d54e0ffe07c3e3`；README `675b215ef387032f3cfc7564cb2335e09eb05cfd`；本 TaskPlan 回填 commit 另计。
 - CI 只证明 Ubuntu/ROS Humble+Jazzy 中 295 项 Python 测试和 ROS package CI 通过；没有证明 live collector、真实 ring buffer、writer durability、目标 Orin/BSP/BTF 或 E5 时钟效果。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.269）
+
+- 复用现有只读内核能力盘点模块 `linux_kernel_trace_capabilities.py`（已有配置、BTF 文件可读性、tracefs mount、syscall tracepoint available_events/format/enable-state 盘点），补充读取 tracefs `available_filter_functions`，分别观察 Navigation 46 中 `do_clock_adjtime` 与 `do_adjtimex` 是否出现在 function-tracing inventory。
+- 新增状态区分：listed / not_listed / unknown；tracefs inventory 不可读时不把 unknown 误报为 symbol absent。明确 available_filter_functions 可见性不证明 BTF FUNC 存在、fentry/fexit verifier 可接受、kprobe 注册成功、符号稳定性或 BPF 权限可用。
+- 不执行 mount、write、trace event enable、kprobe_events 修改、BPF load/attach、audit/perf session，也不修改时钟。目标 Orin/BSP 仍需独立采集实际 kernel release/config/BTF/symbol report。
+- 新增两项合成测试覆盖 handler symbol listed 与 inventory unavailable；新增 Navigation 51 文档并更新 Navigation README。代码提交：capability probe `dd3c15414ddb20e40d0ae812b332710ea6bc6602`；测试 `e31679af34b80523a34d11955697772cebcd91f6`；Navigation 51 `e6bbaea6c9fe511e8d9c01520182174a319fa8b3`；README `3d8a9718c87291e93c79b26c52114fe2479253ea`。
+- 本轮测试 CI 尚待最终 head 结果回填。即使合成 CI 通过，也只证明 parser/fixture behavior，不代表真实内核符号、BTF 函数类型或 attachability。N1/N9 未验收，仅 nav 分支推进，不合并 main。
