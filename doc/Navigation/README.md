@@ -300,3 +300,4 @@
 - [41 — LinuxPTP PHC / host clock evidence contract](41_linuxptp_phc_host_clock_evidence_contract.md)
 - [42 — Linux CLOCK_REALTIME / PHC adjustment event capture contract](42_linux_clock_step_event_capture_contract.md)
 - [43 — phc2sys clockadj source-to-syscall mapping](43_phc2sys_clockadj_source_to_syscall_mapping.md)
+- [44 — Linux clock adjustment event envelope and userspace reducer](44_linux_clock_adjustment_event_reducer_contract.md)
