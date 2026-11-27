@@ -230,9 +230,13 @@ def correlate_clock_adjustment_invocation_observations(syscall_report, handler_r
             "handler_invocation_id": handler["invocation_id"],
             "syscall": syscall["name"],
             "handler": handler["name"],
-            "relation": ("syscall_dispatch_handler"
-                         if handler["name"] == _TOP_LEVEL_HANDLER_BY_SYSCALL[syscall["name"]]
-                         else "nested_clock_callback_handler"),
+            "relation": (
+                "direct_syscall_handler"
+                if syscall["name"] in ("adjtimex", "adjtimex_time32")
+                else ("syscall_dispatch_handler"
+                      if handler["name"] == "do_clock_adjtime"
+                      else "nested_clock_callback_handler")
+            ),
             "identity_join": "exact_parent_syscall_invocation_id",
             "clock_effect": "not_measured",
         })
