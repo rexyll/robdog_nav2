@@ -183,6 +183,12 @@ def build_clock_adjustment_capture_report(
         "syscall_handler_join": joined.get("reduction_status") == "consistent",
         "capture_lifecycle": lifecycle.get("lifecycle_status") == "complete",
     }
+    producer_runtime = producer.get("global_runtime")
+    if producer_runtime is not None:
+        gates["producer_runtime_counters"] = (
+            producer_runtime.get("runtime_status") == "consistent"
+        )
+
     if invocation_mode == "schema_v2_required":
         gates["syscall_invocation_reduction"] = (
             syscall_invocations.get("reduction_status") == "consistent"
@@ -206,6 +212,7 @@ def build_clock_adjustment_capture_report(
         "capture_report_status": "consistent" if all(gates.values()) else "partial",
         "gates": gates,
         "producer_integrity": producer,
+        "producer_runtime_counters": producer_runtime,
         "userspace_pipeline": pipeline,
         "syscall_reduction": syscall,
         "handler_reduction": handler,
