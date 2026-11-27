@@ -158,13 +158,19 @@ def test_unified_report_requires_lifecycle_gate():
 
 def invocation_event(kind, event_type, event_id, invocation_id, timestamp,
                      sequence, parent_id=None):
-    payload = {
-        "event_type": event_type,
-        "pid_tgid": 4294967297,
-        "syscall": "clock_adjtime" if kind == "syscall" else None,
-        "handler": "do_clock_adjtime" if kind == "kernel_handler" else None,
-    }
-    payload = {key: value for key, value in payload.items() if value is not None}
+    payload = {"event_type": event_type, "pid_tgid": 4294967297}
+    if kind == "syscall":
+        payload["syscall"] = "clock_adjtime"
+        if event_type == "syscall_enter":
+            payload["modes_read_status"] = "not_requested"
+        else:
+            payload["return_value"] = 0
+    else:
+        payload["handler"] = "do_clock_adjtime"
+        if event_type == "kernel_handler_enter":
+            payload.update({"raw_modes": 0, "raw_clockid": 0})
+        else:
+            payload["return_value"] = 0
     record = {
         "schema_version": 2,
         "capture_session_id": "capture-1",
