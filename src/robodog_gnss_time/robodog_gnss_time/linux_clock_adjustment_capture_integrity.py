@@ -155,9 +155,15 @@ def audit_clock_adjustment_producer_runtime_counters(initial, final):
     gauges_before, gauges_after = initial.get("gauges"), final.get("gauges")
     if not isinstance(gauges_before, dict) or not isinstance(gauges_after, dict):
         issues.append({"code": "invalid_global_runtime_gauges"})
-        gauges_after = {}
+        gauges_before, gauges_after = {}, {}
     final_gauges = {}
     for name in _GLOBAL_GAUGES:
+        start_value = gauges_before.get(name)
+        if not _uint(start_value):
+            issues.append({"code": "invalid_initial_global_runtime_gauge", "gauge": name})
+        elif start_value != 0:
+            issues.append({"code": "initial_global_runtime_work_not_quiescent",
+                           "gauge": name, "value": start_value})
         value = gauges_after.get(name)
         if not _uint(value):
             issues.append({"code": "invalid_global_runtime_gauge", "gauge": name})
