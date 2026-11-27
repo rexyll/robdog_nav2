@@ -7,7 +7,10 @@ from typing import Any
 from .linux_clock_adjustment_capture_integrity import audit_clock_adjustment_capture_integrity
 from .linux_clock_adjustment_events import reduce_clock_adjustment_events
 from .linux_clock_adjustment_kernel_observations import reduce_kernel_clock_adjustment_observations
-from .linux_clock_adjustment_joiner import (\n    correlate_clock_adjustment_observations,\n    correlate_clock_adjustment_invocation_observations,\n)
+from .linux_clock_adjustment_joiner import (
+    correlate_clock_adjustment_observations,
+    correlate_clock_adjustment_invocation_observations,
+)
 from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
 from .linux_clock_adjustment_invocation_reducer import reduce_clock_adjustment_invocation_events
 
