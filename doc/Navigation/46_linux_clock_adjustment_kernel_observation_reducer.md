@@ -44,7 +44,7 @@ The active invocation stack is keyed by `(boot_id, pid_tgid, handler)`. This pre
 
 This is not a call-stack proof. Without a producer-side invocation cookie, a lost inner exit can make a later exit appear to match the most recent pending entry. The remaining outer entry will be reported as unmatched, but LIFO pairing cannot independently detect every missing nested event. A future capture producer should emit a stable per-invocation cookie or nesting depth where safely possible. Orphan returns, unmatched entries, per-CPU sequence gaps/regressions/duplicates, timestamp inversion, malformed records and capacity overflow remain explicit issues. Default pending capacity is 4096 active invocations, not 4096 distinct task/handler keys.
 
-This reducer expects the handler-observation stream to be supplied in its own sequence domain. Do not feed it a filtered subset of a global per-CPU sequence and then interpret the resulting gaps as loss; the producer must define a dedicated sequence or provide the complete stream to a future unified reducer.
+The reducer output is schema version 2 because pairing semantics are now explicit. The legacy `duplicate_handler_entries` counter remains present for compatibility but is no longer used to classify repeated entries; `nested_handler_entries` records accepted repeated entries. The `max_pending` bound applies to active invocations. This reducer expects the handler-observation stream to be supplied in its own sequence domain. Do not feed it a filtered subset of a global per-CPU sequence and then interpret the resulting gaps as loss; the producer must define a dedicated sequence or provide the complete stream to a future unified reducer.
 
 ## 4. Return interpretation
 
