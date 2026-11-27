@@ -189,7 +189,18 @@ def test_end_to_end_synthetic_capture_all_report_gates_consistent():
         handler_envelopes=handler_envelopes,
     )
 
-    assert report["capture_report_status"] == "consistent"
+    assert report["capture_report_status"] == "consistent", {
+        "gates": report["gates"],
+        "issues": report["issues"],
+        "producer_issues": report["producer_integrity"]["issues"],
+        "runtime_issues": report["producer_runtime_counters"]["issues"],
+        "pipeline_issues": report["userspace_pipeline"]["issues"],
+        "syscall_issues": report["syscall_reduction"]["issues"],
+        "handler_issues": report["handler_reduction"]["issues"],
+        "join_issues": report["syscall_handler_join"]["issues"],
+        "invocation_join_issues": report["invocation_parent_join"]["issues"],
+        "lifecycle_issues": report["capture_lifecycle"]["issues"],
+    }
     assert all(report["gates"].values())
     assert report["producer_runtime_counters"]["runtime_status"] == "consistent"
     assert report["producer_integrity"]["integrity_status"] == "complete"
