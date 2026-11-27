@@ -180,18 +180,9 @@ def build_clock_adjustment_capture_report(
         gates["handler_invocation_reduction"] = (
             handler_invocations.get("reduction_status") == "consistent"
         )
-        if not gates["syscall_invocation_reduction"]:
-            issues.append({"code": "capture_report_gate_not_passed",
-                           "gate": "syscall_invocation_reduction"})
-        if not gates["handler_invocation_reduction"]:
-            issues.append({"code": "capture_report_gate_not_passed",
-                           "gate": "handler_invocation_reduction"})
         gates["invocation_parent_join"] = (
             invocation_join.get("reduction_status") == "consistent"
         )
-        if not gates["invocation_parent_join"]:
-            issues.append({"code": "capture_report_gate_not_passed",
-                           "gate": "invocation_parent_join"})
 
     for name, passed in gates.items():
         if not passed:
@@ -210,6 +201,7 @@ def build_clock_adjustment_capture_report(
         "invocation_identity_mode": invocation_mode,
         "syscall_invocation_reduction": syscall_invocations,
         "handler_invocation_reduction": handler_invocations,
+        "invocation_parent_join": invocation_join,
         "issues": issues,
         "interpretation": (
             "A consistent report means all supplied offline reducer gates passed. "
