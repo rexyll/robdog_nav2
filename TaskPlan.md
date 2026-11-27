@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.267
+- 文档版本：v0.3.268
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1445,3 +1445,12 @@
 - 将 lifecycle audit 接入 unified offline capture report，作为第八个必需 gate；缺少 lifecycle transitions/final snapshot 时报告必须 partial。现有七个 producer/pipeline/count/boot/syscall/handler/join gates 保持独立。
 - 新增 Navigation 50 文档、README 索引和合成测试，覆盖 envelope 类型/版本、伪造 payload 字段、stream-kind mismatch、恶意 unhashable 输入、lifecycle 顺序/身份/单调时间和最终 quiescence。
 - 本轮仍为纯 Python 合同验证与离线 reducer；没有实现 live eBPF/tracepoint/fentry、ring-buffer consumer、worker queue、writer 或 session orchestration；没有运行内核 hook 或修改时钟。通用 Linux VM 的 live capture 验证仍待后续阶段；Orin/BSP/BTF 和 E5 时钟效果仍为硬件/目标环境 Gate。仅在 nav 分支推进，N1/N9 未验收，不合并 main。
+
+
+## 本轮 CI 验证回填（2026-11-27 / v0.3.268）
+
+- Capture envelope/lifecycle validator 最终测试 head `e58e3843e6c4bd21cfe498a9537b214e231d952d)：GNSS receiver-time ROS runtime CI run `45923174772` success；Humble/Jammy 与 Jazzy/Noble 各 **295/295 passed，0 errors/failures/skipped**。
+- ROS 2 package CI run `45923174763`：Humble/Jammy、Jazzy/Noble 两个 job 均 success。
+- 测试日志仍报告 rosdep `ament_python` key unresolved ERROR，但后续构建和 pytest 全部成功；这是已知非阻断环境提示，不能宣称无 warning。
+- 代码提交：event envelope/lifecycle validator `4a0d4b83dd13cb753b085f182799faa67c92e15a`；validator tests `f1c2472ba72442add4fa0e29822f97df52a61cc0`；unified report lifecycle gate `5b8c450e96997e358cb13022a3a1ce37934253eb`；lifecycle gate tests `e58e3843e6c4bd21cfe498a9537b214e231d952d`。Navigation 50 文档 `acecec3dce0628ab3e0f57afa5d54e0ffe07c3e3`；README `675b215ef387032f3cfc7564cb2335e09eb05cfd`；本 TaskPlan 回填 commit 另计。
+- CI 只证明 Ubuntu/ROS Humble+Jazzy 中 295 项 Python 测试和 ROS package CI 通过；没有证明 live collector、真实 ring buffer、writer durability、目标 Orin/BSP/BTF 或 E5 时钟效果。N1/N9 未验收，仅 nav 分支推进，不合并 main。
