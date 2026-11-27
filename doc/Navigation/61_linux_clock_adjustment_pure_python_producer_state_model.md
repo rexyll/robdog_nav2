@@ -12,7 +12,7 @@ It does not model kernel scheduling, BPF verifier constraints, helper availabili
 
 ## 2. Modeled behavior
 
-- One task lifetime with a stable task_instance_id and per-task invocation sequence.
+- One-task transition model plus a session-wide allocator model for multiple task lifetimes, with stable task_instance_id and per-task invocation sequence.
 - A fixed-depth syscall stack and independent fixed-depth handler stack.
 - Separate overflow-depth counters so an overflowed nested call cannot pop/overwrite an outer tracked frame.
 - Handler parent identity copied from the exact top syscall frame at handler entry.
@@ -35,12 +35,15 @@ The reference model was added in `linux_clock_adjustment_producer_state.py`. Tes
 8. Task exit with pending invocation accounting.
 9. Cross-stream event-ID uniqueness.
 10. Refusal to detach with active invocations and refusal of duplicate task exit.
+11. Two-task interleaving with globally unique event IDs and task-scoped invocation IDs.
+12. Task-context capacity rejection, create failure, task-ID allocation failure, CAS contention and 64-bit exhaustion.
+13. Global snapshot reconciliation through the producer runtime counter auditor, including live idle Task Storage at detach.
 
 The model's emitted envelopes are also fed into the real schema-v2 invocation reducers and exact parent-ID joiner, so this is a cross-layer synthetic contract test rather than an isolated mock.
 
 ## 4. Remaining gaps
 
-- Multi-task scheduling and task-context capacity admission/rejection are not modeled.
+- Full multi-task scheduling and concurrent BPF execution are not modeled; the session allocator models interleaved task identities and capacity accounting only.
 - Global allocator contention/CMPXCHG retries and integer exhaustion are represented only by injected success/failure flags.
 - BPF callback in-flight concurrency and ring-buffer queue/drain races are not modeled.
 - Task exit hook ordering relative to `free_task()` is not executed.
