@@ -110,6 +110,7 @@ def test_unified_report_keeps_independent_gates_and_fails_closed():
         "producer_integrity", "userspace_pipeline",
         "producer_to_pipeline_record_count", "producer_pipeline_boot_identity",
         "syscall_reduction", "handler_reduction", "syscall_handler_join",
+        "capture_lifecycle",
     }
 
 
@@ -142,3 +143,14 @@ def test_unified_report_cross_checks_producer_receive_count_and_boot_identity():
     assert "producer_received_vs_pipeline_read_mismatch" in [
         item["code"] for item in report["issues"]
     ]
+
+
+
+def test_unified_report_requires_lifecycle_gate():
+    report = build_clock_adjustment_capture_report(
+        [], [], [], {"per_cpu": []}, {"per_cpu": []}, {},
+        snapshot(), snapshot(), None,
+    )
+    assert report["gates"]["capture_lifecycle"] is False
+    assert report["capture_lifecycle"]["lifecycle_status"] == "partial"
+    assert report["capture_report_status"] == "partial"
