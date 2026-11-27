@@ -162,6 +162,9 @@ def audit_clock_adjustment_producer_runtime_counters(initial, final):
         if deltas["task_context_init_attempts"] != deltas["task_instance_id_allocation_attempts"]:
             issues.append({"code": "global_runtime_counter_equation_mismatch",
                            "equation": "task_context_init_to_task_id_allocation"})
+        if deltas["task_context_init_successes"] != deltas["task_instance_id_allocation_successes"]:
+            issues.append({"code": "global_runtime_counter_equation_mismatch",
+                           "equation": "task_context_init_success_to_task_id_allocation"})
 
     gauges_before, gauges_after = initial.get("gauges"), final.get("gauges")
     if not isinstance(gauges_before, dict) or not isinstance(gauges_after, dict):
