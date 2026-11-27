@@ -64,7 +64,7 @@
 
 优先评估目标机已列出的 `syscalls:sys_enter_*` / `syscalls:sys_exit_*` tracepoint。加载前必须将 capability report 中的事件名、format、kernel release、machine、BTF 状态和程序构建 ABI 作为输入门禁。不能从通用 x86_64 fixture 推断 Orin ARM64 可加载。
 
-每条 entry 生成内部关联键 `pid_tgid`（TGID 与 TID 组合），而不是只用 PID；在有界 in-flight map 中保存 syscall kind、entry timestamp、clockid（若有）、请求参数读取状态和最小必要字段。exit 仅与相同线程且 syscall kind 匹配的 entry 配对。线程退出、超时、重复 entry 覆盖、map 插入失败和 orphan exit 均单独计数。
+每条 entry 生成内部关联键 `pid_tgid`（TGID 与 TID 组合），而不是只用 PID；在有界 in-flight map 中保存 syscall kind、entry timestamp、clockid（若有）、请求参数读取状态和最小必要字段。exit 仅与相同线程且 syscall kind 匹配的 entry 配对。线程退出、超时、context stack 溢出、map 插入失败和 orphan exit 均单独计数。相同线程的嵌套同名 syscall 必须保留外层上下文；不得将第二次 entry 当作覆盖。正式 producer 应为每次 syscall 分配 invocation ID，并在 exit 原样回传；内部 handler 还应携带 parent syscall invocation ID。具体字段与生命周期见 Navigation 57。
 
 不保存或输出原始用户指针。指针仅在 syscall entry 的本次 BPF 程序调用内用于安全读取，随后丢弃。
 
@@ -98,7 +98,7 @@ BPF 事件使用 `bpf_ktime_get_ns()` 记录 boot-relative monotonic 时间。�
 - 事件时间戳不使用 CLOCK_REALTIME，因为本采集器正要观测 CLOCK_REALTIME 可能发生的跳变。
 - 用户态启动/停止时可采集 CLOCK_MONOTONIC 与 CLOCK_REALTIME 配对样本，但它们是有采集区间的关联观测，不是原子映射；不得用简单插值制造高精度 UTC traceability。
 - suspend/resume 会影响 monotonic 与 boottime 的关系；若采集窗口跨 suspend，必须显式标记窗口不可直接连续比较，或额外采集 CLOCK_BOOTTIME 作为独立时间域。
-- 跨 CPU 事件的严格全序不能只依赖时间戳。优先使用每 CPU 序号、线程内 entry/exit 关联和原始时间戳；不宣称存在未经证明的全局总序。
+- 跨 CPU 事件的严格全序不能只依赖时间戳或 per-CPU 序号。每 CPU 序号只检测本 CPU stream gap；线程迁移时必须使用 producer-side syscall/handler invocation ID 与 parent ID 配对。时间戳用于 duration/sanity check，不作为身份键。详见 Navigation 57。
 
 ## 5. 事件完整性与丢失计量
 
@@ -113,7 +113,7 @@ BPF 事件使用 `bpf_ktime_get_ns()` 记录 boot-relative monotonic 时间。�
 | entry_pair_created | 成功建立 in-flight 关联 |
 | exit_pair_completed | 成功配对的 exit 数 |
 | orphan_exit | 没有匹配 entry 的 exit |
-| inflight_overwrite | 同线程已有未完成 entry 被覆盖 |
+| syscall_context_stack_overflow | 嵌套上下文栈达到固定深度，未覆盖外层项 |
 | inflight_map_update_failed | map 容量/更新失败 |
 | timex_user_read_failed | timex 用户内存读取失败 |
 | timespec_user_read_failed | timespec 用户内存读取失败 |
@@ -182,6 +182,8 @@ BPF 事件使用 `bpf_ktime_get_ns()` 记录 boot-relative monotonic 时间。�
 - 合成测试、x86 CI、VM 测试均不能替代目标 Orin 实机验证。
 
 ## 8. 实施 Gate 与当前结论
+
+Producer-side invocation identity、task lifetime discriminator、parent syscall context 与跨 CPU ordering 设计见 [57 — invocation identity and ordering contract](57_linux_clock_adjustment_invocation_identity_and_ordering.md)。当前 schema-v2 reducers 的 LIFO 只用于无 cookie 的合成/旧数据，不可作为最终生产采集身份方案。
 
 当前只完成 capability inventory 和本设计合同，尚未实现 BPF 程序、loader、consumer、ABI decoder、loss accounting 或 clock effect correlator。
 
