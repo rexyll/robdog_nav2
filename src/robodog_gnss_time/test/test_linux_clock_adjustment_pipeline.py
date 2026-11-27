@@ -236,3 +236,26 @@ def test_unified_report_invocation_gate_fails_on_parent_mismatch():
     assert report["gates"]["handler_invocation_reduction"] is True
     assert report["gates"]["invocation_parent_join"] is False
     assert report["capture_report_status"] == "partial"
+
+
+def test_unified_report_rejects_cross_stream_event_id_collision():
+    syscalls = [
+        invocation_event("syscall", "syscall_enter", "shared", "sys-1", 100, 1),
+        invocation_event("syscall", "syscall_exit", "s-exit", "sys-1", 400, 2),
+    ]
+    handlers = [
+        invocation_event("kernel_handler", "kernel_handler_enter", "shared",
+                         "handler-1", 150, 1, "sys-1"),
+        invocation_event("kernel_handler", "kernel_handler_exit", "h-exit",
+                         "handler-1", 350, 2, "sys-1"),
+    ]
+    report = build_clock_adjustment_capture_report(
+        [], [], [], {"per_cpu": []}, {"per_cpu": []}, {},
+        snapshot(), snapshot(), None,
+        syscall_envelopes=syscalls, handler_envelopes=handlers,
+    )
+    assert report["gates"]["syscall_invocation_reduction"] is True
+    assert report["gates"]["handler_invocation_reduction"] is True
+    assert report["gates"]["invocation_parent_join"] is True
+    assert report["gates"]["event_id_uniqueness"] is False
+    assert report["capture_report_status"] == "partial"
