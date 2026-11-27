@@ -194,6 +194,6 @@ def test_end_to_end_synthetic_capture_all_report_gates_consistent():
     assert report["producer_runtime_counters"]["runtime_status"] == "consistent"
     assert report["producer_integrity"]["integrity_status"] == "complete"
     assert report["producer_integrity"]["counts"]["received_records"] == len(records)
-    assert report["producer_loss_free"] if "producer_loss_free" in report else True
+    assert report["gates"]["producer_loss_free"] is True
     assert report["invocation_parent_join"]["counts"]["joined_pairs"] == 1
     assert report["event_id_uniqueness"]["audit_status"] == "consistent"
