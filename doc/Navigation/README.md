@@ -311,3 +311,7 @@
 - [49 — Linux clock-adjustment userspace pipeline accounting and unified offline report](49_linux_clock_adjustment_userspace_pipeline_and_unified_report.md)
 - [Userspace pipeline auditor and unified report reducer](../../src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_pipeline.py)
 - [Userspace pipeline auditor tests](../../src/robodog_gnss_time/test/test_linux_clock_adjustment_pipeline.py)
+
+- [50 — Linux clock-adjustment capture session and event envelope](50_linux_clock_adjustment_capture_session_and_event_envelope.md)
+- [Capture event-envelope and lifecycle validator](../../src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_session.py)
+- [Capture event-envelope and lifecycle tests](../../src/robodog_gnss_time/test/test_linux_clock_adjustment_session.py)
