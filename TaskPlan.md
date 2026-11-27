@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.303
+- 文档版本：v0.3.304
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1804,3 +1804,13 @@
 - ClockAdjustmentProducerSessionAllocator 的 ID/capacity/runtime snapshot tests 与 single-task nested stack model tests 均通过；这仍是 Python reference model，不是 BPF implementation。
 - Navigation 62 已完成 verifier-oriented code-level review；不指定 attach section，因为当前 tracefs event inventory、function symbol availability、helper authorization 和 verifier acceptance 仍未验证。
 - 当前 nav TaskPlan 版本 v0.3.303；main 未修改。下一步：把 session allocator 的 global counters 与 single-task state model 的 per-CPU sequence/reserve/submit snapshots 合并为一个 end-to-end synthetic capture fixture；检查统一报告的 producer_loss_free 与 producer_runtime_counters gate 交互。之后再进入 BPF C compile/verifier 授权 Gate。仅 nav 分支，不合并 main。
+
+
+## 本轮 end-to-end fixture 与 BPF privilege-source correction（2026-11-27 / v0.3.304）
+
+- 新增 end-to-end synthetic capture fixture：两个 task 的独立 syscall/handler traces 被合并到同一 session；重分配全局 event IDs、task-scoped invocation IDs 和共享 per-CPU sequence；再接入真实 producer integrity、global runtime audit、userspace pipeline、lifecycle、legacy reducers、schema-v2 reducers、exact parent-ID join 与 event-ID uniqueness。目标是所有适用 gate 一起通过。
+- 发现 end-to-end fixture 的 legacy joiner 要求每个 syscall pair 都有对应 handler observation；fixture 最初只为 clock_adjtime 提供 do_clock_adjtime，adjtimex 缺少直接 do_adjtimex。已补齐 direct handler；另一个已有 multi-task fixture把 stream_kind kernel_handler 直接传给 session allocator（allocator 期望 handler）导致 ValueError，已统一映射修复。最新测试 CI 待最终结论。
+- 对 Navigation 62 做了 source-level privilege/license correction：upstream v7.0 中 bpf_get_current_task_btf 是 GPL-only；bpf_task_storage_get 本身不是 GPL-only；BPF_MAP_TYPE_TASK_STORAGE map creation 需要 CAP_BPF/token；TRACEPOINT/KPROBE/TRACING program load 属 perfmon class，另需 CAP_PERFMON。当前 VM CapEff=0 且 unprivileged_bpf_disabled=2，未授权的普通用户上下文不能据此直接执行 map create/program load。BPF token 可能按 commands/maps/program types/attach types 委托权限，但当前 VM 报告没有证明存在 token。
+- 以上为 upstream v7.0 源码条件；Ubuntu 7.0.0-44-generic 精确 source package/patchset 仍需核对，不能把 upstream 结论冒充目标内核已验证。修订 Navigation 62 提交 333089c45cfd2ed495d77748c2e025a3589a7e60。
+- 最新代码修复提交 4f35ce8d1bbe9e12ea58e4d7e8dc6b8c040eb62b；此前 end-to-end 运行失败已定位为 legacy syscall-handler join missing direct handler 与 multi-task fixture stream kind 参数不一致，未发现 producer integrity/global runtime/pipeline/lifecycle/strict invocation gate 的失败证据。等待 4f35 的 GNSS Runtime 与 ROS 2 Package CI 最终 conclusion。
+- 下一步：先验收 4f35 CI；如通过，将 end-to-end fixture 状态记录为通过。随后审查 BPF Task Storage map/helper source against exact Ubuntu source package metadata，再决定是否向用户请求管理员授权进行最小只读 load probe。仅 nav 分支，不合并 main。
