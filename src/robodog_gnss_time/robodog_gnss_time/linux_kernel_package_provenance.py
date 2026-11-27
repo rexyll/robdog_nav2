@@ -117,13 +117,18 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         if row.get("binary_package_role") in {"signed_image", "kernel_image_unsigned"}
     }
     image_owner_observed = bool(installed_image_packages.intersection(owner_packages))
-    status = (
-        "observed"
-        if image_owner_observed and len(kernel_source_identities) == 1
-        else "partial"
-    )
+    issues = []
+    if not installed:
+        issues.append({"code": "no_installed_kernel_binary_packages"})
+    if not image_owner_observed:
+        issues.append({"code": "installed_kernel_image_owner_not_observed"})
+    if not kernel_source_identities:
+        issues.append({"code": "kernel_source_package_identity_unavailable"})
+    elif len(kernel_source_identities) > 1:
+        issues.append({"code": "multiple_kernel_source_package_identities"})
     if len(signed_image_source_identities) > 1:
-        status = "partial"
+        issues.append({"code": "multiple_signed_image_source_package_identities"})
+    status = "observed" if not issues else "partial"
     return {
         "schema_version": 1,
         "collection_mode": "live_host_read_only",
