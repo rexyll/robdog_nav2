@@ -9,6 +9,7 @@ from .linux_clock_adjustment_events import reduce_clock_adjustment_events
 from .linux_clock_adjustment_kernel_observations import reduce_kernel_clock_adjustment_observations
 from .linux_clock_adjustment_joiner import correlate_clock_adjustment_observations
 from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
+from .linux_clock_adjustment_invocation_reducer import reduce_clock_adjustment_invocation_events
 
 _COUNTERS = (
     "consumer_records_read", "decode_successes", "decode_failures",
@@ -95,6 +96,7 @@ def build_clock_adjustment_capture_report(
     producer_initial_snapshot, producer_final_snapshot, drain_snapshot,
     pipeline_initial_snapshot, pipeline_final_snapshot,
     wrapper_contract_id=None, lifecycle_transitions=None, lifecycle_final_snapshot=None,
+    syscall_envelopes=None, handler_envelopes=None,
 ):
     """Compose all offline reducers and preserve their independent status gates."""
     producer = audit_clock_adjustment_capture_integrity(
@@ -110,6 +112,29 @@ def build_clock_adjustment_capture_report(
         lifecycle_transitions if lifecycle_transitions is not None else [],
         lifecycle_final_snapshot if lifecycle_final_snapshot is not None else {},
     )
+
+    invocation_mode = "not_supplied"
+    syscall_invocations = handler_invocations = None
+    if syscall_envelopes is not None or handler_envelopes is not None:
+        invocation_mode = "schema_v2_required"
+        if not isinstance(syscall_envelopes, list) or not isinstance(handler_envelopes, list):
+            syscall_invocations = {
+                "reduction_status": "partial",
+                "issues": [{"code": "both_invocation_streams_must_be_lists"}],
+                "pairs": [],
+            }
+            handler_invocations = {
+                "reduction_status": "partial",
+                "issues": [{"code": "both_invocation_streams_must_be_lists"}],
+                "pairs": [],
+            }
+        else:
+            syscall_invocations = reduce_clock_adjustment_invocation_events(
+                syscall_envelopes, "syscall"
+            )
+            handler_invocations = reduce_clock_adjustment_invocation_events(
+                handler_envelopes, "kernel_handler"
+            )
 
     issues = []
     producer_received = producer.get("counts", {}).get("received_records")
@@ -142,6 +167,20 @@ def build_clock_adjustment_capture_report(
         "syscall_handler_join": joined.get("reduction_status") == "consistent",
         "capture_lifecycle": lifecycle.get("lifecycle_status") == "complete",
     }
+    if invocation_mode == "schema_v2_required":
+        gates["syscall_invocation_reduction"] = (
+            syscall_invocations.get("reduction_status") == "consistent"
+        )
+        gates["handler_invocation_reduction"] = (
+            handler_invocations.get("reduction_status") == "consistent"
+        )
+        if not gates["syscall_invocation_reduction"]:
+            issues.append({"code": "capture_report_gate_not_passed",
+                           "gate": "syscall_invocation_reduction"})
+        if not gates["handler_invocation_reduction"]:
+            issues.append({"code": "capture_report_gate_not_passed",
+                           "gate": "handler_invocation_reduction"})
+
     for name, passed in gates.items():
         if not passed:
             issues.append({"code": "capture_report_gate_not_passed", "gate": name})
@@ -156,6 +195,9 @@ def build_clock_adjustment_capture_report(
         "handler_reduction": handler,
         "syscall_handler_join": joined,
         "capture_lifecycle": lifecycle,
+        "invocation_identity_mode": invocation_mode,
+        "syscall_invocation_reduction": syscall_invocations,
+        "handler_invocation_reduction": handler_invocations,
         "issues": issues,
         "interpretation": (
             "A consistent report means all supplied offline reducer gates passed. "
