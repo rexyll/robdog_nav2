@@ -153,6 +153,9 @@ def audit_clock_adjustment_producer_runtime_counters(initial, final):
                            "counter": name, "delta": deltas[name]})
 
     if len(deltas) == len(_GLOBAL_COUNTERS):
+        if deltas["task_context_admitted"] != deltas["task_context_create_attempts"]:
+            issues.append({"code": "global_runtime_counter_equation_mismatch",
+                           "equation": "task_context_admission_to_create"})
         if deltas["task_context_init_attempts"] != deltas["task_context_create_successes"]:
             issues.append({"code": "global_runtime_counter_equation_mismatch",
                            "equation": "task_context_create_to_init"})
