@@ -1558,3 +1558,13 @@
 - GNSS runtime CI run 45927787244：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。ROS 2 package CI run 45927787262：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。该结果证明仓库 CI 测试通过，不等于目标 VM 的真实能力报告已生成。
 - 下一步：请用户从更新后的 nav 分支同步代码后，重新运行只读命令并提交 JSON。若 tracefs 权限仍不足，预期报告正常生成且该项标记 permission_denied；不需要 sudo。之后再根据 JSON 分析 BTF、handler symbol、syscall tracepoint、BPF policy 和进程安全上下文。禁止为获得更高权限而修改系统策略或挂载 tracefs。
 - 仍未取得 live host report；没有执行 BPF load/attach，也没有执行会修改系统时钟的 syscall。Orin BSP 证据仍未完成。N1/N9 未验收，所有变更仅在 nav。
+
+
+## 本轮增量（2026-11-27 / v0.3.280）
+
+- 继续审查 Navigation 54–55 的 syscall tracepoint ABI 覆盖，发现原探测器仅枚举 `clock_adjtime` / `adjtimex` 实现名，未覆盖 Linux 32-bit legacy time ABI 的独立 syscall 实现名。
+- 依据 Linux v6.12 源码族的 x86 i386 syscall table、ARM syscall table 与 `SYSCALL_DEFINE` 实现，区分 `clock_adjtime`、`clock_adjtime32`、`adjtimex`、`adjtimex_time32` 四组实现名。i386 `clock_adjtime64` syscall-table alias 映射到 `sys_clock_adjtime`，因此其 tracepoint 实现名为 `clock_adjtime`，不是机械地新增 `clock_adjtime64`。syscall number 仅作为架构/ABI 证据，不硬编码进通用 collector。
+- capability probe 新增 `sys_enter/exit_clock_adjtime32` 与 `sys_enter/exit_adjtimex_time32` 事件检查及独立 pair status；合成测试覆盖 time32 事件 pair 可见性。更新 Navigation 56 与 GNSS package README。
+- 提交：probe `dc749fd3e20d4c6a81993bbd1082d2e994eba596`；tests `1846d94de89785e9fc8fae80bc88e66ed727890b`；Navigation 56 `863115947a8f49c0aafc91ebfdeb6b4f53f615f4`；README 提交见本轮后续提交。
+- 验证边界：本轮依据上游源码做静态 ABI/实现名审计，新增测试为 synthetic tracefs fixture；尚未取得 VM 的 live `available_events` 与 syscall ABI 报告。x86-64 VM 是否启用 IA32 emulation、实际 compat tracepoints 是否出现，必须由目标 kernel config、syscall table 与 live tracefs 共同确认；Orin/AArch64 仍需独立验证。未启用任何 tracepoint、未加载 BPF、未执行时钟调整 syscall。
+- 下一步：检查并测试 handler reducer 对 `clock_adjtime32` / `adjtimex_time32` 入口/出口事件的规范化与父子调用关系；同时等待用户从最新 nav 分支重新运行只读能力探测器并提交 JSON。N1/N9 未验收，继续仅在 nav 分支推进，不合并 main。
