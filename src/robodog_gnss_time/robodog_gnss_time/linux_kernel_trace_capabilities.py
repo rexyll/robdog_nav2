@@ -35,8 +35,12 @@ _HANDLER_SYMBOLS = ("do_clock_adjtime", "do_adjtimex")
 _SYSCALL_EVENTS = (
     "sys_enter_clock_adjtime",
     "sys_exit_clock_adjtime",
+    "sys_enter_clock_adjtime32",
+    "sys_exit_clock_adjtime32",
     "sys_enter_adjtimex",
     "sys_exit_adjtimex",
+    "sys_enter_adjtimex_time32",
+    "sys_exit_adjtimex_time32",
     "sys_enter_clock_settime",
     "sys_exit_clock_settime",
     "sys_enter_settimeofday",
@@ -202,7 +206,11 @@ def _tracefs_observation(path, mountinfo, root="/"):
             "enable_observation": enable_observation,
         }
     pairs = {}
-    for syscall_name in ("clock_adjtime", "adjtimex", "clock_settime", "settimeofday"):
+    for syscall_name in (
+        "clock_adjtime", "clock_adjtime32",
+        "adjtimex", "adjtimex_time32",
+        "clock_settime", "settimeofday",
+    ):
         entry = event_results["sys_enter_" + syscall_name]["status"]
         exit_status = event_results["sys_exit_" + syscall_name]["status"]
         if entry == "available" and exit_status == "available":
