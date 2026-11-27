@@ -356,12 +356,12 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
     ]
     for index, state in enumerate(states):
         cpu = index
-        state.syscall_enter("clock_adjtime", cpu, 100 + index * 100,
-                            raw_clockid=0)
-        state.handler_enter("do_clock_adjtime", cpu, 110 + index * 100,
+        start = 100 if index == 0 else 105
+        state.syscall_enter("clock_adjtime", cpu, start, raw_clockid=0)
+        state.handler_enter("do_clock_adjtime", cpu, start + 10,
                             raw_modes=1, raw_clockid=0)
-        state.handler_exit("do_clock_adjtime", cpu, 120 + index * 100, 0)
-        state.syscall_exit("clock_adjtime", cpu, 130 + index * 100, 0)
+        state.handler_exit("do_clock_adjtime", cpu, start + 15, 0)
+        state.syscall_exit("clock_adjtime", cpu, start + 30, 0)
 
     task_for_state = {
         id(state): task_id for state, task_id in zip(states, task_ids)
@@ -379,9 +379,9 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
         task_id = task_for_state[id(state)]
         event_type = record["payload"]["event_type"]
         kind = record["stream_kind"]
+        allocator_kind = "syscall" if kind == "syscall" else "handler"
         is_entry = event_type.endswith("_enter")
         if is_entry:
-            allocator_kind = "syscall" if kind == "syscall" else "handler"
             invocation_id = session.allocate_invocation_id(task_id, allocator_kind)
             assert invocation_id is not None
             task_invocation_ids[task_id][record["invocation_id"]] = invocation_id
@@ -389,6 +389,9 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
                 task_id, "syscall" if kind == "syscall" else "handler"
             )
         record["task_instance_id"] = task_id
+        record["payload"]["pid_tgid"] = (
+            4294967297 if task_id == task_ids[0] else 8589934594
+        )
         record["invocation_id"] = task_invocation_ids[task_id][record["invocation_id"]]
         event_id = session.allocate_event_id()
         assert event_id is not None
