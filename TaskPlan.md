@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.271
+- 文档版本：v0.3.272
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1484,3 +1484,12 @@
 - 新增两项合成测试，覆盖 policy/security 文件可读、lockdown active mode、CapEff/Seccomp 提取及文件缺失 fail-closed。代码提交：probe `45ea93204fcfc134a848dc549bd3acb800d8c755`；tests `baae42a3ef12a147e3390cc27f38472f72afc17f`；Navigation 52 `71620cf33018488570618879de8e02f9eb98d373`；README `f854dc9d54f871daaf5c970049960783e82e5ea7`。
 - GNSS runtime CI run `45924642728`：Humble/Jammy 与 Jazzy/Noble 各 **299/299 passed，0 errors/failures/skipped**；ROS 2 package CI run `45924642739`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。日志仍出现 rosdep unresolved ERROR 提示，但后续构建/pytest 成功，按非阻断环境提示记录。
 - 该 CI 只证明通用 Ubuntu/ROS 容器中的 parser/fixture 合成测试及 package CI；没有真实 VM/Orin policy report，没有 BTF FUNC parse、BPF load/attach 或 live collector 结果。下一步应取得通用 Linux VM 的原始只读 JSON 报告，再基于实测决定 attach test；Orin BSP 仍独立 Gate。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.272）
+
+- 在只读 kernel capability probe 中增加可选 vmlinux BTF FUNC inventory：当运行主机 PATH 中存在 `bpftool` 且指定 BTF 文件存在时，执行只读命令 `bpftool btf dump file <path> format raw`，最长等待 20 秒，检查 `do_clock_adjtime` 与 `do_adjtimex` 的 FUNC 记录。工具缺失、BTF 缺失、超时、执行错误、命令失败分别报告；失败时符号保持 unknown，不推断不存在。
+- 明确 FUNC 记录存在仍不等于 FUNC_PROTO 参数图可用、fentry/fexit 可挂载、verifier 接受或权限允许；缺少 FUNC 也不排除 kprobe/其他替代路径。对 arbitrary rootfs，bpftool 来自运行主机 PATH，因此必须在目标 VM 本机运行才是对应运行时证据。
+- 新增三项合成测试覆盖 FUNC record present/absent、bpftool missing、命令失败 fail-closed；新增 Navigation 53 并更新 Navigation README。代码提交：probe `71c1d119842a0a559f7b4b0b46eaff45bca9ee9d`；tests `308a9635c7fac7649f7439397553ae1ac1271721`；Navigation 53 `59de64d3a038a29483540b8625e0af1b5fb79b7a`；README `17c08b93ffe3c024304ff5f8ed8b1df0909ffdaf`。
+- GNSS runtime CI run `45925251702`：Humble/Jammy 与 Jazzy/Noble 各 **302/302 passed，0 errors/failures/skipped**。ROS 2 package CI run `45925251650`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。日志仍出现 rosdep unresolved ERROR 提示，后续构建与 pytest 成功；继续作为非阻断环境提示披露。
+- 本轮 CI 只验证 bpftool 输出解析和错误路径的 synthetic fixtures；CI 未实际依赖 bpftool、未检查真实内核 BTF、未执行 BPF load/attach，也未取得通用 VM 或 Orin BSP 报告。下一步仍需在通用 Linux VM 本机运行只读 probe，并保留完整 JSON、kernel release、BTF 与 bpftool 版本/来源；之后再审查 FUNC_PROTO 参数图。Orin BSP 独立验证。N1/N9 未验收，仅 nav 分支推进，不合并 main。
