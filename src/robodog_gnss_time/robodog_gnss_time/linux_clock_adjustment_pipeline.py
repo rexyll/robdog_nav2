@@ -12,7 +12,10 @@ from .linux_clock_adjustment_joiner import (
     correlate_clock_adjustment_invocation_observations,
 )
 from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
-from .linux_clock_adjustment_invocation_reducer import (\n    reduce_clock_adjustment_invocation_events,\n    audit_clock_adjustment_event_id_uniqueness,\n)
+from .linux_clock_adjustment_invocation_reducer import (
+    reduce_clock_adjustment_invocation_events,
+    audit_clock_adjustment_event_id_uniqueness,
+)
 
 _COUNTERS = (
     "consumer_records_read", "decode_successes", "decode_failures",
