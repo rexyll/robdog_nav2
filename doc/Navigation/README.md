@@ -307,3 +307,7 @@
 - [47 — Linux clock-adjustment syscall / post-copy handler correlation](47_linux_clock_adjustment_syscall_handler_correlation.md)
 
 - [48 — Linux clock-adjustment capture integrity and shutdown drain](48_linux_clock_adjustment_capture_integrity_and_drain.md)
+
+- [49 — Linux clock-adjustment userspace pipeline accounting and unified offline report](49_linux_clock_adjustment_userspace_pipeline_and_unified_report.md)
+- [Userspace pipeline auditor and unified report reducer](../../src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_pipeline.py)
+- [Userspace pipeline auditor tests](../../src/robodog_gnss_time/test/test_linux_clock_adjustment_pipeline.py)
