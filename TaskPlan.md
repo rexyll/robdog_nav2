@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.286
+- 文档版本：v0.3.287
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1626,3 +1626,13 @@
 - syscall LIFO reducer 提交 `34c32f16...`：ROS 2 Package CI run `45929459562` success；GNSS Runtime run `45929459560` failure，失败来自同一分支此前遗留的旧 joiner 测试断言，并非 syscall reducer 测试失败。最终包含 joiner 测试替换 + syscall LIFO reducer + tests 的 head `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已获得 GNSS Runtime run `45929462353` success 与 ROS 2 Package run `45929462345` success。
 - 当前 nav HEAD 在本 TaskPlan 更新前为 `bd5056cb...`；本轮文档提交后以远端 branch ref 为准。上述 CI 只覆盖对应提交，不代表 live kernel trace capture、BPF attach、Orin BSP 或真实 clock/PHC 效果已验证。
 - 下一步：继续明确 producer 对同线程跨 CPU 迁移事件排序的保证；per-CPU sequence 不能单独证明跨 CPU 全序，LIFO 无 invocation cookie 仍属启发式。然后定义 producer-side invocation cookie、drop counter、stop/drain/final snapshot 的统一 envelope。VM live capability JSON 仍未取得，用户需从最新 nav 拉取后运行只读探测器。N1/N9 未验收，仅 nav 分支，不合并 main。
+
+
+## 本轮 producer-side identity 设计（2026-11-27 / v0.3.287）
+
+- 新增 Navigation 57：定义 syscall invocation ID、handler invocation ID、parent syscall invocation ID、task lifetime discriminator、固定深度 context stack、跨 CPU ordering、drop counter 与 stop/detach/final-snapshot/drain 的生产端合同。
+- 关键约束：per-CPU sequence 只用于各 CPU stream gap 检查，不能建立跨 CPU 全序；时间戳只用于 duration/sanity，不作为 invocation identity；handler parent 必须由 producer 在执行现场从 active syscall context 取得，不能由 userspace 通过时间区间猜测。
+- 对 task lifetime discriminator 暂不指定未经目标 BTF/Verifier 验证的 task_struct 字段；候选是经验证的 task start-time 或 producer task-lifecycle generation。固定深度 stack overflow 必须 fail closed，不得覆盖外层上下文。正式 schema-v3 reducer 应按 invocation ID 配对，schema-v2 LIFO 仅保留为 synthetic/legacy compatibility。
+- 更新 Navigation 42 的 capture design 与 README 索引；新增文档提交 Navigation 57 `404ba7e6d39acc6c127724bb3569f22db4bebe0f`，Navigation 42 `39e50a886eff635d3108ea3b45a7e4af9a0230bf`，索引提交见本节更新历史。
+- CI：包含 joiner one-to-many、syscall LIFO、测试替换的 head `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已获得 GNSS Runtime success（run `45929462353`）和 ROS 2 Package success（run `45929462345`）。本轮仅新增设计文档/索引/TaskPlan，不新增运行时代码。
+- 下一步：把 schema-v3 envelope 与现有 session/pipeline accounting contracts 对照，明确哪些字段可进入 session manifest、哪些必须随每个 event 携带；评估 BPF map 中 bounded syscall context stack 的可实现性及 task-exit cleanup 的失效模式。等待用户 VM live capability JSON；Orin BSP 独立 Gate。N1/N9 未验收，仅 nav 分支，不合并 main。
