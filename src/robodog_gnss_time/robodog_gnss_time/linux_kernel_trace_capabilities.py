@@ -255,6 +255,47 @@ def _handler_symbol_observation(path):
     }
 
 
+def _runtime_policy_observation(rooted):
+    """Read BPF/perf policy and this process security context without changing it."""
+    policy_paths = {
+        "unprivileged_bpf_disabled": "/proc/sys/kernel/unprivileged_bpf_disabled",
+        "perf_event_paranoid": "/proc/sys/kernel/perf_event_paranoid",
+        "kptr_restrict": "/proc/sys/kernel/kptr_restrict",
+        "lockdown": "/sys/kernel/security/lockdown",
+        "process_status": "/proc/self/status",
+    }
+    observations = {name: _read_text(rooted(path)) for name, path in policy_paths.items()}
+    status_fields = {}
+    for line in observations["process_status"]["content"].splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            if key in {"Uid", "Gid", "CapEff", "CapBnd", "NoNewPrivs", "Seccomp", "Seccomp_filters"}:
+                status_fields[key] = value.strip()
+    lockdown_text = observations["lockdown"]["content"].strip()
+    lockdown_match = re.search(r"\[([^]]+)\]", lockdown_text)
+    return {
+        "sysctls": {
+            name: {
+                "status": item["status"],
+                "value": item["content"].strip() if item["status"] == "ok" else None,
+            }
+            for name, item in observations.items()
+            if name not in {"process_status", "lockdown"}
+        },
+        "lockdown": {
+            "status": observations["lockdown"]["status"],
+            "active_mode": lockdown_match.group(1) if lockdown_match else None,
+            "raw": lockdown_text if observations["lockdown"]["status"] == "ok" else None,
+        },
+        "process_security": {
+            "status": observations["process_status"]["status"],
+            "fields": status_fields,
+            "interpretation": "Effective capabilities and seccomp are observations for this process only; they do not prove BPF program load/attach permission.",
+        },
+        "interpretation": "These policy values are read-only preflight evidence. Kernel policy, LSM, namespaces, capabilities, BPF command type, and program/map specifics can still deny an operation; no BPF syscall was attempted.",
+    }
+
+
 def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
     """Inventory config, BTF and syscall tracepoint visibility without changing state."""
     start_mono = time.monotonic_ns()
@@ -306,6 +347,7 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         "kernel_config_sources": config_sources,
         "btf": btf,
         "handler_function_symbols": handler_symbols,
+        "runtime_policy": _runtime_policy_observation(rooted),
         "tracefs": tracefs,
         "candidate_syscall_events": list(_SYSCALL_EVENTS),
         "interpretation": (
