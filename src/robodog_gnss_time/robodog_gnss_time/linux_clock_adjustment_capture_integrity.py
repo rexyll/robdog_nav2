@@ -261,6 +261,8 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
 
     all_keys = set(initial) | set(final) | set(observed)
     per_cpu = []
+    if not initial or not final:
+        issues.append({"code": "no_cpu_stream_snapshots"})
     for key in sorted(all_keys):
         before, after = initial.get(key), final.get(key)
         if before is None or after is None:
