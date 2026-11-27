@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.310
+- 文档版本：v0.3.311
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1876,3 +1876,11 @@
 - 修正 v0.3.309 的 signed source archive 归档判断：Ubuntu Security archive 当前目录索引已列出精确的 `linux-signed-hwe-7.0_7.0.0-44.44~24.04.1.dsc` 与对应 `.tar.xz`（2026-11-20）；此前“官方归档只到 43”的判断已过时/错误。证据目录：`https://security.ubuntu.com/ubuntu/pool/main/l/linux-signed-hwe-7.0/`。这只确认目录项存在，尚未读取/验签 signed source descriptor 或审查其构建输入。
 - 当前状态：source descriptor 内容可审阅；二进制 diff 与 LFS 原始 tarball的实际内容仍不可由当前 GitHub 读取接口取得。签名包 44 的官方归档文件已定位。两套 source package 均未完成验签与源码审计。
 - 下一步：在 VM 对三个文件执行 `gpgv`（使用 Ubuntu archive/keyring 中可信签名密钥）和 `sha256sum -c`（按 `.dsc` 值核对）；确认 Git LFS 对象实际下载/checkout 后大小与 SHA256。然后从 diff 中导出 BPF 相关 patch hunks / series 信息为 UTF-8 文本文件 push 到 nav 分支，或将完整解压后的 diff 作为可读文本提供；同时下载并提交 `linux-signed-hwe-7.0_7.0.0-44.44~24.04.1.dsc` 与 `.tar.xz` 供签名包审计。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
+
+## 本轮 kernel source SHA256 实测通过与 uploader key 缺失定位（2026-11-27 / v0.3.311）
+
+- 用户在 VM 实测两个源码文件的 SHA256：orig tarball `c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536`；Ubuntu diff `ca52b58456be235c683de4638689e1837a86ec6ba19c97c398fc26af06941501`。均与精确 `.dsc` 的 Checksums-Sha256 声明完全一致。文件内容完整性相对于该 `.dsc` 声明已验证。
+- 用户执行 `gpgv --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg <dsc>`，签名时间 Wed 11 Nov 2026 03:30:42 AM CST，签名 key fingerprint `61DDD3F31F7F472B0D4200084F575E4829B6558D`，issuer `alice.munduruca@canonical.com`；结果 `Can't check signature: No public key`。这是当前 keyring 缺少 uploader public key，不是 BAD signature，也不能表述为签名无效或已验证。
+- Ubuntu 官方 archive integrity 文档说明：`.dsc` 由 source uploader 私钥签名，对应公钥可从 Ubuntu Keyserver 获取，并应与该开发者 Launchpad 账户关联的密钥身份核对；另有独立 archive trust chain：签名 InRelease → hash-verified Sources index → `.dsc` 与 source tarball hashes。参考 `https://documentation.ubuntu.com/security/software-integrity/archive-verification/`。
+- 下一步仅在临时 GNUPGHOME 中从 `hkps://keyserver.ubuntu.com` 获取该 fingerprint 的公钥；检查完整 fingerprint 与 Launchpad uploader profile 发布的 OpenPGP key fingerprint 完全一致后，导出临时 keyring 并重跑 `gpgv`。不将未知 key 导入系统全局 keyring，不运行 apt update，不安装包。若 Launchpad 身份/指纹无法独立确认，则保持 uploader signature unverified，并转而用 Ubuntu Security pocket 的签名 InRelease + Sources SHA256 链做 archive provenance 验证。
+- `.dsc` SHA256 清单与实际 orig/diff 内容匹配；但 cryptographic uploader signature 仍待验证。之后需解压并审计 exact Ubuntu patchset；`linux-signed-hwe-7.0` 7.0.0-44 的 source package 仍需单独取得 descriptor/tarball并核验。无 BPF 编译/load/attach。仅 nav 分支，不合并 main。
