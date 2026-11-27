@@ -13,6 +13,8 @@ A production capture producer must provide identity at event creation time. The 
 
 ## 2. Required identity fields
 
+The current Navigation 50 event-envelope validator is schema v1 and does not yet carry these fields. This document specifies a schema-v2 extension; until that validator and the payload reducers are upgraded, invocation IDs are a design requirement only and must not be fabricated by the userspace pipeline.
+
 Every emitted event must include:
 
 - `boot_id`: boot identity captured once per collection session;
@@ -68,6 +70,8 @@ Per-CPU sequence numbers remain useful for detecting gaps within each CPU stream
 A consumer may sort by monotonic timestamp for presentation, but sorting is not a substitute for invocation identity. If two events have equal timestamps or delivery order differs across CPUs, identity fields still determine pairing.
 
 ## 6. Reducer migration policy
+
+The current session envelope schema v1 carries capture/session/stream identity and per-CPU sequence only. It cannot validate or preserve invocation identity. Schema v2 must add the fields in Section 2 before any reducer may claim strict ID-based pairing. The current syscall/handler reducers and joiner remain schema v2 LIFO/interval reducers and must retain their explicit limitations.
 
 The existing schema-v2 reducers remain valid for synthetic fixtures and legacy captures without invocation IDs. They must continue to label their policy as LIFO-without-cookie.
 
