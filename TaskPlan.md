@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.262
+- 文档版本：v0.3.263
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1399,3 +1399,13 @@
 - CI 曾在中间提交 `b7576653b7fb2df81a2d47687d2aa54ed0660f70` 因源文件中误写入字面 `\\n` 导致 SyntaxError；根据 runtime CI run `45920981870` 的日志定位，已在 `61e20ae55626a9819b946d75f7025b3d6b3afd22` 修复。该中间失败如实保留，不计为最终通过。
 - 最终 head `61e20ae55626a9819b946d75f7025b3d6b3afd22` 的 GNSS runtime CI run `45921025738`：Humble/Jammy、Jazzy/Noble 均 **250/250 passed，0 errors/failures/skipped**；ROS 2 package CI run `45921025246` 两发行版均 success。
 - 这些结果验证通用 Ubuntu/ROS 容器中的纯 Python reducer 和合成测试，不验证实际 eBPF producer、ringbuf 丢失计数真实性、目标 Orin 内核事件覆盖或时钟效果。保持仅 nav，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.263）
+
+- 新增 `linux_clock_adjustment_pipeline.py`：对用户态采集流水线执行独立计数审计，覆盖 consumer read、decode success/failure、queue enqueue/admission drop、writer written/write failure。
+- 固化三段累计计数等式：`read = decode_success + decode_failure`；`decode_success = queue_enqueued + queue_admission_drops`；`queue_enqueued = writer_written + writer_write_failures`。明确 queue admission drop 与 writer failure 是不同阶段的终态，不得合并；任何 quarantine/filter/retry-exhaustion 新出口必须新增独立计数和版本化合同。
+- Pipeline snapshot 绑定 capture_session_id + boot_id；检查计数单调性、final snapshot 必须在 writer close 后，以及最终 queue depth/in-flight writer records 为 0。对未知出口、计数器回退、identity 变化、未排空状态均 fail-closed。
+- 新增 `build_clock_adjustment_capture_report()`，组合 Navigation 44 syscall reducer、Navigation 46 post-copy handler reducer、Navigation 47 joiner、Navigation 48 producer/drain integrity 与本轮 userspace pipeline auditor；各 Gate 独立输出，全部通过才给出 overall consistent。
+- 新增 Navigation 49 文档与 README 索引；新增 pipeline 合成测试，覆盖三段恒等式、queue drop 与 writer failure 区分、session/boot identity、counter regression、队列/写入中任务未清空、writer close 快照顺序和 unified report fail-closed。
+- 本轮实现为纯 Python 离线 reducer；未实现 live eBPF producer/consumer、decode/queue/writer 运行时，也未加载内核 hook、启用 tracing、修改 CLOCK_REALTIME/PHC。当前只在 nav 分支推进；N1/N9 未验收，不合并 main。CI 待最终 head 运行并回填。
