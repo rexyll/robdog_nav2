@@ -56,6 +56,16 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
         "name: sys_exit_clock_adjtime\nformat:\n"
         "\tfield:long ret; offset:16; size:8;\n",
     )
+    for event_name in (
+        "sys_enter_clock_adjtime32",
+        "sys_exit_clock_adjtime32",
+        "sys_enter_adjtimex_time32",
+        "sys_exit_adjtimex_time32",
+    ):
+        _write(
+            tmp_path / "sys/kernel/tracing/events/syscalls" / event_name / "format",
+            f"name: {event_name}\\nformat:\\n\\tfield:long ret; offset:16; size:8;\\n",
+        )
     _write(tmp_path / "sys/kernel/debug/tracing/available_events", "")
     _write(tmp_path / "sys/kernel/btf/vmlinux", "btf")
 
