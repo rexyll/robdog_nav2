@@ -61,7 +61,7 @@ For each envelope:
 2. route `payload` to the syscall or kernel-handler reducer selected by `stream_kind`;
 3. preserve independent sequence domains;
 4. feed producer counters and userspace counters into Navigation 48–49 audits;
-5. run this lifecycle audit on the ordered transition log and final snapshot.
+5. run this lifecycle audit on the ordered transition log and final snapshot; the unified report exposes it as a mandatory eighth gate.
 
 The validator does not itself prove that a producer emitted all events, that a consumer read every submitted record, or that a writer persisted bytes durably. Those remain separate counter and storage-integrity contracts.
 
