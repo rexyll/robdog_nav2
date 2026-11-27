@@ -331,3 +331,5 @@
 - [57 — Linux clock-adjustment invocation identity and cross-CPU ordering contract](57_linux_clock_adjustment_invocation_identity_and_ordering.md)
 
 - [58 — Generic VM live kernel capability baseline (2026-11-27)](58_generic_vm_live_kernel_capability_baseline_2026-11-27.md)
+
+- [59 — Linux v7.0 BPF task storage and invocation allocator design](59_linux_v7_task_storage_and_invocation_allocator_design.md)
