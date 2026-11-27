@@ -40,7 +40,9 @@ No user pointer, kernel pointer, struct address, command line, or unrelated proc
 
 ## 3. Pairing and bounded state
 
-Pair key is exactly `(boot_id, pid_tgid, handler)`. This prevents pairing across boots, threads, or unlike handler paths. A duplicate entry supersedes the previous pending entry but marks the result partial. Orphan returns, unmatched entries, per-CPU sequence gaps/regressions/duplicates, timestamp inversion, malformed records and capacity overflow are explicit issues. Default pending capacity is 4096.
+The active invocation stack is keyed by `(boot_id, pid_tgid, handler)`. This prevents pairing across boots, threads, or unlike handler paths. Repeated entry for the same key is treated as a possible nested invocation and increments `nested_handler_entries`; a matching exit consumes the most recent entry (LIFO). This handles same-thread recursive/nested calls without overwriting the outer invocation. The output records `pairing_method=lifo_same_thread_handler_stack` and the report declares `pairing_policy=lifo_same_thread_handler_stack_without_invocation_cookie`.
+
+This is not a call-stack proof. Without a producer-side invocation cookie, a lost inner exit can make a later exit appear to match the most recent pending entry. The remaining outer entry will be reported as unmatched, but LIFO pairing cannot independently detect every missing nested event. A future capture producer should emit a stable per-invocation cookie or nesting depth where safely possible. Orphan returns, unmatched entries, per-CPU sequence gaps/regressions/duplicates, timestamp inversion, malformed records and capacity overflow remain explicit issues. Default pending capacity is 4096 active invocations, not 4096 distinct task/handler keys.
 
 This reducer expects the handler-observation stream to be supplied in its own sequence domain. Do not feed it a filtered subset of a global per-CPU sequence and then interpret the resulting gaps as loss; the producer must define a dedicated sequence or provide the complete stream to a future unified reducer.
 
@@ -55,7 +57,7 @@ Only the combined source-pinned observation of a non-negative internal handler r
 ## 5. Implementation and limitations
 
 Implementation:
-- `src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_kernel_observations.py`
+- `src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_kernel_observations.py` (same-thread same-handler nested calls are paired LIFO; invocation-cookie support remains future work)
 - Tests: `src/robodog_gnss_time/test/test_linux_clock_adjustment_kernel_observations.py`
 - Public function: `reduce_kernel_clock_adjustment_observations(events, max_pending=4096)`
 
