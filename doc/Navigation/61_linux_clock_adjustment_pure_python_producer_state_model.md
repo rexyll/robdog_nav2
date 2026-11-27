@@ -24,7 +24,7 @@ It does not model kernel scheduling, BPF verifier constraints, helper availabili
 
 ## 3. Synthetic test coverage
 
-The reference model was added in `linux_clock_adjustment_producer_state.py`. Tests exercise:
+The reference model was added in `linux_clock_adjustment_producer_state.py`; `ClockAdjustmentProducerSessionAllocator` models session-global IDs and multi-task admission separately from the single-task nested stack simulator. Tests exercise:
 1. Nested syscall entry/exit pairing by invocation ID.
 2. Syscall stack overflow and recovery without outer-frame corruption.
 3. Ring-buffer reserve failure and matching exit suppression.
@@ -37,6 +37,8 @@ The reference model was added in `linux_clock_adjustment_producer_state.py`. Tes
 10. Refusal to detach with active invocations and refusal of duplicate task exit.
 11. Two-task interleaving with globally unique event IDs and task-scoped invocation IDs.
 12. Task-context capacity rejection, create failure, task-ID allocation failure, CAS contention and 64-bit exhaustion.
+13. Interleaved two-task invocation gauges and task-exit cleanup without clearing another task's active invocation.
+14. Post-detach allocation, invocation and task-exit mutations are rejected.
 13. Global snapshot reconciliation through the producer runtime counter auditor, including live idle Task Storage at detach.
 
 The model's emitted envelopes are also fed into the real schema-v2 invocation reducers and exact parent-ID joiner, so this is a cross-layer synthetic contract test rather than an isolated mock.
