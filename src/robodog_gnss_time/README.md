@@ -435,3 +435,15 @@ have a separate `clock_adjtime64` tracepoint. Event availability is still
 read from the target's tracefs `available_events` and each event's `format`
 file; architecture-specific syscall numbers are not inferred by the collector.
 See `doc/Navigation/56_linux_clock_adjustment_syscall_tracepoint_abi_coverage.md`.
+
+
+## Read-only running-kernel package provenance
+
+To identify the exact Ubuntu binary/source package relationship for the running kernel (without installing packages or updating apt indexes), run:
+
+```bash
+python3 src/robodog_gnss_time/robodog_gnss_time/linux_kernel_package_provenance.py \
+  --output "$HOME/kernel-package-provenance.json"
+```
+
+The report uses `uname` and read-only `dpkg-query` calls to record installed package versions, source package/version fields, and owners of `/boot/vmlinuz-$(uname -r)` and related kernel files. It does not fetch source packages or prove equivalence to upstream Linux. A complete result requires an installed package row, a kernel image file owner, and a consistent source package identity. No sudo is required.
