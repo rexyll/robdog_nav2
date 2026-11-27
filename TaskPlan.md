@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.304
+- 文档版本：v0.3.305
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1814,3 +1814,12 @@
 - 以上为 upstream v7.0 源码条件；Ubuntu 7.0.0-44-generic 精确 source package/patchset 仍需核对，不能把 upstream 结论冒充目标内核已验证。修订 Navigation 62 提交 333089c45cfd2ed495d77748c2e025a3589a7e60。
 - 最新代码修复提交 4f35ce8d1bbe9e12ea58e4d7e8dc6b8c040eb62b；此前 end-to-end 运行失败已定位为 legacy syscall-handler join missing direct handler 与 multi-task fixture stream kind 参数不一致，未发现 producer integrity/global runtime/pipeline/lifecycle/strict invocation gate 的失败证据。等待 4f35 的 GNSS Runtime 与 ROS 2 Package CI 最终 conclusion。
 - 下一步：先验收 4f35 CI；如通过，将 end-to-end fixture 状态记录为通过。随后审查 BPF Task Storage map/helper source against exact Ubuntu source package metadata，再决定是否向用户请求管理员授权进行最小只读 load probe。仅 nav 分支，不合并 main。
+
+
+## 本轮 end-to-end synthetic capture CI 验收与 BPF privilege clarification（2026-11-27 / v0.3.305）
+
+- 最新代码提交 4f35ce8d1bbe9e12ea58e4d7e8dc6b8c040eb62b 的 GNSS Runtime CI run 45936807704 success，ROS 2 Package CI run 45936807724 success。End-to-end synthetic capture fixture 的 producer integrity、producer loss-free、global runtime counters、userspace pipeline、lifecycle、legacy reducers/joiner、schema-v2 invocation reducers、exact parent-ID join 与 cross-stream event-ID uniqueness gates 全部通过。
+- 端到端 fixture 中两个 task 分别执行 clock_adjtime→do_clock_adjtime 和 adjtimex→do_adjtimex，所有事件在同一 capture session 合并；global event IDs、task-scoped invocation IDs 与 per-CPU sequence domains 对账完成。
+- 回归根因记录：提交 917abe99 的 legacy syscall_handler_join gate failure 是 fixture 中 direct adjtimex 缺少 do_adjtimex handler observation；补齐后，另一条 multi-task fixture 仍把 stream_kind=kernel_handler 传给 allocator，allocator 接口期望 handler；提交 4f35ce8 统一映射后两项 CI 通过。
+- Navigation 62 再次修正 BPF helper 权限描述：upstream v7.0 中 bpf_task_storage_get 的 helper prototype 标记 gpl_only=false，但 bpf_base_func_proto 对它实施 CAP_BPF token-capability check；bpf_get_current_task_btf 标记 gpl_only=true。Task Storage map 创建也需 CAP_BPF，TRACEPOINT/KPROBE/TRACING program load 属 perfmon class，另需 CAP_PERFMON。该结论来自 upstream v7.0 源码，Ubuntu 7.0.0-44 精确 source package/patchset 仍待核对。Navigation 62 修订提交 84318d064f69a7a241aa3e020d9b7a7100b9682e。
+- 当前 TaskPlan v0.3.305；下一步：把 exact Ubuntu source package metadata 与 upstream v7.0 helper/map/program checks逐项比对；随后设计最小 BPF object static inspection checklist，先做 clang compile/BTF/relocation inspection，不 load、不 attach。只有用户明确授权后才进入最小 verifier/load probe。仅 nav 分支，不合并 main。
