@@ -259,3 +259,63 @@ def test_unified_report_rejects_cross_stream_event_id_collision():
     assert report["gates"]["invocation_parent_join"] is True
     assert report["gates"]["event_id_uniqueness"] is False
     assert report["capture_report_status"] == "partial"
+
+
+def producer_global_snapshot(**overrides):
+    counters = {
+        "event_id_allocation_attempts": 0, "event_id_allocation_successes": 0,
+        "event_id_allocation_failures": 0,
+        "task_instance_id_allocation_attempts": 0,
+        "task_instance_id_allocation_successes": 0,
+        "task_instance_id_allocation_failures": 0,
+        "task_context_admission_attempts": 0, "task_context_admitted": 0,
+        "task_context_capacity_rejected": 0,
+        "task_context_create_attempts": 0, "task_context_create_successes": 0,
+        "task_context_create_failures": 0,
+        "task_context_init_attempts": 0, "task_context_init_successes": 0,
+        "task_context_init_failures": 0,
+        "syscall_invocation_allocation_attempts": 0,
+        "syscall_invocation_allocation_successes": 0,
+        "syscall_invocation_allocation_failures": 0,
+        "handler_invocation_allocation_attempts": 0,
+        "handler_invocation_allocation_successes": 0,
+        "handler_invocation_allocation_failures": 0,
+        "cpu_sequence_allocation_failures": 0,
+        "syscall_context_stack_overflow": 0, "syscall_context_pop_mismatch": 0,
+        "handler_context_stack_overflow": 0, "handler_context_pop_mismatch": 0,
+        "handler_parent_context_unavailable": 0, "task_exit_observed": 0,
+        "task_exit_with_pending_syscalls": 0, "task_exit_with_pending_handlers": 0,
+    }
+    value = {
+        "capture_session_id": "capture-1", "boot_id": "boot-a",
+        "snapshot_after_producer_detach": True,
+        "counters": counters,
+        "gauges": {
+            "active_syscall_invocations": 0,
+            "active_handler_invocations": 0,
+            "inflight_bpf_callbacks": 0,
+            "task_context_reservations": 2,
+        },
+    }
+    value.update(overrides)
+    return value
+
+
+def test_unified_report_exposes_global_producer_runtime_counter_gate():
+    cpu = {"producer_id": "syscall-producer", "boot_id": "boot-a", "cpu": 0,
+           "sequence_allocated": 0, "ringbuf_reserve_failures": 0,
+           "ringbuf_submit_successes": 0}
+    initial = {"per_cpu": [cpu], "global": producer_global_snapshot()}
+    final = {"per_cpu": [cpu], "global": producer_global_snapshot()}
+    drain = {
+        "stop_requested": True, "producer_quiesced": True,
+        "ring_buffer_drained": True, "consumer_queue_drained": True,
+        "writer_flushed": True, "writer_closed": True,
+        "final_snapshot_after_drain": True, "queue_depth": 0,
+        "inflight_callbacks": 0, "pending_syscalls": 0, "pending_handlers": 0,
+    }
+    report = build_clock_adjustment_capture_report(
+        [], [], [], initial, final, drain, snapshot(), snapshot(), None,
+    )
+    assert report["gates"]["producer_runtime_counters"] is True
+    assert report["producer_runtime_counters"]["runtime_status"] == "consistent"
