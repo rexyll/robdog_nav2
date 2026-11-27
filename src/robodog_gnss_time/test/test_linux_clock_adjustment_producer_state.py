@@ -1,3 +1,6 @@
+from robodog_gnss_time.linux_clock_adjustment_capture_integrity import (
+    audit_clock_adjustment_producer_runtime_counters,
+)
 from robodog_gnss_time.linux_clock_adjustment_invocation_reducer import (
     audit_clock_adjustment_event_id_uniqueness,
     reduce_clock_adjustment_invocation_events,
@@ -256,3 +259,51 @@ def test_session_allocator_rejects_operations_after_detach():
         session.allocate_invocation_id(task)
     with pytest.raises(RuntimeError):
         session.create_task_context()
+
+
+def test_session_allocator_global_snapshot_passes_runtime_audit_for_live_idle_task():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=2)
+    initial = session.global_snapshot()
+    task_a = session.create_task_context()
+    task_b = session.create_task_context()
+    session.allocate_invocation_id(task_a, kind="syscall")
+    session.allocate_invocation_id(task_b, kind="handler")
+    session.allocate_event_id()
+    session.allocate_event_id()
+    session.release_task_context(task_a)
+    session.detach()
+    final = session.global_snapshot()
+    audit = audit_clock_adjustment_producer_runtime_counters(initial, final)
+    assert audit["runtime_status"] == "consistent"
+    assert audit["final_gauges"]["task_context_reservations"] == 1
+
+
+def test_session_allocator_capacity_rejection_is_visible_to_runtime_audit():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=1)
+    initial = session.global_snapshot()
+    task = session.create_task_context()
+    assert session.create_task_context() is None
+    session.release_task_context(task)
+    session.detach()
+    final = session.global_snapshot()
+    audit = audit_clock_adjustment_producer_runtime_counters(initial, final)
+    assert audit["runtime_status"] == "partial"
+    assert any(
+        issue.get("counter") == "task_context_capacity_rejected"
+        for issue in audit["issues"]
+    )
+
+
+def test_session_allocator_task_id_and_invocation_id_exhaustion_do_not_wrap():
+    session = ClockAdjustmentProducerSessionAllocator(
+        start_task_instance_seq=(1 << 64) - 1
+    )
+    assert session.create_task_context() is None
+    assert session.task_context_reservations == 0
+    assert session.counters["task_instance_id_allocation_failures"] == 1
+
+    session2 = ClockAdjustmentProducerSessionAllocator()
+    task = session2.create_task_context()
+    session2.next_invocation_seq[task] = (1 << 64) - 1
+    assert session2.allocate_invocation_id(task, kind="handler") is None
+    assert session2.counters["handler_invocation_allocation_failures"] == 1
