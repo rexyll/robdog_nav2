@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.308
+- 文档版本：v0.3.309
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1853,3 +1853,14 @@
 - 代码提交 d7239833eed2b89aefde57297178a85e538541fc；测试提交 c6710331b857cfb6975ca92a3a5e9c1da1f7e05b；Navigation 63 文档修订 e28ef5dbd0be48fc77e55bdb457d7288f7f01539。
 - 以上均为只读 provenance 工具的静态逻辑与 synthetic tests；尚未读取用户 VM 的 dpkg 数据库，未下载/安装包，未执行 BPF。
 - 下一步：等待本轮最新 CI；通过后请用户按 Navigation 63 §2 运行命令并上传 JSON。拿到真实 package source identity 后，再获取 exact Ubuntu source package 与 patch series，核对实际 helper/map/program permission 和 cleanup 实现。仅 nav 分支，不合并 main。
+
+
+## 本轮实测 Ubuntu kernel provenance 与 exact source archive 定位（2026-11-27 / v0.3.309）
+
+- 已收到并检查用户 VM 上传的 `kernel-package-provenance.json`：status=observed、issues=[]；运行内核 `7.0.0-44-generic`、x86_64、proc_version 为 `#44~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue Nov 10 20:33:11 UTC 2`。
+- 实测已安装 kernel-code binary packages：`linux-image-7.0.0-44-generic`（source `linux-signed-hwe-7.0`，version `7.0.0-44.44~24.04.1`）、`linux-modules-7.0.0-44-generic` 和 `linux-headers-7.0.0-44-generic`（source `linux-hwe-7.0`，version `7.0.0-44.44~24.04.1`）。/boot/vmlinuz 由已安装 image package 拥有；config 由 modules package 拥有；/usr/lib/modules/.../vmlinuz 不存在 dpkg owner 记录。extra modules 与 buildinfo 未安装；这两项不是 collector error，不得假设其文件存在。
+- 报告的 `kernel_source_package_identity` 只指向 `linux-hwe-7.0`；签名镜像 source identity 单独列为 `linux-signed-hwe-7.0`。两套源码均需审计，不能用主体源码包替代签名包。
+- 外部归档核对：Ubuntu Security pool 已列出精确匹配的 `linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc`、同版本 `.diff.gz`（约 6.2 MB）及共享上游 `.orig.tar.gz`（约 243 MB）；目录时间为 2026-11-20。官方 security archive listing：`https://security.ubuntu.com/ubuntu/pool/main/l/linux-hwe-7.0/`。已确认精确文件名和版本，但尚未下载、验签或核对 dsc 内部 SHA256。
+- `linux-signed-hwe-7.0` 的 VM source identity/version 已确认；当前查到的 Ubuntu Security pool listing 仅显示至 7.0.0-43，故 7.0.0-44 signed source archive 尚未从对应官方归档取得可验证证据。不能以 7.0.0-43 或第三方/PPA 内容替代。
+- 当前阶段仅完成 dpkg provenance 实测和公开归档目录定位；尚未取得/验证 exact source tarballs、Ubuntu patch series、签名包构建输入，也未审计 Task Storage/helper/CAP_BPF/BPF token/CAP_PERFMON/GPL-only helper/task-exit cleanup 的目标源码实现。
+- 下一步：用户在 VM 下载精确 `linux-hwe-7.0` source descriptor/diff/orig，并上传 `.dsc`（或完整 source package）；同时继续追踪官方 `linux-signed-hwe-7.0` 7.0.0-44 descriptor。先核验 dsc 的签名与 SHA256，再做源码/补丁静态审计；不安装软件、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
