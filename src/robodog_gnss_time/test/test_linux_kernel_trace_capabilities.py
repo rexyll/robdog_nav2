@@ -39,7 +39,9 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     )
     _write(
         tmp_path / "sys/kernel/tracing/available_events",
-        "syscalls:sys_enter_clock_adjtime\nsyscalls:sys_exit_clock_adjtime\n",
+        "syscalls:sys_enter_clock_adjtime\nsyscalls:sys_exit_clock_adjtime\n"
+        "syscalls:sys_enter_clock_adjtime32\nsyscalls:sys_exit_clock_adjtime32\n"
+        "syscalls:sys_enter_adjtimex_time32\nsyscalls:sys_exit_adjtimex_time32\n",
     )
     _write(
         tmp_path / "sys/kernel/tracing/events/syscalls/sys_enter_clock_adjtime/format",
@@ -86,8 +88,14 @@ def test_capability_audit_reads_config_btf_and_only_listed_tracepoints(tmp_path)
     ]
     assert tracefs["syscall_events"]["sys_exit_clock_adjtime"]["status"] == "available"
     assert tracefs["syscall_events"]["sys_enter_adjtimex"]["status"] == "not_listed"
+    assert tracefs["syscall_events"]["sys_enter_clock_adjtime32"]["status"] == "available"
+    assert tracefs["syscall_events"]["sys_exit_clock_adjtime32"]["status"] == "available"
+    assert tracefs["syscall_events"]["sys_enter_adjtimex_time32"]["status"] == "available"
+    assert tracefs["syscall_events"]["sys_exit_adjtimex_time32"]["status"] == "available"
     assert tracefs["syscall_event_pairs"]["clock_adjtime"]["pair_status"] == "complete"
+    assert tracefs["syscall_event_pairs"]["clock_adjtime32"]["pair_status"] == "complete"
     assert tracefs["syscall_event_pairs"]["adjtimex"]["pair_status"] == "not_listed"
+    assert tracefs["syscall_event_pairs"]["adjtimex_time32"]["pair_status"] == "complete"
     assert tracefs["syscall_events"]["sys_enter_clock_adjtime"]["enable_observation"] == {
         "status": "not_found", "value": None,
     }
