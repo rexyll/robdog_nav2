@@ -81,14 +81,31 @@ def test_handler_entry_without_return_is_retained():
     assert report["unpaired_entries"][0]["unpaired_reason"] == "no_matching_handler_return"
 
 
-def test_duplicate_handler_entry_supersedes_old_and_marks_partial():
+def test_nested_same_handler_entries_pair_lifo_and_keep_outer_pending():
     report = reduce_kernel_clock_adjustment_observations([
-        _event("kernel_handler_enter", 1),
-        _event("kernel_handler_enter", 2),
-        _event("kernel_handler_exit", 3),
+        _event("kernel_handler_enter", 1, monotonic_ns=100),
+        _event("kernel_handler_enter", 2, monotonic_ns=200),
+        _event("kernel_handler_exit", 3, monotonic_ns=300),
     ])
-    assert report["counts"]["duplicate_handler_entries"] == 1
-    assert report["unpaired_entries"][0]["unpaired_reason"] == "superseded_by_duplicate_handler_entry"
+    assert report["counts"]["nested_handler_entries"] == 1
+    assert report["counts"]["duplicate_handler_entries"] == 0
+    assert len(report["pairs"]) == 1
+    assert report["pairs"][0]["entry_sequence"] == 2
+    assert report["pairs"][0]["pairing_method"] == "lifo_same_thread_handler_stack"
+    assert report["unpaired_entries"][0]["sequence"] == 1
+    assert report["unpaired_entries"][0]["unpaired_reason"] == "no_matching_handler_return"
+
+
+def test_fully_nested_same_handler_entries_pair_in_lifo_order():
+    report = reduce_kernel_clock_adjustment_observations([
+        _event("kernel_handler_enter", 1, monotonic_ns=100),
+        _event("kernel_handler_enter", 2, monotonic_ns=200),
+        _event("kernel_handler_exit", 3, monotonic_ns=300),
+        _event("kernel_handler_exit", 4, monotonic_ns=400),
+    ])
+    assert report["reduction_status"] == "consistent"
+    assert [pair["entry_sequence"] for pair in report["pairs"]] == [2, 1]
+    assert [pair["return_sequence"] for pair in report["pairs"]] == [3, 4]
 
 
 def test_per_cpu_sequence_gap_is_reported():
