@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.293
+- 文档版本：v0.3.294
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1700,3 +1700,15 @@
 - CI 最终验收：最新运行时提交 2cb503bc 的 GNSS Runtime run 45932995336 success，ROS 2 Package run 45932995325 success。此前 pipeline 接入期间出现过两类短暂回归：导入行的转义换行导致 SyntaxError，已修复；报告漏输出 invocation_parent_join 导致测试 KeyError，已修复。后续 c519043 及最终 2cb503bc 均通过，失败提交不作为最终验证依据。
 - 当前 strict path 已可由 offline unified report 消费，但真实 producer 尚未生成 task/event/invocation/parent IDs；BPF attachability、ring-buffer delivery、task exit cleanup 与 Orin BSP 仍未验证。schema-v1 LIFO reducers/joiner 保留兼容，不得宣称已被 strict path 替换。仅 nav 分支，不合并 main。
 - 下一步：定义 producer-side event/invocation ID allocator 的原子分配与跨 stream namespace；将 task-local storage/hash map 方案落到 bounded stack layout、task-exit cleanup accounting 和 quiescence counters；在用户授权的特权诊断上下文下再补充 tracefs/function symbol inventory。VM 现有 unprivileged baseline 不覆盖这些能力。
+
+
+## 本轮 Linux v7.0 task-context / invocation allocator 设计审计（2026-11-27 / v0.3.294）
+
+- 新增 Navigation 59，按 upstream Linux v7.0 源码审计 Task Storage 与 HASH map 选型。明确 Ubuntu VM 实测 kernel 为 7.0.0-44-generic，但 exact Ubuntu source package revision/patchset 未取得；upstream v7.0 仅作近版本参考，不能声称与运行内核完全一致。
+- 上游 v7.0 Task Storage 关键事实：map 要求 BPF_F_NO_PREALLOC、max_entries=0、key_size=int、BTF key/value 类型；per-value size 受 BPF_LOCAL_STORAGE_MAX_VALUE_SIZE 限制；map_get_next_key 返回 -ENOTSUPP；free_task() 调用 bpf_task_storage_free；bpf_task_storage_get helper 原型要求 BTF task pointer，且 bpf_base_func_proto 的 helper 分发受 CAP_BPF token gate；bpf_get_current_task_btf 为 GPL-only。由此确认 Task Storage 生命周期绑定有优势，但无枚举与无 max_entries，必须通过 producer-wide max_tracked_tasks reservation 和 active invocation counters 管理容量/最终 quiescence。
+- 对比 bounded HASH：支持 get_next_key 与固定 max_entries，但需可靠 task-lifetime key 和 task-exit delete；PID/TID 单独作为 key 不足以隔离复用。LRU hash 不适合活动调用栈，静默 eviction 会丢失 pending frame。
+- 设计偏好：优先验证 Task Storage；global event_id 使用共享 ARRAY counter + bounded 64-bit cmpxchg allocator，task-local invocation_seq 由 Task Storage 保存，handler parent ID 在 entry 时从 syscall stack 精确复制；event_id 分配后 reserve failure 单独计数，不能把 ID gap 单独认定为丢包。Task/handler 栈固定深度、overflow fail-closed；task exit hook 在 free_task() 自动释放前审计未完成 invocation。
+- 明确当前 VM 报告 CapEff=0、unprivileged_bpf_disabled=2，未做 BPF load/helper probe；Task Storage helper availability、map create、verifier、attach 和 ring-buffer 行为均未实测。BPF helper 分发还涉及 CAP_BPF token gate；current task BTF helper GPL-only，因此 BPF program license 与 repo license 治理边界需要先核对。
+- 新增 Navigation 59，提交 `d432c08a94974aaad185a279e543198707f5362c`；README 索引提交 `38773c80712ab4ec0ab51b12a99ed3ae1ca44bd8`。未新增 BPF 代码、未创建 map、未 attach probe、未改变时钟。
+- 最新 runtime code baseline `2cb503bc...` 的 GNSS Runtime run `45932995336` success、ROS 2 Package run `45932995325` success；后续仅新增设计文档与 TaskPlan。
+- 下一步：审计 event_id allocator 的 BPF atomic/CMPXCHG 指令与 map update 错误处理；检查 exact Ubuntu source package revision 获取路径；随后形成 BPF C 结构体/CO-RE 伪代码与 verifier-oriented synthetic state-machine tests，仍不加载程序。仅 nav 分支，不合并 main。
