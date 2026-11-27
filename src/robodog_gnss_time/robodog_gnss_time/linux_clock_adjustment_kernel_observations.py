@@ -174,13 +174,13 @@ def reduce_kernel_clock_adjustment_observations(
         if event["event_type"] == "kernel_handler_enter":
             counts["handler_entries_seen"] += 1
             stack = pending.setdefault(key, [])
-            if stack:
-                counts["nested_handler_entries"] += 1
             if pending_count >= max_pending:
                 counts["pending_capacity_drops"] += 1
                 unpaired.append({**event, "unpaired_reason": "pending_capacity_exceeded"})
                 issues.append({"code": "pending_capacity_exceeded", "pid_tgid": event["pid_tgid"], "handler": event["handler"]})
                 continue
+            if stack:
+                counts["nested_handler_entries"] += 1
             stack.append(event)
             pending_count += 1
             continue
