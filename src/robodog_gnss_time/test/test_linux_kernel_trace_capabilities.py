@@ -258,3 +258,53 @@ def test_runtime_policy_inventory_fails_closed_when_policy_files_are_unavailable
     assert policy["lockdown"]["status"] == "not_found"
     assert policy["process_security"]["status"] == "not_found"
     assert policy["process_security"]["fields"] == {}
+
+
+
+def test_btf_handler_inventory_parses_func_records_without_claiming_attachability(tmp_path, monkeypatch):
+    btf = _write(tmp_path / "sys/kernel/btf/vmlinux", "fixture")
+    monkeypatch.setattr(capability_module.shutil, "which", lambda name: "/usr/sbin/bpftool")
+    monkeypatch.setattr(
+        capability_module.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Completed",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "[10] FUNC 'do_clock_adjtime' type_id=9 linkage=global\n"
+                "[11] FUNC 'unrelated' type_id=8 linkage=static\n",
+                "stderr": "",
+            },
+        )(),
+    )
+
+    result = capability_module._btf_handler_function_inventory(btf)
+    assert result["status"] == "observed"
+    assert result["symbols"]["do_clock_adjtime"]["status"] == "func_record_present"
+    assert result["symbols"]["do_adjtimex"]["status"] == "func_record_absent"
+    assert "does not prove a usable FUNC_PROTO" in result["interpretation"]
+
+
+def test_btf_handler_inventory_reports_unknown_when_bpftool_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(capability_module.shutil, "which", lambda name: None)
+    result = capability_module._btf_handler_function_inventory(
+        tmp_path / "sys/kernel/btf/vmlinux"
+    )
+    assert result["status"] == "tool_unavailable"
+    assert all(item["status"] == "unknown" for item in result["symbols"].values())
+
+
+def test_btf_handler_inventory_reports_command_failure_without_inference(tmp_path, monkeypatch):
+    btf = _write(tmp_path / "sys/kernel/btf/vmlinux", "fixture")
+    monkeypatch.setattr(capability_module.shutil, "which", lambda name: "/usr/sbin/bpftool")
+    monkeypatch.setattr(
+        capability_module.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Completed", (), {"returncode": 1, "stdout": "", "stderr": "invalid BTF"}
+        )(),
+    )
+    result = capability_module._btf_handler_function_inventory(btf)
+    assert result["status"] == "command_failed"
+    assert all(item["status"] == "unknown" for item in result["symbols"].values())
