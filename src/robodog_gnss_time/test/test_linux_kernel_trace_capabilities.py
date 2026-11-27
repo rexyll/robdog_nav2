@@ -195,3 +195,24 @@ def test_mount_inventory_ignores_unrelated_ancestor_filesystems(tmp_path):
         "mount_relation": "ancestor",
         "mount_options": "rw,nosuid,nodev,noexec,relatime",
     }]
+
+
+
+def test_handler_function_inventory_reports_candidates_without_claiming_attachability(tmp_path):
+    _write(
+        tmp_path / "sys/kernel/tracing/available_filter_functions",
+        "do_clock_adjtime\nother_function\ndo_adjtimex [vmlinux]\n",
+    )
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+    symbols = report["handler_function_symbols"][0]["symbols"]
+    assert symbols["do_clock_adjtime"]["status"] == "listed"
+    assert symbols["do_adjtimex"]["status"] == "listed"
+    assert "does not prove BTF FUNC availability" in report["handler_function_symbols"][0]["interpretation"]
+    assert "No tracefs mount" in report["interpretation"]
+
+
+def test_handler_function_inventory_distinguishes_unavailable_from_absent(tmp_path):
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+    symbols = report["handler_function_symbols"][0]
+    assert symbols["status"] == "not_found"
+    assert all(item["status"] == "unknown" for item in symbols["symbols"].values())
