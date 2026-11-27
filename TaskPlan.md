@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.255
+- 文档版本：v0.3.256
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1279,4 +1279,30 @@
 - 本切片不需要 Orin、PHC 或 tracing 权限；不读取用户指针、不启动 eBPF。
   GNSS runtime CI / package CI 针对此新增代码与合成测试仍待本轮最终结果确认；
   通过 CI 也只代表 Python package tests，不代表内核事件覆盖或实际 clock effect。
+  保持仅 nav 分支，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.256）
+
+- 对 Linux v6.12 syscall entry tracepoint 的源码位置完成核对：`kernel/entry/common.c`
+  在 syscall handler dispatch 前调用 `trace_sys_enter()`；`include/trace/events/syscalls.h`
+  的通用 sys_enter 仅记录 syscall ID 和 6 个 `unsigned long` 参数槽，
+  不解引用 timex 指针。
+- 新发现并记录 E2a/E2b 区分：在 sys_enter 时执行 bpf_probe_read_user 只得到
+  pre-dispatch user-memory snapshot；若其他线程并发修改共享结构，该快照不保证
+  与 syscall handler 后续 copy_from_user 实际读到的字节一致。因此禁止将 E2a
+  模式值称为 kernel-consumed request。
+- 审计 Linux v6.12 `clock_adjtime()` / `clock_adjtime32()`：copy/compat
+  conversion 之后进入 `do_clock_adjtime()`；`adjtimex()` /
+  `adjtimex_time32()` 在结构复制/转换后进入 `do_adjtimex()`。这些内部函数
+  是观察 E2b normalized kernel-owned request 的候选 hook，但 target BTF、
+  kprobe/fentry、实际符号、非 syscall 调用者和 kernel/BSP 版本必须先核验。
+- 新增 `doc/Navigation/45_syscall_tracepoint_vs_postcopy_kernel_request.md`，
+  定义 E1、E2a、E2b、E3a handler return、E3b outer syscall return、E3c
+  copy-back failure inference 和 E5 独立时钟效果；明确只有在已核验 wrapper
+  顺序且观察到 handler 非负返回后 outer syscall=-EFAULT 时，才能推断为
+  handler 后的 copyback failure；仍不证明实际时钟效果。
+- 修订 doc42 对 E2 和 sys_enter 用户内存读取边界；更新 Navigation README。
+  本轮为固定源码审计与设计更新，不实现/附加内核 hook，不启用 tracing/eBPF，
+  不修改系统时钟或 PHC。所有 Orin BTF/ARM64/driver/运行态证据继续标记未完成。
   保持仅 nav 分支，N1/N9 未验收，不合并 main。
