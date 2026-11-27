@@ -335,3 +335,5 @@
 - [59 — Linux v7.0 BPF task storage and invocation allocator design](59_linux_v7_task_storage_and_invocation_allocator_design.md)
 
 - [60 — Linux clock-adjustment BPF wire ABI and allocator pseudocode](60_linux_clock_adjustment_bpf_wire_abi_and_allocator_pseudocode.md)
+
+- [61 — Linux clock-adjustment pure-Python producer state model](61_linux_clock_adjustment_pure_python_producer_state_model.md)
