@@ -88,6 +88,67 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
             continue
 
         side = "entry" if event_type == entry_type else "exit"
+        if side == "entry":
+            if stream_kind == "syscall":
+                raw_clockid = event.get("raw_clockid")
+                modes_status = event.get("modes_read_status", "not_requested")
+                if raw_clockid is not None and (
+                    not isinstance(raw_clockid, int) or isinstance(raw_clockid, bool)
+                    or not -(1 << 31) <= raw_clockid <= (1 << 31) - 1
+                ):
+                    issues.append({"code": "invalid_invocation_raw_clockid",
+                                   "record_index": index})
+                    continue
+                if not isinstance(modes_status, str) or not modes_status or len(modes_status) > 64:
+                    issues.append({"code": "invalid_invocation_modes_status",
+                                   "record_index": index})
+                    continue
+                raw_modes = event.get("raw_modes")
+                if modes_status == "ok" and (
+                    not isinstance(raw_modes, int) or isinstance(raw_modes, bool)
+                    or not 0 <= raw_modes <= 0xFFFFFFFF
+                ):
+                    issues.append({"code": "invalid_invocation_raw_modes",
+                                   "record_index": index})
+                    continue
+                entry_payload = {
+                    "raw_clockid": raw_clockid,
+                    "modes_read_status": modes_status,
+                    "raw_modes": raw_modes if modes_status == "ok" else None,
+                    "mode_decode": event.get("mode_decode") if modes_status == "ok" else None,
+                }
+            else:
+                raw_modes = event.get("raw_modes")
+                raw_clockid = event.get("raw_clockid")
+                if (not isinstance(raw_modes, int) or isinstance(raw_modes, bool)
+                        or not 0 <= raw_modes <= 0xFFFFFFFF):
+                    issues.append({"code": "invalid_invocation_handler_modes",
+                                   "record_index": index})
+                    continue
+                if name == "do_clock_adjtime":
+                    if (not isinstance(raw_clockid, int) or isinstance(raw_clockid, bool)
+                            or not -(1 << 31) <= raw_clockid <= (1 << 31) - 1):
+                        issues.append({"code": "invalid_invocation_handler_clockid",
+                                       "record_index": index})
+                        continue
+                elif raw_clockid is not None:
+                    issues.append({"code": "unexpected_invocation_handler_clockid",
+                                   "record_index": index})
+                    continue
+                entry_payload = {
+                    "raw_modes": raw_modes,
+                    "mode_decode": event.get("mode_decode"),
+                    "raw_clockid": raw_clockid,
+                }
+        else:
+            return_value = event.get("return_value")
+            if (not isinstance(return_value, int) or isinstance(return_value, bool)
+                    or not -(1 << 63) <= return_value <= (1 << 63) - 1):
+                issues.append({"code": "invalid_invocation_return_value",
+                               "record_index": index})
+                continue
+            exit_payload = {"return_value": return_value}
+
         if slot[side] is not None:
             issues.append({"code": "duplicate_invocation_side", "record_index": index,
                            "side": side, "invocation_id": identity["invocation_id"]})
@@ -97,6 +158,7 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
             "cpu": event["cpu"],
             "sequence": event["sequence"],
             "event_id": event["event_id"],
+            **(entry_payload if side == "entry" else exit_payload),
         }
         valid_count += 1
 
@@ -133,6 +195,15 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
             "exit_event_id": slot["exit"]["event_id"],
             "parent_syscall_invocation_id": slot["parent_syscall_invocation_id"],
             "parent_context_status": slot["parent_context_status"],
+            "raw_clockid": slot["entry"].get("raw_clockid"),
+            "modes_read_status": slot["entry"].get("modes_read_status"),
+            "raw_modes": slot["entry"].get("raw_modes"),
+            "mode_decode": slot["entry"].get("mode_decode"),
+            "raw_return_value": slot["exit"]["return_value"],
+            "raw_handler_return": (slot["exit"]["return_value"]
+                                   if stream_kind == "kernel_handler" else None),
+            "duration_ns": slot["exit"]["monotonic_ns"] - slot["entry"]["monotonic_ns"],
+            "clock_effect": "not_measured",
         })
 
     return {
