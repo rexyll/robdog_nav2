@@ -45,6 +45,16 @@ def _validate_common_event(event: dict[str, Any], index: int) -> tuple[dict[str,
     if not _is_int(sequence) or sequence < 0 or sequence > _UINT64_MAX:
         issues.append({"code": "invalid_sequence", "event_index": index})
 
+    if event_type == "syscall_enter":
+        raw_clockid = event.get("raw_clockid")
+        if raw_clockid is not None and (
+            not _is_int(raw_clockid) or not -(1 << 31) <= raw_clockid <= (1 << 31) - 1
+        ):
+            issues.append({"code": "invalid_raw_clockid", "event_index": index})
+        modes_status = event.get("modes_read_status", "not_requested")
+        if not isinstance(modes_status, str) or not modes_status or len(modes_status) > 64:
+            issues.append({"code": "invalid_modes_read_status", "event_index": index})
+
     if event_type == "syscall_exit":
         return_value = event.get("return_value")
         if not _is_int(return_value) or not _INT64_MIN <= return_value <= _INT64_MAX:
@@ -74,6 +84,7 @@ def _validate_common_event(event: dict[str, Any], index: int) -> tuple[dict[str,
             else:
                 projected["modes_read_status"] = "invalid_value"
                 issues.append({"code": "invalid_raw_modes", "event_index": index})
+                return None, issues
         else:
             projected["mode_decode"] = None
     else:
