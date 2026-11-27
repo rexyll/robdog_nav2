@@ -106,3 +106,74 @@ def test_clock_adjtime_does_not_require_nested_adjtimex_handler():
     )
     assert r["counts"]["joined_pairs"] == 1
     assert r["reduction_status"] == "consistent"
+
+
+def invocation_sc(name, invocation_id, start, end):
+    return {
+        "capture_session_id": "c", "boot_id": "b", "task_instance_id": "t",
+        "invocation_id": invocation_id, "pid_tgid": 11, "name": name,
+        "entry_monotonic_ns": start, "exit_monotonic_ns": end,
+    }
+
+
+def invocation_kh(name, invocation_id, parent_id, start, end, status="matched"):
+    return {
+        "capture_session_id": "c", "boot_id": "b", "task_instance_id": "t",
+        "invocation_id": invocation_id, "parent_syscall_invocation_id": parent_id,
+        "parent_context_status": status, "pid_tgid": 11, "name": name,
+        "entry_monotonic_ns": start, "exit_monotonic_ns": end,
+    }
+
+
+def test_invocation_join_uses_exact_parent_id_and_allows_one_to_many():
+    from robodog_gnss_time.linux_clock_adjustment_joiner import (
+        correlate_clock_adjustment_invocation_observations,
+    )
+    syscall = {"reduction_status": "consistent",
+               "pairs": [invocation_sc("clock_adjtime", "sys-1", 100, 400)]}
+    handlers = {"reduction_status": "consistent", "pairs": [
+        invocation_kh("do_clock_adjtime", "h-1", "sys-1", 120, 380),
+        invocation_kh("do_adjtimex", "h-2", "sys-1", 180, 300),
+    ]}
+    result = correlate_clock_adjustment_invocation_observations(syscall, handlers)
+    assert result["reduction_status"] == "consistent"
+    assert result["counts"]["joined_pairs"] == 2
+    assert {x["identity_join"] for x in result["joins"]} == {
+        "exact_parent_syscall_invocation_id"
+    }
+
+
+def test_invocation_join_rejects_wrong_parent_id_and_pid():
+    from robodog_gnss_time.linux_clock_adjustment_joiner import (
+        correlate_clock_adjustment_invocation_observations,
+    )
+    syscall = {"reduction_status": "consistent",
+               "pairs": [invocation_sc("clock_adjtime", "sys-1", 100, 400)]}
+    wrong_parent = invocation_kh("do_clock_adjtime", "h-1", "sys-other", 120, 380)
+    result = correlate_clock_adjustment_invocation_observations(
+        syscall, {"reduction_status": "consistent", "pairs": [wrong_parent]}
+    )
+    assert result["reduction_status"] == "partial"
+    assert "handler_parent_invocation_not_found" in [x["code"] for x in result["issues"]]
+
+    wrong_pid = invocation_kh("do_clock_adjtime", "h-2", "sys-1", 120, 380)
+    wrong_pid["pid_tgid"] = 99
+    result = correlate_clock_adjustment_invocation_observations(
+        syscall, {"reduction_status": "consistent", "pairs": [wrong_pid]}
+    )
+    assert "handler_parent_pid_mismatch" in [x["code"] for x in result["issues"]]
+
+
+def test_invocation_join_rejects_unavailable_parent_context():
+    from robodog_gnss_time.linux_clock_adjustment_joiner import (
+        correlate_clock_adjustment_invocation_observations,
+    )
+    syscall = {"reduction_status": "consistent",
+               "pairs": [invocation_sc("clock_adjtime", "sys-1", 100, 400)]}
+    handler = invocation_kh("do_clock_adjtime", "h-1", None, 120, 380,
+                            status="stack_overflow")
+    result = correlate_clock_adjustment_invocation_observations(
+        syscall, {"reduction_status": "consistent", "pairs": [handler]}
+    )
+    assert result["reduction_status"] == "partial"
+    assert "handler_parent_context_unavailable" in [x["code"] for x in result["issues"]]
