@@ -381,7 +381,8 @@ def test_end_to_end_multi_task_fixture_reconciles_global_and_per_cpu_gates():
         kind = record["stream_kind"]
         is_entry = event_type.endswith("_enter")
         if is_entry:
-            invocation_id = session.allocate_invocation_id(task_id, kind)
+            allocator_kind = "syscall" if kind == "syscall" else "handler"
+            invocation_id = session.allocate_invocation_id(task_id, allocator_kind)
             assert invocation_id is not None
             task_invocation_ids[task_id][record["invocation_id"]] = invocation_id
             session.begin_invocation(task_id, kind)
