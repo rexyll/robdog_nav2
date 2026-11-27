@@ -57,6 +57,133 @@ def _validate_snapshot(snapshot, label, issues):
     return result
 
 
+_GLOBAL_COUNTERS = (
+    "event_id_allocation_attempts", "event_id_allocation_successes",
+    "event_id_allocation_failures",
+    "task_instance_id_allocation_attempts", "task_instance_id_allocation_successes",
+    "task_instance_id_allocation_failures",
+    "task_context_admission_attempts", "task_context_admitted",
+    "task_context_capacity_rejected",
+    "task_context_create_attempts", "task_context_create_successes",
+    "task_context_create_failures",
+    "task_context_init_attempts", "task_context_init_successes",
+    "task_context_init_failures",
+    "syscall_invocation_allocation_attempts",
+    "syscall_invocation_allocation_successes",
+    "syscall_invocation_allocation_failures",
+    "handler_invocation_allocation_attempts",
+    "handler_invocation_allocation_successes",
+    "handler_invocation_allocation_failures",
+    "cpu_sequence_allocation_failures",
+    "syscall_context_stack_overflow", "syscall_context_pop_mismatch",
+    "handler_context_stack_overflow", "handler_context_pop_mismatch",
+    "handler_parent_context_unavailable", "task_exit_observed",
+    "task_exit_with_pending_syscalls", "task_exit_with_pending_handlers",
+)
+_GLOBAL_GAUGES = (
+    "active_syscall_invocations", "active_handler_invocations",
+    "inflight_bpf_callbacks", "task_context_reservations",
+)
+
+
+def audit_clock_adjustment_producer_runtime_counters(initial, final):
+    """Audit global ID/task-context counters and producer quiescence gauges."""
+    issues = []
+    if not isinstance(initial, dict) or not isinstance(final, dict):
+        raise TypeError("global runtime snapshots must be mappings")
+    for field in ("capture_session_id", "boot_id"):
+        a, b = initial.get(field), final.get(field)
+        if not isinstance(a, str) or not a.strip() or a != b:
+            issues.append({"code": "global_runtime_identity_mismatch", "field": field})
+    if final.get("snapshot_after_producer_detach") is not True:
+        issues.append({"code": "global_snapshot_not_after_producer_detach"})
+
+    before, after = initial.get("counters"), final.get("counters")
+    if not isinstance(before, dict) or not isinstance(after, dict):
+        issues.append({"code": "invalid_global_runtime_counters"})
+        before, after = {}, {}
+    deltas = {}
+    for name in _GLOBAL_COUNTERS:
+        a, b = before.get(name), after.get(name)
+        if not _uint(a) or not _uint(b):
+            issues.append({"code": "invalid_global_runtime_counter", "counter": name})
+            continue
+        if b < a:
+            issues.append({"code": "global_runtime_counter_regression", "counter": name})
+            continue
+        deltas[name] = b - a
+
+    equations = (
+        ("event_id_allocation", "event_id_allocation_attempts",
+         ("event_id_allocation_successes", "event_id_allocation_failures")),
+        ("task_instance_id_allocation", "task_instance_id_allocation_attempts",
+         ("task_instance_id_allocation_successes", "task_instance_id_allocation_failures")),
+        ("task_context_admission", "task_context_admission_attempts",
+         ("task_context_admitted", "task_context_capacity_rejected")),
+        ("task_context_create", "task_context_create_attempts",
+         ("task_context_create_successes", "task_context_create_failures")),
+        ("task_context_init", "task_context_init_attempts",
+         ("task_context_init_successes", "task_context_init_failures")),
+        ("syscall_invocation_allocation", "syscall_invocation_allocation_attempts",
+         ("syscall_invocation_allocation_successes", "syscall_invocation_allocation_failures")),
+        ("handler_invocation_allocation", "handler_invocation_allocation_attempts",
+         ("handler_invocation_allocation_successes", "handler_invocation_allocation_failures")),
+    )
+    if len(deltas) == len(_GLOBAL_COUNTERS):
+        for label, total_name, parts in equations:
+            accounted = sum(deltas[name] for name in parts)
+            if deltas[total_name] != accounted:
+                issues.append({"code": "global_runtime_counter_equation_mismatch",
+                               "equation": label, "attempts": deltas[total_name],
+                               "accounted": accounted})
+
+    failure_counters = (
+        "event_id_allocation_failures", "task_instance_id_allocation_failures",
+        "task_context_capacity_rejected", "task_context_create_failures",
+        "task_context_init_failures", "syscall_invocation_allocation_failures",
+        "handler_invocation_allocation_failures", "cpu_sequence_allocation_failures",
+        "syscall_context_stack_overflow", "syscall_context_pop_mismatch",
+        "handler_context_stack_overflow", "handler_context_pop_mismatch",
+        "handler_parent_context_unavailable", "task_exit_with_pending_syscalls",
+        "task_exit_with_pending_handlers",
+    )
+    for name in failure_counters:
+        if deltas.get(name, 0) > 0:
+            issues.append({"code": "producer_runtime_failure_observed",
+                           "counter": name, "delta": deltas[name]})
+
+    gauges_before, gauges_after = initial.get("gauges"), final.get("gauges")
+    if not isinstance(gauges_before, dict) or not isinstance(gauges_after, dict):
+        issues.append({"code": "invalid_global_runtime_gauges"})
+        gauges_after = {}
+    final_gauges = {}
+    for name in _GLOBAL_GAUGES:
+        value = gauges_after.get(name)
+        if not _uint(value):
+            issues.append({"code": "invalid_global_runtime_gauge", "gauge": name})
+            continue
+        final_gauges[name] = value
+        if name != "task_context_reservations" and value != 0:
+            issues.append({"code": "producer_runtime_work_remaining",
+                           "gauge": name, "value": value})
+
+    return {
+        "schema_version": 1,
+        "runtime_status": "consistent" if not issues else "partial",
+        "counter_deltas": deltas,
+        "final_gauges": final_gauges,
+        "task_context_reservations_zero_required": False,
+        "issues": issues,
+        "interpretation": (
+            "Consistent means the supplied global allocator/task-context counters "
+            "reconcile and active invocation/callback gauges are zero after producer "
+            "detach. A nonzero task_context_reservations gauge is allowed because "
+            "live tasks may own idle storage; the session map is destroyed after drain."
+        ),
+    }
+
+
+
 def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_snapshot, drain_snapshot):
     """Reconcile per-CPU allocated sequence, reserve failures and received records.
 
@@ -174,7 +301,26 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
 
     if malformed:
         issues.append({"code": "malformed_event_count", "count": malformed})
-    consistent = not issues and all(item["status"] == "consistent" for item in per_cpu)
+    global_initial = (initial_snapshot.get("global")
+                      if isinstance(initial_snapshot, dict) else None)
+    global_final = (final_snapshot.get("global")
+                    if isinstance(final_snapshot, dict) else None)
+    global_runtime = None
+    if global_initial is not None or global_final is not None:
+        if global_initial is None or global_final is None:
+            global_runtime = {
+                "runtime_status": "partial",
+                "issues": [{"code": "missing_global_runtime_snapshot"}],
+            }
+        else:
+            global_runtime = audit_clock_adjustment_producer_runtime_counters(
+                global_initial, global_final
+            )
+        issues.extend(global_runtime.get("issues", []))
+
+    consistent = (not issues and all(item["status"] == "consistent" for item in per_cpu)
+                  and (global_runtime is None
+                       or global_runtime.get("runtime_status") == "consistent"))
     return {
         "schema_version": 1,
         "integrity_status": "complete" if consistent else "partial",
@@ -189,6 +335,7 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
             "received_records": sum(x["received_records"] for x in per_cpu),
         },
         "per_cpu": per_cpu,
+        "global_runtime": global_runtime,
         "drain": drain,
         "issues": issues,
         "interpretation": (
@@ -200,4 +347,4 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
     }
 
 
-__all__ = ["audit_clock_adjustment_capture_integrity"]
+__all__ = [\n    "audit_clock_adjustment_capture_integrity",\n    "audit_clock_adjustment_producer_runtime_counters",\n]
