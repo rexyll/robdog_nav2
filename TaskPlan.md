@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.284
+- 文档版本：v0.3.285
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1607,3 +1607,13 @@
 - 新增/调整 synthetic tests：clock_adjtime 同时关联 dispatch handler 与 nested do_adjtimex；直接 adjtimex 关联 do_adjtimex；clock_adjtime 不要求一定观测到 nested callback；删除旧的一对一冲突假设测试。代码提交 joiner `f38cfbc3a55fcdf4d4785348c989361db3e74962`，测试提交 `db71acd9ad7c2e5f52175ab5d5625b9e6c0322d0`，替换测试与 Navigation 47 文档提交见本节更新历史。
 - 验证边界：代码已推送，CI 尚未完成；synthetic tests 只验证 reducer/joiner 的逻辑关系，不证明特定目标 kernel 的 callback 路径。interval containment 仍不是 call-stack proof；同线程信号处理器中的嵌套 syscall 可能需要 invocation cookie/parent context 消歧。未加载 BPF、未启用 tracepoint、未修改时钟。
 - 下一步：检查 joiner 对同一 handler 的嵌套 interval 和同线程嵌套 syscall 的歧义策略；随后检查 outer syscall reducer 目前的 duplicate-entry overwrite 是否同样需要 LIFO stack，以免信号处理器嵌套同名 syscall 时丢失外层 entry。等待 GNSS Runtime CI 最终结果，VM live capability JSON 仍待用户提供。仅 nav 分支，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.285）
+
+- 继续审计 outer syscall reducer，发现其与此前修复前的 kernel-handler reducer 存在相同缺陷：相同 `(boot_id, pid_tgid, syscall)` 在未返回时再次 entry 会覆盖外层 invocation。Linux 同一线程可能在被信号打断后由 signal handler 再次发起同名 syscall，因此不能把同 key 第二次 entry 直接视为重复采集。
+- 将 syscall pending state 改为 per-key LIFO stack；exit 消费最近一次 entry，外层 invocation 保留。新增 `nested_syscall_entries`，活动 invocation 数参与 max_pending 容量限制，输出 schema v2 并声明 `pairing_policy=lifo_same_thread_syscall_stack_without_invocation_cookie`。保留 `inflight_overwrite` 兼容计数，但新策略不再用它分类合法嵌套。
+- 新增 synthetic tests：完整双层嵌套按 LIFO 配对；缺少内层 exit 时只配对最近 entry，并把外层 entry 保留为 unpaired。更新 Navigation 44 契约文档。
+- 提交：joiner one-to-many `f38cfbc3a55fcdf4d4785348c989361db3e74962`；joiner tests `db71acd9ad7c2e5f52175ab5d5625b9e6c0322d0`；Navigation 47 `3322b154db6945e929e1bc842e5bfd7c4055f6c0`；syscall reducer `34c32f16f850b54b81612147c866373a7abbf210`；syscall tests `bd5056cbebf55edb6aa05d1f73697f3e448a82e3`；Navigation 44 文档 `7415790bcdaa0629b429f92455d2aee27e040256`。
+- 验证边界：CI 尚未完成；仅 synthetic reducer/joiner tests 设计验证，不能证明 kernel capture ordering 或跨 CPU 迁移时事件交付顺序。LIFO 无 invocation cookie 时仍不是严格 ancestry proof；若 producer 有丢失/乱序，可能将 exit 分配给最近 pending entry，因此必须在后续 producer contract 中引入 invocation identity 或明确失配/丢失信号。未启用 tracing/BPF，未改变系统时钟。
+- 下一步：审查 reducer 在跨 CPU 迁移时如何定义 per-CPU sequence 与同线程事件总序；完善 producer sequence/cookie/drop/drain contract。检查 joiner 同一 handler 嵌套及同线程 nested syscall 的 interval ambiguity。CI 最终结果与 VM live capability JSON 仍是后续 Gate。仅 nav 分支，不合并 main。
