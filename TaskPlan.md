@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.292
+- 文档版本：v0.3.293
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1688,3 +1688,15 @@
 - 提交：exact joiner `14e8b54b9bd4c7c3601d8171b6dc7e1cbbd5ea94`；pipeline integration `55162359cf9f324e526b2ef4833f4f8d0e779ec6`；joiner tests `38b1ac2ceb620e33b8a884bde46edc2f96b73752`；pipeline import formatting `ef2ec57171fbde6f1d296c750400d9dd1df4555e`；pipeline import fix `0450f01d35873deeaa8ae2a38e7cc80f21807b9c`；report output/gate cleanup `c5190435965ec13c1ded505ca4e710a2be32715e`；pipeline integration tests `afa00509a88f263f4d7c338a1141a4f7288264ea`；Navigation 50 `fe045b9aa7277e9d3410dc1fa14280278761acff`；Navigation 57 `e833307192cc66fa37cbe7fb1fce0769c76eec1d`。
 - 验证边界：上述实现和 synthetic tests 已提交，等待最新 CI 最终结果。strict path 仍需 schema-v2 producer 真实生成 IDs；旧 schema-v1 LIFO reducers 与 interval joiner 保留为兼容路径，尚未迁移/替换。unified report 的 legacy mode 不把缺少 v2 输入视为 v2 gate 通过。
 - 下一步：审查 exact parent join 对 handler 嵌套与 direct syscall 路径的关系标签；将 strict invocation pair 的返回值、copy-back errno、handler raw return 和 clock adjustment 结果纳入规范输出；再设计 producer-side ID allocator 的并发、task exit 与 map capacity 行为。仅 nav 分支，不合并 main。
+
+
+## 本轮 invocation evidence 与全局 event ID 审计（2026-11-27 / v0.3.293）
+
+- strict invocation reducer 增加 payload-specific validation 与 evidence projection：syscall entry 检查可选 signed clockid、modes_read_status 与 raw_modes；handler entry 检查 raw_modes、do_clock_adjtime 的 signed clockid 以及 do_adjtimex 不携带 clockid；entry/exit 保存原始请求参数与 signed int64 return value，并生成 TIMEX mode classification 和 stage-specific return interpretation。
+- exact parent-ID joiner 增加外层 syscall/内部 handler raw return 保留；copy-back failure inference 仅在显式传入 pinned Linux v6.12 wrapper contract、顶层 do_clock_adjtime、outer syscall -EFAULT 且 handler return 非负时成立。默认不推断；嵌套 do_adjtimex 不可独立触发 copy-back 归因。修正 native/compat 关系标签：clock_adjtime32 的 do_clock_adjtime 为 dispatch，clock_adjtime32 的 do_adjtimex 为 nested；adjtimex_time32 的 do_adjtimex 为 direct。
+- 新增跨 syscall/handler 两条 stream 的 event_id uniqueness audit，唯一性作用域为 (capture_session_id, boot_id)；统一报告新增 event_id_uniqueness gate，避免两个 producer stream 各自无重复但彼此 event_id 撞号。
+- 新增测试覆盖跨 stream ID collision、request modes/clockid/return preservation、native+compat relation、pinned wrapper copy-back gating。
+- 提交：invocation pair evidence c462e437bf5b8f8b94f283bdd2b237e26d6eb9d2；strict joiner wrapper inference 4c476455103ba36eacf7cd63250c7c27c89d34a9；pipeline wrapper contract forwarding 5b585e2f4742d4373b9fbb9af2ec9d83082bf07a；cross-stream event audit 5eba3433ad3a753e0716dbb01f5603f16647652b；pipeline event gate 8d7a2b3e876bab518ca142d1ca2ce0473581e535；import fix 67f9ac5fde354346209761f70377095fb921a5cd；event audit tests 19baafffa09a8b6e608eb4f337ad6f88a43ac52b；pipeline tests 2cb503bc7bd697b0db3a168ad814f930444311d6；Navigation 50 783b8711376787c095870f4baf9e5187fa26087f；Navigation 57 4440eb6b67c6b1928c343355e8c149780bd09859。
+- CI 最终验收：最新运行时提交 2cb503bc 的 GNSS Runtime run 45932995336 success，ROS 2 Package run 45932995325 success。此前 pipeline 接入期间出现过两类短暂回归：导入行的转义换行导致 SyntaxError，已修复；报告漏输出 invocation_parent_join 导致测试 KeyError，已修复。后续 c519043 及最终 2cb503bc 均通过，失败提交不作为最终验证依据。
+- 当前 strict path 已可由 offline unified report 消费，但真实 producer 尚未生成 task/event/invocation/parent IDs；BPF attachability、ring-buffer delivery、task exit cleanup 与 Orin BSP 仍未验证。schema-v1 LIFO reducers/joiner 保留兼容，不得宣称已被 strict path 替换。仅 nav 分支，不合并 main。
+- 下一步：定义 producer-side event/invocation ID allocator 的原子分配与跨 stream namespace；将 task-local storage/hash map 方案落到 bounded stack layout、task-exit cleanup accounting 和 quiescence counters；在用户授权的特权诊断上下文下再补充 tracefs/function symbol inventory。VM 现有 unprivileged baseline 不覆盖这些能力。
