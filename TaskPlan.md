@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.299
+- 文档版本：v0.3.300
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1762,3 +1762,14 @@
 - 新增/更新 Navigation 48、49、61，提交：producer model `076b4585eb781c830fe3979a7b0e1371fd6a6f65`；stream test fix `249cccf36e67cc24d12b40e6d997c4f4586750d4`；explicit detach `4869cc8570360c51d6afd7caab50d5d124193d04`；detach test `fe3654cf6110fc6d7f26ee7be04dc17d6779eee9`；producer loss gates `df42cb441766557b1e3a8137bc211d0a50e85393`；loss gate tests `f3701879fe5046e507e880e2a0839c4edf51e9d9`；sequence audit hardening `65e4114bac4e174ecaa93920aa6dc3885a71312d`；global gauge tests `07336c4e1dd1b391bbd10c35365e6eb7daff5595`；counter lifecycle equation `021c02cdbbd6c0b601daab7c7a498d556b159d41`；no-empty-stream test `ba91173319bb793bd59e03db3af8cf467492619d`；docs Navigation 48 `63177013be4e2f39433b015203c76d7847b02896`，49 `2db1520d1a716fe647ebf136b561f5ef36a8b94e`，61 `88955339fb9316df4288e1625a7157236f37e1a9`。
 - 验证边界：代码和测试已提交，最新 GNSS Runtime / ROS 2 Package CI 等待最终 conclusion。Python model 是状态机 reference only，不代表 BPF C、内核调度、map helper、ringbuf 或 verifier 行为。无 BPF load/attach、无系统时钟修改。
 - 下一步：CI 通过后，审查 producer simulator 的多任务上下文容量与 ID allocator contention；随后将 counter snapshot schema 纳入统一 report fixtures，并设计 target-kernel smoke probe 的授权边界。仅 nav 分支，不合并 main。
+
+
+## 本轮 producer state / global runtime audit CI 验收（2026-11-27 / v0.3.300）
+
+- 最终代码提交 `ba91173319bb793bd59e03db3af8cf467492619d` 的 GNSS Runtime CI run `45935180552` success，ROS 2 Package CI run `45935180707` success。
+- 中间运行时 CI `45935102682` failure 的根因是 known-ring-buffer-loss 测试 fixture 声称存在 1 个 submit_success，却没有向 consumer 提供 sequence=2 的 record，触发 submitted-vs-received mismatch；不是 reducer 逻辑缺陷。测试在 `34c5122a6a347ef0658e457e76d533a6116a06e7` 补入已提交 record 后，最终 `ba911733...` 两项 CI 通过。
+- global producer audit 另增加 task-context lifecycle 约束：task_context_admitted 必须对应 create_attempts；create_successes 对应 init_attempts；init_attempts 对应 task ID allocation attempts；init_successes 对应 task ID allocation successes；reservation gauge delta 必须扣除 create/init failures 与 observed task exits。
+- 新增空 per-CPU snapshot set fail-closed test，避免空输入被误判为 complete；当前 latest test run `ba911733...` 通过 366 项测试（两 ROS distro job 均通过）。
+- 代码修订提交：known-loss fixture `34c5122a6a347ef0658e457e76d533a6116a06e7`；task init/task ID success equation `6dda2296f9b9f5b3d45adbb5e65482bc60aa0e7e`；empty CPU snapshot test `ba91173319bb793bd59e03db3af8cf467492619d`。
+- 运行时状态仍是 reference model + offline reducers；没有 BPF C producer，没有 clang/verifier/attach 证据，没有真实 kernel capture。当前 global snapshot contract 仍是 future producer obligation。
+- 下一步：扩展 Python state simulator 到多任务与全局 ID allocator contention；验证同一 task 在 signal nested path、不同 task 并发和 task exit/ID reuse 场景下的边界；再将 state machine 转为 verifier-friendly BPF C design review。仅 nav 分支，不合并 main。
