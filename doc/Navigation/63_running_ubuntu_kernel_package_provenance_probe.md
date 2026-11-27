@@ -29,8 +29,8 @@ No sudo is required. The script only invokes `uname` and `dpkg-query`. It does n
 
 The report is `observed` only if:
 1. at least one candidate kernel package is installed;
-2. dpkg reports an owner for the running kernel image path;
-3. an installed image package is confirmed as owner of the running kernel image;
+2. dpkg reports an owner specifically for `/boot/vmlinuz-<release>`;
+3. that exact owner matches an installed signed or unsigned kernel-image binary package (ownership of `/boot/config-*` or `/usr/lib/modules/*/vmlinuz` alone is insufficient);
 4. at least one installed kernel-code package (modules, headers, buildinfo or unsigned image) supplies a source package and source version;
 5. the kernel-code packages agree on one source package/version identity. The signed-image package may legitimately have a different source package identity.
 
@@ -58,3 +58,8 @@ No BPF program was compiled or loaded; no map or probe was created.
 - Published linux-hwe-7.0 package pool: https://security.ubuntu.com/ubuntu/pool/main/l/linux-hwe-7.0/
 
 These sources establish public package-family relationships, not what is installed on the user's VM.
+
+
+## 6. Provenance owner-matching hardening
+
+The collector compares the owner list for `/boot/vmlinuz-<release>` only against installed image binary packages. It strips a possible `:architecture` suffix from dpkg package identifiers before comparison, while retaining the original identifiers in the raw package/owner records. A match on the config file or modules-tree image does not prove ownership of the running `/boot/vmlinuz` image.
