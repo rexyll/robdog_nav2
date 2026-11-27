@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.282
+- 文档版本：v0.3.283
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1588,3 +1588,12 @@
 - 提交：reducer schema v2 `f85d3c923ffce21fdb93dfaceb42aa2d4ceb1d52`；schema test `ef5beb42a0ccf856f0871ff3ce1aff4b4859722d`；Navigation 46 `1140fdfcd1623a5c6b67870bcac2239c73f92ace`。
 - 当前 CI 尚待最终 head 结果；合成测试尚未由本轮最终 head 确认。没有真实内核 hook、BPF attach、系统时钟修改或硬件验证。
 - 下一步：CI 完成后检查全量回归；然后验证 outer syscall reducer/joiner 的 compat 映射与嵌套区间行为，并继续等待 VM live capability JSON。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮 CI 故障定位与夹具修正（2026-11-27 / v0.3.283）
+
+- 新增 compat syscall tracepoint 事件名后，GNSS Runtime CI 的两个发行版 job 暴露测试夹具不完整：fixture 的 `available_events` 已列出四个 compat entry/exit 事件，但未为它们创建对应 `format` 文件；探测器按设计返回 `format_unreadable`，测试却期待 `available`。因此失败是 synthetic fixture 漏项，不是 Linux runtime、权限或新事件解析逻辑故障。
+- 失败记录：GNSS runtime run `45928749749`（head `1846d94...`）与 `45928781382`（head `88a8bb4...`）两平台均出现同一断言；ROS 2 package CI 对应 run 均成功。失败日志为 `AssertionError: assert 'format_unreadable' == 'available'`，307 tests 中 306 passed / 1 failed。
+- 修复测试夹具：为 `sys_enter/exit_clock_adjtime32` 与 `sys_enter/exit_adjtimex_time32` 创建对应 format 文件。提交 `d9044bc1026906a5c393fe0170e9c559bff3be73`。随后将 nested counter 的递增移动到容量检查之后，确保只计入实际接受的嵌套 entry，提交 `831711a49beaab97f745f9dc2f77e1b7c75b4984`。
+- 修复后 CI 仍在运行；不得将早期失败忽略，也不得将后续运行中状态写成通过。等待最新 nav HEAD 对应的 GNSS Runtime 与 ROS 2 Package 两套 CI 最终结果。
+- 当前变更仅在 nav；main HEAD 未触碰。未执行 tracepoint enable、BPF load/attach 或时钟调整 syscall。VM live capability JSON 仍待用户同步最新 nav 后运行采集器获得。
