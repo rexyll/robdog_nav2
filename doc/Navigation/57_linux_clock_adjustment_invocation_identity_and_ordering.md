@@ -44,6 +44,26 @@ The task_instance_id must prevent PID/TID reuse from reusing an old invocation n
 
 The stack must have a fixed, documented maximum depth. Overflow must not overwrite an outer context: increment a dedicated counter, mark the nested context unavailable, and emit an event with `parent_context_status=stack_overflow`. Task exit cleanup should delete per-task state; missing cleanup must be detected by stale-context accounting rather than silently reused.
 
+
+## 3A. Task-local storage option (Linux v6.12 source audit)
+
+A bounded per-task context is a stronger candidate than a plain hash keyed only by pid_tgid:
+
+- Linux v6.12 defines `BPF_MAP_TYPE_TASK_STORAGE` and `bpf_task_storage_get()`.
+- The task-storage implementation stores local data through the task object and frees it from `free_task()` via `bpf_task_storage_free()`; this avoids stale state being silently inherited by a later task that reuses the same numeric PID/TID.
+- The v6.12 task-storage map operations deliberately use a `get_next_key` implementation that returns `-ENOTSUPP`. Userspace cannot enumerate all task-local entries using ordinary map iteration. A final `pending_syscalls=0` claim therefore cannot be derived by dumping the task-storage map.
+- The tracing helper dispatcher exposes `bpf_task_storage_get`; the exact helper/program-type/attach combination must still be confirmed against the target kernel and verifier. Helper availability is not proof that a particular program can load.
+
+Potential design: store the fixed-depth syscall context stack and per-task counter in task storage, while maintaining separate producer-wide active/pending counters and explicit task-exit accounting. At task exit, a dedicated lifecycle observation must account for abandoned active invocation depth before task storage is eventually freed. If that observation is unavailable or its counter cannot be reconciled, final capture status is partial. Do not infer zero pending work from automatic memory cleanup.
+
+This is a candidate, not a selected implementation. Compare task storage with a bounded hash map keyed by a task-lifetime token, including memory pressure, map enumeration, task-exit ordering, helper support, and target verifier behavior.
+
+Pinned source references:
+- Linux v6.12 task storage implementation: https://github.com/torvalds/linux/blob/v6.12/kernel/bpf/bpf_task_storage.c
+- Linux v6.12 task storage release from task freeing: https://github.com/torvalds/linux/blob/v6.12/kernel/fork.c#L609-L615
+- Linux v6.12 tracing helper dispatch: https://github.com/torvalds/linux/blob/v6.12/kernel/trace/bpf_trace.c#L1524-L1529
+- Helper program-type availability reference: https://docs.ebpf.io/linux/helper-function/bpf_task_storage_get/
+
 ## 4. Handler parent context
 
 At handler entry, the producer reads the current task context:
