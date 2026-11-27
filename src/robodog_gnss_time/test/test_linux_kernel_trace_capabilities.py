@@ -216,3 +216,45 @@ def test_handler_function_inventory_distinguishes_unavailable_from_absent(tmp_pa
     symbols = report["handler_function_symbols"][0]
     assert symbols["status"] == "not_found"
     assert all(item["status"] == "unknown" for item in symbols["symbols"].values())
+
+
+
+def test_runtime_policy_inventory_reads_security_controls_without_mutation(tmp_path):
+    _write(tmp_path / "proc/sys/kernel/unprivileged_bpf_disabled", "2\n")
+    _write(tmp_path / "proc/sys/kernel/perf_event_paranoid", "3\n")
+    _write(tmp_path / "proc/sys/kernel/kptr_restrict", "2\n")
+    _write(tmp_path / "sys/kernel/security/lockdown", "none [integrity] confidentiality\n")
+    _write(
+        tmp_path / "proc/self/status",
+        "Name:\tpytest\nUid:\t1000\t1000\t1000\t1000\n"
+        "Gid:\t1000\t1000\t1000\t1000\nCapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\nNoNewPrivs:\t1\nSeccomp:\t2\nSeccomp_filters:\t1\n",
+    )
+
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+    policy = report["runtime_policy"]
+
+    assert policy["sysctls"]["unprivileged_bpf_disabled"] == {
+        "status": "ok", "value": "2",
+    }
+    assert policy["sysctls"]["perf_event_paranoid"] == {
+        "status": "ok", "value": "3",
+    }
+    assert policy["lockdown"]["active_mode"] == "integrity"
+    assert policy["process_security"]["fields"]["Uid"].startswith("1000")
+    assert policy["process_security"]["fields"]["CapEff"] == "0000000000000000"
+    assert policy["process_security"]["fields"]["Seccomp"] == "2"
+    assert "no BPF syscall was attempted" in policy["interpretation"]
+    assert not (tmp_path / "proc/sys/kernel/unprivileged_bpf_disabled").read_text().startswith("0")
+
+
+def test_runtime_policy_inventory_fails_closed_when_policy_files_are_unavailable(tmp_path):
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+    policy = report["runtime_policy"]
+
+    assert policy["sysctls"]["unprivileged_bpf_disabled"] == {
+        "status": "not_found", "value": None,
+    }
+    assert policy["lockdown"]["status"] == "not_found"
+    assert policy["process_security"]["status"] == "not_found"
+    assert policy["process_security"]["fields"] == {}
