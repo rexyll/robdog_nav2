@@ -302,3 +302,4 @@
 - [43 — phc2sys clockadj source-to-syscall mapping](43_phc2sys_clockadj_source_to_syscall_mapping.md)
 - [44 — Linux clock adjustment event envelope and userspace reducer](44_linux_clock_adjustment_event_reducer_contract.md)
 - [45 — Syscall tracepoint versus post-copy kernel request evidence](45_syscall_tracepoint_vs_postcopy_kernel_request.md)
+- [46 — Linux clock-adjustment post-copy kernel-handler observation reducer](46_linux_clock_adjustment_kernel_observation_reducer.md)
