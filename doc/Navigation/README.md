@@ -329,3 +329,5 @@
 
 - [56 — Linux clock-adjustment syscall tracepoint ABI coverage](56_linux_clock_adjustment_syscall_tracepoint_abi_coverage.md)
 - [57 — Linux clock-adjustment invocation identity and cross-CPU ordering contract](57_linux_clock_adjustment_invocation_identity_and_ordering.md)
+
+- [58 — Generic VM live kernel capability baseline (2026-11-27)](58_generic_vm_live_kernel_capability_baseline_2026-11-27.md)
