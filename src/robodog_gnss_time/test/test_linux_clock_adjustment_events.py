@@ -202,3 +202,33 @@ def test_unhashable_event_type_is_rejected_without_crashing():
     assert report["issues"][0]["code"] == "unknown_event_type"
     assert "raw_user_pointer" not in str(report)
 
+
+def test_invalid_raw_clockid_is_rejected_without_echoing_object():
+    report = reduce_clock_adjustment_events([
+        _event("syscall_enter", 1, raw_clockid={"fd": 3}),
+    ])
+
+    assert report["reduction_status"] == "partial"
+    assert report["counts"]["malformed_events"] == 1
+    assert report["issues"][0]["code"] == "invalid_raw_clockid"
+
+
+def test_unhashable_modes_read_status_is_rejected():
+    report = reduce_clock_adjustment_events([
+        _event("syscall_enter", 1, modes_read_status=["ok"]),
+    ])
+
+    assert report["reduction_status"] == "partial"
+    assert report["counts"]["malformed_events"] == 1
+    assert report["issues"][0]["code"] == "invalid_modes_read_status"
+
+
+def test_invalid_raw_modes_record_is_not_counted_as_accepted():
+    report = reduce_clock_adjustment_events([
+        _event("syscall_enter", 1, modes_read_status="ok", raw_modes=True),
+    ])
+
+    assert report["reduction_status"] == "partial"
+    assert report["counts"]["accepted_events"] == 0
+    assert report["counts"]["malformed_events"] == 1
+    assert report["issues"][0]["code"] == "invalid_raw_modes"
