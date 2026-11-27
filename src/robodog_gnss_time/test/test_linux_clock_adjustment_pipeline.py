@@ -107,7 +107,7 @@ def test_unified_report_keeps_independent_gates_and_fails_closed():
     )
     assert report["capture_report_status"] == "partial"
     assert set(report["gates"]) == {
-        "producer_integrity", "userspace_pipeline",
+        "producer_integrity", "producer_loss_free", "userspace_pipeline",
         "producer_to_pipeline_record_count", "producer_pipeline_boot_identity",
         "syscall_reduction", "handler_reduction", "syscall_handler_join",
         "capture_lifecycle",
@@ -319,3 +319,50 @@ def test_unified_report_exposes_global_producer_runtime_counter_gate():
     )
     assert report["gates"]["producer_runtime_counters"] is True
     assert report["producer_runtime_counters"]["runtime_status"] == "consistent"
+
+
+def test_known_ring_buffer_loss_fails_loss_free_gate_even_when_accounted():
+    producer = {"per_cpu": [{
+        "producer_id": "clock-step", "boot_id": "boot-a", "cpu": 0,
+        "sequence_allocated": 2, "ringbuf_reserve_failures": 1,
+        "ringbuf_submit_successes": 1,
+    }]}
+    initial = {"per_cpu": [{
+        "producer_id": "clock-step", "boot_id": "boot-a", "cpu": 0,
+        "sequence_allocated": 0, "ringbuf_reserve_failures": 0,
+        "ringbuf_submit_successes": 0,
+    }]}
+    final = producer
+    drain = {
+        "stop_requested": True, "producer_quiesced": True,
+        "ring_buffer_drained": True, "consumer_queue_drained": True,
+        "writer_flushed": True, "writer_closed": True,
+        "final_snapshot_after_drain": True, "queue_depth": 0,
+        "inflight_callbacks": 0, "pending_syscalls": 0, "pending_handlers": 0,
+    }
+    report = build_clock_adjustment_capture_report(
+        [], [], [], initial, final, drain, snapshot(), snapshot(), None,
+    )
+    assert report["producer_integrity"]["integrity_status"] == "complete"
+    assert report["gates"]["producer_loss_free"] is False
+    assert report["capture_report_status"] == "partial"
+
+
+def test_strict_invocation_mode_requires_global_producer_runtime_snapshot():
+    syscalls = [
+        invocation_event("syscall", "syscall_enter", "s-enter", "sys-1", 100, 1),
+        invocation_event("syscall", "syscall_exit", "s-exit", "sys-1", 400, 2),
+    ]
+    handlers = [
+        invocation_event("kernel_handler", "kernel_handler_enter", "h-enter",
+                         "handler-1", 150, 1, "sys-1"),
+        invocation_event("kernel_handler", "kernel_handler_exit", "h-exit",
+                         "handler-1", 350, 2, "sys-1"),
+    ]
+    report = build_clock_adjustment_capture_report(
+        [], [], [], {"per_cpu": []}, {"per_cpu": []}, {},
+        snapshot(), snapshot(), None,
+        syscall_envelopes=syscalls, handler_envelopes=handlers,
+    )
+    assert report["gates"]["producer_runtime_counters"] is False
+    assert report["capture_report_status"] == "partial"
