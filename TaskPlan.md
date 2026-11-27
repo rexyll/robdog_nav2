@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.294
+- 文档版本：v0.3.295
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1712,3 +1712,12 @@
 - 新增 Navigation 59，提交 `d432c08a94974aaad185a279e543198707f5362c`；README 索引提交 `38773c80712ab4ec0ab51b12a99ed3ae1ca44bd8`。未新增 BPF 代码、未创建 map、未 attach probe、未改变时钟。
 - 最新 runtime code baseline `2cb503bc...` 的 GNSS Runtime run `45932995336` success、ROS 2 Package run `45932995325` success；后续仅新增设计文档与 TaskPlan。
 - 下一步：审计 event_id allocator 的 BPF atomic/CMPXCHG 指令与 map update 错误处理；检查 exact Ubuntu source package revision 获取路径；随后形成 BPF C 结构体/CO-RE 伪代码与 verifier-oriented synthetic state-machine tests，仍不加载程序。仅 nav 分支，不合并 main。
+
+
+## 本轮 BPF atomic allocator 与 Ubuntu source provenance 审计（2026-11-27 / v0.3.295）
+
+- 继续审计 upstream Linux v7.0 BPF atomic：UAPI 定义 BPF_ATOMIC/BPF_FETCH/BPF_CMPXCHG，verifier 对 atomic RMW 有专门校验并接受 BPF_ADD、BPF_ADD|BPF_FETCH、BPF_CMPXCHG。可支持共享 ARRAY counter 的 bounded 64-bit cmpxchg allocator 设计，但尚未验证 clang 生成指令、JIT/架构行为或目标 verifier acceptance。
+- 对照 Ubuntu Noble 公开 package metadata：`linux-image-7.0.0-44-generic` 的公开版本为 `7.0.0-44.44~24.04.1`；对应 buildinfo 页面指向 source package `linux-hwe-7.0`。这让 exact source retrieval path 有了候选，但不是 VM 实际安装包版本的证明；必须从 dpkg metadata 读取 ${source:Package}/${source:Version} 后再下载匹配 source。
+- Navigation 59 新增 atomic allocator source audit、Ubuntu package provenance、只读 dpkg-query/apt-cache 核对命令和 source artifact pinning 步骤，提交 `c8c14aa73ea0dcd069d3c918c7b740fac9b28e29`。
+- 外部证据：Ubuntu Noble linux-image package metadata 与 changelog；linux-buildinfo metadata；Ubuntu linux-source-7.0.0 package description。公开 package listing 不能代替 VM 安装状态。无下载/安装、无权限提升、无 BPF load。
+- 下一步：等待用户可选地提供上述只读 dpkg 输出，锁定 Ubuntu patchset；在此之前以 upstream v7.0 为设计参考，不将其当作 exact kernel source。随后写 BPF C wire structs 与 bounded cmpxchg pseudocode 的静态审计，不 attach。仅 nav 分支，不合并 main。
