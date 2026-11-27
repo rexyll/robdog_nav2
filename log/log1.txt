@@ -1,0 +1,2019 @@
+earl@earl-VMware-Virtual-Platform:~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source$ cd ~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44
+
+command -v dpkg-source
+df -h .
+/usr/bin/dpkg-source
+Filesystem                         Size  Used Avail Use% Mounted on
+/dev/mapper/ubuntu--vg-ubuntu--lv  391G  153G  219G  42% /
+earl@earl-VMware-Virtual-Platform:~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44$ dpkg-source -x \
+  linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc \
+  ubuntu-patched-source
+gpgv: Signature made Wed 11 Nov 2026 03:30:42 AM CST
+gpgv:                using RSA key 61DDD3F31F7F472B0D4200084F575E4829B6558D
+gpgv:                issuer "alice.munduruca@canonical.com"
+gpgv: Can't check signature: No public key
+dpkg-source: warning: cannot verify inline signature for ./linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc: no acceptable signature found
+dpkg-source: info: extracting linux-hwe-7.0 in ubuntu-patched-source
+dpkg-source: info: unpacking linux-hwe-7.0_7.0.0.orig.tar.gz
+dpkg-source: info: applying linux-hwe-7.0_7.0.0-44.44~24.04.1.diff.gz
+Use of uninitialized value in <HANDLE> at /usr/share/perl5/Dpkg/Compression/FileHandle.pm line 206, <$output_pipe> line 751450.
+dpkg-source: error: unexpected end of diff './linux-hwe-7.0_7.0.0-44.44~24.04.1.diff.gz'
+earl@earl-VMware-Virtual-Platform:~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44$ cd ~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source
+
+python3 - <<'PY'
+from pathlib import Path
+import re
+
+roots = [
+    Path("kernel/bpf"),
+    Path("kernel/trace"),
+    Path("include/linux"),
+    Path("include/uapi/linux"),
+]
+
+pattern = re.compile(
+    r'\b(bpf_capable|perfmon_capable|CAP_BPF|CAP_PERFMON|'
+    r'bpf_task_storage_get|bpf_get_current_task_btf|'
+    r'BPF_PROG_TYPE_TRACING|BPF_MAP_TYPE_TASK_STORAGE)\b'
+)
+
+for root in roots:
+    if not root.exists():
+PY              print(f"{j + 1}: {lines[j]}")(len(lines), i + 6)):
+
+====================================================================================================
+FILE: kernel/bpf/bpf_task_storage.c
+164: 	put_pid(pid);
+165: 	return err;
+166: }
+167: 
+168: /* *gfp_flags* is a hidden argument provided by the verifier */
+169: BPF_CALL_5(bpf_task_storage_get, struct bpf_map *, map, struct task_struct *,
+170: 	   task, void *, value, u64, flags, gfp_t, gfp_flags)
+171: {
+172: 	struct bpf_local_storage_data *sdata;
+173: 
+174: 	WARN_ON_ONCE(!bpf_rcu_lock_held());
+
+====================================================================================================
+FILE: kernel/bpf/bpf_task_storage.c
+235: 	.map_btf_id = &bpf_local_storage_map_btf_id[0],
+236: 	.map_owner_storage_ptr = task_storage_ptr,
+237: };
+238: 
+239: const struct bpf_func_proto bpf_task_storage_get_proto = {
+240: 	.func = bpf_task_storage_get,
+241: 	.gpl_only = false,
+242: 	.ret_type = RET_PTR_TO_MAP_VALUE_OR_NULL,
+243: 	.arg1_type = ARG_CONST_MAP_PTR,
+244: 	.arg2_type = ARG_PTR_TO_BTF_ID_OR_NULL,
+245: 	.arg2_btf_id = &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+
+====================================================================================================
+FILE: kernel/bpf/btf.c
+6207: 	case BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE:
+6208: 		/* allow u64* as ctx */
+6209: 		if (btf_is_int(t) && t->size == 8)
+6210: 			return 0;
+6211: 		break;
+6212: 	case BPF_PROG_TYPE_TRACING:
+6213: 		switch (attach_type) {
+6214: 		case BPF_TRACE_RAW_TP:
+6215: 			/* tp_btf program is TRACING, so need special case here */
+6216: 			if (__btf_type_is_struct(t) &&
+6217: 			    strcmp(tname, "bpf_raw_tracepoint_args") == 0)
+
+====================================================================================================
+FILE: kernel/bpf/btf.c
+6555: static bool prog_args_trusted(const struct bpf_prog *prog)
+6556: {
+6557: 	enum bpf_attach_type atype = prog->expected_attach_type;
+6558: 
+6559: 	switch (prog->type) {
+6560: 	case BPF_PROG_TYPE_TRACING:
+6561: 		return atype == BPF_TRACE_RAW_TP || atype == BPF_TRACE_ITER;
+6562: 	case BPF_PROG_TYPE_LSM:
+6563: 		return bpf_lsm_is_trusted(prog);
+6564: 	case BPF_PROG_TYPE_STRUCT_OPS:
+6565: 		return true;
+
+====================================================================================================
+FILE: kernel/bpf/btf.c
+8828: 		return BTF_KFUNC_HOOK_XDP;
+8829: 	case BPF_PROG_TYPE_SCHED_CLS:
+8830: 		return BTF_KFUNC_HOOK_TC;
+8831: 	case BPF_PROG_TYPE_STRUCT_OPS:
+8832: 		return BTF_KFUNC_HOOK_STRUCT_OPS;
+8833: 	case BPF_PROG_TYPE_TRACING:
+8834: 	case BPF_PROG_TYPE_TRACEPOINT:
+8835: 	case BPF_PROG_TYPE_RAW_TRACEPOINT:
+8836: 	case BPF_PROG_TYPE_PERF_EVENT:
+8837: 	case BPF_PROG_TYPE_LSM:
+8838: 		return BTF_KFUNC_HOOK_TRACING;
+
+====================================================================================================
+FILE: kernel/bpf/core.c
+667: }
+668: 
+669: void bpf_prog_kallsyms_add(struct bpf_prog *fp)
+670: {
+671: 	if (!bpf_prog_kallsyms_candidate(fp) ||
+672: 	    !bpf_token_capable(fp->aux->token, CAP_BPF))
+673: 		return;
+674: 
+675: 	bpf_prog_ksym_set_addr(fp);
+676: 	bpf_prog_ksym_set_name(fp);
+677: 	fp->aux->ksym.prog = true;
+
+====================================================================================================
+FILE: kernel/bpf/core.c
+1045: pure_initcall(bpf_jit_charge_init);
+1046: 
+1047: int bpf_jit_charge_modmem(u32 size)
+1048: {
+1049: 	if (atomic_long_add_return(size, &bpf_jit_current) > READ_ONCE(bpf_jit_limit)) {
+1050: 		if (!bpf_capable()) {
+1051: 			atomic_long_sub(size, &bpf_jit_current);
+1052: 			return -EPERM;
+1053: 		}
+1054: 	}
+1055: 
+
+====================================================================================================
+FILE: kernel/bpf/core.c
+2455: 			      !cookie;
+2456: 		}
+2457: 		if (ret &&
+2458: 		    map->owner->attach_func_proto != aux->attach_func_proto) {
+2459: 			switch (prog_type) {
+2460: 			case BPF_PROG_TYPE_TRACING:
+2461: 			case BPF_PROG_TYPE_LSM:
+2462: 			case BPF_PROG_TYPE_EXT:
+2463: 			case BPF_PROG_TYPE_STRUCT_OPS:
+2464: 				ret = false;
+2465: 				break;
+
+====================================================================================================
+FILE: kernel/bpf/cpumask.c
+521: 			.kfunc_btf_id = cpumask_dtor_ids[1]
+522: 		},
+523: 	};
+524: 
+525: 	ret = bpf_mem_alloc_init(&bpf_cpumask_ma, sizeof(struct bpf_cpumask), false);
+526: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING, &cpumask_kfunc_set);
+527: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &cpumask_kfunc_set);
+528: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_SYSCALL, &cpumask_kfunc_set);
+529: 	return  ret ?: register_btf_id_dtor_kfuncs(cpumask_dtors,
+530: 						   ARRAY_SIZE(cpumask_dtors),
+531: 						   THIS_MODULE);
+
+====================================================================================================
+FILE: kernel/bpf/helpers.c
+2104: 		return &bpf_get_current_uid_gid_proto;
+2105: 	default:
+2106: 		break;
+2107: 	}
+2108: 
+2109: 	if (!bpf_token_capable(prog->aux->token, CAP_BPF))
+2110: 		return NULL;
+2111: 
+2112: 	switch (func_id) {
+2113: 	case BPF_FUNC_spin_lock:
+2114: 		return &bpf_spin_lock_proto;
+
+====================================================================================================
+FILE: kernel/bpf/helpers.c
+2172: 		return &bpf_task_storage_delete_proto;
+2173: 	default:
+2174: 		break;
+2175: 	}
+2176: 
+2177: 	if (!bpf_token_capable(prog->aux->token, CAP_PERFMON))
+2178: 		return NULL;
+2179: 
+2180: 	switch (func_id) {
+2181: 	case BPF_FUNC_trace_printk:
+2182: 		return bpf_get_trace_printk_proto();
+
+====================================================================================================
+FILE: kernel/bpf/helpers.c
+4706: 			.kfunc_btf_id = generic_dtor_ids[3]
+4707: 		},
+4708: #endif
+4709: 	};
+4710: 
+4711: 	ret = register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING, &generic_kfunc_set);
+4712: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_SCHED_CLS, &generic_kfunc_set);
+4713: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_XDP, &generic_kfunc_set);
+4714: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_STRUCT_OPS, &generic_kfunc_set);
+4715: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_SYSCALL, &generic_kfunc_set);
+4716: 	ret = ret ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_CGROUP_SKB, &generic_kfunc_set);
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1270: 				       BPF_TASK_WORK,
+1271: 				       map->value_size);
+1272: 	if (!IS_ERR_OR_NULL(map->record)) {
+1273: 		int i;
+1274: 
+1275: 		if (!bpf_token_capable(token, CAP_BPF)) {
+1276: 			ret = -EPERM;
+1277: 			goto free_map_tab;
+1278: 		}
+1279: 		if (map->map_flags & (BPF_F_RDONLY_PROG | BPF_F_WRONLY_PROG)) {
+1280: 			ret = -EACCES;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1289: 				if (map->map_type != BPF_MAP_TYPE_HASH &&
+1290: 				    map->map_type != BPF_MAP_TYPE_ARRAY &&
+1291: 				    map->map_type != BPF_MAP_TYPE_CGROUP_STORAGE &&
+1292: 				    map->map_type != BPF_MAP_TYPE_SK_STORAGE &&
+1293: 				    map->map_type != BPF_MAP_TYPE_INODE_STORAGE &&
+1294: 				    map->map_type != BPF_MAP_TYPE_TASK_STORAGE &&
+1295: 				    map->map_type != BPF_MAP_TYPE_CGRP_STORAGE) {
+1296: 					ret = -EOPNOTSUPP;
+1297: 					goto free_map_tab;
+1298: 				}
+1299: 				break;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1317: 				    map->map_type != BPF_MAP_TYPE_LRU_PERCPU_HASH &&
+1318: 				    map->map_type != BPF_MAP_TYPE_ARRAY &&
+1319: 				    map->map_type != BPF_MAP_TYPE_PERCPU_ARRAY &&
+1320: 				    map->map_type != BPF_MAP_TYPE_SK_STORAGE &&
+1321: 				    map->map_type != BPF_MAP_TYPE_INODE_STORAGE &&
+1322: 				    map->map_type != BPF_MAP_TYPE_TASK_STORAGE &&
+1323: 				    map->map_type != BPF_MAP_TYPE_CGRP_STORAGE) {
+1324: 					ret = -EOPNOTSUPP;
+1325: 					goto free_map_tab;
+1326: 				}
+1327: 				break;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1324: 					ret = -EOPNOTSUPP;
+1325: 					goto free_map_tab;
+1326: 				}
+1327: 				break;
+1328: 			case BPF_UPTR:
+1329: 				if (map->map_type != BPF_MAP_TYPE_TASK_STORAGE) {
+1330: 					ret = -EOPNOTSUPP;
+1331: 					goto free_map_tab;
+1332: 				}
+1333: 				break;
+1334: 			case BPF_LIST_HEAD:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1450: 	 * creation for unprivileged users; other actions depend
+1451: 	 * on fd availability and access to bpffs, so are dependent on
+1452: 	 * object creation success. Even with unprivileged BPF disabled,
+1453: 	 * capability checks are still carried out.
+1454: 	 */
+1455: 	if (sysctl_unprivileged_bpf_disabled && !bpf_token_capable(token, CAP_BPF))
+1456: 		goto put_token;
+1457: 
+1458: 	/* check privileged map type permissions */
+1459: 	switch (map_type) {
+1460: 	case BPF_MAP_TYPE_ARRAY:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1472: 	case BPF_MAP_TYPE_PERCPU_CGROUP_STORAGE:
+1473: 		/* unprivileged */
+1474: 		break;
+1475: 	case BPF_MAP_TYPE_SK_STORAGE:
+1476: 	case BPF_MAP_TYPE_INODE_STORAGE:
+1477: 	case BPF_MAP_TYPE_TASK_STORAGE:
+1478: 	case BPF_MAP_TYPE_CGRP_STORAGE:
+1479: 	case BPF_MAP_TYPE_BLOOM_FILTER:
+1480: 	case BPF_MAP_TYPE_LPM_TRIE:
+1481: 	case BPF_MAP_TYPE_REUSEPORT_SOCKARRAY:
+1482: 	case BPF_MAP_TYPE_STACK_TRACE:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+1486: 	case BPF_MAP_TYPE_LRU_PERCPU_HASH:
+1487: 	case BPF_MAP_TYPE_STRUCT_OPS:
+1488: 	case BPF_MAP_TYPE_CPUMAP:
+1489: 	case BPF_MAP_TYPE_ARENA:
+1490: 	case BPF_MAP_TYPE_INSN_ARRAY:
+1491: 		if (!bpf_token_capable(token, CAP_BPF))
+1492: 			goto put_token;
+1493: 		break;
+1494: 	case BPF_MAP_TYPE_SOCKMAP:
+1495: 	case BPF_MAP_TYPE_SOCKHASH:
+1496: 	case BPF_MAP_TYPE_DEVMAP:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2661: 
+2662: 		if (!attach_btf && !dst_prog)
+2663: 			return -EINVAL;
+2664: 
+2665: 		switch (prog_type) {
+2666: 		case BPF_PROG_TYPE_TRACING:
+2667: 		case BPF_PROG_TYPE_LSM:
+2668: 		case BPF_PROG_TYPE_STRUCT_OPS:
+2669: 		case BPF_PROG_TYPE_EXT:
+2670: 			break;
+2671: 		default:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2674: 	}
+2675: 
+2676: 	if (attach_btf && (!btf_id || dst_prog))
+2677: 		return -EINVAL;
+2678: 
+2679: 	if (dst_prog && prog_type != BPF_PROG_TYPE_TRACING &&
+2680: 	    prog_type != BPF_PROG_TYPE_EXT)
+2681: 		return -EINVAL;
+2682: 
+2683: 	switch (prog_type) {
+2684: 	case BPF_PROG_TYPE_CGROUP_SOCK:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2779: 	case BPF_PROG_TYPE_NETFILTER:
+2780: 		return true;
+2781: 	case BPF_PROG_TYPE_CGROUP_SKB:
+2782: 		/* always unpriv */
+2783: 	case BPF_PROG_TYPE_SK_REUSEPORT:
+2784: 		/* equivalent to SOCKET_FILTER. need CAP_BPF only */
+2785: 	default:
+2786: 		return false;
+2787: 	}
+2788: }
+2789: 
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2793: 	case BPF_PROG_TYPE_KPROBE:
+2794: 	case BPF_PROG_TYPE_TRACEPOINT:
+2795: 	case BPF_PROG_TYPE_PERF_EVENT:
+2796: 	case BPF_PROG_TYPE_RAW_TRACEPOINT:
+2797: 	case BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE:
+2798: 	case BPF_PROG_TYPE_TRACING:
+2799: 	case BPF_PROG_TYPE_LSM:
+2800: 	case BPF_PROG_TYPE_STRUCT_OPS: /* has access to struct sock */
+2801: 	case BPF_PROG_TYPE_EXT: /* extends any prog */
+2802: 		return true;
+2803: 	default:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2908: 			bpf_token_put(token);
+2909: 			token = NULL;
+2910: 		}
+2911: 	}
+2912: 
+2913: 	bpf_cap = bpf_token_capable(token, CAP_BPF);
+2914: 	err = -EPERM;
+2915: 
+2916: 	if (!IS_ENABLED(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) &&
+2917: 	    (attr->prog_flags & BPF_F_ANY_ALIGNMENT) &&
+2918: 	    !bpf_cap)
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+2938: 	    !bpf_cap)
+2939: 		goto put_token;
+2940: 
+2941: 	if (is_net_admin_prog_type(type) && !bpf_token_capable(token, CAP_NET_ADMIN))
+2942: 		goto put_token;
+2943: 	if (is_perfmon_prog_type(type) && !bpf_token_capable(token, CAP_PERFMON))
+2944: 		goto put_token;
+2945: 
+2946: 	/* attach_prog_fd/attach_btf_obj_fd can specify fd of either bpf_prog
+2947: 	 * or btf, we need to check which one it is
+2948: 	 */
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+3063: 	 *
+3064: 	 * The flag attach_tracing_prog is set for the whole program lifecycle, and
+3065: 	 * doesn't have to be cleared in bpf_tracing_link_release, since tracing
+3066: 	 * programs cannot change attachment target.
+3067: 	 */
+3068: 	if (type == BPF_PROG_TYPE_TRACING && dst_prog &&
+3069: 	    dst_prog->type == BPF_PROG_TYPE_TRACING) {
+3070: 		prog->aux->attach_tracing_prog = true;
+3071: 	}
+3072: 
+3073: 	/* find program type: socket_filter vs tracing_filter */
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+3064: 	 * The flag attach_tracing_prog is set for the whole program lifecycle, and
+3065: 	 * doesn't have to be cleared in bpf_tracing_link_release, since tracing
+3066: 	 * programs cannot change attachment target.
+3067: 	 */
+3068: 	if (type == BPF_PROG_TYPE_TRACING && dst_prog &&
+3069: 	    dst_prog->type == BPF_PROG_TYPE_TRACING) {
+3070: 		prog->aux->attach_tracing_prog = true;
+3071: 	}
+3072: 
+3073: 	/* find program type: socket_filter vs tracing_filter */
+3074: 	err = find_prog_type(type, prog);
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+3596: 	struct bpf_tracing_link *link;
+3597: 	u64 key = 0;
+3598: 	int err;
+3599: 
+3600: 	switch (prog->type) {
+3601: 	case BPF_PROG_TYPE_TRACING:
+3602: 		if (prog->expected_attach_type != BPF_TRACE_FENTRY &&
+3603: 		    prog->expected_attach_type != BPF_TRACE_FEXIT &&
+3604: 		    prog->expected_attach_type != BPF_TRACE_FSESSION &&
+3605: 		    prog->expected_attach_type != BPF_MODIFY_RETURN) {
+3606: 			err = -EINVAL;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+3631: 
+3632: 	if (tgt_prog_fd) {
+3633: 		/*
+3634: 		 * For now we only allow new targets for BPF_PROG_TYPE_EXT. If this
+3635: 		 * part would be changed to implement the same for
+3636: 		 * BPF_PROG_TYPE_TRACING, do not forget to update the way how
+3637: 		 * attach_tracing_prog flag is set.
+3638: 		 */
+3639: 		if (prog->type != BPF_PROG_TYPE_EXT) {
+3640: 			err = -EINVAL;
+3641: 			goto out_put_prog;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+3704: 		 * Allow re-attach for TRACING and LSM programs. If it's
+3705: 		 * currently linked, bpf_trampoline_link_prog will fail.
+3706: 		 * EXT programs need to specify tgt_prog_fd, so they
+3707: 		 * re-attach in separate code path.
+3708: 		 */
+3709: 		if (prog->type != BPF_PROG_TYPE_TRACING &&
+3710: 		    prog->type != BPF_PROG_TYPE_LSM) {
+3711: 			err = -EINVAL;
+3712: 			goto out_unlock;
+3713: 		}
+3714: 		/* We can allow re-attach only if we have valid attach_btf. */
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+4251: 	const char *tp_name;
+4252: 	char buf[128];
+4253: 	int err;
+4254: 
+4255: 	switch (prog->type) {
+4256: 	case BPF_PROG_TYPE_TRACING:
+4257: 	case BPF_PROG_TYPE_EXT:
+4258: 	case BPF_PROG_TYPE_LSM:
+4259: 		if (user_tp_name)
+4260: 			/* The attach point for this category of programs
+4261: 			 * should be specified via btf_id during program load.
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+4259: 		if (user_tp_name)
+4260: 			/* The attach point for this category of programs
+4261: 			 * should be specified via btf_id during program load.
+4262: 			 */
+4263: 			return -EINVAL;
+4264: 		if (prog->type == BPF_PROG_TYPE_TRACING &&
+4265: 		    prog->expected_attach_type == BPF_TRACE_RAW_TP) {
+4266: 			tp_name = prog->aux->attach_func_name;
+4267: 			break;
+4268: 		}
+4269: 		return bpf_tracing_prog_attach(prog, 0, 0, 0, attach_type);
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+4389: 	case BPF_TRACE_RAW_TP:
+4390: 	case BPF_TRACE_FENTRY:
+4391: 	case BPF_TRACE_FEXIT:
+4392: 	case BPF_TRACE_FSESSION:
+4393: 	case BPF_MODIFY_RETURN:
+4394: 		return BPF_PROG_TYPE_TRACING;
+4395: 	case BPF_LSM_MAC:
+4396: 		return BPF_PROG_TYPE_LSM;
+4397: 	case BPF_SK_LOOKUP:
+4398: 		return BPF_PROG_TYPE_SK_LOOKUP;
+4399: 	case BPF_XDP:
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+5070: 
+5071: 	info.verified_insns = prog->aux->verified_insns;
+5072: 	if (prog->aux->btf)
+5073: 		info.btf_id = btf_obj_id(prog->aux->btf);
+5074: 
+5075: 	if (!bpf_capable()) {
+5076: 		info.jited_prog_len = 0;
+5077: 		info.xlated_prog_len = 0;
+5078: 		info.nr_jited_ksyms = 0;
+5079: 		info.nr_jited_func_lens = 0;
+5080: 		info.nr_func_info = 0;
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+5488: 			bpf_token_put(token);
+5489: 			token = NULL;
+5490: 		}
+5491: 	}
+5492: 
+5493: 	if (!bpf_token_capable(token, CAP_BPF)) {
+5494: 		bpf_token_put(token);
+5495: 		return -EPERM;
+5496: 	}
+5497: 
+5498: 	bpf_token_put(token);
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+5735: 					      attr->link_create.target_btf_id,
+5736: 					      attr->link_create.tracing.cookie,
+5737: 					      attr->link_create.attach_type);
+5738: 		break;
+5739: 	case BPF_PROG_TYPE_LSM:
+5740: 	case BPF_PROG_TYPE_TRACING:
+5741: 		if (attr->link_create.attach_type != prog->expected_attach_type) {
+5742: 			ret = -EINVAL;
+5743: 			goto out;
+5744: 		}
+5745: 		if (prog->expected_attach_type == BPF_TRACE_RAW_TP)
+
+====================================================================================================
+FILE: kernel/bpf/syscall.c
+6505: static const struct bpf_func_proto *
+6506: syscall_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+6507: {
+6508: 	switch (func_id) {
+6509: 	case BPF_FUNC_sys_bpf:
+6510: 		return !bpf_token_capable(prog->aux->token, CAP_PERFMON)
+6511: 		       ? NULL : &bpf_sys_bpf_proto;
+6512: 	case BPF_FUNC_btf_find_by_name_kind:
+6513: 		return &bpf_btf_find_by_name_kind_proto;
+6514: 	case BPF_FUNC_sys_close:
+6515: 		return &bpf_sys_close_proto;
+
+====================================================================================================
+FILE: kernel/bpf/token.c
+141: 	 * namespace as the BPF FS instance. This makes reasoning about
+142: 	 * permissions a lot easier and we can always relax this later.
+143: 	 */
+144: 	if (current_user_ns() != userns)
+145: 		return -EPERM;
+146: 	if (!ns_capable(userns, CAP_BPF))
+147: 		return -EPERM;
+148: 
+149: 	/* Creating BPF token in init_user_ns doesn't make much sense. */
+150: 	if (current_user_ns() == &init_user_ns)
+151: 		return -EOPNOTSUPP;
+
+====================================================================================================
+FILE: kernel/bpf/trampoline.c
+138: {
+139: 	enum bpf_attach_type eatype = prog->expected_attach_type;
+140: 	enum bpf_prog_type ptype = prog->type;
+141: 
+142: 	switch (ptype) {
+143: 	case BPF_PROG_TYPE_TRACING:
+144: 		if (eatype == BPF_TRACE_FENTRY || eatype == BPF_TRACE_FEXIT ||
+145: 		    eatype == BPF_MODIFY_RETURN || eatype == BPF_TRACE_FSESSION)
+146: 			return true;
+147: 		return false;
+148: 	case BPF_PROG_TYPE_LSM:
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+2223: 	__mark_reg_known(reg, 0);
+2224: 	reg->type = SCALAR_VALUE;
+2225: 	/* all scalars are assumed imprecise initially (unless unprivileged,
+2226: 	 * in which case everything is forced to be precise)
+2227: 	 */
+2228: 	reg->precise = !env->bpf_capable;
+2229: }
+2230: 
+2231: static void mark_reg_known_zero(struct bpf_verifier_env *env,
+2232: 				struct bpf_reg_state *regs, u32 regno)
+2233: {
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+2880:  */
+2881: static void __mark_reg_unknown(const struct bpf_verifier_env *env,
+2882: 			       struct bpf_reg_state *reg)
+2883: {
+2884: 	__mark_reg_unknown_imprecise(reg);
+2885: 	reg->precise = !env->bpf_capable;
+2886: }
+2887: 
+2888: static void mark_reg_unknown(struct bpf_verifier_env *env,
+2889: 			     struct bpf_reg_state *regs, u32 regno)
+2890: {
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+3634: 	for (i = 0; i < insn_cnt; i++, insn++) {
+3635: 		if (!bpf_pseudo_func(insn) && !bpf_pseudo_call(insn) &&
+3636: 		    !bpf_pseudo_kfunc_call(insn))
+3637: 			continue;
+3638: 
+3639: 		if (!env->bpf_capable) {
+3640: 			verbose(env, "loading/calling other bpf or kernel functions are allowed for CAP_BPF and CAP_SYS_ADMIN\n");
+3641: 			return -EPERM;
+3642: 		}
+3643: 
+3644: 		if (bpf_pseudo_func(insn) || bpf_pseudo_call(insn))
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+3635: 		if (!bpf_pseudo_func(insn) && !bpf_pseudo_call(insn) &&
+3636: 		    !bpf_pseudo_kfunc_call(insn))
+3637: 			continue;
+3638: 
+3639: 		if (!env->bpf_capable) {
+3640: 			verbose(env, "loading/calling other bpf or kernel functions are allowed for CAP_BPF and CAP_SYS_ADMIN\n");
+3641: 			return -EPERM;
+3642: 		}
+3643: 
+3644: 		if (bpf_pseudo_func(insn) || bpf_pseudo_call(insn))
+3645: 			ret = add_subprog(env, i + insn->imm + 1);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+4918: 	struct bpf_func_state *func;
+4919: 	bool tmp, skip_first = true;
+4920: 	struct bpf_reg_state *reg;
+4921: 	int i, fr, err;
+4922: 
+4923: 	if (!env->bpf_capable)
+4924: 		return 0;
+4925: 
+4926: 	changed = changed ?: &tmp;
+4927: 	/* set frame number from which we are starting to backtrack */
+4928: 	bt_init(bt, starting_state->curframe);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+5302: 		bpf_mark_stack_write(env, state->frameno, BIT(spi));
+5303: 	}
+5304: 
+5305: 	check_fastcall_stack_contract(env, state, insn_idx, off);
+5306: 	mark_stack_slot_scratched(env, spi);
+5307: 	if (reg && !(off % BPF_REG_SIZE) && reg->type == SCALAR_VALUE && env->bpf_capable) {
+5308: 		bool reg_value_fits;
+5309: 
+5310: 		reg_value_fits = get_reg_width(reg) <= BITS_PER_BYTE * size;
+5311: 		/* Make sure that reg had an ID to build a relation on spill. */
+5312: 		if (reg_value_fits)
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+5314: 		save_register_state(env, state, spi, reg, size);
+5315: 		/* Break the relation on a narrowing spill. */
+5316: 		if (!reg_value_fits)
+5317: 			state->stack[spi].spilled_ptr.id = 0;
+5318: 	} else if (!reg && !(off % BPF_REG_SIZE) && is_bpf_st_mem(insn) &&
+5319: 		   env->bpf_capable) {
+5320: 		struct bpf_reg_state *tmp_reg = &env->fake_reg[0];
+5321: 
+5322: 		memset(tmp_reg, 0, sizeof(*tmp_reg));
+5323: 		__mark_reg_known(tmp_reg, insn->imm);
+5324: 		tmp_reg->type = SCALAR_VALUE;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+5444: 			 * though not all slots are actually overwritten),
+5445: 			 * possibly opening the door to leaks.
+5446: 			 *
+5447: 			 * We do however catch STACK_INVALID case below, and
+5448: 			 * only allow reading possibly uninitialized memory
+5449: 			 * later for CAP_PERFMON, as the write may not happen to
+5450: 			 * that slot.
+5451: 			 */
+5452: 			verbose(env, "spilled ptr in range of var-offset stack write; insn %d, ptr off: %d",
+5453: 				insn_idx, i);
+5454: 			return -EINVAL;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+5591: 				/* The earlier check_reg_arg() has decided the
+5592: 				 * subreg_def for this insn.  Save it first.
+5593: 				 */
+5594: 				s32 subreg_def = state->regs[dst_regno].subreg_def;
+5595: 
+5596: 				if (env->bpf_capable && size == 4 && spill_size == 4 &&
+5597: 				    get_reg_width(reg) <= 32)
+5598: 					/* Ensure stack slot has an ID to build a relation
+5599: 					 * with the destination register on fill.
+5600: 					 */
+5601: 					assign_scalar_id_before_mov(env, reg);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+5642: 					insn_flags = 0; /* not restoring original register state */
+5643: 				}
+5644: 			}
+5645: 		} else if (dst_regno >= 0) {
+5646: 			/* restore register state from stack */
+5647: 			if (env->bpf_capable)
+5648: 				/* Ensure stack slot has an ID to build a relation
+5649: 				 * with the destination register on fill.
+5650: 				 */
+5651: 				assign_scalar_id_before_mov(env, reg);
+5652: 			copy_register_state(&state->regs[dst_regno], reg);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+6705: 	case BPF_PROG_TYPE_KPROBE:
+6706: 	case BPF_PROG_TYPE_TRACEPOINT:
+6707: 	case BPF_PROG_TYPE_PERF_EVENT:
+6708: 	case BPF_PROG_TYPE_RAW_TRACEPOINT:
+6709: 		return PRIV_STACK_ADAPTIVE;
+6710: 	case BPF_PROG_TYPE_TRACING:
+6711: 	case BPF_PROG_TYPE_LSM:
+6712: 	case BPF_PROG_TYPE_STRUCT_OPS:
+6713: 		if (prog->aux->priv_stack_requested || bpf_prog_check_recur(prog))
+6714: 			return PRIV_STACK_ADAPTIVE;
+6715: 		fallthrough;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+7390: 	u32 btf_id = 0;
+7391: 	int ret;
+7392: 
+7393: 	if (!env->allow_ptr_leaks) {
+7394: 		verbose(env,
+7395: 			"'struct %s' access is allowed only to CAP_PERFMON and CAP_SYS_ADMIN\n",
+7396: 			tname);
+7397: 		return -EPERM;
+7398: 	}
+7399: 	if (!env->prog->gpl_compatible && btf_is_kernel(reg->btf)) {
+7400: 		verbose(env,
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+7558: 	t = btf_type_by_id(btf_vmlinux, *map->ops->map_btf_id);
+7559: 	tname = btf_name_by_offset(btf_vmlinux, t->name_off);
+7560: 
+7561: 	if (!env->allow_ptr_leaks) {
+7562: 		verbose(env,
+7563: 			"'struct %s' access is allowed only to CAP_PERFMON and CAP_SYS_ADMIN\n",
+7564: 			tname);
+7565: 		return -EPERM;
+7566: 	}
+7567: 
+7568: 	if (off < 0) {
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+9808: 	int zero_size = 0;
+9809: 	int stack_off;
+9810: 	int i, err;
+9811: 	u8 *stype;
+9812: 
+9813: 	if (!env->bpf_capable)
+9814: 		return -EOPNOTSUPP;
+9815: 	if (key->type != PTR_TO_STACK)
+9816: 		return -EOPNOTSUPP;
+9817: 	if (!tnum_is_const(key->var_off))
+9818: 		return -EOPNOTSUPP;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+10139: 
+10140: 	/* It's not possible to get access to a locked struct sock in these
+10141: 	 * contexts, so updating is safe.
+10142: 	 */
+10143: 	switch (type) {
+10144: 	case BPF_PROG_TYPE_TRACING:
+10145: 		if (eatype == BPF_TRACE_ITER)
+10146: 			return true;
+10147: 		break;
+10148: 	case BPF_PROG_TYPE_SOCK_OPS:
+10149: 		/* map_update allowed only via dedicated helpers with event type checks */
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+10281: 		if (func_id != BPF_FUNC_inode_storage_get &&
+10282: 		    func_id != BPF_FUNC_inode_storage_delete &&
+10283: 		    func_id != BPF_FUNC_kptr_xchg)
+10284: 			goto error;
+10285: 		break;
+10286: 	case BPF_MAP_TYPE_TASK_STORAGE:
+10287: 		if (func_id != BPF_FUNC_task_storage_get &&
+10288: 		    func_id != BPF_FUNC_task_storage_delete &&
+10289: 		    func_id != BPF_FUNC_kptr_xchg)
+10290: 			goto error;
+10291: 		break;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+10404: 		if (map->map_type != BPF_MAP_TYPE_INODE_STORAGE)
+10405: 			goto error;
+10406: 		break;
+10407: 	case BPF_FUNC_task_storage_get:
+10408: 	case BPF_FUNC_task_storage_delete:
+10409: 		if (map->map_type != BPF_MAP_TYPE_TASK_STORAGE)
+10410: 			goto error;
+10411: 		break;
+10412: 	case BPF_FUNC_cgrp_storage_get:
+10413: 	case BPF_FUNC_cgrp_storage_delete:
+10414: 		if (map->map_type != BPF_MAP_TYPE_CGRP_STORAGE)
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+11547: static int check_get_func_ip(struct bpf_verifier_env *env)
+11548: {
+11549: 	enum bpf_prog_type type = resolve_prog_type(env->prog);
+11550: 	int func_id = BPF_FUNC_get_func_ip;
+11551: 
+11552: 	if (type == BPF_PROG_TYPE_TRACING) {
+11553: 		if (!bpf_prog_has_trampoline(env->prog)) {
+11554: 			verbose(env, "func %s#%d supported only for fentry/fexit/fmod_ret programs\n",
+11555: 				func_id_name(func_id), func_id);
+11556: 			return -ENOTSUPP;
+11557: 		}
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+13341: 	enum bpf_prog_type prog_type = resolve_prog_type(env->prog);
+13342: 
+13343: 	switch (prog_type) {
+13344: 	case BPF_PROG_TYPE_LSM:
+13345: 		return true;
+13346: 	case BPF_PROG_TYPE_TRACING:
+13347: 		if (env->prog->expected_attach_type == BPF_TRACE_ITER)
+13348: 			return true;
+13349: 		fallthrough;
+13350: 	default:
+13351: 		return in_sleepable(env);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+16309: 	 * if r2 < 1000 goto ...
+16310: 	 * use r1 in memory access
+16311: 	 * So remember constant delta between r2 and r1 and update r1 after
+16312: 	 * 'if' condition.
+16313: 	 */
+16314: 	if (env->bpf_capable &&
+16315: 	    (BPF_OP(insn->code) == BPF_ADD || BPF_OP(insn->code) == BPF_SUB) &&
+16316: 	    dst_reg->id && is_reg_const(src_reg, alu32)) {
+16317: 		u64 val = reg_const_value(src_reg, alu32);
+16318: 		s32 off;
+16319: 
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+18041: 	case BPF_PROG_TYPE_RAW_TRACEPOINT:
+18042: 		if (!env->prog->aux->attach_btf_id)
+18043: 			return 0;
+18044: 		range = retval_range(0, 0);
+18045: 		break;
+18046: 	case BPF_PROG_TYPE_TRACING:
+18047: 		switch (env->prog->expected_attach_type) {
+18048: 		case BPF_TRACE_FENTRY:
+18049: 		case BPF_TRACE_FEXIT:
+18050: 		case BPF_TRACE_FSESSION:
+18051: 			range = retval_range(0, 0);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+18275: 		if (env->cfg.cur_stack >= env->prog->len)
+18276: 			return -E2BIG;
+18277: 		insn_stack[env->cfg.cur_stack++] = w;
+18278: 		return KEEP_EXPLORING;
+18279: 	} else if ((insn_state[w] & 0xF0) == DISCOVERED) {
+18280: 		if (env->bpf_capable)
+18281: 			return DONE_EXPLORING;
+18282: 		verbose_linfo(env, t, "%d: ", t);
+18283: 		verbose_linfo(env, w, "%d: ", w);
+18284: 		verbose(env, "back-edge from insn %d to %d\n", t, w);
+18285: 		return -EINVAL;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+20774: 	}
+20775: 
+20776: 	if (env->max_states_per_insn < states_cnt)
+20777: 		env->max_states_per_insn = states_cnt;
+20778: 
+20779: 	if (!env->bpf_capable && states_cnt > BPF_COMPLEXITY_LIMIT_STATES)
+20780: 		return 0;
+20781: 
+20782: 	if (!add_new_state)
+20783: 		return 0;
+20784: 
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+20799: 	update_peak_states(env);
+20800: 	env->prev_jmps_processed = env->jmps_processed;
+20801: 	env->prev_insn_processed = env->insn_processed;
+20802: 
+20803: 	/* forget precise markings we inherited, see __mark_chain_precision */
+20804: 	if (env->bpf_capable)
+20805: 		mark_all_scalars_imprecise(env, cur);
+20806: 
+20807: 	clear_singular_ids(env, cur);
+20808: 
+20809: 	/* add new state to the head of linked list */
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+21680: 		case BPF_MAP_TYPE_HASH_OF_MAPS:
+21681: 		case BPF_MAP_TYPE_RINGBUF:
+21682: 		case BPF_MAP_TYPE_USER_RINGBUF:
+21683: 		case BPF_MAP_TYPE_INODE_STORAGE:
+21684: 		case BPF_MAP_TYPE_SK_STORAGE:
+21685: 		case BPF_MAP_TYPE_TASK_STORAGE:
+21686: 		case BPF_MAP_TYPE_CGRP_STORAGE:
+21687: 		case BPF_MAP_TYPE_QUEUE:
+21688: 		case BPF_MAP_TYPE_STACK:
+21689: 		case BPF_MAP_TYPE_ARENA:
+21690: 		case BPF_MAP_TYPE_INSN_ARRAY:
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+21705: 	if (map->map_type == BPF_MAP_TYPE_ARENA) {
+21706: 		if (env->prog->aux->arena) {
+21707: 			verbose(env, "Only one arena per program\n");
+21708: 			return -EBUSY;
+21709: 		}
+21710: 		if (!env->allow_ptr_leaks || !env->bpf_capable) {
+21711: 			verbose(env, "CAP_BPF and CAP_PERFMON are required to use arena\n");
+21712: 			return -EPERM;
+21713: 		}
+21714: 		if (!env->prog->jit_requested) {
+21715: 			verbose(env, "JIT is required to use arena\n");
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+21706: 		if (env->prog->aux->arena) {
+21707: 			verbose(env, "Only one arena per program\n");
+21708: 			return -EBUSY;
+21709: 		}
+21710: 		if (!env->allow_ptr_leaks || !env->bpf_capable) {
+21711: 			verbose(env, "CAP_BPF and CAP_PERFMON are required to use arena\n");
+21712: 			return -EPERM;
+21713: 		}
+21714: 		if (!env->prog->jit_requested) {
+21715: 			verbose(env, "JIT is required to use arena\n");
+21716: 			return -EOPNOTSUPP;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+23784: 			 */
+23785: 			insn->imm = 0;
+23786: 			insn->code = BPF_JMP | BPF_TAIL_CALL;
+23787: 
+23788: 			aux = &env->insn_aux_data[i + delta];
+23789: 			if (env->bpf_capable && !prog->blinding_requested &&
+23790: 			    prog->jit_requested &&
+23791: 			    !bpf_map_key_poisoned(aux) &&
+23792: 			    !bpf_map_ptr_poisoned(aux) &&
+23793: 			    !bpf_map_ptr_unpriv(aux)) {
+23794: 				struct bpf_jit_poke_descriptor desc = {
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24061: 			env->prog = prog = new_prog;
+24062: 			insn      = new_prog->insnsi + i + delta;
+24063: 			goto next_insn;
+24064: 		}
+24065: 
+24066: 		/* Implement bpf_get_current_task() and bpf_get_current_task_btf() inline. */
+24067: 		if ((insn->imm == BPF_FUNC_get_current_task || insn->imm == BPF_FUNC_get_current_task_btf) &&
+24068: 		    verifier_inlines_helper_call(env, insn->imm)) {
+24069: 			insn_buf[0] = BPF_MOV64_IMM(BPF_REG_0, (u32)(unsigned long)&current_task);
+24070: 			insn_buf[1] = BPF_MOV64_PERCPU_REG(BPF_REG_0, BPF_REG_0);
+24071: 			insn_buf[2] = BPF_LDX_MEM(BPF_DW, BPF_REG_0, BPF_REG_0, 0);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24080: 			insn      = new_prog->insnsi + i + delta;
+24081: 			goto next_insn;
+24082: 		}
+24083: #endif
+24084: 		/* Implement bpf_get_func_arg inline. */
+24085: 		if (prog_type == BPF_PROG_TYPE_TRACING &&
+24086: 		    insn->imm == BPF_FUNC_get_func_arg) {
+24087: 			if (eatype == BPF_TRACE_RAW_TP) {
+24088: 				int nr_args = btf_type_vlen(prog->aux->attach_func_proto);
+24089: 
+24090: 				/* skip 'void *__data' in btf_trace_##name() and save to reg0 */
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24114: 			insn      = new_prog->insnsi + i + delta;
+24115: 			goto next_insn;
+24116: 		}
+24117: 
+24118: 		/* Implement bpf_get_func_ret inline. */
+24119: 		if (prog_type == BPF_PROG_TYPE_TRACING &&
+24120: 		    insn->imm == BPF_FUNC_get_func_ret) {
+24121: 			if (eatype == BPF_TRACE_FEXIT ||
+24122: 			    eatype == BPF_TRACE_FSESSION ||
+24123: 			    eatype == BPF_MODIFY_RETURN) {
+24124: 				/* Load nr_args from ctx - 8 */
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24144: 			insn      = new_prog->insnsi + i + delta;
+24145: 			goto next_insn;
+24146: 		}
+24147: 
+24148: 		/* Implement get_func_arg_cnt inline. */
+24149: 		if (prog_type == BPF_PROG_TYPE_TRACING &&
+24150: 		    insn->imm == BPF_FUNC_get_func_arg_cnt) {
+24151: 			if (eatype == BPF_TRACE_RAW_TP) {
+24152: 				int nr_args = btf_type_vlen(prog->aux->attach_func_proto);
+24153: 
+24154: 				/* skip 'void *__data' in btf_trace_##name() and save to reg0 */
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24170: 			insn      = new_prog->insnsi + i + delta;
+24171: 			goto next_insn;
+24172: 		}
+24173: 
+24174: 		/* Implement bpf_get_func_ip inline. */
+24175: 		if (prog_type == BPF_PROG_TYPE_TRACING &&
+24176: 		    insn->imm == BPF_FUNC_get_func_ip) {
+24177: 			/* Load IP address from ctx - 16 */
+24178: 			insn_buf[0] = BPF_LDX_MEM(BPF_DW, BPF_REG_0, BPF_REG_1, -16);
+24179: 
+24180: 			new_prog = bpf_patch_insn_data(env, i + delta, insn_buf, 1);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+24960: 			    const struct bpf_prog *tgt_prog,
+24961: 			    u32 btf_id,
+24962: 			    struct bpf_attach_target_info *tgt_info)
+24963: {
+24964: 	bool prog_extension = prog->type == BPF_PROG_TYPE_EXT;
+24965: 	bool prog_tracing = prog->type == BPF_PROG_TYPE_TRACING;
+24966: 	char trace_symbol[KSYM_SYMBOL_LEN];
+24967: 	const char prefix[] = "btf_trace_";
+24968: 	struct bpf_raw_event_map *btp;
+24969: 	int ret = 0, subprog = -1, i;
+24970: 	const struct btf_type *t;
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25071: 			 * fentry/fexit to extension program.
+25072: 			 */
+25073: 			bpf_log(log, "Cannot recursively attach\n");
+25074: 			return -EINVAL;
+25075: 		}
+25076: 		if (tgt_prog->type == BPF_PROG_TYPE_TRACING &&
+25077: 		    prog_extension &&
+25078: 		    (tgt_prog->expected_attach_type == BPF_TRACE_FENTRY ||
+25079: 		     tgt_prog->expected_attach_type == BPF_TRACE_FEXIT ||
+25080: 		     tgt_prog->expected_attach_type == BPF_TRACE_FSESSION)) {
+25081: 			/* Program extensions can extend all program types
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25231: 		}
+25232: 
+25233: 		if (prog->sleepable) {
+25234: 			ret = -EINVAL;
+25235: 			switch (prog->type) {
+25236: 			case BPF_PROG_TYPE_TRACING:
+25237: 
+25238: 				/* fentry/fexit/fmod_ret progs can be sleepable if they are
+25239: 				 * attached to ALLOW_ERROR_INJECTION and are not in denylist.
+25240: 				 */
+25241: 				if (!check_non_sleepable_error_inject(btf_id) &&
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25339: BTF_ID(func, make_task_dead)
+25340: BTF_SET_END(noreturn_deny)
+25341: 
+25342: static bool can_be_sleepable(struct bpf_prog *prog)
+25343: {
+25344: 	if (prog->type == BPF_PROG_TYPE_TRACING) {
+25345: 		switch (prog->expected_attach_type) {
+25346: 		case BPF_TRACE_FENTRY:
+25347: 		case BPF_TRACE_FEXIT:
+25348: 		case BPF_MODIFY_RETURN:
+25349: 		case BPF_TRACE_ITER:
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25382: 	}
+25383: 
+25384: 	if (prog->type == BPF_PROG_TYPE_STRUCT_OPS)
+25385: 		return check_struct_ops_btf_id(env);
+25386: 
+25387: 	if (prog->type != BPF_PROG_TYPE_TRACING &&
+25388: 	    prog->type != BPF_PROG_TYPE_LSM &&
+25389: 	    prog->type != BPF_PROG_TYPE_EXT)
+25390: 		return 0;
+25391: 
+25392: 	ret = bpf_check_attach_target(&env->log, prog, tgt_prog, btf_id, &tgt_info);
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25421: 
+25422: 	if (prog->type == BPF_PROG_TYPE_LSM) {
+25423: 		ret = bpf_lsm_verify_prog(&env->log, prog);
+25424: 		if (ret < 0)
+25425: 			return ret;
+25426: 	} else if (prog->type == BPF_PROG_TYPE_TRACING &&
+25427: 		   btf_id_set_contains(&btf_id_deny, btf_id)) {
+25428: 		verbose(env, "Attaching tracing programs to function '%s' is rejected.\n",
+25429: 			tgt_info.tgt_name);
+25430: 		return -EINVAL;
+25431: 	} else if ((prog->expected_attach_type == BPF_TRACE_FEXIT ||
+
+====================================================================================================
+FILE: kernel/bpf/verifier.c
+25990: 
+25991: 	env->allow_ptr_leaks = bpf_allow_ptr_leaks(env->prog->aux->token);
+25992: 	env->allow_uninit_stack = bpf_allow_uninit_stack(env->prog->aux->token);
+25993: 	env->bypass_spec_v1 = bpf_bypass_spec_v1(env->prog->aux->token);
+25994: 	env->bypass_spec_v4 = bpf_bypass_spec_v4(env->prog->aux->token);
+25995: 	env->bpf_capable = is_priv = bpf_token_capable(env->prog->aux->token, CAP_BPF);
+25996: 
+25997: 	bpf_get_btf_vmlinux();
+25998: 
+25999: 	/* grab the mutex to protect few globals used by verifier */
+26000: 	if (!is_priv)
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+761: 	.func		= bpf_get_current_task,
+762: 	.gpl_only	= true,
+763: 	.ret_type	= RET_INTEGER,
+764: };
+765: 
+766: BPF_CALL_0(bpf_get_current_task_btf)
+767: {
+768: 	return (unsigned long) current;
+769: }
+770: 
+771: const struct bpf_func_proto bpf_get_current_task_btf_proto = {
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+767: {
+768: 	return (unsigned long) current;
+769: }
+770: 
+771: const struct bpf_func_proto bpf_get_current_task_btf_proto = {
+772: 	.func		= bpf_get_current_task_btf,
+773: 	.gpl_only	= true,
+774: 	.ret_type	= RET_PTR_TO_BTF_ID_TRUSTED,
+775: 	.ret_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+776: };
+777: 
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+944: BTF_ID(func, filp_close)
+945: BTF_SET_END(btf_allowlist_d_path)
+946: 
+947: static bool bpf_d_path_allowed(const struct bpf_prog *prog)
+948: {
+949: 	if (prog->type == BPF_PROG_TYPE_TRACING &&
+950: 	    prog->expected_attach_type == BPF_TRACE_ITER)
+951: 		return true;
+952: 
+953: 	if (prog->type == BPF_PROG_TYPE_LSM)
+954: 		return bpf_lsm_is_sleepable_hook(prog->aux->attach_btf_id);
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+1302: 	       prog->expected_attach_type == BPF_TRACE_UPROBE_SESSION;
+1303: }
+1304: 
+1305: static inline bool is_trace_fsession(const struct bpf_prog *prog)
+1306: {
+1307: 	return prog->type == BPF_PROG_TYPE_TRACING &&
+1308: 	       prog->expected_attach_type == BPF_TRACE_FSESSION;
+1309: }
+1310: 
+1311: static const struct bpf_func_proto *
+1312: kprobe_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+1752: 		if (bpf_prog_has_trampoline(prog) ||
+1753: 		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1754: 			return &bpf_get_func_arg_cnt_proto;
+1755: 		return NULL;
+1756: 	case BPF_FUNC_get_attach_cookie:
+1757: 		if (prog->type == BPF_PROG_TYPE_TRACING &&
+1758: 		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1759: 			return &bpf_get_attach_cookie_proto_tracing;
+1760: 		return bpf_prog_has_trampoline(prog) ? &bpf_get_attach_cookie_proto_tracing : NULL;
+1761: 	default:
+1762: 		fn = raw_tp_prog_func_proto(func_id, prog);
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+2010: 	struct perf_event_query_bpf query = {};
+2011: 	struct bpf_prog_array *progs;
+2012: 	u32 *ids, prog_cnt, ids_len;
+2013: 	int ret;
+2014: 
+2015: 	if (!perfmon_capable())
+2016: 		return -EPERM;
+2017: 	if (event->attr.type != PERF_TYPE_TRACEPOINT)
+2018: 		return -EINVAL;
+2019: 	if (copy_from_user(&query, uquery, sizeof(query)))
+2020: 		return -EFAULT;
+
+====================================================================================================
+FILE: kernel/trace/bpf_trace.c
+3379: static int __init bpf_trace_kfuncs_init(void)
+3380: {
+3381: 	int err = 0;
+3382: 
+3383: 	err = err ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_KPROBE, &bpf_session_kfunc_set);
+3384: 	err = err ?: register_btf_kfunc_id_set(BPF_PROG_TYPE_TRACING, &bpf_session_kfunc_set);
+3385: 
+3386: 	return err;
+3387: }
+3388: 
+3389: late_initcall(bpf_trace_kfuncs_init);
+
+====================================================================================================
+FILE: kernel/trace/trace_events_user.c
+217: 	return jhash(name, strlen(name), 0);
+218: }
+219: 
+220: static bool user_event_capable(u16 reg_flags)
+221: {
+222: 	/* Persistent events require CAP_PERFMON / CAP_SYS_ADMIN */
+223: 	if (reg_flags & USER_EVENT_REG_PERSIST) {
+224: 		if (!perfmon_capable())
+225: 			return false;
+226: 	}
+227: 
+
+====================================================================================================
+FILE: kernel/trace/trace_events_user.c
+219: 
+220: static bool user_event_capable(u16 reg_flags)
+221: {
+222: 	/* Persistent events require CAP_PERFMON / CAP_SYS_ADMIN */
+223: 	if (reg_flags & USER_EVENT_REG_PERSIST) {
+224: 		if (!perfmon_capable())
+225: 			return false;
+226: 	}
+227: 
+228: 	return true;
+229: }
+
+====================================================================================================
+FILE: include/linux/bpf.h
+2731: 
+2732: bool bpf_token_capable(const struct bpf_token *token, int cap);
+2733: 
+2734: static inline bool bpf_allow_ptr_leaks(const struct bpf_token *token)
+2735: {
+2736: 	return bpf_token_capable(token, CAP_PERFMON);
+2737: }
+2738: 
+2739: static inline bool bpf_allow_uninit_stack(const struct bpf_token *token)
+2740: {
+2741: 	return bpf_token_capable(token, CAP_PERFMON);
+
+====================================================================================================
+FILE: include/linux/bpf.h
+2736: 	return bpf_token_capable(token, CAP_PERFMON);
+2737: }
+2738: 
+2739: static inline bool bpf_allow_uninit_stack(const struct bpf_token *token)
+2740: {
+2741: 	return bpf_token_capable(token, CAP_PERFMON);
+2742: }
+2743: 
+2744: static inline bool bpf_bypass_spec_v1(const struct bpf_token *token)
+2745: {
+2746: 	return bpf_jit_bypass_spec_v1() ||
+
+====================================================================================================
+FILE: include/linux/bpf.h
+2743: 
+2744: static inline bool bpf_bypass_spec_v1(const struct bpf_token *token)
+2745: {
+2746: 	return bpf_jit_bypass_spec_v1() ||
+2747: 		cpu_mitigations_off() ||
+2748: 		bpf_token_capable(token, CAP_PERFMON);
+2749: }
+2750: 
+2751: static inline bool bpf_bypass_spec_v4(const struct bpf_token *token)
+2752: {
+2753: 	return bpf_jit_bypass_spec_v4() ||
+
+====================================================================================================
+FILE: include/linux/bpf.h
+2750: 
+2751: static inline bool bpf_bypass_spec_v4(const struct bpf_token *token)
+2752: {
+2753: 	return bpf_jit_bypass_spec_v4() ||
+2754: 		cpu_mitigations_off() ||
+2755: 		bpf_token_capable(token, CAP_PERFMON);
+2756: }
+2757: 
+2758: int bpf_map_new_fd(struct bpf_map *map, int flags);
+2759: int bpf_prog_new_fd(struct bpf_prog *prog);
+2760: 
+
+====================================================================================================
+FILE: include/linux/bpf_types.h
+44: 	      struct bpf_perf_event_data, struct bpf_perf_event_data_kern)
+45: BPF_PROG_TYPE(BPF_PROG_TYPE_RAW_TRACEPOINT, raw_tracepoint,
+46: 	      struct bpf_raw_tracepoint_args, u64)
+47: BPF_PROG_TYPE(BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE, raw_tracepoint_writable,
+48: 	      struct bpf_raw_tracepoint_args, u64)
+49: BPF_PROG_TYPE(BPF_PROG_TYPE_TRACING, tracing,
+50: 	      void *, void *)
+51: #endif
+52: #ifdef CONFIG_CGROUP_BPF
+53: BPF_PROG_TYPE(BPF_PROG_TYPE_CGROUP_DEVICE, cg_dev,
+54: 	      struct bpf_cgroup_dev_ctx, struct bpf_cgroup_dev_ctx)
+
+====================================================================================================
+FILE: include/linux/bpf_types.h
+107: BPF_MAP_TYPE(BPF_MAP_TYPE_ARRAY_OF_MAPS, array_of_maps_map_ops)
+108: BPF_MAP_TYPE(BPF_MAP_TYPE_HASH_OF_MAPS, htab_of_maps_map_ops)
+109: #ifdef CONFIG_BPF_LSM
+110: BPF_MAP_TYPE(BPF_MAP_TYPE_INODE_STORAGE, inode_storage_map_ops)
+111: #endif
+112: BPF_MAP_TYPE(BPF_MAP_TYPE_TASK_STORAGE, task_storage_map_ops)
+113: #ifdef CONFIG_NET
+114: BPF_MAP_TYPE(BPF_MAP_TYPE_DEVMAP, dev_map_ops)
+115: BPF_MAP_TYPE(BPF_MAP_TYPE_DEVMAP_HASH, dev_map_hash_ops)
+116: BPF_MAP_TYPE(BPF_MAP_TYPE_SK_STORAGE, sk_storage_map_ops)
+117: BPF_MAP_TYPE(BPF_MAP_TYPE_CPUMAP, cpu_map_ops)
+
+====================================================================================================
+FILE: include/linux/bpf_verifier.h
+776: 	/* Allow access to uninitialized stack memory. Writes with fixed offset are
+777: 	 * always allowed, so this refers to reads (with fixed or variable offset),
+778: 	 * to writes with variable offset and to indirect (helper) accesses.
+779: 	 */
+780: 	bool allow_uninit_stack;
+781: 	bool bpf_capable;
+782: 	bool bypass_spec_v1;
+783: 	bool bypass_spec_v4;
+784: 	bool seen_direct_write;
+785: 	bool seen_exception;
+786: 	struct bpf_insn_aux_data *insn_aux_data; /* array of per-insn state */
+
+====================================================================================================
+FILE: include/linux/bpf_verifier.h
+963: }
+964: 
+965: static inline bool bpf_prog_check_recur(const struct bpf_prog *prog)
+966: {
+967: 	switch (resolve_prog_type(prog)) {
+968: 	case BPF_PROG_TYPE_TRACING:
+969: 		return prog->expected_attach_type != BPF_TRACE_ITER;
+970: 	case BPF_PROG_TYPE_STRUCT_OPS:
+971: 		return prog->aux->jits_use_priv_stack;
+972: 	case BPF_PROG_TYPE_LSM:
+973: 	case BPF_PROG_TYPE_SYSCALL:
+
+====================================================================================================
+FILE: include/linux/capability.h
+185: 				 const struct inode *inode);
+186: bool capable_wrt_inode_uidgid(struct mnt_idmap *idmap,
+187: 			      const struct inode *inode, int cap);
+188: extern bool file_ns_capable(const struct file *file, struct user_namespace *ns, int cap);
+189: extern bool ptracer_capable(struct task_struct *tsk, struct user_namespace *ns);
+190: static inline bool perfmon_capable(void)
+191: {
+192: 	return capable(CAP_PERFMON) || capable(CAP_SYS_ADMIN);
+193: }
+194: 
+195: static inline bool bpf_capable(void)
+
+====================================================================================================
+FILE: include/linux/capability.h
+187: 			      const struct inode *inode, int cap);
+188: extern bool file_ns_capable(const struct file *file, struct user_namespace *ns, int cap);
+189: extern bool ptracer_capable(struct task_struct *tsk, struct user_namespace *ns);
+190: static inline bool perfmon_capable(void)
+191: {
+192: 	return capable(CAP_PERFMON) || capable(CAP_SYS_ADMIN);
+193: }
+194: 
+195: static inline bool bpf_capable(void)
+196: {
+197: 	return capable(CAP_BPF) || capable(CAP_SYS_ADMIN);
+
+====================================================================================================
+FILE: include/linux/capability.h
+190: static inline bool perfmon_capable(void)
+191: {
+192: 	return capable(CAP_PERFMON) || capable(CAP_SYS_ADMIN);
+193: }
+194: 
+195: static inline bool bpf_capable(void)
+196: {
+197: 	return capable(CAP_BPF) || capable(CAP_SYS_ADMIN);
+198: }
+199: 
+200: static inline bool checkpoint_restore_ns_capable(struct user_namespace *ns)
+
+====================================================================================================
+FILE: include/linux/capability.h
+192: 	return capable(CAP_PERFMON) || capable(CAP_SYS_ADMIN);
+193: }
+194: 
+195: static inline bool bpf_capable(void)
+196: {
+197: 	return capable(CAP_BPF) || capable(CAP_SYS_ADMIN);
+198: }
+199: 
+200: static inline bool checkpoint_restore_ns_capable(struct user_namespace *ns)
+201: {
+202: 	return ns_capable(ns, CAP_CHECKPOINT_RESTORE) ||
+
+====================================================================================================
+FILE: include/linux/filter.h
+1353: 		return false;
+1354: 	if (!prog->jit_requested)
+1355: 		return false;
+1356: 	if (!bpf_jit_harden)
+1357: 		return false;
+1358: 	if (bpf_jit_harden == 1 && bpf_token_capable(prog->aux->token, CAP_BPF))
+1359: 		return false;
+1360: 
+1361: 	return true;
+1362: }
+1363: 
+
+====================================================================================================
+FILE: include/linux/perf_event.h
+1792: 
+1793: extern int perf_allow_kernel(void);
+1794: 
+1795: static inline int perf_allow_cpu(void)
+1796: {
+1797: 	if (sysctl_perf_event_paranoid > 0 && !perfmon_capable())
+1798: 		return -EACCES;
+1799: 
+1800: 	return security_perf_event_open(PERF_SECURITY_CPU);
+1801: }
+1802: 
+
+====================================================================================================
+FILE: include/linux/perf_event.h
+1800: 	return security_perf_event_open(PERF_SECURITY_CPU);
+1801: }
+1802: 
+1803: static inline int perf_allow_tracepoint(void)
+1804: {
+1805: 	if (sysctl_perf_event_paranoid > -1 && !perfmon_capable())
+1806: 		return -EPERM;
+1807: 
+1808: 	return security_perf_event_open(PERF_SECURITY_TRACEPOINT);
+1809: }
+1810: 
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+904:  *
+905:  *		When created, BPF token is "associated" with the owning
+906:  *		user namespace of BPF FS instance (super block) that it was
+907:  *		derived from, and subsequent BPF operations performed with
+908:  *		BPF token would be performing capabilities checks (i.e.,
+909:  *		CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN, CAP_SYS_ADMIN) within
+910:  *		that user namespace. Without BPF token, such capabilities
+911:  *		have to be granted in init user namespace, making bpf()
+912:  *		syscall incompatible with user namespace, for the most part.
+913:  *
+914:  *	Return
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+1038: 	BPF_MAP_TYPE_SK_STORAGE,
+1039: 	BPF_MAP_TYPE_DEVMAP_HASH,
+1040: 	BPF_MAP_TYPE_STRUCT_OPS,
+1041: 	BPF_MAP_TYPE_RINGBUF,
+1042: 	BPF_MAP_TYPE_INODE_STORAGE,
+1043: 	BPF_MAP_TYPE_TASK_STORAGE,
+1044: 	BPF_MAP_TYPE_BLOOM_FILTER,
+1045: 	BPF_MAP_TYPE_USER_RINGBUF,
+1046: 	BPF_MAP_TYPE_CGRP_STORAGE,
+1047: 	BPF_MAP_TYPE_ARENA,
+1048: 	BPF_MAP_TYPE_INSN_ARRAY,
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+1082: 	BPF_PROG_TYPE_SK_REUSEPORT,
+1083: 	BPF_PROG_TYPE_FLOW_DISSECTOR,
+1084: 	BPF_PROG_TYPE_CGROUP_SYSCTL,
+1085: 	BPF_PROG_TYPE_RAW_TRACEPOINT_WRITABLE,
+1086: 	BPF_PROG_TYPE_CGROUP_SOCKOPT,
+1087: 	BPF_PROG_TYPE_TRACING,
+1088: 	BPF_PROG_TYPE_STRUCT_OPS,
+1089: 	BPF_PROG_TYPE_EXT,
+1090: 	BPF_PROG_TYPE_LSM,
+1091: 	BPF_PROG_TYPE_SK_LOOKUP,
+1092: 	BPF_PROG_TYPE_SYSCALL, /* a program that can execute syscalls */
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+5062:  * 		peer device must reside in a different network namespace.
+5063:  * 	Return
+5064:  * 		The helper returns **TC_ACT_REDIRECT** on success or
+5065:  * 		**TC_ACT_SHOT** on error.
+5066:  *
+5067:  * void *bpf_task_storage_get(struct bpf_map *map, struct task_struct *task, void *value, u64 flags)
+5068:  *	Description
+5069:  *		Get a bpf_local_storage from the *task*.
+5070:  *
+5071:  *		Logically, it could be thought of as getting the value from
+5072:  *		a *map* with *task* as the **key**.  From this
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+5071:  *		Logically, it could be thought of as getting the value from
+5072:  *		a *map* with *task* as the **key**.  From this
+5073:  *		perspective,  the usage is not much different from
+5074:  *		**bpf_map_lookup_elem**\ (*map*, **&**\ *task*) except this
+5075:  *		helper enforces the key must be a task_struct and the map must also
+5076:  *		be a **BPF_MAP_TYPE_TASK_STORAGE**.
+5077:  *
+5078:  *		Underneath, the value is stored locally at *task* instead of
+5079:  *		the *map*.  The *map* is used as the bpf-local-storage
+5080:  *		"type". The bpf-local-storage "type" (i.e. the *map*) is
+5081:  *		searched against all bpf_local_storage residing at *task*.
+
+====================================================================================================
+FILE: include/uapi/linux/bpf.h
+5098:  *	Return
+5099:  *		0 on success.
+5100:  *
+5101:  *		**-ENOENT** if the bpf_local_storage cannot be found.
+5102:  *
+5103:  * struct task_struct *bpf_get_current_task_btf(void)
+5104:  *	Description
+5105:  *		Return a BTF pointer to the "current" task.
+5106:  *		This pointer can also be used in helpers that accept an
+5107:  *		*ARG_PTR_TO_BTF_ID* of type *task_struct*.
+5108:  *	Return
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+273: /* Allow sending raw qic-117 commands */
+274: /* Allow enabling/disabling tagged queuing on SCSI controllers and sending
+275:    arbitrary SCSI commands */
+276: /* Allow setting encryption key on loopback filesystem */
+277: /* Allow setting zone reclaim policy */
+278: /* Allow everything under CAP_BPF and CAP_PERFMON for backward compatibility */
+279: /* Allow setting hardware protection emergency action */
+280: 
+281: #define CAP_SYS_ADMIN        21
+282: 
+283: /* Allow use of reboot() */
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+378: /*
+379:  * Allow system performance and observability privileged operations
+380:  * using perf_events, i915_perf and other kernel subsystems
+381:  */
+382: 
+383: #define CAP_PERFMON		38
+384: 
+385: /*
+386:  * CAP_BPF allows the following BPF operations:
+387:  * - Creating all types of BPF maps
+388:  * - Advanced verifier features
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+381:  */
+382: 
+383: #define CAP_PERFMON		38
+384: 
+385: /*
+386:  * CAP_BPF allows the following BPF operations:
+387:  * - Creating all types of BPF maps
+388:  * - Advanced verifier features
+389:  *   - Indirect variable access
+390:  *   - Bounded loops
+391:  *   - BPF to BPF function calls
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+395:  *   - And potentially other features
+396:  * - Loading BPF Type Format (BTF) data
+397:  * - Retrieve xlated and JITed code of BPF programs
+398:  * - Use bpf_spin_lock() helper
+399:  *
+400:  * CAP_PERFMON relaxes the verifier checks further:
+401:  * - BPF progs can use of pointer-to-integer conversions
+402:  * - speculation attack hardening measures are bypassed
+403:  * - bpf_probe_read to read arbitrary kernel memory is allowed
+404:  * - bpf_trace_printk to print kernel memory is allowed
+405:  *
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+406:  * CAP_SYS_ADMIN is required to use bpf_probe_write_user.
+407:  *
+408:  * CAP_SYS_ADMIN is required to iterate system wide loaded
+409:  * programs, maps, links, BTFs and convert their IDs to file descriptors.
+410:  *
+411:  * CAP_PERFMON and CAP_BPF are required to load tracing programs.
+412:  * CAP_NET_ADMIN and CAP_BPF are required to load networking programs.
+413:  */
+414: #define CAP_BPF			39
+415: 
+416: 
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+407:  *
+408:  * CAP_SYS_ADMIN is required to iterate system wide loaded
+409:  * programs, maps, links, BTFs and convert their IDs to file descriptors.
+410:  *
+411:  * CAP_PERFMON and CAP_BPF are required to load tracing programs.
+412:  * CAP_NET_ADMIN and CAP_BPF are required to load networking programs.
+413:  */
+414: #define CAP_BPF			39
+415: 
+416: 
+417: /* Allow checkpoint/restore related operations */
+
+====================================================================================================
+FILE: include/uapi/linux/capability.h
+409:  * programs, maps, links, BTFs and convert their IDs to file descriptors.
+410:  *
+411:  * CAP_PERFMON and CAP_BPF are required to load tracing programs.
+412:  * CAP_NET_ADMIN and CAP_BPF are required to load networking programs.
+413:  */
+414: #define CAP_BPF			39
+415: 
+416: 
+417: /* Allow checkpoint/restore related operations */
+418: /* Allow PID selection during clone3() */
+419: /* Allow writing to ns_last_pid */
+earl@earl-VMware-Virtual-Platform:~/workspace/robdog_nav2/kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source$ python3 - <<'PY'
+from pathlib import Path
+
+targets = {
+    "kernel/bpf/syscall.c": (
+        "static int map_create",
+        "static int bpf_prog_load",
+    ),
+    "kernel/bpf/helpers.c": (
+        "bpf_task_storage_get",
+        "bpf_get_current_task_btf",
+    ),
+    "kernel/trace/bpf_trace.c": (
+        "bpf_get_current_task_btf",
+    ),
+}
+
+for filename, needles in targets.items():
+    path = Path(filename)
+    if not path.exists():
+        continue
+
+    lines = path.read_text(errors="replace").splitlines()
+PY              print(f"{j + 1}: {lines[j]}")(len(lines), i + 30)):ine]
+
+####################################################################################################
+FILE: kernel/bpf/syscall.c
+
+--- static int map_create, line 1369 ---
+1361: 	return ret;
+1362: free_map_tab:
+1363: 	bpf_map_free_record(map);
+1364: 	return ret;
+1365: }
+1366: 
+1367: #define BPF_MAP_CREATE_LAST_FIELD excl_prog_hash_size
+1368: /* called via syscall */
+1369: static int map_create(union bpf_attr *attr, bpfptr_t uattr)
+1370: {
+1371: 	const struct bpf_map_ops *ops;
+1372: 	struct bpf_token *token = NULL;
+1373: 	int numa_node = bpf_map_attr_numa_node(attr);
+1374: 	u32 map_type = attr->map_type;
+1375: 	struct bpf_map *map;
+1376: 	bool token_flag;
+1377: 	int f_flags;
+1378: 	int err;
+1379: 
+1380: 	err = CHECK_ATTR(BPF_MAP_CREATE);
+1381: 	if (err)
+1382: 		return -EINVAL;
+1383: 
+1384: 	/* check BPF_F_TOKEN_FD flag, remember if it's set, and then clear it
+1385: 	 * to avoid per-map type checks tripping on unknown flag
+1386: 	 */
+1387: 	token_flag = attr->map_flags & BPF_F_TOKEN_FD;
+1388: 	attr->map_flags &= ~BPF_F_TOKEN_FD;
+1389: 
+1390: 	if (attr->btf_vmlinux_value_type_id) {
+1391: 		if (attr->map_type != BPF_MAP_TYPE_STRUCT_OPS ||
+1392: 		    attr->btf_key_type_id || attr->btf_value_type_id)
+1393: 			return -EINVAL;
+1394: 	} else if (attr->btf_key_type_id && !attr->btf_value_type_id) {
+1395: 		return -EINVAL;
+1396: 	}
+1397: 
+1398: 	if (attr->map_type != BPF_MAP_TYPE_BLOOM_FILTER &&
+
+--- static int bpf_prog_load, line 2871 ---
+2863: 	}
+2864: 
+2865: 	return 0;
+2866: }
+2867: 
+2868: /* last field in 'union bpf_attr' used by this command */
+2869: #define BPF_PROG_LOAD_LAST_FIELD keyring_id
+2870: 
+2871: static int bpf_prog_load(union bpf_attr *attr, bpfptr_t uattr, u32 uattr_size)
+2872: {
+2873: 	enum bpf_prog_type type = attr->prog_type;
+2874: 	struct bpf_prog *prog, *dst_prog = NULL;
+2875: 	struct btf *attach_btf = NULL;
+2876: 	struct bpf_token *token = NULL;
+2877: 	bool bpf_cap;
+2878: 	int err;
+2879: 	char license[128];
+2880: 
+2881: 	if (CHECK_ATTR(BPF_PROG_LOAD))
+2882: 		return -EINVAL;
+2883: 
+2884: 	if (attr->prog_flags & ~(BPF_F_STRICT_ALIGNMENT |
+2885: 				 BPF_F_ANY_ALIGNMENT |
+2886: 				 BPF_F_TEST_STATE_FREQ |
+2887: 				 BPF_F_SLEEPABLE |
+2888: 				 BPF_F_TEST_RND_HI32 |
+2889: 				 BPF_F_XDP_HAS_FRAGS |
+2890: 				 BPF_F_XDP_DEV_BOUND_ONLY |
+2891: 				 BPF_F_TEST_REG_INVARIANTS |
+2892: 				 BPF_F_TOKEN_FD))
+2893: 		return -EINVAL;
+2894: 
+2895: 	bpf_prog_load_fixup_attach_type(attr);
+2896: 
+2897: 	if (attr->prog_flags & BPF_F_TOKEN_FD) {
+2898: 		token = bpf_token_get_from_fd(attr->prog_token_fd);
+2899: 		if (IS_ERR(token))
+2900: 			return PTR_ERR(token);
+
+####################################################################################################
+FILE: kernel/bpf/helpers.c
+
+--- bpf_task_storage_get, line 2170 ---
+2162: 	case BPF_FUNC_current_task_under_cgroup:
+2163: 		return &bpf_current_task_under_cgroup_proto;
+2164: #endif
+2165: #ifdef CONFIG_CGROUP_NET_CLASSID
+2166: 	case BPF_FUNC_get_cgroup_classid:
+2167: 		return &bpf_get_cgroup_classid_curr_proto;
+2168: #endif
+2169: 	case BPF_FUNC_task_storage_get:
+2170: 		return &bpf_task_storage_get_proto;
+2171: 	case BPF_FUNC_task_storage_delete:
+2172: 		return &bpf_task_storage_delete_proto;
+2173: 	default:
+2174: 		break;
+2175: 	}
+2176: 
+2177: 	if (!bpf_token_capable(prog->aux->token, CAP_PERFMON))
+2178: 		return NULL;
+2179: 
+2180: 	switch (func_id) {
+2181: 	case BPF_FUNC_trace_printk:
+2182: 		return bpf_get_trace_printk_proto();
+2183: 	case BPF_FUNC_get_current_task:
+2184: 		return &bpf_get_current_task_proto;
+2185: 	case BPF_FUNC_get_current_task_btf:
+2186: 		return &bpf_get_current_task_btf_proto;
+2187: 	case BPF_FUNC_get_current_comm:
+2188: 		return &bpf_get_current_comm_proto;
+2189: 	case BPF_FUNC_probe_read_user:
+2190: 		return &bpf_probe_read_user_proto;
+2191: 	case BPF_FUNC_probe_read_kernel:
+2192: 		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+2193: 		       NULL : &bpf_probe_read_kernel_proto;
+2194: 	case BPF_FUNC_probe_read_user_str:
+2195: 		return &bpf_probe_read_user_str_proto;
+2196: 	case BPF_FUNC_probe_read_kernel_str:
+2197: 		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+2198: 		       NULL : &bpf_probe_read_kernel_str_proto;
+2199: 	case BPF_FUNC_copy_from_user:
+
+--- bpf_get_current_task_btf, line 2038 ---
+2030: 	.gpl_only	= false,
+2031: 	.ret_type	= RET_PTR_TO_DYNPTR_MEM_OR_NULL,
+2032: 	.arg1_type	= ARG_PTR_TO_DYNPTR | MEM_RDONLY,
+2033: 	.arg2_type	= ARG_ANYTHING,
+2034: 	.arg3_type	= ARG_CONST_ALLOC_SIZE_OR_ZERO,
+2035: };
+2036: 
+2037: const struct bpf_func_proto bpf_get_current_task_proto __weak;
+2038: const struct bpf_func_proto bpf_get_current_task_btf_proto __weak;
+2039: const struct bpf_func_proto bpf_probe_read_user_proto __weak;
+2040: const struct bpf_func_proto bpf_probe_read_user_str_proto __weak;
+2041: const struct bpf_func_proto bpf_probe_read_kernel_proto __weak;
+2042: const struct bpf_func_proto bpf_probe_read_kernel_str_proto __weak;
+2043: const struct bpf_func_proto bpf_task_pt_regs_proto __weak;
+2044: const struct bpf_func_proto bpf_perf_event_read_proto __weak;
+2045: const struct bpf_func_proto bpf_send_signal_proto __weak;
+2046: const struct bpf_func_proto bpf_send_signal_thread_proto __weak;
+2047: const struct bpf_func_proto bpf_get_task_stack_sleepable_proto __weak;
+2048: const struct bpf_func_proto bpf_get_task_stack_proto __weak;
+2049: const struct bpf_func_proto bpf_get_branch_snapshot_proto __weak;
+2050: 
+2051: const struct bpf_func_proto *
+2052: bpf_base_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+2053: {
+2054: 	switch (func_id) {
+2055: 	case BPF_FUNC_map_lookup_elem:
+2056: 		return &bpf_map_lookup_elem_proto;
+2057: 	case BPF_FUNC_map_update_elem:
+2058: 		return &bpf_map_update_elem_proto;
+2059: 	case BPF_FUNC_map_delete_elem:
+2060: 		return &bpf_map_delete_elem_proto;
+2061: 	case BPF_FUNC_map_push_elem:
+2062: 		return &bpf_map_push_elem_proto;
+2063: 	case BPF_FUNC_map_pop_elem:
+2064: 		return &bpf_map_pop_elem_proto;
+2065: 	case BPF_FUNC_map_peek_elem:
+2066: 		return &bpf_map_peek_elem_proto;
+2067: 	case BPF_FUNC_map_lookup_percpu_elem:
+
+--- bpf_get_current_task_btf, line 2186 ---
+2178: 		return NULL;
+2179: 
+2180: 	switch (func_id) {
+2181: 	case BPF_FUNC_trace_printk:
+2182: 		return bpf_get_trace_printk_proto();
+2183: 	case BPF_FUNC_get_current_task:
+2184: 		return &bpf_get_current_task_proto;
+2185: 	case BPF_FUNC_get_current_task_btf:
+2186: 		return &bpf_get_current_task_btf_proto;
+2187: 	case BPF_FUNC_get_current_comm:
+2188: 		return &bpf_get_current_comm_proto;
+2189: 	case BPF_FUNC_probe_read_user:
+2190: 		return &bpf_probe_read_user_proto;
+2191: 	case BPF_FUNC_probe_read_kernel:
+2192: 		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+2193: 		       NULL : &bpf_probe_read_kernel_proto;
+2194: 	case BPF_FUNC_probe_read_user_str:
+2195: 		return &bpf_probe_read_user_str_proto;
+2196: 	case BPF_FUNC_probe_read_kernel_str:
+2197: 		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+2198: 		       NULL : &bpf_probe_read_kernel_str_proto;
+2199: 	case BPF_FUNC_copy_from_user:
+2200: 		return &bpf_copy_from_user_proto;
+2201: 	case BPF_FUNC_copy_from_user_task:
+2202: 		return &bpf_copy_from_user_task_proto;
+2203: 	case BPF_FUNC_snprintf_btf:
+2204: 		return &bpf_snprintf_btf_proto;
+2205: 	case BPF_FUNC_snprintf:
+2206: 		return &bpf_snprintf_proto;
+2207: 	case BPF_FUNC_task_pt_regs:
+2208: 		return &bpf_task_pt_regs_proto;
+2209: 	case BPF_FUNC_trace_vprintk:
+2210: 		return bpf_get_trace_vprintk_proto();
+2211: 	case BPF_FUNC_perf_event_read_value:
+2212: 		return bpf_get_perf_event_read_value_proto();
+2213: 	case BPF_FUNC_perf_event_read:
+2214: 		return &bpf_perf_event_read_proto;
+2215: 	case BPF_FUNC_send_signal:
+
+####################################################################################################
+FILE: kernel/trace/bpf_trace.c
+
+--- bpf_get_current_task_btf, line 766 ---
+758: }
+759: 
+760: const struct bpf_func_proto bpf_get_current_task_proto = {
+761: 	.func		= bpf_get_current_task,
+762: 	.gpl_only	= true,
+763: 	.ret_type	= RET_INTEGER,
+764: };
+765: 
+766: BPF_CALL_0(bpf_get_current_task_btf)
+767: {
+768: 	return (unsigned long) current;
+769: }
+770: 
+771: const struct bpf_func_proto bpf_get_current_task_btf_proto = {
+772: 	.func		= bpf_get_current_task_btf,
+773: 	.gpl_only	= true,
+774: 	.ret_type	= RET_PTR_TO_BTF_ID_TRUSTED,
+775: 	.ret_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+776: };
+777: 
+778: BPF_CALL_1(bpf_task_pt_regs, struct task_struct *, task)
+779: {
+780: 	return (unsigned long) task_pt_regs(task);
+781: }
+782: 
+783: BTF_ID_LIST_SINGLE(bpf_task_pt_regs_ids, struct, pt_regs)
+784: 
+785: const struct bpf_func_proto bpf_task_pt_regs_proto = {
+786: 	.func		= bpf_task_pt_regs,
+787: 	.gpl_only	= true,
+788: 	.arg1_type	= ARG_PTR_TO_BTF_ID,
+789: 	.arg1_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+790: 	.ret_type	= RET_PTR_TO_BTF_ID,
+791: 	.ret_btf_id	= &bpf_task_pt_regs_ids[0],
+792: };
+793: 
+794: struct send_signal_irq_work {
+795: 	struct irq_work irq_work;
+
+--- bpf_get_current_task_btf, line 771 ---
+763: 	.ret_type	= RET_INTEGER,
+764: };
+765: 
+766: BPF_CALL_0(bpf_get_current_task_btf)
+767: {
+768: 	return (unsigned long) current;
+769: }
+770: 
+771: const struct bpf_func_proto bpf_get_current_task_btf_proto = {
+772: 	.func		= bpf_get_current_task_btf,
+773: 	.gpl_only	= true,
+774: 	.ret_type	= RET_PTR_TO_BTF_ID_TRUSTED,
+775: 	.ret_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+776: };
+777: 
+778: BPF_CALL_1(bpf_task_pt_regs, struct task_struct *, task)
+779: {
+780: 	return (unsigned long) task_pt_regs(task);
+781: }
+782: 
+783: BTF_ID_LIST_SINGLE(bpf_task_pt_regs_ids, struct, pt_regs)
+784: 
+785: const struct bpf_func_proto bpf_task_pt_regs_proto = {
+786: 	.func		= bpf_task_pt_regs,
+787: 	.gpl_only	= true,
+788: 	.arg1_type	= ARG_PTR_TO_BTF_ID,
+789: 	.arg1_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+790: 	.ret_type	= RET_PTR_TO_BTF_ID,
+791: 	.ret_btf_id	= &bpf_task_pt_regs_ids[0],
+792: };
+793: 
+794: struct send_signal_irq_work {
+795: 	struct irq_work irq_work;
+796: 	struct task_struct *task;
+797: 	u32 sig;
+798: 	enum pid_type type;
+799: 	bool has_siginfo;
+800: 	struct kernel_siginfo info;
+
+--- bpf_get_current_task_btf, line 772 ---
+764: };
+765: 
+766: BPF_CALL_0(bpf_get_current_task_btf)
+767: {
+768: 	return (unsigned long) current;
+769: }
+770: 
+771: const struct bpf_func_proto bpf_get_current_task_btf_proto = {
+772: 	.func		= bpf_get_current_task_btf,
+773: 	.gpl_only	= true,
+774: 	.ret_type	= RET_PTR_TO_BTF_ID_TRUSTED,
+775: 	.ret_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+776: };
+777: 
+778: BPF_CALL_1(bpf_task_pt_regs, struct task_struct *, task)
+779: {
+780: 	return (unsigned long) task_pt_regs(task);
+781: }
+782: 
+783: BTF_ID_LIST_SINGLE(bpf_task_pt_regs_ids, struct, pt_regs)
+784: 
+785: const struct bpf_func_proto bpf_task_pt_regs_proto = {
+786: 	.func		= bpf_task_pt_regs,
+787: 	.gpl_only	= true,
+788: 	.arg1_type	= ARG_PTR_TO_BTF_ID,
+789: 	.arg1_btf_id	= &btf_tracing_ids[BTF_TRACING_TYPE_TASK],
+790: 	.ret_type	= RET_PTR_TO_BTF_ID,
+791: 	.ret_btf_id	= &bpf_task_pt_regs_ids[0],
+792: };
+793: 
+794: struct send_signal_irq_work {
+795: 	struct irq_work irq_work;
+796: 	struct task_struct *task;
+797: 	u32 sig;
+798: 	enum pid_type type;
+799: 	bool has_siginfo;
+800: 	struct kernel_siginfo info;
+801: };
