@@ -26,7 +26,7 @@
 |---|---|---|---|
 | E0 能力 | kernel release、available_events、format、BTF、权限 | 目标机存在候选观测入口 | 程序可加载或事件不会丢失 |
 | E1 调用尝试 | syscall entry | 某线程发起了某类 syscall | 请求被内核接受或时钟已改变 |
-| E2 请求内容 | 成功读取并按目标 ABI 解码的 modes/clockid/时间参数 | 请求的操作类别与参数 | 内核实际执行成功 |
+| E2 请求内容 | 分 E2a（sys_enter 时用户内存快照）与 E2b（copy_from_user 后内核副本） | E2a 仅是预调度快照；E2b 是传给内核 handler 的归一化请求 | 不能把 E2a 快照当成内核实际消费内容，也不能把 E2b 当成已生效 |
 | E3 syscall 返回观察 | 配对 exit 与原始 return value | handler 返回非负状态或负 errno 的观测 | 单凭负值（尤其 -EFAULT）不能证明副作用没有发生 |
 | E4 目标解析 | 明确识别 CLOCK_REALTIME，或经过 fd 生命周期追踪确认 PHC 设备 | 请求目标的 clock domain / PHC 设备 | 仅凭 dynamic clockid 数值推断 /dev/ptpN |
 | E5 独立效果 | 独立 clock sample、PHC/系统时钟观测及其误差/时间域说明 | 观测窗口内的时钟变化 | 单凭 syscall 成功断言整个同步链路正确 |
@@ -70,7 +70,7 @@
 
 ### 4.2 用户内存读取与 ABI 门禁
 
-`clock_adjtime` / `adjtimex` 的 tracepoint `tx` 字段是用户态 `struct timex *`。必须使用受支持的安全用户内存读取 helper（例如 `bpf_probe_read_user`），并将读取失败作为显式事件状态与计数器，不能用零值代替失败。
+`clock_adjtime` / `adjtimex` 的 tracepoint `tx` 字段是用户态 `struct timex *`。必须使用受支持的安全用户内存读取 helper（例如 `bpf_probe_read_user`），并将读取失败作为显式事件状态与计数器，不能用零值代替失败。注意：Linux syscall entry tracepoint 在实际 syscall handler 前触发；此处读取用户指针只得到 E2a pre-dispatch snapshot。另一个线程可能并发修改共享用户内存，使该样本与稍后 kernel copy_from_user 实际复制的字节不同。若必须观察内核消费的规范化请求，应另行评估 copy_from_user 之后的内部 kernel function hook（E2b），见专题 45。
 
 BTF/CO-RE 不能自动解决任意用户态 UAPI 结构布局：libbpf 的 `BPF_CORE_READ_USER` 仍要求被访问类型存在于 kernel/kernel-module BTF；用户态 UAPI 类型若不在目标 BTF 中，不能据此假设 CO-RE relocation 可用。因此：
 - 首个实现切片最多只解码经目标 ABI 明确验证的 `modes` 字段；
