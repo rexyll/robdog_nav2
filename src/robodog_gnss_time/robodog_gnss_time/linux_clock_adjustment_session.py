@@ -40,7 +40,7 @@ def validate_clock_adjustment_event_envelope(record):
         if not _text(record.get(name)):
             issues.append({"code": "invalid_envelope_identity", "field": name})
     version = record.get("schema_version")
-    if isinstance(version, bool) or version not in _SUPPORTED_SCHEMA_VERSIONS:
+    if not isinstance(version, int) or isinstance(version, bool) or version not in _SUPPORTED_SCHEMA_VERSIONS:
         issues.append({"code": "unsupported_envelope_schema_version"})
     kind = record.get("stream_kind")
     if not isinstance(kind, str) or kind not in _STREAM_KINDS:
@@ -58,7 +58,7 @@ def validate_clock_adjustment_event_envelope(record):
         if kind == "kernel_handler":
             status = record.get("parent_context_status")
             parent = record.get("parent_syscall_invocation_id")
-            if status not in _PARENT_CONTEXT_STATUSES:
+            if not isinstance(status, str) or status not in _PARENT_CONTEXT_STATUSES:
                 issues.append({"code": "invalid_parent_context_status"})
             elif status == "matched":
                 if not _text(parent):
