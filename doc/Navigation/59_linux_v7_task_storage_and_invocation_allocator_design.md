@@ -126,7 +126,7 @@ Because Task Storage has no `max_entries` and cannot be enumerated, enforce a pr
 
 The active-task gauge need not be zero at session stop: tasks may remain alive with idle Task Storage entries. The quiescence requirement is zero active syscall/handler invocations, zero in-flight callbacks, reconciled task-exit accounting, zero ring-buffer/queue work and a complete final snapshot. Destroying the session map releases storage for still-live tasks.
 
-If the task-exit hook cannot account for a task, if any global counter is unreadable, if capacity is exceeded, or if any invocation remains active at final quiescence, report `partial`. Do not infer zero pending work from automatic memory cleanup.
+If the task-exit hook misses a task with pending invocations, the active invocation gauges remain nonzero and final capture is partial. A missed idle-task exit can conservatively retain a reservation and cause later capacity rejection; it must not silently overwrite another task's state. If any required counter is unreadable, capacity is exceeded, or any invocation remains active at final quiescence, report `partial`. Do not infer zero pending work from automatic memory cleanup.
 
 ## 7. Required counters and failure states
 
