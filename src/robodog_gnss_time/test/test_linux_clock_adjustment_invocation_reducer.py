@@ -153,3 +153,23 @@ def test_invalid_inputs_rejected():
         reduce_clock_adjustment_invocation_events({}, "syscall")
     with pytest.raises(ValueError):
         reduce_clock_adjustment_invocation_events([], "unknown")
+
+
+def test_invocation_pair_preserves_request_modes_and_return_value():
+    records = [
+        event("syscall_enter", "e1", 0, 1, 10,
+              payload={"event_type": "syscall_enter", "pid_tgid": 4294967297,
+                       "syscall": "clock_adjtime", "raw_clockid": 0,
+                       "modes_read_status": "ok", "raw_modes": 1}),
+        event("syscall_exit", "e2", 1, 1, 20,
+              payload={"event_type": "syscall_exit", "pid_tgid": 4294967297,
+                       "syscall": "clock_adjtime", "return_value": -14}),
+    ]
+    result = reduce_clock_adjustment_invocation_events(records, "syscall")
+    assert result["reduction_status"] == "consistent"
+    pair = result["pairs"][0]
+    assert pair["raw_clockid"] == 0
+    assert pair["raw_modes"] == 1
+    assert pair["mode_decode"] is not None
+    assert pair["raw_return_value"] == -14
+    assert pair["return_interpretation"] == "negative_efault_copy_stage_ambiguous"
