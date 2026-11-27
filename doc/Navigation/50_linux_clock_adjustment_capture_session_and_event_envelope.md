@@ -73,6 +73,12 @@ The exact reconciliation equations and terminal outcome rules remain in Navigati
 
 ## 5. Reducer integration
 
+When both `syscall_envelopes` and `handler_envelopes` are supplied to the unified report builder, it runs strict invocation reducers for each stream and an exact parent-ID join. The report adds three mandatory gates: syscall invocation reduction, handler invocation reduction, and invocation parent join. Supplying only one stream or a non-list value fails closed. Omitting both keeps the report in explicit legacy mode and does not claim schema-v2 verification.
+
+The exact join key is `(capture_session_id, boot_id, task_instance_id, parent_syscall_invocation_id)`. It additionally checks PID equality, supported syscall/handler mapping and interval containment; a syscall may own multiple handler observations. It never falls back to nearest timestamp when parent identity is missing or ambiguous.
+
+## 5A. Legacy and strict paths
+
 The strict invocation reducer is an additional schema-v2 path; it does not replace the schema-v1 LIFO reducers yet. Its pairing key includes session, boot, producer, stream, task lifetime and invocation ID. It reports duplicate event IDs, duplicate entry/exit sides, unmatched sides, subject mismatches, parent-context mismatches and timestamp reversals as partial.
 
 For each envelope:
@@ -89,8 +95,8 @@ The validator does not itself prove that a producer emitted all events, that a c
 Synthetic tests cover v1 compatibility, v2 identity projection, handler parent-context states, schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
 
 Remaining implementation gates:
-- integrate invocation-ID reducer reports into the unified capture report as independent syscall/handler gates;
-- upgrade syscall-handler joiner to exact parent_syscall_invocation_id association;
+- migrate existing syscall/handler payload reducers to consume strict invocation pairs without losing legacy report fields;
+- generate producer-side invocation IDs and parent IDs from the target-kernel context stack;
 - define the actual eBPF/perf/ring-buffer transport and target-kernel attachment points;
 - implement producer counters and a dedicated unfiltered stream for each event class;
 - implement consumer decode/queue/writer counters and durable flush semantics;
