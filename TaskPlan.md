@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.291
+- 文档版本：v0.3.292
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1678,3 +1678,13 @@
 - 提交：validator `8bfb54d095b56c300e582ffe435a032f6c5b0b46`；类型检查 hardening `b6ef9a75e2eeb1665efd7ae6ffb8eda7b5fd230b`；validator tests `7194863dc6ff96db3c693c3eb92f875ebc7c709d`；invocation reducer `7ebc377046e79a989da546529019d64b0e9516f7`；reducer tests `eaf8ccce26a3662b8f43549afa68c18d1ffac25f`；Navigation 50 `458d61884b1961e626b521e39b57e66e02ea3f01`；Navigation 57 `7de7debff6fb75f9ccbf51ef1d7107bd3a285f4e`。
 - 验证边界：代码与 synthetic tests 已提交，等待 GNSS Runtime 与 ROS 2 Package CI 最终结果；当前 reducer 仅处理已具备 schema-v2 envelope 的离线 records，尚未接入统一 capture report，也没有真实 producer 生成这些 IDs。schema-v1 reducers/joiner 尚未替换；不能宣称 live cross-CPU pairing 已验证。
 - 下一步：把 strict syscall/handler invocation reports 接入 unified capture report，增加独立 gates；再将 joiner 改为基于 `parent_syscall_invocation_id` 精确关联，并保留 schema-v1 interval/LIFO 兼容路径。随后再研究 producer-side task storage/ID allocator 的 BPF map design。仅 nav 分支，不合并 main。
+
+
+## 本轮 unified capture report 接入 invocation identity（2026-11-27 / v0.3.292）
+
+- `build_clock_adjustment_capture_report` 新增可选 `syscall_envelopes` / `handler_envelopes` 输入。两条 schema-v2 stream 同时提供时，运行 strict invocation reducers，并将三项 gate 纳入 unified report：syscall invocation reduction、handler invocation reduction、invocation parent join。只提供一条 stream 或输入类型错误时 fail-closed；两条都未提供时显式标记 legacy mode，不宣称 schema-v2 已验证。
+- 新增 `correlate_clock_adjustment_invocation_observations`：通过 `(capture_session_id, boot_id, task_instance_id, parent_syscall_invocation_id)` 精确关联 handler 与 syscall；额外检查 PID、syscall/handler ABI 映射和 interval containment；允许一个 syscall 对应多个 handler。parent ID 不可用或不唯一时不回退到时间戳最近邻。
+- 新增 joiner tests 与 unified report integration tests，覆盖一对多 exact join、错误 parent ID、PID mismatch、parent context unavailable，以及统一报告中三项 gate 的通过/失败。
+- 提交：exact joiner `14e8b54b9bd4c7c3601d8171b6dc7e1cbbd5ea94`；pipeline integration `55162359cf9f324e526b2ef4833f4f8d0e779ec6`；joiner tests `38b1ac2ceb620e33b8a884bde46edc2f96b73752`；pipeline import formatting `ef2ec57171fbde6f1d296c750400d9dd1df4555e`；pipeline import fix `0450f01d35873deeaa8ae2a38e7cc80f21807b9c`；report output/gate cleanup `c5190435965ec13c1ded505ca4e710a2be32715e`；pipeline integration tests `afa00509a88f263f4d7c338a1141a4f7288264ea`；Navigation 50 `fe045b9aa7277e9d3410dc1fa14280278761acff`；Navigation 57 `e833307192cc66fa37cbe7fb1fce0769c76eec1d`。
+- 验证边界：上述实现和 synthetic tests 已提交，等待最新 CI 最终结果。strict path 仍需 schema-v2 producer 真实生成 IDs；旧 schema-v1 LIFO reducers 与 interval joiner 保留为兼容路径，尚未迁移/替换。unified report 的 legacy mode 不把缺少 v2 输入视为 v2 gate 通过。
+- 下一步：审查 exact parent join 对 handler 嵌套与 direct syscall 路径的关系标签；将 strict invocation pair 的返回值、copy-back errno、handler raw return 和 clock adjustment 结果纳入规范输出；再设计 producer-side ID allocator 的并发、task exit 与 map capacity 行为。仅 nav 分支，不合并 main。
