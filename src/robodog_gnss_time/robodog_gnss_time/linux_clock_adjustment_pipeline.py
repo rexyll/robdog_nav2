@@ -107,9 +107,31 @@ def build_clock_adjustment_capture_report(
     joined = correlate_clock_adjustment_observations(syscall, handler, wrapper_contract_id)
 
     issues = []
+    producer_received = producer.get("counts", {}).get("received_records")
+    pipeline_read = pipeline.get("deltas", {}).get("consumer_records_read")
+    count_match = (
+        _counter(producer_received) and _counter(pipeline_read)
+        and producer_received == pipeline_read
+    )
+    pipeline_boot = pipeline.get("identity", {}).get("boot_id")
+    producer_boots = {
+        item.get("boot_id") for item in producer.get("per_cpu", [])
+        if isinstance(item, dict) and isinstance(item.get("boot_id"), str)
+    }
+    boot_match = bool(pipeline_boot) and producer_boots == {pipeline_boot}
+    if not count_match:
+        issues.append({"code": "producer_received_vs_pipeline_read_mismatch",
+                       "producer_received_records": producer_received,
+                       "pipeline_records_read": pipeline_read})
+    if not boot_match:
+        issues.append({"code": "producer_pipeline_boot_id_mismatch",
+                       "producer_boot_ids": sorted(producer_boots),
+                       "pipeline_boot_id": pipeline_boot})
     gates = {
         "producer_integrity": producer.get("integrity_status") == "complete",
         "userspace_pipeline": pipeline.get("pipeline_status") == "consistent",
+        "producer_to_pipeline_record_count": count_match,
+        "producer_pipeline_boot_identity": boot_match,
         "syscall_reduction": syscall.get("reduction_status") == "consistent",
         "handler_reduction": handler.get("reduction_status") == "consistent",
         "syscall_handler_join": joined.get("reduction_status") == "consistent",
