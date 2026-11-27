@@ -7,7 +7,7 @@
 
 ## 1. Evidence boundary
 
-The uploaded live report identifies the VM kernel as `7.0.0-44-generic`, x86_64, with readable BTF. This document audits upstream Linux tag `v7.0` as a near-version reference. The exact Ubuntu source package revision and its patch set have not been obtained, so none of the upstream implementation details below are claimed as verified against the running Ubuntu binary.
+The uploaded live report identifies the VM kernel as `7.0.0-44-generic`, x86_64, with readable BTF. This document audits upstream Linux tag `v7.0` as a near-version reference. The exact installed Ubuntu source package revision and its patch set have not yet been read from the VM, so none of the upstream implementation details below are claimed as verified against the running Ubuntu binary. Public Noble package metadata lists linux-image-7.0.0-44-generic as version 7.0.0-44.44~24.04.1; the associated buildinfo metadata identifies linux-hwe-7.0 as its source package. This is a strong candidate mapping, not proof of the VM's installed binary package version.
 
 The VM report also shows an unprivileged process with `CapEff=0`, `unprivileged_bpf_disabled=2`, and no observed BPF load attempt. The current report therefore does not establish map creation, helper availability, verifier acceptance or attach permission.
 
@@ -85,6 +85,33 @@ Use a one-element global `BPF_MAP_TYPE_ARRAY` counter shared by all event-produc
 Allocate `event_id` before ring-buffer submission. A reservation failure therefore creates an unused ID; this is expected and must be separately accounted. Do not interpret event-ID gaps alone as lost records. Preserve per-CPU sequence numbers for local stream-gap detection and reconcile them with allocation, reserve-failure, submit-success and userspace-receive counters.
 
 The task-local `next_invocation_seq` is incremented for each syscall or handler entry. The syscall exit reuses the ID stored in the matching syscall frame. Handler entry copies the top syscall ID as its parent and allocates its own handler ID; handler exit reuses the handler frame ID and parent ID. No userspace timestamp matching is allowed as fallback.
+
+
+## 5A. Atomic allocator source audit and Ubuntu package provenance
+
+Upstream Linux v7.0 UAPI defines `BPF_ATOMIC`, `BPF_FETCH`, `BPF_XCHG` and `BPF_CMPXCHG`. The v7.0 verifier has explicit atomic RMW validation and accepts `BPF_ADD`, `BPF_ADD | BPF_FETCH`, and `BPF_CMPXCHG` in its atomic-op switch. This supports a design using a 64-bit compare-and-swap loop on a shared ARRAY value, but does not prove that the selected compiler emits the intended instruction, that the target architecture JIT accepts it, or that the program passes verification under the VM policy.
+
+References:
+- BPF atomic instruction definitions: https://github.com/torvalds/linux/blob/v7.0/include/uapi/linux/bpf.h#L16-L53
+- Verifier atomic RMW validation and opcode dispatch: https://github.com/torvalds/linux/blob/v7.0/kernel/bpf/verifier.c#L8034-L8190
+
+Ubuntu package provenance research:
+- The public Noble package listing maps `linux-image-7.0.0-44-generic` to version `7.0.0-44.44~24.04.1`: https://www.ubuntuupdates.org/package/core/noble/main/updates/linux-image-7.0.0-44-generic
+- The matching `linux-buildinfo-7.0.0-44-generic` listing identifies source package `linux-hwe-7.0` and the same version: https://www.ubuntuupdates.org/package/core/noble/main/updates/linux-buildinfo-7.0.0-44-generic
+- Ubuntu's `linux-source-7.0.0` package is described as Linux 7.0.0 source with Ubuntu patches: https://packages.ubuntu.com/noble/linux-source-7.0.0
+
+To pin the actual VM package metadata, collect this read-only output:
+```bash
+dpkg-query -W -f='${binary:Package}\t${Version}\t${source:Package}\t${source:Version}\n' \
+  "linux-image-$(uname -r)" \
+  "linux-modules-$(uname -r)" \
+  "linux-headers-$(uname -r)" 2>&1
+
+apt-cache policy linux-source-7.0.0
+apt-cache showsrc linux-hwe-7.0 2>&1 | sed -n '1,45p'
+```
+
+Do not download or install the source package merely to identify its version. The dpkg metadata should first establish the exact installed binary/source version; only then retrieve the matching source artifact and record its `.dsc` and SHA-256.
 
 ## 6. Task Storage lifecycle and bounded capacity
 
