@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.269
+- 文档版本：v0.3.270
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1463,3 +1463,13 @@
 - 不执行 mount、write、trace event enable、kprobe_events 修改、BPF load/attach、audit/perf session，也不修改时钟。目标 Orin/BSP 仍需独立采集实际 kernel release/config/BTF/symbol report。
 - 新增两项合成测试覆盖 handler symbol listed 与 inventory unavailable；新增 Navigation 51 文档并更新 Navigation README。代码提交：capability probe `dd3c15414ddb20e40d0ae812b332710ea6bc6602`；测试 `e31679af34b80523a34d11955697772cebcd91f6`；Navigation 51 `e6bbaea6c9fe511e8d9c01520182174a319fa8b3`；README `3d8a9718c87291e93c79b26c52114fe2479253ea`。
 - 本轮测试 CI 尚待最终 head 结果回填。即使合成 CI 通过，也只证明 parser/fixture behavior，不代表真实内核符号、BTF 函数类型或 attachability。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮 CI 验证回填（2026-11-27 / v0.3.270）
+
+- Kernel handler symbol inventory probe 最终测试 head `e31679af34b80523a34d11955697772cebcd91f6)：GNSS receiver-time ROS runtime CI run `45923836319` 成功，Humble/Jammy 与 Jazzy/Noble 各 **297/297 passed，0 errors/failures/skipped**。
+- ROS 2 package CI run `45923836292`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。
+- 日志仍出现 rosdep key unresolved ERROR 提示，但后续构建和 pytest 成功；保留为非阻断环境提示，不宣称零 warning。
+- CI 仅证明 Ubuntu/ROS Humble+Jazzy 中只读 inventory parser 的 synthetic fixture 测试与 ROS package 构建通过；没有采集真实 Orin/VM 的 available_filter_functions、没有解析目标 BTF FUNC、没有执行 fentry/kprobe attach，也没有启动 live collector 或修改时钟。
+- 代码与测试提交：`dd3c15414ddb20e40d0ae812b332710ea6bc6602` / `e31679af34b80523a34d11955697772cebcd91f6`；Navigation 51 `e6bbaea6c9fe511e8d9c01520182174a319fa8b3`；README `3d8a9718c87291e93c79b26c52114fe2479253ea`。
+- 下一步不是继续增加离线猜测：需在通用 Linux VM 执行只读 capability probe，保存 JSON 原始报告并审计实际 syscall tracepoint 和 handler symbol visibility；若缺少 VM 现场报告，应明确标记待用户/VM 执行。目标 Orin BSP 仍单独验证。N1/N9 未验收，仅 nav 分支推进，不合并 main。
