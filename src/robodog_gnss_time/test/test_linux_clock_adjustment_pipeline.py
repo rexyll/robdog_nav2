@@ -107,6 +107,38 @@ def test_unified_report_keeps_independent_gates_and_fails_closed():
     )
     assert report["capture_report_status"] == "partial"
     assert set(report["gates"]) == {
-        "producer_integrity", "userspace_pipeline", "syscall_reduction",
-        "handler_reduction", "syscall_handler_join",
+        "producer_integrity", "userspace_pipeline",
+        "producer_to_pipeline_record_count", "producer_pipeline_boot_identity",
+        "syscall_reduction", "handler_reduction", "syscall_handler_join",
     }
+
+
+
+def test_unified_report_cross_checks_producer_receive_count_and_boot_identity():
+    producer_snapshot = {"per_cpu": [{
+        "producer_id": "clock-step", "boot_id": "boot-a", "cpu": 0,
+        "sequence_allocated": 0, "ringbuf_reserve_failures": 0,
+        "ringbuf_submit_successes": 0,
+    }]}
+    drain_snapshot = {
+        "stop_requested": True, "producer_quiesced": True,
+        "ring_buffer_drained": True, "consumer_queue_drained": True,
+        "writer_flushed": True, "writer_closed": True,
+        "final_snapshot_after_drain": True, "queue_depth": 0,
+        "inflight_callbacks": 0, "pending_syscalls": 0, "pending_handlers": 0,
+    }
+    report = build_clock_adjustment_capture_report(
+        [], [], [], producer_snapshot, producer_snapshot, drain_snapshot,
+        snapshot(), snapshot(
+            boot_id="boot-a", consumer_records_read=1,
+            decode_failures=1,
+        ), None,
+    )
+    assert report["gates"]["producer_integrity"] is True
+    assert report["gates"]["userspace_pipeline"] is True
+    assert report["gates"]["producer_to_pipeline_record_count"] is False
+    assert report["gates"]["producer_pipeline_boot_identity"] is True
+    assert report["capture_report_status"] == "partial"
+    assert "producer_received_vs_pipeline_read_mismatch" in [
+        item["code"] for item in report["issues"]
+    ]
