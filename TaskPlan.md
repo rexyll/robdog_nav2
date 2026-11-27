@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.263
+- 文档版本：v0.3.264
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1409,3 +1409,12 @@
 - 新增 `build_clock_adjustment_capture_report()`，组合 Navigation 44 syscall reducer、Navigation 46 post-copy handler reducer、Navigation 47 joiner、Navigation 48 producer/drain integrity 与本轮 userspace pipeline auditor；各 Gate 独立输出，全部通过才给出 overall consistent。
 - 新增 Navigation 49 文档与 README 索引；新增 pipeline 合成测试，覆盖三段恒等式、queue drop 与 writer failure 区分、session/boot identity、counter regression、队列/写入中任务未清空、writer close 快照顺序和 unified report fail-closed。
 - 本轮实现为纯 Python 离线 reducer；未实现 live eBPF producer/consumer、decode/queue/writer 运行时，也未加载内核 hook、启用 tracing、修改 CLOCK_REALTIME/PHC。当前只在 nav 分支推进；N1/N9 未验收，不合并 main。CI 待最终 head 运行并回填。
+
+
+## 本轮验证回填（2026-11-27 / v0.3.264）
+
+- 本轮代码测试提交 `d21e9960a59815353575a8523aff990ebfabd5ed` 的 GNSS receiver-time ROS runtime CI run `45921929757`：Humble/Jammy 与 Jazzy/Noble 均 success；两组各 **261/261 passed，0 errors/failures/skipped**。新增 pipeline auditor tests 已包含在 261 项中。
+- ROS 2 package CI run `45921929770`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。
+- CI 日志仍有 rosdep 对 `ament_python` key 的 ERROR 提示，但构建步骤继续完成，pytest 汇总为 261 passed，job 成功；记录为非阻断环境提示，不表述为零 warning。
+- 后续文档/TaskPlan commits：Navigation 49 `82b0b02d825e151557e3445c1a11ffedfbbd3493`；Navigation README `ea3caa19653cb59304931960b3245acc176771f5`；TaskPlan v0.3.263 `55ef6e048d5fa652ce2e36166198e52e9c5d935c`。本次 CI 的代码 head 为 `d21e9960a59815353575a8523aff990ebfabd5ed`。
+- 验证边界不变：CI 只覆盖通用 Ubuntu/ROS 容器中的 Python reducer 与合成测试，不证明 live eBPF producer/consumer、真实 queue/writer 丢失统计、目标 Orin/BSP 内核 hook、instrumentation 全覆盖或 CLOCK_REALTIME/PHC 实际变化。N1/N9 未验收，仅 nav 分支推进，不合并 main。
