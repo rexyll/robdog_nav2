@@ -337,3 +337,5 @@
 - [60 — Linux clock-adjustment BPF wire ABI and allocator pseudocode](60_linux_clock_adjustment_bpf_wire_abi_and_allocator_pseudocode.md)
 
 - [61 — Linux clock-adjustment pure-Python producer state model](61_linux_clock_adjustment_pure_python_producer_state_model.md)
+
+- [62 — Linux clock-adjustment BPF CO-RE and verifier review](62_linux_clock_adjustment_bpf_core_and_verifier_review.md)
