@@ -218,9 +218,20 @@ def _tracefs_observation(path, mountinfo, root="/"):
             "exit_status": exit_status,
             "pair_status": pair_status,
         }
+    try:
+        directory_stat = path.stat()
+    except FileNotFoundError:
+        directory_status = "not_found"
+    except PermissionError:
+        directory_status = "permission_denied"
+    except OSError:
+        directory_status = "stat_error"
+    else:
+        import stat
+        directory_status = "present" if stat.S_ISDIR(directory_stat.st_mode) else "not_directory"
     return {
         "path": str(path),
-        "directory_status": "present" if path.is_dir() else "not_found",
+        "directory_status": directory_status,
         "mounts": mounts,
         "available_events_status": available["status"],
         "syscall_events": event_results,
