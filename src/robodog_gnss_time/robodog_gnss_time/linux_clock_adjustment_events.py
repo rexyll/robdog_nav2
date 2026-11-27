@@ -22,7 +22,7 @@ def _is_int(value: Any) -> bool:
 def _validate_common_event(event: dict[str, Any], index: int) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     issues: list[dict[str, Any]] = []
     event_type = event.get("event_type")
-    if event_type not in _EVENT_TYPES:
+    if not isinstance(event_type, str) or event_type not in _EVENT_TYPES:
         issues.append({"code": "unknown_event_type", "event_index": index})
         return None, issues
 
