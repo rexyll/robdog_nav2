@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.306
+- 文档版本：v0.3.307
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1833,3 +1833,13 @@
 - 新增 synthetic tests 覆盖 exact installed source identity、signed-image/kernel-code source split、missing owner、conflicting source versions、missing dpkg source metadata、dpkg-query command unavailable；新增 Navigation 63 运行说明和 README 索引。关键提交：collector `0b167a72bde8662b53eee6d3fd7dce4e14f732b2`；strict provenance gate `ebdb5b2842521796453147c5bd6e0a238eef7509`；tests `c407fbabb299cf617e4af79be0141eb108963038` / `561f9b589e32bb3a7681878eef4d54c957a82f8a` / `ac4193b35b2666c4d30c80759fe637e9d487888c`；Navigation 63 `a2a9460c74d3910147d02f4e8a391335dd887474` / `96666748a7fbf1653fcf0c8de0b1743ace595ff3`；README `43717343567827521fe1533feeccee34d9920b08`；最终 provenance issue reporting fix `4b4234ad0be7b22ac52e8578faf3829263dccd3c`。
 - 最终 CI head `4b4234ad...`：GNSS Runtime run `45937295121` success（Humble/Jazzy 两个 job 均 success），ROS 2 Package run `45937295096` success。没有 BPF C 编译、BPF object load、map 创建、probe attach、tracepoint enable 或 clock change。
 - 当前等待 VM 提供真实 dpkg provenance。请用户在 Ubuntu VM 仓库根目录运行 Navigation 63 §2 的只读命令，输出 `$HOME/kernel-package-provenance.json` 并上传。拿到后再锁定实际 source package/version，下载匹配 Ubuntu source package（不安装、不修改系统），逐项对比 Task Storage map/helper、CAP_BPF/token、CAP_PERFMON、GPL-only helper、task-exit cleanup 与 upstream v7.0；之后再设计 clang/BTF/relocation 的静态 object inspection。未取得用户授权前不执行 BPF load/attach。仅 nav 分支，不合并 main。
+
+
+## 本轮 Ubuntu kernel provenance collector owner-match hardening（2026-11-27 / v0.3.307）
+
+- 审查 Navigation 63 的只读 dpkg provenance collector 时发现一个 fail-open 边界：原实现将三个路径（/boot/vmlinuz、/boot/config、/usr/lib/modules/.../vmlinuz）的所有者合并，再判断是否有已安装 image package。这样，image package 只拥有 config 文件时也可能被误判为拥有正在运行的 kernel image。
+- 已修正为：只使用 /boot/vmlinuz-<release> 的 dpkg owner，与已安装 signed/unsigned image binary package 比对；:architecture 后缀在比较时规范化，但原始 package identifier 保留在报告中。config/modules 路径 owner 仅作为旁证，不参与 image-owner gate。
+- 新增测试：image package 只拥有 config、不拥有 vmlinuz 时必须 partial；dpkg package/owner 含 :amd64 时仍能正确匹配。
+- 代码提交：f6bbe3d87ae2b6e7e9809ebae86cdfc097dd03d5；测试提交：14bfe0031bef72374942728b1cc884b13fb35737；Navigation 63 文档修订：c53fd7861820e0180740c55fc49d5b78c8f708f5。
+- 验证状态：等待最新 GNSS Runtime 与 ROS 2 Package CI。尚未触发或执行任何 VM 命令；未安装包、未下载源码、未 load/attach BPF。仅 nav 分支，不合并 main。
+- 下一步：CI 通过后等待用户上传 $HOME/kernel-package-provenance.json；在此期间可继续静态审查 provenance report schema 和 exact source package retrieval procedure，但不以公开候选版本替代 VM 实测版本。
