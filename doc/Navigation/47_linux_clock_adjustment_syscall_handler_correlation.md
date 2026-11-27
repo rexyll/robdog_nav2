@@ -16,9 +16,10 @@ Public function: `correlate_clock_adjustment_observations(syscall_report, handle
 
 - Exact identity match on `(boot_id, pid_tgid)`.
 - The handler interval must be fully contained in the outer syscall interval using CLOCK_MONOTONIC.
-- Source-derived mapping: `clock_adjtime` and `clock_adjtime32` → `do_clock_adjtime`; `adjtimex` and `adjtimex_time32` → `do_adjtimex`.
+- Source-derived mapping: `clock_adjtime` and `clock_adjtime32` → `do_clock_adjtime`, and may additionally contain `do_adjtimex` when the selected clock callback dispatches through the adjtimex core; `adjtimex` and `adjtimex_time32` → `do_adjtimex`.
+- The relation is one syscall to zero, one, or multiple handler observations. `do_clock_adjtime` is labeled `syscall_dispatch_handler`; `do_adjtimex` under `clock_adjtime*` is labeled `nested_clock_callback_handler`; direct `adjtimex*` → `do_adjtimex` is labeled `direct_syscall_handler`.
 - If multiple nested syscall intervals contain one handler interval, select only a unique narrowest interval. Equal-width candidates are ambiguous.
-- If multiple handler intervals claim one syscall interval, none is joined. Missing/ambiguous matches remain explicit issues and make the result partial.
+- Multiple distinct handler intervals may legitimately belong to one syscall; they are no longer treated as a one-to-one collision. Missing/ambiguous matches remain explicit issues and make the result partial.
 
 Interval containment is not proof of call-stack ancestry. A same-thread nested syscall may exist. A future collector should add a shared invocation cookie or explicit parent context if it can do so safely.
 
@@ -26,7 +27,7 @@ Interval containment is not proof of call-stack ancestry. A same-thread nested s
 
 Inference is disabled by default. It is enabled only by explicitly passing `linux_v6.12_clock_adjtime_adjtimex_wrapper_order`, selecting the source-pinned Linux v6.12 wrapper ordering audited in Navigation 45.
 
-Inference is true only if the joined handler returned nonnegative and the outer syscall returned `-EFAULT` (`-14`). An internal handler returning `-EFAULT` does not qualify. This contract identifies the Linux v6.12 reference source only; it does not claim that an Orin BSP uses that source or ordering. Pin target BSP source/version before enabling this inference in deployment.
+Inference is true only for the syscall’s top-level wrapper handler (`do_clock_adjtime` for `clock_adjtime*`, `do_adjtimex` for direct `adjtimex*`) when that handler returned nonnegative and the outer syscall returned `-EFAULT` (`-14`). A nested `do_adjtimex` callback under `clock_adjtime*` does not independently qualify. An internal handler returning `-EFAULT` does not qualify. This contract identifies the Linux v6.12 reference source only; it does not claim that an Orin BSP uses that source or ordering. Pin target BSP source/version before enabling this inference in deployment.
 
 ## 4. Output and limitations
 
