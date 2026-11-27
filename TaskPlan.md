@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.279
+- 文档版本：v0.3.281
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1568,3 +1568,13 @@
 - 提交：probe `dc749fd3e20d4c6a81993bbd1082d2e994eba596`；tests `1846d94de89785e9fc8fae80bc88e66ed727890b`；Navigation 56 `863115947a8f49c0aafc91ebfdeb6b4f53f615f4`；README 提交见本轮后续提交。
 - 验证边界：本轮依据上游源码做静态 ABI/实现名审计，新增测试为 synthetic tracefs fixture；尚未取得 VM 的 live `available_events` 与 syscall ABI 报告。x86-64 VM 是否启用 IA32 emulation、实际 compat tracepoints 是否出现，必须由目标 kernel config、syscall table 与 live tracefs 共同确认；Orin/AArch64 仍需独立验证。未启用任何 tracepoint、未加载 BPF、未执行时钟调整 syscall。
 - 下一步：检查并测试 handler reducer 对 `clock_adjtime32` / `adjtimex_time32` 入口/出口事件的规范化与父子调用关系；同时等待用户从最新 nav 分支重新运行只读能力探测器并提交 JSON。N1/N9 未验收，继续仅在 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.281）
+
+- 检查 Navigation 46 kernel-handler reducer 的状态键，发现原实现对同一 `(boot_id, pid_tgid, handler)` 只保留一个 pending entry；同一线程同一 handler 嵌套时会把外层 entry 误判为 duplicate 并覆盖，导致外层/内层调用关系丢失。
+- 将 pending state 改为 per-boot/per-thread/per-handler LIFO stack；同一 key 的重复 entry 记录为 `nested_handler_entries`，handler exit 配对最近一次 entry，外层 invocation 保留在 stack 中。容量限制改按 active invocation 数计算。pair 输出显式记录 `pairing_method=lifo_same_thread_handler_stack`，报告声明未使用 invocation cookie。
+- 新增测试覆盖单次嵌套（inner 配对、outer 未配对时明确保留）和完整双层嵌套的 LIFO 配对顺序；更新 Navigation 46 文档，明确 LIFO 是同线程嵌套假设，不是 call-stack proof。若 inner exit 丢失，后续 exit 仍可能被 LIFO 分配给最近 entry，因此未来 capture producer 应提供稳定 invocation cookie/depth。
+- 提交：reducer `1f7813d2af87eccde1f77a778871f1d34a89b831`；tests `259096378dba29201f93722c3f224147fb499e4a`；Navigation 46 `4fd1d782e9c3811eb09b4837209109f15d5e1a3c`。
+- 验证状态：对应 GNSS Runtime CI 与 ROS 2 Package CI 正在运行，尚未据此宣告通过。未启动真实 kernel hook，未加载 BPF，未修改系统时钟；该 reducer 仍只对合成/未来采集事件工作。VM live capability JSON 仍待用户从最新 nav 分支生成。
+- 下一步：等待本轮 CI；审计 syscall reducer 与 handler joiner 对四种实现名的兼容映射（`clock_adjtime`/`clock_adjtime32` → `do_clock_adjtime`，`adjtimex`/`adjtimex_time32` → `do_adjtimex`），再决定是否需要 invocation cookie schema 扩展。N1/N9 未验收，仅 nav 分支推进，不合并 main。
