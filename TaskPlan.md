@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.298
+- 文档版本：v0.3.299
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1751,3 +1751,14 @@
 - 代码提交：global runtime audit `c613e28bcb6026c9011718249f4b816117f868dd`；exports fix `4e20c0be26a05ae7c26dc21271770c20b5bd996f`；pipeline gate `ea4dd29ec1e5ff1bf1a1575fec284274e0317cd3`；gauge delta audit `07336c4e1dd1b391bbd10c35365e6eb7daff5595`；integrity tests `99dcf8ed6e4b2cab041f89901308ef9250df7126`；pipeline tests `e90f71a721c783a33c91949f281642ca0bb8dd4b`；admission equation fix `021c02cdbbd6c0b601daab7c7a498d556b159d41`；Navigation 48 `17d5e1b22e8021ea195ec1545fdf2eed6c0555c9`；Navigation 49 `e9f26e8b7a7d9b4ad595cf5484e2ee056dfb7886`。
 - 验证边界：代码和 synthetic tests 已提交，最新 commit CI 待最终 conclusion；未实现 BPF producer，也没有 live global snapshots。Global audit 不把 task_context_reservations final nonzero 视为失败，但 task exit pending frames、allocator failures、overflow、unmatched counters 或 active invocation nonzero 必须 partial。
 - 下一步：检查 CI 最终结果；若通过，将 schema-v2 producer global snapshots 接入真实 collector contract 和 final report fixtures。随后构建 pure Python producer-state simulator，验证 nested/overflow/failed event emission/task exit/drain 状态机。仅 nav 分支，不合并 main。
+
+
+## 本轮 producer state simulator 与 loss-free Gate（2026-11-27 / v0.3.299）
+
+- 新增纯 Python `ClockAdjustmentProducerState` reference model：模拟固定深度 syscall/handler stacks、独立 overflow depth、per-task invocation IDs、跨 stream global event IDs、CPU sequence-before-reserve、entry emit failure suppression、exact handler parent copy、task exit pending accounting 与显式 detach。输出的 schema-v2 events 直接送入现有 invocation reducers/joiner 做 cross-layer tests。
+- 新增测试覆盖 nested syscalls、syscall/handler overflow 不破坏 outer frame、ringbuf reserve failure 使 entry/exit 同时 suppression、event ID allocation failure 不消耗 CPU sequence、handler parent exact match、no-active-parent、task exit with pending、cross-stream ID uniqueness、detach guard。
+- 进一步发现 Navigation 48 per-CPU audit 在 initial/final per_cpu 都为空时可能将空输入判为 complete；已增加 `no_cpu_stream_snapshots` fail-closed。新增 global runtime equation：task context init attempts 必须等于 create successes 和 task ID allocation attempts；init successes 必须等于 task ID allocation successes；reservation gauge delta 必须与 admitted/create fail/init fail/task exit 计数相符。
+- Unified report 新增 `producer_loss_free` gate：至少有一个 per-CPU stream 且 ring-buffer reserve failures=0。Navigation 48 的 `integrity_status=complete` 仍只表示已知 loss accounting 对账完整；存在已解释 reserve failures 时，loss-free gate 仍失败。strict schema-v2 invocation mode 还必须提供 global producer runtime counters。
+- 新增/更新 Navigation 48、49、61，提交：producer model `076b4585eb781c830fe3979a7b0e1371fd6a6f65`；stream test fix `249cccf36e67cc24d12b40e6d997c4f4586750d4`；explicit detach `4869cc8570360c51d6afd7caab50d5d124193d04`；detach test `fe3654cf6110fc6d7f26ee7be04dc17d6779eee9`；producer loss gates `df42cb441766557b1e3a8137bc211d0a50e85393`；loss gate tests `f3701879fe5046e507e880e2a0839c4edf51e9d9`；sequence audit hardening `65e4114bac4e174ecaa93920aa6dc3885a71312d`；global gauge tests `07336c4e1dd1b391bbd10c35365e6eb7daff5595`；counter lifecycle equation `021c02cdbbd6c0b601daab7c7a498d556b159d41`；no-empty-stream test `ba91173319bb793bd59e03db3af8cf467492619d`；docs Navigation 48 `63177013be4e2f39433b015203c76d7847b02896`，49 `2db1520d1a716fe647ebf136b561f5ef36a8b94e`，61 `88955339fb9316df4288e1625a7157236f37e1a9`。
+- 验证边界：代码和测试已提交，最新 GNSS Runtime / ROS 2 Package CI 等待最终 conclusion。Python model 是状态机 reference only，不代表 BPF C、内核调度、map helper、ringbuf 或 verifier 行为。无 BPF load/attach、无系统时钟修改。
+- 下一步：CI 通过后，审查 producer simulator 的多任务上下文容量与 ID allocator contention；随后将 counter snapshot schema 纳入统一 report fixtures，并设计 target-kernel smoke probe 的授权边界。仅 nav 分支，不合并 main。
