@@ -175,6 +175,11 @@ def build_clock_adjustment_capture_report(
                        "pipeline_boot_id": pipeline_boot})
     gates = {
         "producer_integrity": producer.get("integrity_status") == "complete",
+        "producer_loss_free": (
+            producer.get("integrity_status") == "complete"
+            and producer.get("counts", {}).get("cpu_streams_audited", 0) > 0
+            and producer.get("counts", {}).get("reserve_failures", 0) == 0
+        ),
         "userspace_pipeline": pipeline.get("pipeline_status") == "consistent",
         "producer_to_pipeline_record_count": count_match,
         "producer_pipeline_boot_identity": boot_match,
@@ -188,6 +193,8 @@ def build_clock_adjustment_capture_report(
         gates["producer_runtime_counters"] = (
             producer_runtime.get("runtime_status") == "consistent"
         )
+    elif invocation_mode == "schema_v2_required":
+        gates["producer_runtime_counters"] = False
 
     if invocation_mode == "schema_v2_required":
         gates["syscall_invocation_reduction"] = (
