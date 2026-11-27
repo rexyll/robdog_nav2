@@ -400,3 +400,29 @@ def test_btf_observation_records_sha256_identity(tmp_path):
     assert result["status"] == "present_readable"
     assert result["sha256"] == hashlib.sha256(b"synthetic-btf-bytes").hexdigest()
     assert result["hash_algorithm"] == "sha256"
+
+
+def test_tracefs_probe_reports_permission_denied_directory_without_crashing(tmp_path, monkeypatch):
+    tracefs_path = tmp_path / "sys/kernel/debug/tracing"
+    original_stat = Path.stat
+
+    def permission_denied_for_tracefs(path, *args, **kwargs):
+        if path == tracefs_path:
+            raise PermissionError(13, "Permission denied", str(path))
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", permission_denied_for_tracefs)
+
+    result = capability_module._tracefs_observation(
+        tracefs_path,
+        {"status": "not_found", "content": ""},
+        root=tmp_path,
+    )
+
+    assert result["directory_status"] == "permission_denied"
+    assert result["available_events_status"] == "not_found"
+    assert all(
+        event["status"] == "unknown"
+        for event in result["syscall_events"].values()
+    )
+    assert result["syscall_event_pairs"]["clock_adjtime"]["pair_status"] == "unknown"
