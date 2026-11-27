@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.281
+- 文档版本：v0.3.282
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1578,3 +1578,13 @@
 - 提交：reducer `1f7813d2af87eccde1f77a778871f1d34a89b831`；tests `259096378dba29201f93722c3f224147fb499e4a`；Navigation 46 `4fd1d782e9c3811eb09b4837209109f15d5e1a3c`。
 - 验证状态：对应 GNSS Runtime CI 与 ROS 2 Package CI 正在运行，尚未据此宣告通过。未启动真实 kernel hook，未加载 BPF，未修改系统时钟；该 reducer 仍只对合成/未来采集事件工作。VM live capability JSON 仍待用户从最新 nav 分支生成。
 - 下一步：等待本轮 CI；审计 syscall reducer 与 handler joiner 对四种实现名的兼容映射（`clock_adjtime`/`clock_adjtime32` → `do_clock_adjtime`，`adjtimex`/`adjtimex_time32` → `do_adjtimex`），再决定是否需要 invocation cookie schema 扩展。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.282）
+
+- 将 kernel-handler reducer 输出 schema 升级到 v2，显式暴露 `pairing_policy=lifo_same_thread_handler_stack_without_invocation_cookie`；每个 pair 增加 `pairing_method`。新增 `nested_handler_entries` 计数，保留旧 `duplicate_handler_entries` 字段以兼容既有消费者，但不再将无法区分的重复 entry 误判为已确认 duplicate。
+- pending 容量按活动 invocation 数计算，而不是按不同 task/handler key 数计算；handler exit 从同一 boot/thread/handler stack 顶部弹出，跨 CPU 迁移仍以 pid_tgid 与单调事件顺序关联。
+- 更新 Navigation 46，明确 LIFO 是无 cookie 情况下的嵌套假设：如果内层 exit 丢失，LIFO 可能将后续 exit 配给最近的 pending entry，不能代替 producer-side invocation cookie/depth。该风险作为后续 capture producer Gate 保留。
+- 提交：reducer schema v2 `f85d3c923ffce21fdb93dfaceb42aa2d4ceb1d52`；schema test `ef5beb42a0ccf856f0871ff3ce1aff4b4859722d`；Navigation 46 `1140fdfcd1623a5c6b67870bcac2239c73f92ace`。
+- 当前 CI 尚待最终 head 结果；合成测试尚未由本轮最终 head 确认。没有真实内核 hook、BPF attach、系统时钟修改或硬件验证。
+- 下一步：CI 完成后检查全量回归；然后验证 outer syscall reducer/joiner 的 compat 映射与嵌套区间行为，并继续等待 VM live capability JSON。N1/N9 未验收，仅 nav 分支推进，不合并 main。
