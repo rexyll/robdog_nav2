@@ -32,7 +32,8 @@ def test_clean_stream_and_complete_drain():
 def test_reserve_failure_is_accounted_by_sequence_gap():
     result=audit([event(1),event(3)],snap(0,0,0),snap(3,1,2))
     assert result["integrity_status"]=="complete"
-    assert result["per_cpu"][0]["missing_sequences"]==[2]
+    assert result["per_cpu"][0]["missing_sequence_ranges"]==[{"first":2,"last":2}]
+    assert result["per_cpu"][0]["missing_sequence_count"]==1
 
 def test_unexplained_sequence_gap_is_partial():
     result=audit([event(1),event(3)],snap(0,0,0),snap(3,0,3))
@@ -97,3 +98,11 @@ def test_invalid_input_shapes_rejected():
 def test_missing_cpu_snapshot_is_partial():
     result=audit([event(1)],snap(0,0,0),{"per_cpu":[]})
     assert "missing_counter_snapshot" in [x["code"] for x in result["issues"]]
+
+
+def test_huge_sequence_gap_is_reported_compactly_without_expanding_range():
+    end=(1<<63)
+    result=audit([event(1)],snap(0,0,0),snap(end, end-1, 1))
+    assert result["integrity_status"]=="complete"
+    assert result["per_cpu"][0]["missing_sequence_count"]==end-1
+    assert len(result["per_cpu"][0]["missing_sequence_ranges"])==1
