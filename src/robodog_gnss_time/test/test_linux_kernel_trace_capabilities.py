@@ -261,29 +261,78 @@ def test_runtime_policy_inventory_fails_closed_when_policy_files_are_unavailable
 
 
 
-def test_btf_handler_inventory_parses_func_records_without_claiming_attachability(tmp_path, monkeypatch):
+def _bpftool_json_fixture():
+    return {
+        "types": [
+            {"id": 1, "kind": "STRUCT", "name": "timex", "size": 208, "vlen": 0},
+            {"id": 2, "kind": "PTR", "name": "(anon)", "type_id": 1},
+            {"id": 3, "kind": "INT", "name": "long", "size": 8},
+            {"id": 4, "kind": "TYPEDEF", "name": "clockid_t", "type_id": 5},
+            {"id": 5, "kind": "INT", "name": "int", "size": 4},
+            {
+                "id": 6, "kind": "FUNC_PROTO", "name": "(anon)",
+                "ret_type_id": 3, "vlen": 2,
+                "params": [
+                    {"name": "which_clock", "type_id": 4},
+                    {"name": "tx", "type_id": 2},
+                ],
+            },
+            {"id": 7, "kind": "FUNC", "name": "do_clock_adjtime", "type_id": 6, "linkage": "global"},
+            {
+                "id": 8, "kind": "FUNC_PROTO", "name": "(anon)",
+                "ret_type_id": 3, "vlen": 1,
+                "params": [{"name": "tx", "type_id": 2}],
+            },
+            {"id": 9, "kind": "FUNC", "name": "do_adjtimex", "type_id": 8, "linkage": "global"},
+        ]
+    }
+
+
+def test_btf_handler_inventory_resolves_func_proto_and_parameter_type_chains(tmp_path, monkeypatch):
+    import json
+
     btf = _write(tmp_path / "sys/kernel/btf/vmlinux", "fixture")
     monkeypatch.setattr(capability_module.shutil, "which", lambda name: "/usr/sbin/bpftool")
     monkeypatch.setattr(
         capability_module.subprocess,
         "run",
         lambda *args, **kwargs: type(
-            "Completed",
-            (),
-            {
+            "Completed", (), {
                 "returncode": 0,
-                "stdout": "[10] FUNC 'do_clock_adjtime' type_id=9 linkage=global\n"
-                "[11] FUNC 'unrelated' type_id=8 linkage=static\n",
+                "stdout": json.dumps(_bpftool_json_fixture()),
                 "stderr": "",
-            },
+            }
         )(),
     )
 
     result = capability_module._btf_handler_function_inventory(btf)
     assert result["status"] == "observed"
-    assert result["symbols"]["do_clock_adjtime"]["status"] == "func_record_present"
-    assert result["symbols"]["do_adjtimex"]["status"] == "func_record_absent"
-    assert "does not prove a usable FUNC_PROTO" in result["interpretation"]
+    assert result["symbols"]["do_clock_adjtime"]["status"] == "prototype_resolved"
+    clock_adj = result["symbols"]["do_clock_adjtime"]
+    assert clock_adj["return_type"]["name"] == "long"
+    assert clock_adj["parameter_count"] == 2
+    assert clock_adj["parameters"][0]["name"] == "which_clock"
+    assert clock_adj["parameters"][0]["type"]["kind"] == "TYPEDEF"
+    assert clock_adj["parameters"][0]["type"]["target"]["name"] == "int"
+    assert clock_adj["parameters"][1]["type"]["target"]["kind"] == "STRUCT"
+    assert result["symbols"]["do_adjtimex"]["status"] == "prototype_resolved"
+    assert "-j" in result["command"]
+    assert "does not prove fentry attachability" in result["interpretation"]
+
+
+def test_btf_handler_inventory_fails_closed_on_missing_proto_or_type_reference():
+    document = _bpftool_json_fixture()
+    document["types"] = [
+        item for item in document["types"] if item["id"] != 6
+    ]
+    result = capability_module._parse_btf_handler_functions(document)
+    assert result["symbols"]["do_clock_adjtime"]["status"] == "invalid_func_proto_reference"
+
+    document = _bpftool_json_fixture()
+    document["types"][5]["params"][1]["type_id"] = 999
+    result = capability_module._parse_btf_handler_functions(document)
+    assert result["symbols"]["do_clock_adjtime"]["status"] == "prototype_incomplete"
+    assert result["symbols"]["do_clock_adjtime"]["parameters"][1]["type"]["status"] == "missing_type"
 
 
 def test_btf_handler_inventory_reports_unknown_when_bpftool_is_missing(tmp_path, monkeypatch):
@@ -307,4 +356,19 @@ def test_btf_handler_inventory_reports_command_failure_without_inference(tmp_pat
     )
     result = capability_module._btf_handler_function_inventory(btf)
     assert result["status"] == "command_failed"
+    assert all(item["status"] == "unknown" for item in result["symbols"].values())
+
+
+def test_btf_handler_inventory_reports_invalid_json(tmp_path, monkeypatch):
+    btf = _write(tmp_path / "sys/kernel/btf/vmlinux", "fixture")
+    monkeypatch.setattr(capability_module.shutil, "which", lambda name: "/usr/sbin/bpftool")
+    monkeypatch.setattr(
+        capability_module.subprocess,
+        "run",
+        lambda *args, **kwargs: type(
+            "Completed", (), {"returncode": 0, "stdout": "{", "stderr": ""}
+        )(),
+    )
+    result = capability_module._btf_handler_function_inventory(btf)
+    assert result["status"] == "invalid_json"
     assert all(item["status"] == "unknown" for item in result["symbols"].values())
