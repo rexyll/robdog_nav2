@@ -1,6 +1,6 @@
 # Linux clock adjustment event envelope and userspace reducer contract
 
-- Status: PURE_LOGIC_IMPLEMENTED / SYNTHETIC_TESTS_SUBMITTED / KERNEL_CAPTURE_NOT_IMPLEMENTED
+- Status: PURE_LOGIC_IMPLEMENTED / GNSS_RUNTIME_CI_PASSED / KERNEL_CAPTURE_NOT_IMPLEMENTED
 - Date: 2026-11-27
 - Related: [42 — event capture design](42_linux_clock_step_event_capture_contract.md)
 - Related: [43 — phc2sys source-to-syscall mapping](43_phc2sys_clockadj_source_to_syscall_mapping.md)
