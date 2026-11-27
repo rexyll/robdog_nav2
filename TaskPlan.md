@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.275
+- 文档版本：v0.3.276
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1519,3 +1519,10 @@
 - 新增 Navigation 54：`doc/Navigation/54_kernel_probe_provenance_and_btf_identity.md`；增加 fixture/collector metadata 分离及 BTF SHA-256 合成测试。代码提交 `03293a1405ff12055460843ecadbe5d24ce1a40a`；测试提交 `4293b149626fe100ff5e31c2697aa19163117916`；文档提交 `9198bf080efb43c16df01dea948f819ae78166d1`；Navigation README `bea89cc172c9bc6313f4892eaaaa897901054d9d`。
 - 最新 CI 正在运行：GNSS runtime run `45926586710`；ROS 2 package run `45926586674`。提交时两者尚未完成，本台账不预先宣告通过；此前结构化 BTF parser 最新已完成 CI：run `45926365951` 的两平台各 304/304 passed，run `45926365962` 两平台均 success。
 - 下一步：等待当前 CI 结果；随后在通用 Linux VM 本机执行只读探测并提交 JSON 报告（至少保留 kernel release、boot_id、BTF SHA-256、bpftool version、两个 handler FUNC/FUNC_PROTO 及参数类型）。不要用 rootfs fixture 的 collector_host 元数据替代目标 VM。真实 attach 仍是单独 Gate；不执行任何改时钟 syscall。Orin BSP 单独复验。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮 CI 回填（2026-11-27 / v0.3.276）
+
+- Navigation 54 / probe provenance 变更 CI 已完成：GNSS runtime run `45926586710`，Humble/Jammy 与 Jazzy/Noble 各 **306/306 passed，0 errors/failures/skipped**；ROS 2 package run `45926586674`，两个 job 均 success。
+- CI 日志仍有 rosdep unresolved ERROR 提示，但两个平台的 colcon build/test 均成功，pytest 结果完整；此提示继续保留为非阻断环境告警，不将其描述为零告警。
+- 当前 nav HEAD：`919cf4ce9ab5c7c62dd84474ac545e5cee2d1fca`；main HEAD：`0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`。main 未修改。
