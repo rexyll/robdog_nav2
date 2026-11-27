@@ -63,3 +63,5 @@ These sources establish public package-family relationships, not what is install
 ## 6. Provenance owner-matching hardening
 
 The collector compares the owner list for `/boot/vmlinuz-<release>` only against installed image binary packages. It strips a possible `:architecture` suffix from dpkg package identifiers before comparison, while retaining the original identifiers in the raw package/owner records. A match on the config file or modules-tree image does not prove ownership of the running `/boot/vmlinuz` image.
+
+The collector also fails closed if any installed kernel-code package (modules, extra modules, unsigned image, headers or buildinfo) lacks either source package or source version metadata. A valid identity from a different installed package does not mask that missing identity.
