@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.257
+- 文档版本：v0.3.258
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1341,3 +1341,27 @@
   clock effect。
 - TaskPlan 版本更新；仅 nav 分支。未加载 eBPF、未启 tracing/audit、未改系统时钟
   或 PHC，未进行实机验证；N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.258）
+
+- 新增独立纯 Python E2b/E3a kernel-handler observation reducer：
+  `linux_clock_adjustment_kernel_observations.py`。将候选内部 hook 的
+  `kernel_handler_enter/exit` 配对，支持 `do_clock_adjtime` 与
+  `do_adjtimex` 两条源码路径；按 boot ID + pid_tgid + handler 配对，
+  按 boot ID + CPU 检查专属事件流 sequence。
+- E2b entry 要求内核副本 raw_modes 为 uint32；`do_clock_adjtime` 必须带
+  signed 32-bit clockid_t，`do_adjtimex` 禁止出现 clockid 字段。输出明确
+  `request_observation_stage=post_copy_kernel_request`；E3a handler return
+  保留原始 signed value，非负值不解释为物理效果，-EFAULT 也不误判为
+  outer syscall copy-back failure。
+- duplicate handler entry、orphan return、未配对 entry、timestamp inversion、
+  malformed typed fields、per-CPU sequence gap/regression/duplicate 与 pending
+  capacity overflow 均显式输出 issue 并降为 partial；默认 pending capacity=4096。
+- 新增 Navigation 46 和 18 项 synthetic tests。该 reducer 与 Navigation 44
+  的 E1/E2a/E3b syscall reducer 分离；当前明确 `outer_syscall_correlation=not_joined`，
+  不臆测内核内部函数调用与外层 syscall 的关联。后续需要设计跨事件流 joiner，
+  并在 target kernel/BTF/signature 验证后才可考虑 hook。
+- 本轮不加载 eBPF、不附加 fentry/kprobe、不启 tracing/audit、不读取任何内核指针、
+  不修改 CLOCK_REALTIME/PHC；CI 合成测试不证明目标 Orin 内核 hook 可用、事件流完整
+  或真实时钟效果。保持仅 nav 分支，N1/N9 未验收，不合并 main。
