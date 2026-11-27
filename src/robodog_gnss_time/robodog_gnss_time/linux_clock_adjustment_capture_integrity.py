@@ -152,6 +152,14 @@ def audit_clock_adjustment_producer_runtime_counters(initial, final):
             issues.append({"code": "producer_runtime_failure_observed",
                            "counter": name, "delta": deltas[name]})
 
+    if len(deltas) == len(_GLOBAL_COUNTERS):
+        if deltas["task_context_init_attempts"] != deltas["task_context_create_successes"]:
+            issues.append({"code": "global_runtime_counter_equation_mismatch",
+                           "equation": "task_context_create_to_init"})
+        if deltas["task_context_init_attempts"] != deltas["task_instance_id_allocation_attempts"]:
+            issues.append({"code": "global_runtime_counter_equation_mismatch",
+                           "equation": "task_context_init_to_task_id_allocation"})
+
     gauges_before, gauges_after = initial.get("gauges"), final.get("gauges")
     if not isinstance(gauges_before, dict) or not isinstance(gauges_after, dict):
         issues.append({"code": "invalid_global_runtime_gauges"})
@@ -172,6 +180,29 @@ def audit_clock_adjustment_producer_runtime_counters(initial, final):
         if name != "task_context_reservations" and value != 0:
             issues.append({"code": "producer_runtime_work_remaining",
                            "gauge": name, "value": value})
+
+    if (_uint(gauges_before.get("task_context_reservations"))
+            and _uint(gauges_after.get("task_context_reservations"))
+            and all(name in deltas for name in (
+                "task_context_admitted", "task_context_create_failures",
+                "task_context_init_failures", "task_exit_observed"
+            ))):
+        expected_reservation_delta = (
+            deltas["task_context_admitted"]
+            - deltas["task_context_create_failures"]
+            - deltas["task_context_init_failures"]
+            - deltas["task_exit_observed"]
+        )
+        observed_reservation_delta = (
+            gauges_after["task_context_reservations"]
+            - gauges_before["task_context_reservations"]
+        )
+        if expected_reservation_delta != observed_reservation_delta:
+            issues.append({
+                "code": "task_context_reservation_gauge_mismatch",
+                "expected_delta": expected_reservation_delta,
+                "observed_delta": observed_reservation_delta,
+            })
 
     return {
         "schema_version": 1,
