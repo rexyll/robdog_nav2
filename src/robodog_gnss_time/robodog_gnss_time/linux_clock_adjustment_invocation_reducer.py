@@ -240,4 +240,49 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
     }
 
 
-__all__ = ["reduce_clock_adjustment_invocation_events"]
+def audit_clock_adjustment_event_id_uniqueness(streams):
+    """Check event_id uniqueness across all supplied schema-v2 streams."""
+    if not isinstance(streams, list):
+        raise TypeError("streams must be a list")
+    seen = set()
+    issues = []
+    valid_v2 = 0
+    for stream_index, records in enumerate(streams):
+        if not isinstance(records, list):
+            issues.append({"code": "event_id_stream_not_list",
+                           "stream_index": stream_index})
+            continue
+        for record_index, record in enumerate(records):
+            result = validate_clock_adjustment_event_envelope(record)
+            if result.get("status") != "valid":
+                continue
+            identity = result["identity"]
+            if identity.get("schema_version") != 2:
+                continue
+            key = (identity["capture_session_id"], identity["boot_id"],
+                   identity["event_id"])
+            if key in seen:
+                issues.append({
+                    "code": "duplicate_event_id_across_streams",
+                    "stream_index": stream_index,
+                    "record_index": record_index,
+                    "event_id": identity["event_id"],
+                })
+                continue
+            seen.add(key)
+            valid_v2 += 1
+    return {
+        "schema_version": 1,
+        "audit_status": "consistent" if not issues else "partial",
+        "counts": {"valid_v2_events": valid_v2, "unique_event_ids": len(seen)},
+        "issues": issues,
+        "uniqueness_scope": "capture_session_id+boot_id",
+    }
+
+
+
+
+__all__ = [
+    "reduce_clock_adjustment_invocation_events",
+    "audit_clock_adjustment_event_id_uniqueness",
+]
