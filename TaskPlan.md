@@ -1894,3 +1894,17 @@
 - Ubuntu 官方依据：`https://documentation.ubuntu.com/security/software-integrity/archive-verification/`（InRelease/Sources/.dsc 信任链与 uploader key 说明）。
 - 已有 orig tarball 与 diff 的实际 SHA256 均与该 .dsc 的 Checksums-Sha256 一致；结合本轮 gpgv Good signature，exact linux-hwe-7.0 source descriptor 的签名验证和其列出源文件的内容哈希验证已完成。仍未完成 Ubuntu Security pocket 的 InRelease→Sources 独立交叉验证、BPF 相关 diff hunk 审计、以及 `linux-signed-hwe-7.0` 7.0.0-44 source package 验证。
 - 下一步：先获取并验证 Ubuntu Security pocket 对应的签名 InRelease 与 Sources 索引链（确认该 .dsc 文件名及其 SHA256 在已签名索引中）；并获取 Launchpad uploader profile 的公开 fingerprint 做身份关联核验。随后解包 exact `linux-hwe-7.0` diff，按实际 patch series 追踪 Task Storage map/helper、CAP_BPF/token、CAP_PERFMON、GPL-only helper 与 task-exit cleanup；并单独审计 signed source。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
+
+
+## 本轮 Ubuntu Security InRelease→Sources→linux-hwe-7.0 记录交叉验证（2026-11-27 / v0.3.313）
+
+- 用户在 VM 对 https://security.ubuntu.com/ubuntu/dists/noble-security/InRelease 执行 gpgv --keyring /usr/share/keyrings/ubuntu-archive-keyring.gpg InRelease，得到 Good signature from Ubuntu Archive Automatic Signing Key (2018)；签名时间 Fri 27 Nov 2026 09:06:55 AM CST，签名 key fingerprint F6ECB3762474EDA9D21B7022871920D1991BC93C。
+- 从已验签 InRelease 的 SHA256 段提取 main/source/Sources.xz 期望值，并执行 sha256sum -c，结果 Sources.xz: OK。因此 Sources 索引字节受已验证的 Ubuntu Archive InRelease 签名保护。
+- 用户完整解压 Sources.xz 后提取 Package: linux-hwe-7.0 的完整 source record。记录版本精确为 7.0.0-44.44~24.04.1，Directory 为 pool/main/l/linux-hwe-7.0。该记录的 SHA256：
+  - orig tarball：c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536 / 254937830 bytes；
+  - diff：ca52b58456be235c683de4638689e1837a86ec6ba19c97c398fc26af06941501 / 6551438 bytes；
+  - .dsc：04d5f9aa67ffefe76a1cf476b5c05feb51a3aeee6844eb9cd4ec1f0878eedf3f / 6480 bytes。
+- orig tarball 与 diff 的上述 SHA256 已与用户此前 VM 实测值逐字匹配；因此它们现在不仅匹配 .dsc 内部清单，也匹配由已验签 Ubuntu Archive InRelease 所保护的 Sources 索引记录。Sources record 中 .dsc 的期望 SHA256 已取得，但用户尚未提供本地 .dsc 的 sha256sum 输出；需要最后核对该 6480-byte 文件是否为 04d5f9aa...
+- 当前结论：Ubuntu Archive InRelease 签名通过；Sources.xz 哈希通过；精确 source package 名称/版本/目录已确认；orig/diff 内容哈希与签名索引一致。结合此前 .dsc 的 uploader-key gpgv Good signature，来源链已大幅闭合；但本地 .dsc 文件哈希与 Sources 记录的最终逐字比对仍待完成，Launchpad uploader fingerprint/授权身份关联也仍待独立确认。
+- 用户此前第一次提取索引时，awk 提前 exit 使 xz 管道收到 SIGPIPE，在 set -euo pipefail 下导致 shell 退出；已改为先完整解压 Sources.txt 再提取记录。该退出不是归档签名或索引完整性错误。
+- 下一步：用户在源文件目录执行 sha256sum linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc，确认值是否为 04d5f9aa67ffefe76a1cf476b5c05feb51a3aeee6844eb9cd4ec1f0878eedf3f；通过后将 source archive provenance gate 标记完成。之后进入 diff 解包与 BPF 相关 Ubuntu patch hunk 静态审计，并单独取回/验证 linux-signed-hwe-7.0 7.0.0-44 source package。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
