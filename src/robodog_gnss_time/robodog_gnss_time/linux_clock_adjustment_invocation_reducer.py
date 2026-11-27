@@ -3,6 +3,7 @@
 This is an offline reducer. It does not collect events or infer missing IDs.
 """
 from .linux_clock_adjustment_session import validate_clock_adjustment_event_envelope
+from .linux_timex_modes import classify_timex_modes
 
 
 def reduce_clock_adjustment_invocation_events(records, stream_kind):
@@ -115,7 +116,7 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
                     "raw_clockid": raw_clockid,
                     "modes_read_status": modes_status,
                     "raw_modes": raw_modes if modes_status == "ok" else None,
-                    "mode_decode": event.get("mode_decode") if modes_status == "ok" else None,
+                    "mode_decode": classify_timex_modes(raw_modes) if modes_status == "ok" else None,
                 }
             else:
                 raw_modes = event.get("raw_modes")
@@ -137,7 +138,7 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
                     continue
                 entry_payload = {
                     "raw_modes": raw_modes,
-                    "mode_decode": event.get("mode_decode"),
+                    "mode_decode": classify_timex_modes(raw_modes),
                     "raw_clockid": raw_clockid,
                 }
         else:
@@ -202,6 +203,16 @@ def reduce_clock_adjustment_invocation_events(records, stream_kind):
             "raw_return_value": slot["exit"]["return_value"],
             "raw_handler_return": (slot["exit"]["return_value"]
                                    if stream_kind == "kernel_handler" else None),
+            "return_interpretation": (
+                "nonnegative_return_not_effect_proof"
+                if slot["exit"]["return_value"] >= 0
+                else ("negative_efault_copy_stage_ambiguous"
+                      if stream_kind == "syscall" and slot["exit"]["return_value"] == -14
+                      else ("negative_efault_handler_result_not_copyback_proof"
+                            if stream_kind == "kernel_handler"
+                            and slot["exit"]["return_value"] == -14
+                            else "negative_errno_effect_unresolved"))
+            ),
             "duration_ns": slot["exit"]["monotonic_ns"] - slot["entry"]["monotonic_ns"],
             "clock_effect": "not_measured",
         })
