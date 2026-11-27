@@ -29,7 +29,7 @@ def _command(argv, timeout=5):
     }
 
 
-def _package_row(package_name):
+def _package_row(package_name, role):
     fmt = (
         "${binary:Package}\t${Version}\t${source:Package}\t"
         "${source:Version}\t${db:Status-Abbrev}\n"
@@ -48,6 +48,7 @@ def _package_row(package_name):
     installed = status.startswith("ii")
     return {
         "package_query": package_name,
+        "binary_package_role": role,
         "status": "installed" if installed else "not_installed",
         "binary_package": binary,
         "binary_version": version,
@@ -73,15 +74,14 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
     release = kernel_release or os.uname().release
     architecture = platform.machine()
     candidate_packages = (
-        f"linux-image-{release}",
-        f"linux-image-unsigned-{release}",
-        f"linux-modules-{release}",
-        f"linux-modules-extra-{release}",
-        f"linux-headers-{release}",
-        f"linux-headers-{release}-generic",
-        f"linux-buildinfo-{release}",
+        (f"linux-image-{release}", "signed_image"),
+        (f"linux-image-unsigned-{release}", "kernel_image_unsigned"),
+        (f"linux-modules-{release}", "kernel_modules"),
+        (f"linux-modules-extra-{release}", "kernel_modules_extra"),
+        (f"linux-headers-{release}", "kernel_headers"),
+        (f"linux-buildinfo-{release}", "kernel_buildinfo"),
     )
-    package_rows = [_package_row(name) for name in candidate_packages]
+    package_rows = [_package_row(name, role) for name, role in candidate_packages]
     file_owners = [
         _file_owner(f"/boot/vmlinuz-{release}"),
         _file_owner(f"/boot/config-{release}"),
@@ -89,18 +89,40 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
     ]
     installed = [row for row in package_rows if row.get("status") == "installed"]
     installed_names = {row.get("binary_package") for row in installed}
+    def identities_for(roles):
+        return sorted({
+            (row.get("source_package"), row.get("source_version"))
+            for row in installed
+            if row.get("binary_package_role") in roles
+            and row.get("source_package") and row.get("source_version")
+        })
+
     source_identities = sorted({
         (row.get("source_package"), row.get("source_version"))
         for row in installed
         if row.get("source_package") and row.get("source_version")
     })
+    kernel_source_identities = identities_for({
+        "kernel_image_unsigned", "kernel_modules",
+        "kernel_modules_extra", "kernel_headers", "kernel_buildinfo",
+    })
+    signed_image_source_identities = identities_for({"signed_image"})
     owner_packages = sorted({
         owner["package"]
         for item in file_owners
         for owner in item.get("owners", [])
     })
-    status = "observed" if installed and owner_packages and source_identities else "partial"
-    if len(source_identities) > 1:
+    installed_image_packages = {
+        row.get("binary_package") for row in installed
+        if row.get("binary_package_role") in {"signed_image", "kernel_image_unsigned"}
+    }
+    image_owner_observed = bool(installed_image_packages.intersection(owner_packages))
+    status = (
+        "observed"
+        if image_owner_observed and len(kernel_source_identities) == 1
+        else "partial"
+    )
+    if len(signed_image_source_identities) > 1:
         status = "partial"
     return {
         "schema_version": 1,
@@ -116,6 +138,15 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         "source_package_identities": [
             {"source_package": name, "source_version": version}
             for name, version in source_identities
+        ],
+        "kernel_source_package_identity": (
+            {"source_package": kernel_source_identities[0][0],
+             "source_version": kernel_source_identities[0][1]}
+            if len(kernel_source_identities) == 1 else None
+        ),
+        "signed_image_source_package_identities": [
+            {"source_package": name, "source_version": version}
+            for name, version in signed_image_source_identities
         ],
         "installed_binary_packages": sorted(installed_names),
         "issues": issues,
