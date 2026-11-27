@@ -122,6 +122,8 @@ def test_task_exit_accounts_abandoned_frames_and_releases_context_reservation():
     assert state.counters["task_exit_with_pending_syscalls"] == 1
     assert state.active_syscall_invocations == 0
     assert state.task_context_reservations == 0
+    state.detach()
+    assert state.global_snapshot()["snapshot_after_producer_detach"] is True
     assert state.global_snapshot()["gauges"]["inflight_bpf_callbacks"] == 0
 
 
