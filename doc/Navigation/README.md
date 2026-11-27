@@ -317,3 +317,5 @@
 - [Capture event-envelope and lifecycle tests](../../src/robodog_gnss_time/test/test_linux_clock_adjustment_session.py)
 
 - [51 — Linux kernel trace capability probe for clock-adjustment evidence](51_linux_kernel_trace_capability_probe.md)
+
+- [52 — Linux BPF runtime-policy preflight inventory](52_linux_bpf_runtime_policy_preflight.md)
