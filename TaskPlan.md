@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.278
+- 文档版本：v0.3.279
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1547,3 +1547,14 @@
 - 文档与索引提交：Navigation 55 `3580b85880d0ea205c9918e745091bc2123d2e17`；Navigation README 后续提交记录在本 TaskPlan 更新提交中。
 - 本轮未新增代码或测试，未触发新的 CI；此前 v0.3.276 CI 结果仅适用于 Navigation 54 对应代码，不可当作本轮源码文档验证。当前 nav 分支推进，N1/N9 未验收，不合并 main。
 - 下一步：继续核验 `adjtimex` / `clock_adjtime` syscall tracepoint 的 ABI/架构覆盖与 compat syscall 编号；同时检查现有 handler reducer 对多层嵌套、同一任务并发上下文和 handler invocation cookie 的表达能力。VM live report 仍是 attach 选型前置 Gate。
+
+
+## 本轮现场探测器异常修复（2026-11-27 / v0.3.279）
+
+- 用户在 Ubuntu 24.04 / Python 3.12 VM 执行 Navigation 54 只读命令时，Path.is_dir() 对 /sys/kernel/debug/tracing 抛出 PermissionError: [Errno 13]，导致 CLI 在写出 JSON 前退出。该问题是探测器异常处理缺陷，不是要求用户提权的系统配置错误。
+- 修复 linux_kernel_trace_capabilities.py：tracefs/debugfs 目录状态改为显式 Path.stat() 并分别记录 present、not_found、permission_denied、stat_error、not_directory；不可访问目录不再使整个能力盘点崩溃。其余 tracefs 文件读取仍由 _read_text() 单独记录权限/读取状态，未改变任何系统设置。
+- 新增回归测试 test_tracefs_probe_reports_permission_denied_directory_without_crashing，模拟 tracefs 目录 stat 权限拒绝，验证探测结果保持 directory_status=permission_denied，事件可用性为 unknown，clock_adjtime pair 为 unknown，而不是抛异常。
+- 代码提交：f6076fdd3ba1a0a4e540e2ec8cd7eeee6807e004；回归测试提交：85cd27fef543af8f3639b5471f8b9a6d24edaf32。
+- GNSS runtime CI run 45927787244：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。ROS 2 package CI run 45927787262：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。该结果证明仓库 CI 测试通过，不等于目标 VM 的真实能力报告已生成。
+- 下一步：请用户从更新后的 nav 分支同步代码后，重新运行只读命令并提交 JSON。若 tracefs 权限仍不足，预期报告正常生成且该项标记 permission_denied；不需要 sudo。之后再根据 JSON 分析 BTF、handler symbol、syscall tracepoint、BPF policy 和进程安全上下文。禁止为获得更高权限而修改系统策略或挂载 tracefs。
+- 仍未取得 live host report；没有执行 BPF load/attach，也没有执行会修改系统时钟的 syscall。Orin BSP 证据仍未完成。N1/N9 未验收，所有变更仅在 nav。
