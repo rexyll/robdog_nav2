@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.273
+- 文档版本：v0.3.274
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1502,3 +1502,11 @@
 - 测试覆盖结构化 JSON、返回值与参数类型、typedef/pointer 链、缺失 FUNC_PROTO、缺失参数 type ID、bpftool 缺失、命令失败及无效 JSON。代码提交：`60492f0d7741c2a5032a36e2b474e3eabf74e840`；测试提交：`81370f6f1e4a8c8027359168d336c7cb1a6c4e14`；文档提交：`650c90e5398f9e3bf60277b736f892765534741c`。
 - 上游结构化输出证据：bpftool JSON 输出字段定义（FUNC/FUNC_PROTO）及顶层 `types` 数组实现，参见 bpftool 源码；该来源证明工具输出结构，不证明任何目标 Linux 内核实际含有目标 handler BTF。
 - 本轮尚未取得真实 Linux VM 的 BTF JSON，也未在 Orin BSP 上运行；CI 只验证 parser 和 synthetic fixtures。下一步在收集 VM JSON 后审查两个 handler 的实际参数类型与调用语义，再决定是否构造 fentry 程序；不因 prototype_resolved 自动宣告可 attach。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.274）
+
+- 结构化 BTF FUNC_PROTO 解析完成 CI 验证：GNSS runtime run `45926365951`，Humble/Jammy 与 Jazzy/Noble 各 **304/304 passed，0 errors/failures/skipped**；ROS 2 package run `45926365962`，两个发行版 job 均 success。
+- 过程记录：先提交实现的中间提交 `60492f0d7741c2a5032a36e2b474e3eabf74e840` 触发旧测试夹具与新 JSON parser 不匹配，GNSS runtime run `45926346707` 的 Humble job 失败（301 passed / 1 failed，原测试仍提供 raw 文本而实现已改为 JSON）；随后提交同步更新 JSON fixtures 与新增异常测试 `81370f6f1e4a8c8027359168d336c7cb1a6c4e14`，最新 CI 全绿。该失败属于提交间测试未同步，不是忽略的持续失败。
+- CI 日志仍出现 rosdep unresolved ERROR 提示，但依赖构建和测试流程结束成功；继续作为非阻断环境提示记录。
+- 当前 nav HEAD：`55b86da770688a0413f646ebd40d390acdcaa8e2`；main HEAD：`0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`，main 未修改。当前阶段仍没有真实 VM 的 BTF JSON / bpftool 版本与内核 release，也没有 fentry/kprobe attach 证据；不能据此选定最终采集 hook。下一步收集目标 Linux VM 的完整只读 JSON，再做函数参数语义对照。Orin BSP 需独立验证。
