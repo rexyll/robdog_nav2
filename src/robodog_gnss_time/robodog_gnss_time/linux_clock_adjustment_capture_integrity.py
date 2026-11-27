@@ -123,21 +123,30 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
                            "producer_id": key[0], "boot_id": key[1],
                            "cpu": key[2], "submitted": expected_submitted,
                            "received": len(seqs)})
-        missing = sorted(set(range(seq_start + 1, seq_end + 1)) - seqs)
+        # Compact gap ranges avoid allocating a uint64-sized Python set.
+        missing_ranges = []
+        cursor = seq_start + 1
+        for seq in sorted(value for value in seqs if seq_start < value <= seq_end):
+            if seq > cursor:
+                missing_ranges.append({"first": cursor, "last": seq - 1})
+            cursor = max(cursor, seq + 1)
+        if cursor <= seq_end:
+            missing_ranges.append({"first": cursor, "last": seq_end})
+        missing_count = sum(item["last"] - item["first"] + 1 for item in missing_ranges)
         expected_reserve_failures = deltas["ringbuf_reserve_failures"]
-        if len(missing) != expected_reserve_failures:
+        if missing_count != expected_reserve_failures:
             issues.append({"code": "sequence_gaps_vs_reserve_failures_mismatch",
                            "producer_id": key[0], "boot_id": key[1], "cpu": key[2],
-                           "sequence_gaps": len(missing),
+                           "sequence_gaps": missing_count,
                            "reserve_failures": expected_reserve_failures})
         per_cpu.append({
             "producer_id": key[0], "boot_id": key[1], "cpu": key[2],
             "sequence_allocated_delta": deltas["sequence_allocated"],
             "ringbuf_reserve_failures_delta": expected_reserve_failures,
             "ringbuf_submit_successes_delta": expected_submitted,
-            "received_records": len(seqs), "missing_sequences": missing,
+            "received_records": len(seqs), "missing_sequence_ranges": missing_ranges,\n            "missing_sequence_count": missing_count,
             "status": "consistent" if not out_of_range and len(seqs) == expected_submitted
-                      and len(missing) == expected_reserve_failures
+                      and missing_count == expected_reserve_failures
                       and deltas["sequence_allocated"] == expected_reserve_failures + expected_submitted
                       else "partial",
         })
