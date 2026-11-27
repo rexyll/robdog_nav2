@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.309
+- 文档版本：v0.3.310
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1864,3 +1864,15 @@
 - `linux-signed-hwe-7.0` 的 VM source identity/version 已确认；当前查到的 Ubuntu Security pool listing 仅显示至 7.0.0-43，故 7.0.0-44 signed source archive 尚未从对应官方归档取得可验证证据。不能以 7.0.0-43 或第三方/PPA 内容替代。
 - 当前阶段仅完成 dpkg provenance 实测和公开归档目录定位；尚未取得/验证 exact source tarballs、Ubuntu patch series、签名包构建输入，也未审计 Task Storage/helper/CAP_BPF/BPF token/CAP_PERFMON/GPL-only helper/task-exit cleanup 的目标源码实现。
 - 下一步：用户在 VM 下载精确 `linux-hwe-7.0` source descriptor/diff/orig，并上传 `.dsc`（或完整 source package）；同时继续追踪官方 `linux-signed-hwe-7.0` 7.0.0-44 descriptor。先核验 dsc 的签名与 SHA256，再做源码/补丁静态审计；不安装软件、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
+
+## 本轮 kernel source 文件 GitHub 仓库核验与 signed source 归档纠正（2026-11-27 / v0.3.310）
+
+- 用户确认 exact source files 已 push 到 `nav` 分支的 `kernel-source-audit/linux-hwe-7.0-44/`；已直接读取该目录，确认三项：
+  - `linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc`，6480 bytes，Git blob `e00746e23b3f5837b9d84046bdd35253bc1364aa`；
+  - `linux-hwe-7.0_7.0.0-44.44~24.04.1.diff.gz`，6551438 bytes，Git blob `bc6d011b901265e757e509c5046efc482d1de383`；
+  - `linux-hwe-7.0_7.0.0.orig.tar.gz` 在 Git tree 中为 134-byte Git LFS pointer，Git blob `0bc2ac0692cf5443695cb69882bf4be7a9171744`，pointer OID SHA256 `c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536`，声明对象大小 254937830 bytes。它不是实际 tarball 内容。
+- 已读取 `.dsc` 明文内容：Source 为 `linux-hwe-7.0`，Version 为 `7.0.0-44.44~24.04.1`，Format 1.0，含 PGP clearsign / Hash SHA512；其 SHA256 清单声明 orig tarball 为 254937830 bytes / `c6343795...`，diff 为 6551438 bytes / `ca52b58456be235c683de4638689e1837a86ec6ba19c97c398fc26af06941501`。签名文本可见，但尚未用可信 Ubuntu/Canonical keyring 完成 cryptographic signature verification。
+- GitHub connector 可以列出二进制 diff 文件的 tree metadata，但不能通过当前文件读取接口取得其二进制字节（base64 内容为空）；Git LFS orig tarball 也只返回 pointer。因此尚未完成 diff 实际 SHA256、orig tarball 实际 SHA256、解包与 patch/source audit。不可把 Git blob SHA 或 LFS pointer OID 当作已下载文件内容验证结果。
+- 修正 v0.3.309 的 signed source archive 归档判断：Ubuntu Security archive 当前目录索引已列出精确的 `linux-signed-hwe-7.0_7.0.0-44.44~24.04.1.dsc` 与对应 `.tar.xz`（2026-11-20）；此前“官方归档只到 43”的判断已过时/错误。证据目录：`https://security.ubuntu.com/ubuntu/pool/main/l/linux-signed-hwe-7.0/`。这只确认目录项存在，尚未读取/验签 signed source descriptor 或审查其构建输入。
+- 当前状态：source descriptor 内容可审阅；二进制 diff 与 LFS 原始 tarball的实际内容仍不可由当前 GitHub 读取接口取得。签名包 44 的官方归档文件已定位。两套 source package 均未完成验签与源码审计。
+- 下一步：在 VM 对三个文件执行 `gpgv`（使用 Ubuntu archive/keyring 中可信签名密钥）和 `sha256sum -c`（按 `.dsc` 值核对）；确认 Git LFS 对象实际下载/checkout 后大小与 SHA256。然后从 diff 中导出 BPF 相关 patch hunks / series 信息为 UTF-8 文本文件 push 到 nav 分支，或将完整解压后的 diff 作为可读文本提供；同时下载并提交 `linux-signed-hwe-7.0_7.0.0-44.44~24.04.1.dsc` 与 `.tar.xz` 供签名包审计。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
