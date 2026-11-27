@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.277
+- 文档版本：v0.3.278
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1537,3 +1537,13 @@
     --output "$HOME/kernel-trace-capabilities.json"
   ```
 - 待回传 JSON 后才能进入目标函数参数语义审核；目前仍未获得用户 VM 实际报告，未做任何 BPF attach。Orin BSP 必须独立采集。
+
+
+## 本轮源码语义审计（2026-11-27 / v0.3.278）
+
+- 新增 Navigation 55：`doc/Navigation/55_linux_clock_adjustment_handler_call_path_semantics.md`，对两个内部 handler 的语义作出区分：`do_clock_adjtime(clockid_t, struct __kernel_timex *)` 是 `clock_adjtime` 完成 copy-in 后的 clock dispatch 层；只有解析到 realtime clock callback 时才进入 `do_adjtimex`。直接 `adjtimex` syscall 则 copy-in 后直接调用 `do_adjtimex`，不经过 `do_clock_adjtime`。compat `clock_adjtime32` 也会转换后调用 dispatch handler。
+- 由调用关系确定采集要求：handler 事件保留 handler kind、clockid（适用于 dispatch handler）、PID/TGID、invocation identity、单调时间和 syscall identity；不能假设所有 `do_clock_adjtime` 都会进入 `do_adjtimex`，也不能假设每个 `do_adjtimex` 都有 `clock_adjtime` 父 syscall。handler exit return 不证明 syscall copy-back 成功；syscall exit 才包含最终 syscall return，但仍不证明实际时钟/PHC 效果。
+- 该审计进一步明确 fentry/fexit 只能在目标 VM 的 BTF FUNC/FUNC_PROTO 和最小 attach 测试通过后选择；kprobe/kretprobe 同样需目标内核注册验证。当前仍未取得通用 Linux VM 的 live probe JSON，未做 BPF load/attach，未运行会改变系统时钟的 syscall；本轮仅上游源码链路审计和文档更新。Orin BSP 必须单独验证。
+- 文档与索引提交：Navigation 55 `3580b85880d0ea205c9918e745091bc2123d2e17`；Navigation README 后续提交记录在本 TaskPlan 更新提交中。
+- 本轮未新增代码或测试，未触发新的 CI；此前 v0.3.276 CI 结果仅适用于 Navigation 54 对应代码，不可当作本轮源码文档验证。当前 nav 分支推进，N1/N9 未验收，不合并 main。
+- 下一步：继续核验 `adjtimex` / `clock_adjtime` syscall tracepoint 的 ABI/架构覆盖与 compat syscall 编号；同时检查现有 handler reducer 对多层嵌套、同一任务并发上下文和 handler invocation cookie 的表达能力。VM live report 仍是 attach 选型前置 Gate。
