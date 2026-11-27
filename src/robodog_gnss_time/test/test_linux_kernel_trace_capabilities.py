@@ -372,3 +372,31 @@ def test_btf_handler_inventory_reports_invalid_json(tmp_path, monkeypatch):
     result = capability_module._btf_handler_function_inventory(btf)
     assert result["status"] == "invalid_json"
     assert all(item["status"] == "unknown" for item in result["symbols"].values())
+
+
+
+def test_capability_report_distinguishes_rootfs_fixture_from_collector_host(tmp_path, monkeypatch):
+    _write(tmp_path / "proc/sys/kernel/random/boot_id", "fixture-boot-id\n")
+    monkeypatch.setattr(capability_module.shutil, "which", lambda name: None)
+
+    report = collect_linux_kernel_trace_capabilities(root=tmp_path)
+
+    assert report["schema_version"] == 2
+    assert report["collection_mode"] == "rootfs_fixture"
+    assert report["kernel"]["release"] is None
+    assert report["kernel"]["release_source"] == "unknown_for_rootfs_fixture"
+    assert report["kernel"]["machine"] is None
+    assert report["kernel"]["boot_id"] == "fixture-boot-id"
+    assert report["collector_host"]["release"] == capability_module.platform.uname().release
+    assert "not attributed" in report["collector_host"]["note"]
+    assert report["kernel_config_sources"]["boot_config"]["status"] == "not_probed"
+
+
+def test_btf_observation_records_sha256_identity(tmp_path):
+    import hashlib
+
+    btf = _write(tmp_path / "sys/kernel/btf/vmlinux", "synthetic-btf-bytes")
+    result = capability_module._btf_observation(btf)
+    assert result["status"] == "present_readable"
+    assert result["sha256"] == hashlib.sha256(b"synthetic-btf-bytes").hexdigest()
+    assert result["hash_algorithm"] == "sha256"
