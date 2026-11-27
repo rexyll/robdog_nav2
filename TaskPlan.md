@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.302
+- 文档版本：v0.3.303
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1794,3 +1794,13 @@
 - 代码提交：per-task active gauge implementation `c1ebf81f3d7188c02be089cf25e1d77b82fe381b`；tests `fcebb7a0d7faa71ecf274e126d054fed29786ef0`；session/global underflow guard `d9e565a118238c4f88323d92aefb75fe21cfeba5`；interleaved task test `99dd6aa4e24d1489358e33066afd04ca67ddbc1a`。
 - CI：包含 multi-task allocator 的 `e4cb3e1d...` 两项 CI success（GNSS Runtime `45935576758`、ROS 2 Package `45935576836`）；加入 interleaved test 的 `99dd6aa4...` 两项 CI success（GNSS Runtime `45935661228`、ROS 2 Package `45935661186`）。最新 per-task gauge 修订 `d9e565a1...` 的两项 CI 仍在运行，待最终结论。
 - 下一步：最新 CI 通过后，继续审查 session allocator counter deltas 与 producer simulator per-CPU sequence/reserve/submit counters 的合并报告；之后才进入真正 BPF C 编译/Verifier 授权 Gate。仅 nav 分支，不合并 main。
+
+
+## 本轮 per-task gauge CI 回归与最终验收（2026-11-27 / v0.3.303）
+
+- 最新代码 head d9e565a118238c4f88323d92aefb75fe21cfeba5 的 GNSS Runtime CI run 45935850940 success，ROS 2 Package CI run 45935850921 success。
+- 中间提交 c1ebf81f 的 GNSS Runtime CI failure 根因是 API 将 begin_invocation/end_invocation 改为需要 task_instance_id，但三处旧测试仍使用旧参数；不是实现运行逻辑失败。测试在 fcebb7a0 更新为 per-task API，最终 d9e565a1 两项 CI 均通过。
+- multi-task reference allocator 现在为每个 task 单独记录 active syscall/handler invocation gauge，同时维护 session aggregate gauges；task exit 只扣减退出 task 的 pending depth，不会误清其他 task 的 active invocation。加入 per-task/global underflow guard。
+- ClockAdjustmentProducerSessionAllocator 的 ID/capacity/runtime snapshot tests 与 single-task nested stack model tests 均通过；这仍是 Python reference model，不是 BPF implementation。
+- Navigation 62 已完成 verifier-oriented code-level review；不指定 attach section，因为当前 tracefs event inventory、function symbol availability、helper authorization 和 verifier acceptance 仍未验证。
+- 当前 nav TaskPlan 版本 v0.3.303；main 未修改。下一步：把 session allocator 的 global counters 与 single-task state model 的 per-CPU sequence/reserve/submit snapshots 合并为一个 end-to-end synthetic capture fixture；检查统一报告的 producer_loss_free 与 producer_runtime_counters gate 交互。之后再进入 BPF C compile/verifier 授权 Gate。仅 nav 分支，不合并 main。
