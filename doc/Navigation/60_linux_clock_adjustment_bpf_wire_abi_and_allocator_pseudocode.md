@@ -93,7 +93,7 @@ The Task Storage map has no map-level max_entries. Enforce a separate `max_track
 6. If the cap is reached, increment task_context_capacity_rejected and suppress the affected invocation events; do not substitute pid_tgid as a task identity.
 7. On task exit, decrement the reservation exactly once using an initialized/active flag before free_task() destroys storage.
 
-A missed exit hook leaves the active-task reservation nonzero. That is intentional fail-closed behavior: final accounting becomes partial rather than silently claiming cleanup.
+A missed exit hook leaves the task-context reservation conservatively elevated and can cause later capacity rejection. A nonzero reservation at session stop is not itself a failure because live tasks may still own idle storage; the decisive quiescence gauges are active syscall/handler invocations and in-flight callbacks. If an exit hook misses a task that still has pending frames, those invocation gauges remain nonzero and the report is partial.
 
 ## 5. Syscall and handler stack state machine
 
@@ -153,7 +153,7 @@ A task-exit observation (candidate: a verified sched_process_exit attachment) re
 - task_exit_with_pending_syscalls/handlers;
 - abandoned invocation counts.
 
-It then decrements active-task reservation exactly once. If the hook is unavailable or cannot be verified, the producer cannot claim task-exit accounting complete.
+It then decrements the task-context reservation exactly once. This reservation is a capacity gauge, not a required-zero final gauge. If the hook is unavailable or cannot be verified, the producer cannot claim abandoned-frame accounting for exiting tasks complete.
 
 At stop:
 1. set stop_requested and stop admitting new target invocation frames;
