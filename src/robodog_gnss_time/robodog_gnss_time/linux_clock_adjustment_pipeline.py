@@ -7,7 +7,7 @@ from typing import Any
 from .linux_clock_adjustment_capture_integrity import audit_clock_adjustment_capture_integrity
 from .linux_clock_adjustment_events import reduce_clock_adjustment_events
 from .linux_clock_adjustment_kernel_observations import reduce_kernel_clock_adjustment_observations
-from .linux_clock_adjustment_joiner import correlate_clock_adjustment_observations
+from .linux_clock_adjustment_joiner import (\n    correlate_clock_adjustment_observations,\n    correlate_clock_adjustment_invocation_observations,\n)
 from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
 from .linux_clock_adjustment_invocation_reducer import reduce_clock_adjustment_invocation_events
 
@@ -114,7 +114,7 @@ def build_clock_adjustment_capture_report(
     )
 
     invocation_mode = "not_supplied"
-    syscall_invocations = handler_invocations = None
+    syscall_invocations = handler_invocations = invocation_join = None
     if syscall_envelopes is not None or handler_envelopes is not None:
         invocation_mode = "schema_v2_required"
         if not isinstance(syscall_envelopes, list) or not isinstance(handler_envelopes, list):
@@ -135,6 +135,9 @@ def build_clock_adjustment_capture_report(
             handler_invocations = reduce_clock_adjustment_invocation_events(
                 handler_envelopes, "kernel_handler"
             )
+        invocation_join = correlate_clock_adjustment_invocation_observations(
+            syscall_invocations, handler_invocations
+        )
 
     issues = []
     producer_received = producer.get("counts", {}).get("received_records")
@@ -180,6 +183,12 @@ def build_clock_adjustment_capture_report(
         if not gates["handler_invocation_reduction"]:
             issues.append({"code": "capture_report_gate_not_passed",
                            "gate": "handler_invocation_reduction"})
+        gates["invocation_parent_join"] = (
+            invocation_join.get("reduction_status") == "consistent"
+        )
+        if not gates["invocation_parent_join"]:
+            issues.append({"code": "capture_report_gate_not_passed",
+                           "gate": "invocation_parent_join"})
 
     for name, passed in gates.items():
         if not passed:
