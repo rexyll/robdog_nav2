@@ -7,6 +7,7 @@ from robodog_gnss_time.linux_clock_adjustment_joiner import (
 )
 from robodog_gnss_time.linux_clock_adjustment_producer_state import (
     ClockAdjustmentProducerState,
+    ClockAdjustmentProducerSessionAllocator,
 )
 
 
@@ -161,3 +162,97 @@ def test_detach_is_blocked_while_invocation_is_active():
     state.syscall_exit("clock_adjtime", 0, 120, 0)
     state.detach()
     assert state.global_snapshot()["snapshot_after_producer_detach"] is True
+
+
+def test_session_allocator_keeps_event_ids_global_and_invocation_ids_task_scoped():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=2)
+    task_a = session.create_task_context()
+    task_b = session.create_task_context()
+    assert task_a != task_b
+    syscall_id = session.allocate_invocation_id(task_a, kind="syscall")
+    handler_id = session.allocate_invocation_id(task_b, kind="handler")
+    assert syscall_id == handler_id == "0000000000000001"
+    event_ids = [
+        session.allocate_event_id(),
+        session.allocate_event_id(),
+        session.allocate_event_id(),
+    ]
+    assert len(event_ids) == len(set(event_ids))
+    session.release_task_context(task_a)
+    session.release_task_context(task_b)
+    session.detach()
+    snapshot = session.global_snapshot()
+    assert snapshot["snapshot_after_producer_detach"] is True
+    assert snapshot["gauges"]["task_context_reservations"] == 0
+    assert snapshot["counters"]["event_id_allocation_successes"] == 3
+    assert snapshot["counters"]["task_instance_id_allocation_successes"] == 2
+
+
+def test_session_allocator_enforces_capacity_without_reusing_task_ids():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=1)
+    task_a = session.create_task_context()
+    assert session.create_task_context() is None
+    assert session.counters["task_context_capacity_rejected"] == 1
+    session.release_task_context(task_a)
+    task_b = session.create_task_context()
+    assert task_b != task_a
+    session.release_task_context(task_b)
+    assert session.task_context_reservations == 0
+
+
+def test_session_allocator_reconciles_create_and_task_id_failures():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=2)
+    assert session.create_task_context(create_ok=False) is None
+    assert session.create_task_context(task_id_ok=False) is None
+    assert session.task_context_reservations == 0
+    assert session.counters["task_context_create_failures"] == 1
+    assert session.counters["task_instance_id_allocation_failures"] == 1
+    assert session.counters["task_context_init_failures"] == 1
+
+
+def test_session_allocator_cas_contention_and_exhaustion_fail_closed():
+    session = ClockAdjustmentProducerSessionAllocator(max_cas_retries=2)
+    assert session.allocate_event_id(cas_attempts=3) is None
+    assert session.allocate_event_id(cas_attempts=2) == "0000000000000001"
+    assert session.counters["event_id_allocation_failures"] == 1
+    exhausted = ClockAdjustmentProducerSessionAllocator(
+        start_event_id=(1 << 64) - 1
+    )
+    assert exhausted.allocate_event_id() is None
+    assert exhausted.counters["event_id_allocation_failures"] == 1
+
+
+def test_session_allocator_task_exit_with_pending_frames_releases_gauges():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=1)
+    task = session.create_task_context()
+    session.begin_invocation("syscall")
+    session.begin_invocation("handler")
+    session.release_task_context(task, pending_syscalls=1, pending_handlers=1)
+    session.detach()
+    snapshot = session.global_snapshot()
+    assert snapshot["gauges"]["active_syscall_invocations"] == 0
+    assert snapshot["gauges"]["active_handler_invocations"] == 0
+    assert snapshot["counters"]["task_exit_with_pending_syscalls"] == 1
+    assert snapshot["counters"]["task_exit_with_pending_handlers"] == 1
+
+
+def test_session_allocator_allows_idle_live_task_storage_at_detach():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=1)
+    session.create_task_context()
+    session.detach()
+    snapshot = session.global_snapshot()
+    assert snapshot["gauges"]["task_context_reservations"] == 1
+    assert snapshot["snapshot_after_producer_detach"] is True
+
+
+def test_session_allocator_rejects_operations_after_detach():
+    import pytest
+    session = ClockAdjustmentProducerSessionAllocator()
+    task = session.create_task_context()
+    session.detach()
+    with pytest.raises(RuntimeError):
+        session.allocate_event_id()
+    with pytest.raises(RuntimeError):
+        session.allocate_invocation_id(task)
+    with pytest.raises(RuntimeError):
+        session.create_task_context()
