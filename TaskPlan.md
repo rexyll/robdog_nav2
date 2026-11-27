@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.289
+- 文档版本：v0.3.290
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1655,3 +1655,16 @@
 - 更新 Navigation 57，新增 task-local storage 方案、自动生命周期清理、不可枚举限制、task-exit accounting 需求与 v6.12 源码引用。提交 `3d28b3013a42a2df72de707e7ca8483ef8598ecb`。
 - 设计结论：task storage 是值得优先验证的候选，不是已选型。后续对比 bounded hash + task-lifetime token；重点验证 helper availability、task exit hook 顺序、固定栈内存上限、producer active counters 与最终 quiescence reconciliation。当前不实现 BPF producer，不做 attach。
 - 本轮只更新设计文档；最近代码基线 `bd5056cb...` 的 GNSS Runtime 与 ROS 2 Package CI 均 success。VM live capability JSON 仍未提供，Orin/BSP 未验证。仅 nav 分支，不合并 main。
+
+
+## 本轮 VM live capability report 验收（2026-11-27 / v0.3.290）
+
+- 收到用户上传的 `kernel-trace-capabilities.json`，确认 `collection_mode=live_host`，环境为 Linux `7.0.0-44-generic` / x86_64；这只是本次采集进程所在主机的观察，不代表 Orin。
+- BTF 可读，大小 7,134,362 bytes，SHA-256 `b46a7adb3d4d3738fce0038feb494055ca43ed398cad4148c52954d3e68e7825`。bpftool 7.7.0 / libbpf 1.7。
+- BTF FUNC/FUNC_PROTO 参数链已解析：`do_clock_adjtime(const clockid_t which_clock, struct __kernel_timex *ktx) -> int`；`do_adjtimex(struct __kernel_timex *txc) -> int`。两者 BTF linkage 均为 static。此证据只证明 BTF 记录与原型存在，不证明 fentry/fexit 可 attach。
+- 内核配置观测到 CONFIG_BPF、BPF_SYSCALL、BPF_EVENTS、DEBUG_INFO_BTF、FTRACE、FTRACE_SYSCALLS、KPROBE_EVENTS、PERF_EVENTS、TRACEPOINTS 等均为 y。
+- tracefs 已挂载在 `/sys/kernel/tracing`，但 `available_events` 与 event format 读取均 permission_denied；所有 syscall tracepoint pair 状态为 unknown，不能判定不存在或可用。function tracing symbol inventory 也 permission_denied。
+- runtime policy：Lockdown none；当前进程 CapEff 全零；`perf_event_paranoid=4`、`unprivileged_bpf_disabled=2`、`kptr_restrict=1`。因此不应预期无特权 BPF load 可直接成功，但本轮没有执行 BPF syscall，不能写成已实测 load denied。
+- 已新增 Navigation 58 记录上述证据和严格验收边界，提交 `4e6e6c75c5a08d9067c68a1b4e0fd0872522c452`。无 sudo、无 sysctl 修改、无 tracefs mount/enable、无 BPF load/attach、无时钟修改。
+- 方案决策：当前环境 BTF introspection 可用于下一阶段设计；fentry/fexit 暂保留候选，static linkage 与函数符号不可读使 attachability 未证实；syscall tracepoint fallback 因 tracefs permission denied 仍未知。不能在现有证据下选定任何运行时采集路线。
+- 下一步：优先完善纯离线 schema-v2 event envelope 与 invocation-ID reducers；同时准备一份最小权限、只读的补充探测步骤，待用户明确授权后再决定是否用具备适当权限的上下文读取 tracefs/function tracing inventory。Orin 必须独立采集，不得以该 VM 报告代替。仅 nav 分支，不合并 main。
