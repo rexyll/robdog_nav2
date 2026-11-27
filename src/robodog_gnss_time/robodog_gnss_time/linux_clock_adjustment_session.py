@@ -40,7 +40,7 @@ def validate_clock_adjustment_event_envelope(record):
     if record.get("schema_version") != _SCHEMA_VERSION or isinstance(record.get("schema_version"), bool):
         issues.append({"code": "unsupported_envelope_schema_version"})
     kind = record.get("stream_kind")
-    if kind not in _STREAM_KINDS:
+    if not isinstance(kind, str) or kind not in _STREAM_KINDS:
         issues.append({"code": "unsupported_stream_kind"})
     for name in ("cpu", "sequence", "monotonic_ns"):
         value = record.get(name)
@@ -71,7 +71,7 @@ def validate_clock_adjustment_event_envelope(record):
         {"syscall_enter", "syscall_exit"} if kind == "syscall"
         else {"kernel_handler_enter", "kernel_handler_exit"}
     )
-    if event.get("event_type") not in expected_types:
+    if not isinstance(event.get("event_type"), str) or event["event_type"] not in expected_types:
         return {"status": "invalid", "issues": [{"code": "event_type_stream_kind_mismatch"}]}
     return {
         "status": "valid",
