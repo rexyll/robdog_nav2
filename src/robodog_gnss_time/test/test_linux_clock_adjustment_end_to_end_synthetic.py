@@ -79,6 +79,8 @@ def test_end_to_end_synthetic_capture_all_report_gates_consistent():
     state_a.syscall_exit("clock_adjtime", 0, 130, 0)
 
     state_b.syscall_enter("adjtimex", 1, 105)
+    state_b.handler_enter("do_adjtimex", 1, 112, raw_modes=1)
+    state_b.handler_exit("do_adjtimex", 1, 118, 0)
     state_b.syscall_exit("adjtimex", 1, 125, 0)
 
     # Merge the independent task-state traces into one session-wide event stream.
@@ -206,5 +208,5 @@ def test_end_to_end_synthetic_capture_all_report_gates_consistent():
     assert report["producer_integrity"]["integrity_status"] == "complete"
     assert report["producer_integrity"]["counts"]["received_records"] == len(records)
     assert report["gates"]["producer_loss_free"] is True
-    assert report["invocation_parent_join"]["counts"]["joined_pairs"] == 1
+    assert report["invocation_parent_join"]["counts"]["joined_pairs"] == 2
     assert report["event_id_uniqueness"]["audit_status"] == "consistent"
