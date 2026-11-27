@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.296
+- 文档版本：v0.3.297
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1732,3 +1732,11 @@
 - 提交：Navigation 60 `1588380cb20cb2396ccd592e0a0893d7cd6fdb67`；Navigation 59 修订 `f6efb9e1fc4839daeb3edf0cd97b58d375f52a24`；Navigation 60 语义修订 `c1c3ce20d5d435aa4ada4427e78c157ca3af33da`；README `408595e37114a66d51719e11c5b581fffe41072e`。
 - 验证边界：仅静态设计和上游源码审计；没有 BPF C 源码、没有 clang 编译、没有 verifier run、没有 map 创建或 probe attach。最新运行时代码基线仍为 `2cb503bc...`，两项 CI success。 
 - 下一步：检查 Navigation 48 producer counter reconciliation 是否覆盖新增 task-context/allocator/overflow/drop counters；将新增 counters 映射到 capture integrity schema，避免设计 counter 无法进入最终 unified report。随后建立纯 Python synthetic producer-state simulator，验证 overflow/failed-entry suppression/task-exit cleanup 的状态机，不加载 BPF。仅 nav 分支，不合并 main。
+
+
+## 本轮 producer sequence ordering consistency check（2026-11-27 / v0.3.297）
+
+- 审查发现 Navigation 60 初稿推荐“ringbuf reserve 后分配 per-CPU sequence”，与 Navigation 48 已冻结的“sequence 先分配，再 reserve”及其严格等式冲突。已修正顺序：先分配 global event_id，若成功再分配 per-CPU sequence，随后 reserve；reserve failure 形成 sequence gap 和 unused event ID，submit success 为另一终态。
+- 保持 Navigation 48 等式不变：sequence_allocated = ringbuf_reserve_failures + ringbuf_submit_successes。任何 post-reservation discard 必须新增独立 terminal counter 并升级 Navigation 48 schema，当前设计不引入该路径。
+- Navigation 60 修订提交 `62c84814b529d5b84c9a288c59116beae161bd4c`。这是设计一致性修正，无运行时代码变更。
+- 下一步：为 Task Storage/task allocator 的全局计数器建立 schema 和 equations，并接入 Navigation 48 integrity audit；避免新增计数器仅存在于设计文档而无法进入最终报告。仅 nav 分支，不合并 main。
