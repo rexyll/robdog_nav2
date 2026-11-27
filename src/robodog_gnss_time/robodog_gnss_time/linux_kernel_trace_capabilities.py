@@ -28,6 +28,7 @@ _CONFIG_KEYS = (
     "CONFIG_PERF_EVENTS",
     "CONFIG_KPROBE_EVENTS",
 )
+_HANDLER_SYMBOLS = ("do_clock_adjtime", "do_adjtimex")
 _SYSCALL_EVENTS = (
     "sys_enter_clock_adjtime",
     "sys_exit_clock_adjtime",
@@ -222,6 +223,38 @@ def _tracefs_observation(path, mountinfo, root="/"):
     }
 
 
+def _handler_symbol_observation(path):
+    """Read available_filter_functions; presence is not proof of attachability."""
+    result = _read_text(Path(path) / "available_filter_functions")
+    if result["status"] != "ok":
+        return {
+            "status": result["status"],
+            "symbols": {
+                name: {"status": "unknown"} for name in _HANDLER_SYMBOLS
+            },
+            "interpretation": (
+                "Function tracing symbol inventory unavailable; no attach attempt was made."
+            ),
+        }
+    available = set()
+    for line in result["content"].splitlines():
+        fields = line.split()
+        if fields:
+            available.add(fields[0])
+    return {
+        "status": "observed",
+        "symbols": {
+            name: {"status": "listed" if name in available else "not_listed"}
+            for name in _HANDLER_SYMBOLS
+        },
+        "interpretation": (
+            "available_filter_functions membership is only a function-tracing visibility "
+            "observation. It does not prove BTF FUNC availability, fentry/kprobe verifier "
+            "acceptance, symbol stability, or permission to attach."
+        ),
+    }
+
+
 def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
     """Inventory config, BTF and syscall tracepoint visibility without changing state."""
     start_mono = time.monotonic_ns()
@@ -243,6 +276,10 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         _tracefs_observation(rooted("/sys/kernel/debug/tracing"), mountinfo, root=root),
     ]
     btf = _btf_observation(rooted("/sys/kernel/btf/vmlinux"))
+    handler_symbols = [
+        _handler_symbol_observation(rooted("/sys/kernel/tracing")),
+        _handler_symbol_observation(rooted("/sys/kernel/debug/tracing")),
+    ]
     readable_tracefs = [
         item for item in tracefs if item["available_events_status"] == "ok"
     ]
@@ -268,13 +305,16 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         },
         "kernel_config_sources": config_sources,
         "btf": btf,
+        "handler_function_symbols": handler_symbols,
         "tracefs": tracefs,
         "candidate_syscall_events": list(_SYSCALL_EVENTS),
         "interpretation": (
             "Read-only capability inventory only. A missing event/config/BTF observation is not "
             "proof that no alternative instrumentation exists. Presence does not prove that "
-            "a tracing program can be loaded, that user-memory reads work, or that events can "
-            "be captured without loss. No tracefs mount, event enablement, audit rule, perf "
+            "a tracing program can be loaded, that handler symbols are BTF attachable, that "
+            "user-memory reads work, or that events can be captured without loss. Handler "
+            "symbol visibility is not proof of fentry/kprobe attachability. No tracefs mount, "
+            "event enablement, audit rule, perf "
             "session, eBPF load, or host configuration change was attempted."
         ),
     }
