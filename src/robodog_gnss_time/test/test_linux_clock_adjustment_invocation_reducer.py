@@ -173,3 +173,26 @@ def test_invocation_pair_preserves_request_modes_and_return_value():
     assert pair["mode_decode"] is not None
     assert pair["raw_return_value"] == -14
     assert pair["return_interpretation"] == "negative_efault_copy_stage_ambiguous"
+
+
+def test_event_id_uniqueness_is_checked_across_streams():
+    from robodog_gnss_time.linux_clock_adjustment_invocation_reducer import (
+        audit_clock_adjustment_event_id_uniqueness,
+    )
+    syscall = event("syscall_enter", "shared", 0, 1, 10)
+    handler = event(
+        "kernel_handler_enter", "shared", 0, 1, 11,
+        stream_id="handler-stream",
+        stream_kind="kernel_handler",
+        invocation_id="handler-inv",
+        parent_syscall_invocation_id="syscall-inv-01",
+        parent_context_status="matched",
+        payload={"event_type": "kernel_handler_enter",
+                 "pid_tgid": 4294967297, "handler": "do_adjtimex",
+                 "raw_modes": 0},
+    )
+    result = audit_clock_adjustment_event_id_uniqueness([[syscall], [handler]])
+    assert result["audit_status"] == "partial"
+    assert "duplicate_event_id_across_streams" in [
+        x["code"] for x in result["issues"]
+    ]
