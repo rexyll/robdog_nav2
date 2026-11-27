@@ -84,17 +84,31 @@ def test_unmatched_entry_is_retained_at_end_of_input():
     assert report["unpaired_entries"][0]["unpaired_reason"] == "no_matching_exit_in_input"
 
 
-def test_duplicate_entry_overwrites_pending_record_but_marks_partial():
+def test_nested_same_thread_syscall_entries_pair_lifo():
     report = reduce_clock_adjustment_events([
-        _event("syscall_enter", 1),
-        _event("syscall_enter", 2, monotonic_ns=220),
+        _event("syscall_enter", 1, monotonic_ns=100),
+        _event("syscall_enter", 2, monotonic_ns=200),
         _event("syscall_exit", 3, monotonic_ns=300, return_value=0),
+        _event("syscall_exit", 4, monotonic_ns=400, return_value=0),
     ])
 
+    assert report["schema_version"] == 2
+    assert report["reduction_status"] == "consistent"
+    assert report["counts"]["nested_syscall_entries"] == 1
+    assert report["counts"]["inflight_overwrite"] == 0
+    assert [pair["entry_sequence"] for pair in report["pairs"]] == [2, 1]
+    assert [pair["exit_sequence"] for pair in report["pairs"]] == [3, 4]
+
+
+def test_nested_syscall_inner_exit_missing_preserves_outer_as_unpaired():
+    report = reduce_clock_adjustment_events([
+        _event("syscall_enter", 1, monotonic_ns=100),
+        _event("syscall_enter", 2, monotonic_ns=200),
+        _event("syscall_exit", 3, monotonic_ns=300, return_value=0),
+    ])
     assert report["reduction_status"] == "partial"
-    assert report["counts"]["inflight_overwrite"] == 1
-    assert report["unpaired_entries"][0]["unpaired_reason"] == "superseded_by_duplicate_entry"
-    assert report["pairs"][0]["entry_monotonic_ns"] == 220
+    assert report["pairs"][0]["entry_sequence"] == 2
+    assert report["unpaired_entries"][0]["sequence"] == 1
 
 
 def test_per_cpu_sequence_gap_is_reported():
