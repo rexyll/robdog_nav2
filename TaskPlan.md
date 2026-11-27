@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.259
+- 文档版本：v0.3.260
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1373,4 +1373,11 @@
 - 关联要求 boot_id、pid_tgid 精确一致，handler interval 完全包含于 syscall interval，并按源码映射匹配 clock_adjtime/clock_adjtime32→do_clock_adjtime、adjtimex/adjtimex_time32→do_adjtimex。嵌套候选选唯一最窄区间；等宽歧义、多 handler 争用一个 syscall、缺失/不包含记录均 fail-closed，输出 partial。
 - copy-back -EFAULT 推断默认关闭；只有显式选择 Linux v6.12 源码合同 ID，且内部 handler 返回非负、外层 syscall 返回 -EFAULT 时才输出推断。该 ID 仅代表 v6.12 参考源码，不代表 Orin BSP；目标 BSP 必须单独 pin source/version。内部 handler -EFAULT 不满足条件。
 - 新增 Navigation 47 与合成测试，覆盖 native/compat 映射、boot/thread 隔离、区间包含、嵌套/歧义、many-to-one 冲突、upstream partial 传播和 copy-back 推断门禁。
-- 重要边界：区间包含是保守时间关联，不证明内核调用栈 ancestry；后续采集器若可行应加入共享 invocation cookie/parent context。没有加载 eBPF、附加 hook、启 tracing、改系统时钟或 PHC；没有 Orin 实机验证。CI 等待本轮 Actions 完成后回填。保持仅 nav 分支，N1/N9 未验收，不合并 main。
+- 重要边界：区间包含是保守时间关联，不证明内核调用栈 ancestry；后续采集器若可行应加入共享 invocation cookie/parent context。没有加载 eBPF、附加 hook、启 tracing、改系统时钟或 PHC；没有 Orin 实机验证。GNSS runtime CI run `45920179107` 与 ROS 2 package CI run `45920179133` 均 success；Humble/Jammy、Jazzy/Noble 两组 job 全部成功。关联器 15 项合成测试随 GNSS runtime CI 通过；ROS 2 package CI 亦通过。较早 module commit 对应 run `45920175925` 与 `45920175888` 也均 success。CI 仅证明 Ubuntu/ROS 容器中的软件构建与合成测试，不证明目标 BSP/Orin 内核 hook、事件完整性或物理时钟效果。保持仅 nav 分支，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.260）
+
+- 回填 v0.3.259 跨流关联器验证结果：GNSS runtime CI `45920179107` 与 ROS 2 package CI `45920179133` 均 success，Humble/Jammy 与 Jazzy/Noble 全部 job 成功；关联器 15 项合成测试已通过。
+- CI 仍属于通用 Ubuntu/ROS 软件验证，不构成目标 Orin/BSP、BTF/fentry/kprobe、ARM64、采集无丢失或 CLOCK_REALTIME/PHC 实际效果证据。无实机，相关 Gate 继续未完成。
+- `nav` 最新 head 为 `5ddcfcbe3f4818b3c9cfa217173ef6dea2d7ebbd`；`main` 未改动。本专项仍只在 nav，N1/N9 未验收，不合并 main。
