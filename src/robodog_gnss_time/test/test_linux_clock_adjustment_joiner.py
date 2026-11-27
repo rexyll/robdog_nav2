@@ -177,3 +177,26 @@ def test_invocation_join_rejects_unavailable_parent_context():
     )
     assert result["reduction_status"] == "partial"
     assert "handler_parent_context_unavailable" in [x["code"] for x in result["issues"]]
+
+
+@pytest.mark.parametrize("syscall_name,handler_name,expected_relation", [
+    ("clock_adjtime", "do_clock_adjtime", "syscall_dispatch_handler"),
+    ("clock_adjtime32", "do_adjtimex", "nested_clock_callback_handler"),
+    ("adjtimex", "do_adjtimex", "direct_syscall_handler"),
+    ("adjtimex_time32", "do_adjtimex", "direct_syscall_handler"),
+])
+def test_invocation_join_relation_labels_follow_native_and_compat_mapping(
+    syscall_name, handler_name, expected_relation
+):
+    from robodog_gnss_time.linux_clock_adjustment_joiner import (
+        correlate_clock_adjustment_invocation_observations,
+    )
+    syscall = {"reduction_status": "consistent", "pairs": [
+        invocation_sc(syscall_name, "sys-1", 100, 400)
+    ]}
+    handler = {"reduction_status": "consistent", "pairs": [
+        invocation_kh(handler_name, "h-1", "sys-1", 120, 380)
+    ]}
+    result = correlate_clock_adjustment_invocation_observations(syscall, handler)
+    assert result["reduction_status"] == "consistent"
+    assert result["joins"][0]["relation"] == expected_relation
