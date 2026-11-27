@@ -8,6 +8,7 @@ from .linux_clock_adjustment_capture_integrity import audit_clock_adjustment_cap
 from .linux_clock_adjustment_events import reduce_clock_adjustment_events
 from .linux_clock_adjustment_kernel_observations import reduce_kernel_clock_adjustment_observations
 from .linux_clock_adjustment_joiner import correlate_clock_adjustment_observations
+from .linux_clock_adjustment_session import audit_clock_adjustment_capture_lifecycle
 
 _COUNTERS = (
     "consumer_records_read", "decode_successes", "decode_failures",
@@ -93,7 +94,7 @@ def build_clock_adjustment_capture_report(
     syscall_events, handler_events, producer_events,
     producer_initial_snapshot, producer_final_snapshot, drain_snapshot,
     pipeline_initial_snapshot, pipeline_final_snapshot,
-    wrapper_contract_id=None,
+    wrapper_contract_id=None, lifecycle_transitions=None, lifecycle_final_snapshot=None,
 ):
     """Compose all offline reducers and preserve their independent status gates."""
     producer = audit_clock_adjustment_capture_integrity(
@@ -105,6 +106,10 @@ def build_clock_adjustment_capture_report(
     syscall = reduce_clock_adjustment_events(syscall_events)
     handler = reduce_kernel_clock_adjustment_observations(handler_events)
     joined = correlate_clock_adjustment_observations(syscall, handler, wrapper_contract_id)
+    lifecycle = audit_clock_adjustment_capture_lifecycle(
+        lifecycle_transitions if lifecycle_transitions is not None else [],
+        lifecycle_final_snapshot if lifecycle_final_snapshot is not None else {},
+    )
 
     issues = []
     producer_received = producer.get("counts", {}).get("received_records")
@@ -135,6 +140,7 @@ def build_clock_adjustment_capture_report(
         "syscall_reduction": syscall.get("reduction_status") == "consistent",
         "handler_reduction": handler.get("reduction_status") == "consistent",
         "syscall_handler_join": joined.get("reduction_status") == "consistent",
+        "capture_lifecycle": lifecycle.get("lifecycle_status") == "complete",
     }
     for name, passed in gates.items():
         if not passed:
@@ -149,6 +155,7 @@ def build_clock_adjustment_capture_report(
         "syscall_reduction": syscall,
         "handler_reduction": handler,
         "syscall_handler_join": joined,
+        "capture_lifecycle": lifecycle,
         "issues": issues,
         "interpretation": (
             "A consistent report means all supplied offline reducer gates passed. "
