@@ -100,3 +100,26 @@ def test_command_wrapper_handles_missing_dpkg_query(monkeypatch):
     monkeypatch.setattr(provenance.subprocess, "run", missing)
     result = provenance._command(["dpkg-query", "-W"])
     assert result["status"] == "command_not_found"
+
+
+def test_package_provenance_does_not_fill_missing_source_metadata(monkeypatch):
+    release = "7.0.0-44-generic"
+    image = f"linux-image-{release}"
+    def fake_run(argv, check, capture_output, text, timeout):
+        if argv[:2] == ["dpkg-query", "-W"] and argv[-1] == image:
+            return _completed(f"{image}\t7.0.0-44.44~24.04.1\t\t\tii \n")
+        if argv[:2] == ["dpkg-query", "-W"]:
+            return _completed(returncode=1, stderr="not installed")
+        if argv[:2] == ["dpkg-query", "-S"]:
+            path = argv[-1]
+            if path == f"/boot/vmlinuz-{release}":
+                return _completed(f"{image}: {path}\n")
+            return _completed(returncode=1, stderr="no owner")
+        if argv[0] == "uname":
+            return _completed("build\n")
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(provenance.subprocess, "run", fake_run)
+    report = provenance.collect_linux_kernel_package_provenance(release)
+    assert report["status"] == "partial"
+    assert report["source_package_identities"] == []
