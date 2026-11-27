@@ -246,3 +246,11 @@ def test_global_runtime_snapshot_pair_is_required_when_either_is_present():
     assert "missing_global_runtime_snapshot" in [
         x["code"] for x in result["global_runtime"]["issues"]
     ]
+
+
+def test_empty_cpu_snapshot_set_is_not_a_complete_capture():
+    result = audit_clock_adjustment_capture_integrity(
+        [], {"per_cpu": []}, {"per_cpu": []}, drain()
+    )
+    assert result["integrity_status"] == "partial"
+    assert "no_cpu_stream_snapshots" in [x["code"] for x in result["issues"]]
