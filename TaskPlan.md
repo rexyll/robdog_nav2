@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.305
+- 文档版本：v0.3.306
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1823,3 +1823,13 @@
 - 回归根因记录：提交 917abe99 的 legacy syscall_handler_join gate failure 是 fixture 中 direct adjtimex 缺少 do_adjtimex handler observation；补齐后，另一条 multi-task fixture 仍把 stream_kind=kernel_handler 传给 allocator，allocator 接口期望 handler；提交 4f35ce8 统一映射后两项 CI 通过。
 - Navigation 62 再次修正 BPF helper 权限描述：upstream v7.0 中 bpf_task_storage_get 的 helper prototype 标记 gpl_only=false，但 bpf_base_func_proto 对它实施 CAP_BPF token-capability check；bpf_get_current_task_btf 标记 gpl_only=true。Task Storage map 创建也需 CAP_BPF，TRACEPOINT/KPROBE/TRACING program load 属 perfmon class，另需 CAP_PERFMON。该结论来自 upstream v7.0 源码，Ubuntu 7.0.0-44 精确 source package/patchset 仍待核对。Navigation 62 修订提交 84318d064f69a7a241aa3e020d9b7a7100b9682e。
 - 当前 TaskPlan v0.3.305；下一步：把 exact Ubuntu source package metadata 与 upstream v7.0 helper/map/program checks逐项比对；随后设计最小 BPF object static inspection checklist，先做 clang compile/BTF/relocation inspection，不 load、不 attach。只有用户明确授权后才进入最小 verifier/load probe。仅 nav 分支，不合并 main。
+
+
+## 本轮 producer unified fixture 与 Ubuntu kernel source provenance collector 验收（2026-11-27 / v0.3.306）
+
+- 在 producer-state 测试中新增第二条 multi-task end-to-end fixture：两个 task 的事件时间交错，syscall/handler stream 共用 session-global event ID allocator，invocation IDs 按 task 生命周期分配；每条记录经 schema-v2 envelope 进入 exact parent join，同时将 per-CPU sequence/reserve/submit snapshots 与 global allocator/task-context snapshots 合并，统一报告同时验证 producer integrity、loss-free、global runtime、pipeline、legacy reducers/joiner、strict invocation reducers/join、event-ID uniqueness 和 lifecycle。最终该测试通过。
+- 测试过程中的失败均已定位并修复：先将 `stream_kind=kernel_handler` 映射到 allocator API 的 `handler` 类型；随后 `begin_invocation/end_invocation` 也使用同一归一化 kind。最终 test commit `4b0aa2673a2b2248329da18c57c3d289ae513efa` 的 GNSS Runtime run `45936944538` success、ROS 2 Package run `45936944540` success。
+- 新增只读 `linux_kernel_package_provenance.py`，从运行 VM 的 dpkg 数据库收集 kernel release/architecture、安装的 image/modules/headers/buildinfo binary package version、source package/version 和 kernel file ownership；明确区分 signed image packaging source（可能是 `linux-signed-hwe-7.0`）与实际 kernel code source（例如 `linux-hwe-7.0`），不再把 signed image source 误当作 kernel source。只有安装的 kernel image 文件 owner 被确认，且 kernel-code packages 提供唯一 source package/version 时才返回 observed；信息缺失或冲突均 partial，不使用公开候选版本补全。
+- 新增 synthetic tests 覆盖 exact installed source identity、signed-image/kernel-code source split、missing owner、conflicting source versions、missing dpkg source metadata、dpkg-query command unavailable；新增 Navigation 63 运行说明和 README 索引。关键提交：collector `0b167a72bde8662b53eee6d3fd7dce4e14f732b2`；strict provenance gate `ebdb5b2842521796453147c5bd6e0a238eef7509`；tests `c407fbabb299cf617e4af79be0141eb108963038` / `561f9b589e32bb3a7681878eef4d54c957a82f8a` / `ac4193b35b2666c4d30c80759fe637e9d487888c`；Navigation 63 `a2a9460c74d3910147d02f4e8a391335dd887474` / `96666748a7fbf1653fcf0c8de0b1743ace595ff3`；README `43717343567827521fe1533feeccee34d9920b08`；最终 provenance issue reporting fix `4b4234ad0be7b22ac52e8578faf3829263dccd3c`。
+- 最终 CI head `4b4234ad...`：GNSS Runtime run `45937295121` success（Humble/Jazzy 两个 job 均 success），ROS 2 Package run `45937295096` success。没有 BPF C 编译、BPF object load、map 创建、probe attach、tracepoint enable 或 clock change。
+- 当前等待 VM 提供真实 dpkg provenance。请用户在 Ubuntu VM 仓库根目录运行 Navigation 63 §2 的只读命令，输出 `$HOME/kernel-package-provenance.json` 并上传。拿到后再锁定实际 source package/version，下载匹配 Ubuntu source package（不安装、不修改系统），逐项对比 Task Storage map/helper、CAP_BPF/token、CAP_PERFMON、GPL-only helper、task-exit cleanup 与 upstream v7.0；之后再设计 clang/BTF/relocation 的静态 object inspection。未取得用户授权前不执行 BPF load/attach。仅 nav 分支，不合并 main。
