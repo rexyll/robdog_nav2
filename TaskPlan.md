@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.297
+- 文档版本：v0.3.298
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1740,3 +1740,14 @@
 - 保持 Navigation 48 等式不变：sequence_allocated = ringbuf_reserve_failures + ringbuf_submit_successes。任何 post-reservation discard 必须新增独立 terminal counter 并升级 Navigation 48 schema，当前设计不引入该路径。
 - Navigation 60 修订提交 `62c84814b529d5b84c9a288c59116beae161bd4c`。这是设计一致性修正，无运行时代码变更。
 - 下一步：为 Task Storage/task allocator 的全局计数器建立 schema 和 equations，并接入 Navigation 48 integrity audit；避免新增计数器仅存在于设计文档而无法进入最终报告。仅 nav 分支，不合并 main。
+
+
+## 本轮 producer global runtime counter audit 实现（2026-11-27 / v0.3.298）
+
+- 在 Navigation 48 per-CPU sequence/reseve/submit audit 之上新增可选 global schema-v2 snapshot：覆盖 event/task/invocation ID allocator、task-context admission/create/init、stack overflow/pop mismatch、handler parent unavailable、task exit pending frames 等累计 counters；gauges 覆盖 active syscall/handler invocation、inflight callbacks 与 task-context reservations。
+- 新增 `audit_clock_adjustment_producer_runtime_counters`，验证 counter monotonicity、allocator/admission/create/init equations、task-context reservation gauge delta、session/boot identity、initial quiescence、final producer detach snapshot 与 active invocation/callback zero。task_context_reservations final 非零允许，因为 live tasks 可保留 idle Task Storage；但 active invocation/callback 必须归零。
+- `audit_clock_adjustment_capture_integrity` 在 initial/final snapshot 带 global object 时自动运行该审计；只提供一侧 global snapshot fail-closed；两侧都没有则保留 legacy per-CPU-only mode。Unified report 额外输出 `producer_runtime_counters` gate。
+- 新增测试覆盖 global counter equations、ID allocation failure、task-context reservation gauge reconcile、idle task storage remain、active invocation not zero、detach snapshot missing 和 unified report gate。
+- 代码提交：global runtime audit `c613e28bcb6026c9011718249f4b816117f868dd`；exports fix `4e20c0be26a05ae7c26dc21271770c20b5bd996f`；pipeline gate `ea4dd29ec1e5ff1bf1a1575fec284274e0317cd3`；gauge delta audit `07336c4e1dd1b391bbd10c35365e6eb7daff5595`；integrity tests `99dcf8ed6e4b2cab041f89901308ef9250df7126`；pipeline tests `e90f71a721c783a33c91949f281642ca0bb8dd4b`；admission equation fix `021c02cdbbd6c0b601daab7c7a498d556b159d41`；Navigation 48 `17d5e1b22e8021ea195ec1545fdf2eed6c0555c9`；Navigation 49 `e9f26e8b7a7d9b4ad595cf5484e2ee056dfb7886`。
+- 验证边界：代码和 synthetic tests 已提交，最新 commit CI 待最终 conclusion；未实现 BPF producer，也没有 live global snapshots。Global audit 不把 task_context_reservations final nonzero 视为失败，但 task exit pending frames、allocator failures、overflow、unmatched counters 或 active invocation nonzero 必须 partial。
+- 下一步：检查 CI 最终结果；若通过，将 schema-v2 producer global snapshots 接入真实 collector contract 和 final report fixtures。随后构建 pure Python producer-state simulator，验证 nested/overflow/failed event emission/task exit/drain 状态机。仅 nav 分支，不合并 main。
