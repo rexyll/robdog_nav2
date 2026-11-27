@@ -54,3 +54,15 @@ The model's emitted envelopes are also fed into the real schema-v2 invocation re
 Before BPF implementation, extend the model to multiple task contexts and allocator contention, then translate the tested transition table into fixed-size BPF maps and structs. Keep BPF-specific verifier checks separate.
 
 No BPF object was compiled or loaded; no map or probe was created; no clock was changed.
+
+
+## 5. End-to-end multi-task fixture
+
+`test_linux_clock_adjustment_end_to_end_synthetic.py` merges two independently simulated task traces into one capture session. It reassigns session-global event IDs, task-scoped invocation IDs and shared per-CPU sequence numbers, then constructs:
+- initial/final per-CPU reserve/submit snapshots;
+- initial/final global allocator and task-context snapshots;
+- producer event records and schema-v2 syscall/handler envelopes;
+- userspace decode/queue/writer snapshots;
+- exact capture lifecycle transitions and final quiescence snapshot.
+
+The resulting fixture is passed through the actual unified report builder. The intended acceptance is that every applicable gate passes, including producer loss-free, global runtime counter reconciliation, legacy reducers, schema-v2 invocation reducers, exact parent-ID join, cross-stream event-ID uniqueness, userspace pipeline and capture lifecycle. This is a synthetic contract integration test, not a live collector test.
