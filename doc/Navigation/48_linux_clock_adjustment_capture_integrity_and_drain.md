@@ -57,7 +57,7 @@ The global audit checks:
 
 A nonzero final `task_context_reservations` is allowed: live tasks may still own idle Task Storage entries. The session map is destroyed after detach/drain. This gauge is a capacity reservation count, not a final quiescence requirement.
 
-Any allocator failure, capacity rejection, stack overflow, pop mismatch, unavailable handler parent, task exit with pending frames, unreadable counter, equation mismatch, or nonzero final invocation/callback gauge makes runtime integrity partial. Task exit observations are not compared with total created contexts as a zero-sum equation because live tasks may remain at session end.
+Any allocator failure, capacity rejection, stack overflow, pop mismatch, unavailable handler parent, task exit with pending frames, unreadable counter, equation mismatch, or nonzero final invocation/callback gauge makes runtime integrity partial. The per-CPU audit may still be complete when reserve failures are fully explained; this means accounting is reconciled, not loss-free. Task exit observations are not compared with total created contexts as a zero-sum equation because live tasks may remain at session end.
 
 ## 3. Consumer reconciliation
 
@@ -70,7 +70,7 @@ The reducer checks:
 - received record count versus producer submitted count;
 - missing sequence count versus producer ring-buffer reserve failures.
 
-A reserve failure should create an explainable sequence hole because sequence allocation precedes reserve. Any mismatch, unreadable counter, counter regression, missing snapshot or malformed event makes the result partial. This contract deliberately does not guess that every missing event is a ring-buffer reserve failure.
+A reserve failure should create an explainable sequence hole because sequence allocation precedes reserve. Any mismatch, unreadable counter, counter regression, missing snapshot, empty per-CPU snapshot set or malformed event makes the result partial. This contract deliberately does not guess that every missing event is a ring-buffer reserve failure.
 
 ## 4. Stop and drain protocol
 
