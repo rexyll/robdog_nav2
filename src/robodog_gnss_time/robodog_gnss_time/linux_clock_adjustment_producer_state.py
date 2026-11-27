@@ -310,6 +310,7 @@ class ClockAdjustmentProducerSessionAllocator:
         self.next_task_instance_seq = start_task_instance_seq
         self.next_invocation_seq = {}
         self.active_tasks = set()
+        self.task_active_invocations = {}
         self.task_context_reservations = 0
         self.active_syscall_invocations = 0
         self.active_handler_invocations = 0
@@ -367,6 +368,7 @@ class ClockAdjustmentProducerSessionAllocator:
         self.counters["task_context_init_successes"] += 1
         self.active_tasks.add(task_id)
         self.next_invocation_seq[task_id] = 1
+        self.task_active_invocations[task_id] = {"syscall": 0, "handler": 0}
         return task_id
 
     def allocate_invocation_id(self, task_instance_id, kind="syscall", success=True):
@@ -386,45 +388,42 @@ class ClockAdjustmentProducerSessionAllocator:
         self.counters[prefix + "successes"] += 1
         return f"{value:016x}"
 
-    def begin_invocation(self, kind):
+    def begin_invocation(self, task_instance_id, kind):
         if self.producer_detached:
             raise RuntimeError("producer session is detached")
+        if task_instance_id not in self.active_tasks:
+            raise KeyError("unknown or exited task context")
+        if kind not in ("syscall", "handler"):
+            raise ValueError("kind must be syscall or handler")
+        self.task_active_invocations[task_instance_id][kind] += 1
         if kind == "syscall":
             self.active_syscall_invocations += 1
-        elif kind == "handler":
-            self.active_handler_invocations += 1
         else:
-            raise ValueError("kind must be syscall or handler")
+            self.active_handler_invocations += 1
 
-    def end_invocation(self, kind):
+    def end_invocation(self, task_instance_id, kind):
         if self.producer_detached:
             raise RuntimeError("producer session is detached")
-        if kind == "syscall":
-            if self.active_syscall_invocations <= 0:
-                raise RuntimeError("syscall invocation gauge underflow")
-            self.active_syscall_invocations -= 1
-        elif kind == "handler":
-            if self.active_handler_invocations <= 0:
-                raise RuntimeError("handler invocation gauge underflow")
-            self.active_handler_invocations -= 1
-        else:
+        if task_instance_id not in self.active_tasks:
+            raise KeyError("unknown or exited task context")
+        if kind not in ("syscall", "handler"):
             raise ValueError("kind must be syscall or handler")
+        if self.task_active_invocations[task_instance_id][kind] <= 0:
+            raise RuntimeError(kind + " invocation gauge underflow for task")
+        self.task_active_invocations[task_instance_id][kind] -= 1
+        if kind == "syscall":
+            self.active_syscall_invocations -= 1
+        else:
+            self.active_handler_invocations -= 1
 
-    def release_task_context(self, task_instance_id,
-                             pending_syscalls=0, pending_handlers=0):
+    def release_task_context(self, task_instance_id):
         if self.producer_detached:
             raise RuntimeError("producer session is detached")
         if task_instance_id not in self.active_tasks:
             raise KeyError("task context already released or unknown")
-        if (not isinstance(pending_syscalls, int) or isinstance(pending_syscalls, bool)
-                or pending_syscalls < 0
-                or not isinstance(pending_handlers, int) or isinstance(pending_handlers, bool)
-                or pending_handlers < 0):
-            raise ValueError("pending invocation counts must be nonnegative integers")
-        if pending_syscalls > self.active_syscall_invocations:
-            raise RuntimeError("pending syscall count exceeds active gauge")
-        if pending_handlers > self.active_handler_invocations:
-            raise RuntimeError("pending handler count exceeds active gauge")
+        pending = self.task_active_invocations[task_instance_id]
+        pending_syscalls = pending["syscall"]
+        pending_handlers = pending["handler"]
         self.counters["task_exit_observed"] += 1
         if pending_syscalls:
             self.counters["task_exit_with_pending_syscalls"] += 1
@@ -433,6 +432,7 @@ class ClockAdjustmentProducerSessionAllocator:
             self.counters["task_exit_with_pending_handlers"] += 1
             self.active_handler_invocations -= pending_handlers
         self.active_tasks.remove(task_instance_id)
+        self.task_active_invocations.pop(task_instance_id, None)
         self.next_invocation_seq.pop(task_instance_id, None)
         self.task_context_reservations -= 1
 
