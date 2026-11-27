@@ -1,6 +1,6 @@
 # Linux clock-adjustment capture session and event envelope
 
-- Status: SCHEMA_V1_COMPATIBLE_AND_V2_VALIDATOR_IMPLEMENTED / SYNTHETIC_TESTS_SUBMITTED / INVOCATION_REDUCER_PENDING / LIVE_COLLECTOR_NOT_IMPLEMENTED
+- Status: SCHEMA_V1_COMPATIBLE_AND_V2_VALIDATOR_IMPLEMENTED / SYNTHETIC_TESTS_SUBMITTED / INVOCATION_ID_REDUCER_IMPLEMENTED / LIVE_COLLECTOR_NOT_IMPLEMENTED
 - Date: 2026-11-27
 - Related: Navigation 42, 44, 46–49
 
@@ -38,7 +38,7 @@ Handler-stream records additionally require `parent_context_status`:
 
 Syscall-stream records reject handler-parent fields. All new fields are envelope-owned and cannot be overridden by payload. The validator preserves the fields in the sanitized event and reports schema version and identity in its result.
 
-The validator checks each record's shape only. It does not prove event_id uniqueness, entry/exit ID equality, or parent identity consistency across records; those are reducer-level checks. Schema v1 remains valid but no IDs are fabricated for it.
+The validator checks each record's shape only. The new `reduce_clock_adjustment_invocation_events` reducer performs cross-record checks: event_id uniqueness within session/boot, one entry and one exit per invocation, stable subject/PID, monotonic entry-before-exit, and stable handler parent context. It pairs across CPU migration and arrival reordering by exact invocation ID. Schema v1 remains valid for legacy consumers but is rejected by the strict invocation reducer; no IDs are fabricated for it.
 
 ## 3. Capture-session lifecycle
 
@@ -73,6 +73,8 @@ The exact reconciliation equations and terminal outcome rules remain in Navigati
 
 ## 5. Reducer integration
 
+The strict invocation reducer is an additional schema-v2 path; it does not replace the schema-v1 LIFO reducers yet. Its pairing key includes session, boot, producer, stream, task lifetime and invocation ID. It reports duplicate event IDs, duplicate entry/exit sides, unmatched sides, subject mismatches, parent-context mismatches and timestamp reversals as partial.
+
 For each envelope:
 1. validate schema and session/stream identity;
 2. route `payload` to the syscall or kernel-handler reducer selected by `stream_kind`;
@@ -87,7 +89,8 @@ The validator does not itself prove that a producer emitted all events, that a c
 Synthetic tests cover v1 compatibility, v2 identity projection, handler parent-context states, schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
 
 Remaining implementation gates:
-- implement a schema-v2 invocation-ID reducer and cross-record duplicate/mismatch checks;
+- integrate invocation-ID reducer reports into the unified capture report as independent syscall/handler gates;
+- upgrade syscall-handler joiner to exact parent_syscall_invocation_id association;
 - define the actual eBPF/perf/ring-buffer transport and target-kernel attachment points;
 - implement producer counters and a dedicated unfiltered stream for each event class;
 - implement consumer decode/queue/writer counters and durable flush semantics;
