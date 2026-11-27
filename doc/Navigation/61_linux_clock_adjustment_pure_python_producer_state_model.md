@@ -24,7 +24,7 @@ It does not model kernel scheduling, BPF verifier constraints, helper availabili
 
 ## 3. Synthetic test coverage
 
-Tests exercise:
+The reference model was added in `linux_clock_adjustment_producer_state.py`. Tests exercise:
 1. Nested syscall entry/exit pairing by invocation ID.
 2. Syscall stack overflow and recovery without outer-frame corruption.
 3. Ring-buffer reserve failure and matching exit suppression.
