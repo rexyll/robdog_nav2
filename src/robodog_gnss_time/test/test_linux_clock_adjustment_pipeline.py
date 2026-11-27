@@ -341,7 +341,9 @@ def test_known_ring_buffer_loss_fails_loss_free_gate_even_when_accounted():
         "inflight_callbacks": 0, "pending_syscalls": 0, "pending_handlers": 0,
     }
     report = build_clock_adjustment_capture_report(
-        [], [], [], initial, final, drain, snapshot(), snapshot(), None,
+        [], [], [{"producer_id": "clock-step", "boot_id": "boot-a",
+                  "cpu": 0, "sequence": 2}],
+        initial, final, drain, snapshot(), snapshot(), None,
     )
     assert report["producer_integrity"]["integrity_status"] == "complete"
     assert report["gates"]["producer_loss_free"] is False
