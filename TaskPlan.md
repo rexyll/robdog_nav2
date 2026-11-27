@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.260
+- 文档版本：v0.3.261
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1381,3 +1381,12 @@
 - 回填 v0.3.259 跨流关联器验证结果：GNSS runtime CI `45920179107` 与 ROS 2 package CI `45920179133` 均 success，Humble/Jammy 与 Jazzy/Noble 全部 job 成功；关联器 15 项合成测试已通过。
 - CI 仍属于通用 Ubuntu/ROS 软件验证，不构成目标 Orin/BSP、BTF/fentry/kprobe、ARM64、采集无丢失或 CLOCK_REALTIME/PHC 实际效果证据。无实机，相关 Gate 继续未完成。
 - `nav` 最新 head 为 `5ddcfcbe3f4818b3c9cfa217173ef6dea2d7ebbd`；`main` 未改动。本专项仍只在 nav，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.261）
+
+- 新增纯 Python 采集完整性审计器 `linux_clock_adjustment_capture_integrity.py`，输入专属 unfiltered per-CPU event records、capture 前初始计数快照、stop/drain 后最终计数快照和 shutdown drain 状态。
+- 固定 producer 计数合同：sequence 在 ringbuf reserve 前分配；每个 sequence 恰好进入 reserve failure 或 submit success 之一；成功提交事件携带该 sequence。检查 `sequence_allocated_delta = ringbuf_reserve_failures_delta + ringbuf_submit_successes_delta`，并校验提交数/收到数、缺失 sequence/ reserve failure 数、重复/越界序号和计数回退。
+- 明确该 reconciliation 仅适用于专属、未过滤、未采样的单一 producer event stream；不能把从其他全局流筛选出的子集用于完整性证明。
+- 增加 shutdown drain gate：stop requested、producer quiesced、ring buffer drained、consumer queue drained、writer flushed/closed、final snapshot after drain；最终 queue_depth、inflight_callbacks、pending_syscalls、pending_handlers 必须为 0，否则 partial。
+- 新增 Navigation 48 与合成测试；不实现 producer/eBPF、不启 tracing、不捕获真实内核事件、不修改 clock/PHC。CI 待本轮完成后回填。保持仅 nav，N1/N9 未验收，不合并 main。
