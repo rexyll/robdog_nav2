@@ -1,6 +1,6 @@
 # Linux clock-adjustment capture session and event envelope
 
-- Status: PURE_CONTRACT_VALIDATOR_IMPLEMENTED / SYNTHETIC_TESTS_SUBMITTED / LIVE_COLLECTOR_NOT_IMPLEMENTED
+- Status: SCHEMA_V1_COMPATIBLE_AND_V2_VALIDATOR_IMPLEMENTED / SYNTHETIC_TESTS_SUBMITTED / INVOCATION_REDUCER_PENDING / LIVE_COLLECTOR_NOT_IMPLEMENTED
 - Date: 2026-11-27
 - Related: Navigation 42, 44, 46–49
 
@@ -23,18 +23,22 @@ The envelope owns identity, ordering and time fields. Payloads cannot override t
 
 Sequence scope is `(capture_session_id, boot_id, producer_id, stream_id, cpu)`. Syscall and kernel-handler observations must use separate stream IDs/sequence domains. Do not combine or filter a global sequence and then interpret resulting gaps as producer loss.
 
-## 2A. Planned schema-v2 invocation identity extension (not implemented)
+## 2A. Event envelope schema v2
 
-Schema v1 above is the current validator contract and does not carry producer-assigned event/invocation identity. It is therefore insufficient for strict nested-call pairing or cross-CPU event delivery reordering.
+Schema v2 is now accepted by the pure validator while schema v1 remains supported as an explicit legacy format.
 
-The proposed schema-v2 envelope adds:
-- `task_instance_id`: opaque task-lifetime identity;
-- `event_id`: producer-assigned event identity;
-- `invocation_id`: syscall invocation ID for syscall streams, handler invocation ID for handler streams;
-- `parent_syscall_invocation_id`: handler-stream parent context when proven;
-- `parent_context_status`: explicit matched/unavailable/stack_overflow/no_active_context state.
+Every v2 record adds:
+- `task_instance_id`: opaque task-lifetime identity string;
+- `event_id`: producer-assigned event identity string;
+- `invocation_id`: syscall invocation ID on syscall streams, handler invocation ID on handler streams.
 
-Schema-v2 must reject a handler event that supplies a parent invocation ID with an invalid type, and must preserve an explicit unavailable state rather than substituting an interval-derived parent. Entry/exit events must repeat the same invocation ID. The reducer migration is specified in Navigation 57; do not claim that schema-v1 plus LIFO provides strict invocation identity.
+Handler-stream records additionally require `parent_context_status`:
+- `matched`: requires a non-empty `parent_syscall_invocation_id`;
+- `unavailable`, `stack_overflow`, `no_active_context`: parent ID must be absent.
+
+Syscall-stream records reject handler-parent fields. All new fields are envelope-owned and cannot be overridden by payload. The validator preserves the fields in the sanitized event and reports schema version and identity in its result.
+
+The validator checks each record's shape only. It does not prove event_id uniqueness, entry/exit ID equality, or parent identity consistency across records; those are reducer-level checks. Schema v1 remains valid but no IDs are fabricated for it.
 
 ## 3. Capture-session lifecycle
 
@@ -80,9 +84,10 @@ The validator does not itself prove that a producer emitted all events, that a c
 
 ## 6. Tests and remaining work
 
-Synthetic tests cover schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
+Synthetic tests cover v1 compatibility, v2 identity projection, handler parent-context states, schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
 
 Remaining implementation gates:
+- implement a schema-v2 invocation-ID reducer and cross-record duplicate/mismatch checks;
 - define the actual eBPF/perf/ring-buffer transport and target-kernel attachment points;
 - implement producer counters and a dedicated unfiltered stream for each event class;
 - implement consumer decode/queue/writer counters and durable flush semantics;
