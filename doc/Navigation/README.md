@@ -323,3 +323,5 @@
 - [53 — vmlinux BTF handler-function inventory](53_linux_vmlinux_btf_handler_inventory.md)
 
 - [54 — Kernel probe provenance and BTF artifact identity](54_kernel_probe_provenance_and_btf_identity.md)
+
+- [55 — Linux clock-adjustment handler call-path semantics](55_linux_clock_adjustment_handler_call_path_semantics.md)
