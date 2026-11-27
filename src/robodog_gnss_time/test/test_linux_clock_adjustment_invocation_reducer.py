@@ -6,11 +6,19 @@ from robodog_gnss_time.linux_clock_adjustment_invocation_reducer import (
 
 
 def event(event_type, event_id, cpu, sequence, monotonic_ns, **overrides):
-    payload = {
-        "event_type": event_type,
-        "pid_tgid": 4294967297,
-        "syscall": "clock_adjtime",
-    }
+    payload = {"event_type": event_type, "pid_tgid": 4294967297}
+    if event_type.startswith("syscall_"):
+        payload["syscall"] = "clock_adjtime"
+        if event_type == "syscall_enter":
+            payload["modes_read_status"] = "not_requested"
+        else:
+            payload["return_value"] = 0
+    else:
+        payload["handler"] = "do_adjtimex"
+        if event_type == "kernel_handler_enter":
+            payload["raw_modes"] = 0
+        else:
+            payload["return_value"] = 0
     payload.update(overrides.pop("payload", {}))
     record = {
         "schema_version": 2,
