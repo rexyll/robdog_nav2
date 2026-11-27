@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.261
+- 文档版本：v0.3.262
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1390,3 +1390,12 @@
 - 明确该 reconciliation 仅适用于专属、未过滤、未采样的单一 producer event stream；不能把从其他全局流筛选出的子集用于完整性证明。
 - 增加 shutdown drain gate：stop requested、producer quiesced、ring buffer drained、consumer queue drained、writer flushed/closed、final snapshot after drain；最终 queue_depth、inflight_callbacks、pending_syscalls、pending_handlers 必须为 0，否则 partial。
 - 新增 Navigation 48 与合成测试；不实现 producer/eBPF、不启 tracing、不捕获真实内核事件、不修改 clock/PHC。CI 待本轮完成后回填。保持仅 nav，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.262）
+
+- 对采集完整性 reducer 做了内存复杂度审查：原始缺失序号展开 `set(range(...))` 会在损坏/异常的 uint64 计数快照下产生巨大内存分配风险。现改为按排序后的已观测序号生成紧凑缺口区间 `missing_sequence_ranges` 和精确 `missing_sequence_count`，不再展开整个序号区间。
+- 新增大序号跨度（2^63）回归测试，验证缺口以一个范围表示，内存复杂度随实际收到事件数增长，而非随计数器跨度增长。
+- CI 曾在中间提交 `b7576653b7fb2df81a2d47687d2aa54ed0660f70` 因源文件中误写入字面 `\\n` 导致 SyntaxError；根据 runtime CI run `45920981870` 的日志定位，已在 `61e20ae55626a9819b946d75f7025b3d6b3afd22` 修复。该中间失败如实保留，不计为最终通过。
+- 最终 head `61e20ae55626a9819b946d75f7025b3d6b3afd22` 的 GNSS runtime CI run `45921025738`：Humble/Jammy、Jazzy/Noble 均 **250/250 passed，0 errors/failures/skipped**；ROS 2 package CI run `45921025246` 两发行版均 success。
+- 这些结果验证通用 Ubuntu/ROS 容器中的纯 Python reducer 和合成测试，不验证实际 eBPF producer、ringbuf 丢失计数真实性、目标 Orin 内核事件覆盖或时钟效果。保持仅 nav，N1/N9 未验收，不合并 main。
