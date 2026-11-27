@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.258
+- 文档版本：v0.3.259
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1365,3 +1365,12 @@
 - 本轮不加载 eBPF、不附加 fentry/kprobe、不启 tracing/audit、不读取任何内核指针、
   不修改 CLOCK_REALTIME/PHC；CI 合成测试不证明目标 Orin 内核 hook 可用、事件流完整
   或真实时钟效果。保持仅 nav 分支，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.259）
+
+- 在 Navigation 44（E1/E3b syscall reducer）与 Navigation 46（E2b/E3a kernel-handler reducer）之间新增独立关联器 `linux_clock_adjustment_joiner.py`，仅消费两边 reducer 已完成的 interval pairs。
+- 关联要求 boot_id、pid_tgid 精确一致，handler interval 完全包含于 syscall interval，并按源码映射匹配 clock_adjtime/clock_adjtime32→do_clock_adjtime、adjtimex/adjtimex_time32→do_adjtimex。嵌套候选选唯一最窄区间；等宽歧义、多 handler 争用一个 syscall、缺失/不包含记录均 fail-closed，输出 partial。
+- copy-back -EFAULT 推断默认关闭；只有显式选择 Linux v6.12 源码合同 ID，且内部 handler 返回非负、外层 syscall 返回 -EFAULT 时才输出推断。该 ID 仅代表 v6.12 参考源码，不代表 Orin BSP；目标 BSP 必须单独 pin source/version。内部 handler -EFAULT 不满足条件。
+- 新增 Navigation 47 与合成测试，覆盖 native/compat 映射、boot/thread 隔离、区间包含、嵌套/歧义、many-to-one 冲突、upstream partial 传播和 copy-back 推断门禁。
+- 重要边界：区间包含是保守时间关联，不证明内核调用栈 ancestry；后续采集器若可行应加入共享 invocation cookie/parent context。没有加载 eBPF、附加 hook、启 tracing、改系统时钟或 PHC；没有 Orin 实机验证。CI 等待本轮 Actions 完成后回填。保持仅 nav 分支，N1/N9 未验收，不合并 main。
