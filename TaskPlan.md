@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.265
+- 文档版本：v0.3.266
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1426,3 +1426,12 @@
 - 新增 producer→userspace read count mismatch 和 boot identity mismatch issue/gates；任何不匹配都会使统一报告为 partial。补充合成测试，构造 producer integrity 与 pipeline 各自通过、但跨层计数不一致的情况，验证统一报告仍 fail-closed。
 - 更新 Navigation 49，明确 unified report 现在有七个独立 gate（producer integrity、pipeline accounting、producer→pipeline record count、boot identity、syscall reducer、handler reducer、syscall-handler join）。
 - 补强代码提交：pipeline module `707da93178bc03e59c1e8498f51914aaa397a2aa`；pipeline tests `8f0f4fadadd1465ae797ee92befd0d03e93d8d08`；Navigation 49 `1ef7195d7d47b2fd736f8347e562f6ba89ab22d0`。本轮补强 CI 待最终 head 运行后回填。
+
+
+## 本轮最终 CI 回填（2026-11-27 / v0.3.266）
+
+- 跨阶段 producer→userspace count/boot identity gate 的最终代码 head `8f0f4fadadd1465ae797ee92befd0d03e93d8d08`：GNSS receiver-time ROS runtime CI run `45922370399` 成功，Humble/Jammy 与 Jazzy/Noble 各 **262/262 passed，0 errors/failures/skipped**；ROS 2 package CI run `45922370423` 两个发行版 job 均 success。
+- 日志仍有 rosdep `ament_python` key 解析 ERROR 提示，但后续依赖安装/构建及 pytest 全部成功；保留为非阻断环境提示，不称为零 warning。
+- 代码/测试提交分别为 pipeline module `707da93178bc03e59c1e8498f51914aaa397a2aa` 与 cross-stage tests `8f0f4fadadd1465ae797ee92befd0d03e93d8d08`。最终 nav head 为本 TaskPlan 更新提交。
+- CI 只证明 Ubuntu/ROS Humble+Jazzy 环境下 262 项 Python package tests 与 ROS package CI 通过；不证明 live collector、内核 hook、真实 ringbuf/queue/writer 丢失计数、目标 Orin/BSP 兼容、覆盖完整或物理时钟效果。
+- 分支核对：nav 指向本轮 TaskPlan 更新；main 仍为 `0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`，未修改。N1/N9 未验收，不合并 main。
