@@ -210,3 +210,38 @@ def test_image_owner_matches_binary_package_with_architecture_suffix(monkeypatch
     monkeypatch.setattr(provenance.subprocess, "run", fake_run)
     report = provenance.collect_linux_kernel_package_provenance(release)
     assert report["status"] == "observed"
+
+
+def test_missing_source_metadata_on_one_installed_kernel_code_package_is_partial(monkeypatch):
+    release = "7.0.0-44-generic"
+    image = f"linux-image-{release}"
+
+    def fake_run(argv, check, capture_output, text, timeout):
+        if argv[:2] == ["dpkg-query", "-W"]:
+            package = argv[-1]
+            if package == image:
+                return _completed(
+                    f"{image}\t1.2.3\tlinux-signed-hwe-7.0\t1.2.3\tii \n"
+                )
+            if package == f"linux-modules-{release}":
+                return _completed(
+                    f"linux-modules-{release}\t1.2.3\t\t\tii \n"
+                )
+            if package == f"linux-headers-{release}":
+                return _completed(
+                    f"linux-headers-{release}\t1.2.3\tlinux-hwe-7.0\t1.2.3\tii \n"
+                )
+            return _completed(returncode=1, stderr="not installed")
+        if argv[:2] == ["dpkg-query", "-S"]:
+            path = argv[-1]
+            if path == f"/boot/vmlinuz-{release}":
+                return _completed(f"{image}: {path}\n")
+            return _completed(returncode=1, stderr="no owner")
+        if argv[0] == "uname":
+            return _completed("#44-Ubuntu\n")
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(provenance.subprocess, "run", fake_run)
+    report = provenance.collect_linux_kernel_package_provenance(release)
+    assert report["status"] == "partial"
+    assert {"code": "installed_kernel_code_package_source_metadata_incomplete"} in report["issues"]
