@@ -98,7 +98,7 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         for item in file_owners
         for owner in item.get("owners", [])
     })
-    status = "observed" if installed and owner_packages else "partial"
+    status = "observed" if installed and owner_packages and source_identities else "partial"
     if len(source_identities) > 1:
         status = "partial"
     return {
