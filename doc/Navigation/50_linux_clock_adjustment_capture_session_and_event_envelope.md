@@ -23,6 +23,19 @@ The envelope owns identity, ordering and time fields. Payloads cannot override t
 
 Sequence scope is `(capture_session_id, boot_id, producer_id, stream_id, cpu)`. Syscall and kernel-handler observations must use separate stream IDs/sequence domains. Do not combine or filter a global sequence and then interpret resulting gaps as producer loss.
 
+## 2A. Planned schema-v2 invocation identity extension (not implemented)
+
+Schema v1 above is the current validator contract and does not carry producer-assigned event/invocation identity. It is therefore insufficient for strict nested-call pairing or cross-CPU event delivery reordering.
+
+The proposed schema-v2 envelope adds:
+- `task_instance_id`: opaque task-lifetime identity;
+- `event_id`: producer-assigned event identity;
+- `invocation_id`: syscall invocation ID for syscall streams, handler invocation ID for handler streams;
+- `parent_syscall_invocation_id`: handler-stream parent context when proven;
+- `parent_context_status`: explicit matched/unavailable/stack_overflow/no_active_context state.
+
+Schema-v2 must reject a handler event that supplies a parent invocation ID with an invalid type, and must preserve an explicit unavailable state rather than substituting an interval-derived parent. Entry/exit events must repeat the same invocation ID. The reducer migration is specified in Navigation 57; do not claim that schema-v1 plus LIFO provides strict invocation identity.
+
 ## 3. Capture-session lifecycle
 
 The required ordered lifecycle is:
