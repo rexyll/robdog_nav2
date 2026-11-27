@@ -150,3 +150,14 @@ def test_invalid_state_configuration_and_double_exit_are_rejected():
     state.task_exit()
     with pytest.raises(RuntimeError):
         state.task_exit()
+
+
+def test_detach_is_blocked_while_invocation_is_active():
+    import pytest
+    state = ClockAdjustmentProducerState()
+    state.syscall_enter("clock_adjtime", 0, 100, raw_clockid=0)
+    with pytest.raises(RuntimeError):
+        state.detach()
+    state.syscall_exit("clock_adjtime", 0, 120, 0)
+    state.detach()
+    assert state.global_snapshot()["snapshot_after_producer_detach"] is True
