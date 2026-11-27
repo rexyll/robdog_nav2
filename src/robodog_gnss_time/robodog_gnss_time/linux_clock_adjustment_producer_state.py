@@ -41,6 +41,7 @@ class ClockAdjustmentProducerState:
         self.per_cpu = {}
         self.emitted = []
         self.task_exited = False
+        self.producer_detached = False
 
     @staticmethod
     def _zero_counters():
@@ -271,11 +272,18 @@ class ClockAdjustmentProducerState:
         return {"pending_syscalls": pending_syscalls,
                 "pending_handlers": pending_handlers}
 
+    def detach(self):
+        if self.active_syscall_invocations or self.active_handler_invocations:
+            raise RuntimeError("cannot detach with active invocations")
+        if self.inflight_bpf_callbacks:
+            raise RuntimeError("cannot detach with in-flight callbacks")
+        self.producer_detached = True
+
     def global_snapshot(self):
         return {
             "capture_session_id": self.capture_session_id,
             "boot_id": self.boot_id,
-            "snapshot_after_producer_detach": True,
+            "snapshot_after_producer_detach": self.producer_detached,
             "counters": dict(self.counters),
             "gauges": {
                 "active_syscall_invocations": self.active_syscall_invocations,
