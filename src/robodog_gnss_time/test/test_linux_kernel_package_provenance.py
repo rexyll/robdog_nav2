@@ -142,3 +142,71 @@ def test_package_provenance_does_not_fill_missing_source_metadata(monkeypatch):
     report = provenance.collect_linux_kernel_package_provenance(release)
     assert report["status"] == "partial"
     assert report["source_package_identities"] == []
+
+
+def test_image_package_ownership_of_config_does_not_prove_vmlinuz_owner(monkeypatch):
+    release = "7.0.0-44-generic"
+    image = f"linux-image-{release}"
+
+    def fake_run(argv, check, capture_output, text, timeout):
+        if argv[:2] == ["dpkg-query", "-W"]:
+            package = argv[-1]
+            if package == image:
+                return _completed(
+                    f"{image}:amd64\t1.2.3\tlinux-signed-hwe-7.0\t1.2.3\tii \n"
+                )
+            if package == f"linux-modules-{release}":
+                return _completed(
+                    f"linux-modules-{release}:amd64\t1.2.3\t"
+                    "linux-hwe-7.0\t1.2.3\tii \n"
+                )
+            return _completed(returncode=1, stderr="not installed")
+        if argv[:2] == ["dpkg-query", "-S"]:
+            path = argv[-1]
+            if path == f"/boot/config-{release}":
+                return _completed(f"{image}:amd64: {path}\n")
+            if path == f"/usr/lib/modules/{release}/vmlinuz":
+                return _completed(f"linux-modules-{release}:amd64: {path}\n")
+            # The actual /boot/vmlinuz path is unowned by the installed image.
+            return _completed(returncode=1, stderr="no path owner")
+        if argv[0] == "uname":
+            return _completed("#44-Ubuntu SMP PREEMPT_DYNAMIC\n")
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(provenance.subprocess, "run", fake_run)
+    report = provenance.collect_linux_kernel_package_provenance(release)
+    assert report["status"] == "partial"
+    assert {"code": "installed_kernel_image_owner_not_observed"} in report["issues"]
+
+
+def test_image_owner_matches_binary_package_with_architecture_suffix(monkeypatch):
+    release = "7.0.0-44-generic"
+    image = f"linux-image-{release}"
+
+    def fake_run(argv, check, capture_output, text, timeout):
+        if argv[:2] == ["dpkg-query", "-W"]:
+            package = argv[-1]
+            if package == image:
+                return _completed(
+                    f"{image}:amd64\t1.2.3\tlinux-signed-hwe-7.0\t1.2.3\tii \n"
+                )
+            if package == f"linux-modules-{release}":
+                return _completed(
+                    f"linux-modules-{release}:amd64\t1.2.3\t"
+                    "linux-hwe-7.0\t1.2.3\tii \n"
+                )
+            return _completed(returncode=1, stderr="not installed")
+        if argv[:2] == ["dpkg-query", "-S"]:
+            path = argv[-1]
+            if path == f"/boot/vmlinuz-{release}":
+                return _completed(f"{image}:amd64: {path}\n")
+            if path == f"/usr/lib/modules/{release}/vmlinuz":
+                return _completed(f"linux-modules-{release}:amd64: {path}\n")
+            return _completed(returncode=1, stderr="no path owner")
+        if argv[0] == "uname":
+            return _completed("#44-Ubuntu SMP PREEMPT_DYNAMIC\n")
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(provenance.subprocess, "run", fake_run)
+    report = provenance.collect_linux_kernel_package_provenance(release)
+    assert report["status"] == "observed"
