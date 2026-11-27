@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.300
+- 文档版本：v0.3.301
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1773,3 +1773,13 @@
 - 代码修订提交：known-loss fixture `34c5122a6a347ef0658e457e76d533a6116a06e7`；task init/task ID success equation `6dda2296f9b9f5b3d45adbb5e65482bc60aa0e7e`；empty CPU snapshot test `ba91173319bb793bd59e03db3af8cf467492619d`。
 - 运行时状态仍是 reference model + offline reducers；没有 BPF C producer，没有 clang/verifier/attach 证据，没有真实 kernel capture。当前 global snapshot contract 仍是 future producer obligation。
 - 下一步：扩展 Python state simulator 到多任务与全局 ID allocator contention；验证同一 task 在 signal nested path、不同 task 并发和 task exit/ID reuse 场景下的边界；再将 state machine 转为 verifier-friendly BPF C design review。仅 nav 分支，不合并 main。
+
+
+## 本轮 multi-task shared identity allocator reference model（2026-11-27 / v0.3.301）
+
+- 在 Navigation 61 的 pure Python producer reference model 中新增 `ClockAdjustmentProducerSessionAllocator`，模拟跨 task shared event ID allocator、全局 task_instance_id allocator、per-task shared syscall/handler invocation sequence、max_tracked_tasks admission、create/init failure、bounded CAS contention/exhaustion、task exit release 与 detach gate。
+- 两个 task 可拥有相同的 task-local invocation sequence（例如都为 1），但 task_instance_id 不同；event_id 由 session-global allocator 分配，syscall/handler stream 共用同一命名空间。
+- 新增 tests：两个 task 交错分配 event IDs 保证全局唯一；invocation IDs 仅在 task 内唯一；容量拒绝不分配 task ID；create/task ID allocation failure 正确释放 reservation；CAS contention 与 U64_MAX fail-closed；task exit pending gauges reconcile；live idle task storage 可在 detach 时保留；capacity rejection 进入 runtime audit partial。
+- 提交：session allocator `4fdf4fc3e557453b64bbac5c4331f7671bb28ae4`；allocator hardening `1ea8863053ef6ab9df945c8c6e2ef0b943b11529`；multi-task tests `7071aa3b2c45500a2c3a7213decefa32fe3a7f7b`；runtime audit integration tests `271ee24739c1c117e465e23555f23dc4c851b969`；Navigation 61 修订 `32299a7855395dfab467b87fa74f76c7b340af58`。
+- 验证边界：这是 multi-task ID/capacity reference model，不模拟真实并行执行、BPF map atomic 指令、内核 task scheduling 或 verifier。CI 等待最新提交最终结果。
+- 下一步：检查 latest CI；若通过，继续扩展 producer state simulator 的跨任务 active invocation / task exit interleaving 和 event stream counter reconciliation；随后再写 BPF C struct/CO-RE pseudo-source review。仅 nav 分支，不合并 main。
