@@ -87,6 +87,7 @@ def test_nested_same_handler_entries_pair_lifo_and_keep_outer_pending():
         _event("kernel_handler_enter", 2, monotonic_ns=200),
         _event("kernel_handler_exit", 3, monotonic_ns=300),
     ])
+    assert report["schema_version"] == 2
     assert report["counts"]["nested_handler_entries"] == 1
     assert report["counts"]["duplicate_handler_entries"] == 0
     assert len(report["pairs"]) == 1
