@@ -142,7 +142,14 @@ For every event attempt, record distinct outcomes:
 - event_submit_success;
 - event_discarded_after_reservation.
 
-The implementation must choose and document whether event ID/CPU sequence allocation occurs before or after ring-buffer reservation. The recommended order is reserve first, then allocate IDs/sequences, fill the fixed record and submit; if any allocator fails, discard the reserved sample and increment its counter. This avoids allocating IDs for a failed ring-buffer reservation. If implementation constraints require another order, retain exact accounting and never interpret ID gaps alone as loss.
+Preserve Navigation 48's required sequence ordering: allocate the per-CPU sequence before attempting ring-buffer reservation. The recommended event path is:
+1. allocate the global event_id; if it fails, increment event_id_allocation_failed and do not allocate a CPU sequence;
+2. allocate/increment the per-CPU sequence;
+3. attempt ring-buffer reservation;
+4. on reserve failure, increment ringbuf_reserve_failures; the CPU sequence and event ID are both unused;
+5. on successful reservation, fill the already-validated fixed record and submit; increment ringbuf_submit_successes.
+
+This preserves Navigation 48's equation: sequence_allocated = ringbuf_reserve_failures + ringbuf_submit_successes. Do not introduce a post-reservation discard path unless a separate terminal counter is added and Navigation 48's schema/equations are revised. Event-ID gaps are not loss proof; reconcile them with event-ID allocation failures and per-CPU reserve/submit counters.
 
 All counter snapshots must be taken after producers quiesce and detach. Ring-buffer drain and userspace queue/writer drain follow; final report checks all counter equations. Event IDs provide uniqueness, not a cross-CPU timestamp order.
 
