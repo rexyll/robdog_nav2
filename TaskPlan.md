@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.287
+- 文档版本：v0.3.288
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1636,3 +1636,12 @@
 - 更新 Navigation 42 的 capture design 与 README 索引；新增文档提交 Navigation 57 `404ba7e6d39acc6c127724bb3569f22db4bebe0f`，Navigation 42 `39e50a886eff635d3108ea3b45a7e4af9a0230bf`，索引提交见本节更新历史。
 - CI：包含 joiner one-to-many、syscall LIFO、测试替换的 head `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已获得 GNSS Runtime success（run `45929462353`）和 ROS 2 Package success（run `45929462345`）。本轮仅新增设计文档/索引/TaskPlan，不新增运行时代码。
 - 下一步：把 schema-v3 envelope 与现有 session/pipeline accounting contracts 对照，明确哪些字段可进入 session manifest、哪些必须随每个 event 携带；评估 BPF map 中 bounded syscall context stack 的可实现性及 task-exit cleanup 的失效模式。等待用户 VM live capability JSON；Orin BSP 独立 Gate。N1/N9 未验收，仅 nav 分支，不合并 main。
+
+
+## 本轮 envelope/pipeline 对齐审计（2026-11-27 / v0.3.288）
+
+- 对照 Navigation 48–50 与 Navigation 57，发现当前 capture envelope validator 仍是 schema v1：仅包含 capture_session_id、boot_id、producer_id、stream_id、stream_kind、cpu、sequence、monotonic_ns 与 payload；尚不承载 task_instance_id、event_id、invocation_id 或 parent_syscall_invocation_id。
+- 因此 schema-v2 invocation identity 目前仍是设计合同，不得声称现有 session/pipeline 已具备严格 invocation pairing。已在 Navigation 50 新增 schema-v2 规划段，并在 Navigation 57 明确 schema-v1 的限制及 reducer migration 前置条件。
+- 提交：Navigation 50 `ceabe4b818d9ab7bf3852a1be2224741833fe77c`；Navigation 57 `8868d23c4311bfba667ac1525ced0b30aceed524`。
+- 后续实现顺序固定为：先扩展 session envelope validator 与 schema-v2 tests；再升级 syscall/handler reducers 到 invocation-ID pairing；再升级 joiner 按 parent_syscall_invocation_id 精确关联；最后更新 unified pipeline report，确保 legacy schema-v1 输入仍显式标记 legacy/LIFO，而不是伪造 ID。
+- CI 基线：包含 joiner one-to-many 与 syscall LIFO reducer 的提交 `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已通过 GNSS Runtime 与 ROS 2 Package CI。文档更新不触发运行时代码验证。无 live collector/BPF/实机效果证据。
