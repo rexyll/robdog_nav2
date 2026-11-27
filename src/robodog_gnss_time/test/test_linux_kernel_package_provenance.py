@@ -17,8 +17,13 @@ def test_package_provenance_reports_exact_installed_source_identity(monkeypatch)
             package = argv[-1]
             if package == image:
                 return _completed(
-                    f"{image}\t7.0.0-44.44~24.04.1\tlinux-hwe-7.0\t"
+                    f"{image}\t7.0.0-44.44~24.04.1\tlinux-signed-hwe-7.0\t"
                     "7.0.0-44.44~24.04.1\tii \n"
+                )
+            if package == f"linux-modules-{release}":
+                return _completed(
+                    f"linux-modules-{release}\t7.0.0-44.44~24.04.1\t"
+                    "linux-hwe-7.0\t7.0.0-44.44~24.04.1\tii \n"
                 )
             return _completed(returncode=1, stderr="not installed")
         if argv[:2] == ["dpkg-query", "-S"]:
@@ -34,14 +39,18 @@ def test_package_provenance_reports_exact_installed_source_identity(monkeypatch)
     report = provenance.collect_linux_kernel_package_provenance(release)
     assert report["status"] == "observed"
     assert report["kernel"]["release"] == release
-    assert report["source_package_identities"] == [{
+    assert report["kernel_source_package_identity"] == {
         "source_package": "linux-hwe-7.0",
+        "source_version": "7.0.0-44.44~24.04.1",
+    }
+    assert report["signed_image_source_package_identities"] == [{
+        "source_package": "linux-signed-hwe-7.0",
         "source_version": "7.0.0-44.44~24.04.1",
     }]
     image_row = next(row for row in report["packages"] if row["package_query"] == image)
     assert image_row["status"] == "installed"
     assert image_row["binary_version"] == "7.0.0-44.44~24.04.1"
-    assert image_row["source_package"] == "linux-hwe-7.0"
+    assert image_row["source_package"] == "linux-signed-hwe-7.0"
     assert report["side_effects"]["bpf_loaded_or_attached"] is False
 
 
@@ -72,11 +81,20 @@ def test_package_provenance_detects_conflicting_source_versions(monkeypatch):
     def fake_run(argv, check, capture_output, text, timeout):
         if argv[:2] == ["dpkg-query", "-W"]:
             package = argv[-1]
-            if package in (f"linux-image-{release}", f"linux-modules-{release}"):
-                source_version = "7.0.0-44.44~24.04.1" if package.startswith("linux-image") else "7.0.0-44.45~24.04.1"
+            if package == f"linux-image-{release}":
                 return _completed(
-                    f"{package}\t{source_version}\tlinux-hwe-7.0\t"
-                    f"{source_version}\tii \n"
+                    f"{package}\t7.0.0-44.44~24.04.1\tlinux-signed-hwe-7.0\t"
+                    "7.0.0-44.44~24.04.1\tii \n"
+                )
+            if package == f"linux-modules-{release}":
+                return _completed(
+                    f"{package}\t7.0.0-44.44~24.04.1\tlinux-hwe-7.0\t"
+                    "7.0.0-44.44~24.04.1\tii \n"
+                )
+            if package == f"linux-headers-{release}":
+                return _completed(
+                    f"{package}\t7.0.0-44.45~24.04.1\tlinux-hwe-7.0\t"
+                    "7.0.0-44.45~24.04.1\tii \n"
                 )
             return _completed(returncode=1, stderr="not installed")
         if argv[:2] == ["dpkg-query", "-S"]:
@@ -91,7 +109,8 @@ def test_package_provenance_detects_conflicting_source_versions(monkeypatch):
     monkeypatch.setattr(provenance.subprocess, "run", fake_run)
     report = provenance.collect_linux_kernel_package_provenance(release)
     assert report["status"] == "partial"
-    assert len(report["source_package_identities"]) == 2
+    assert len(report["kernel_source_package_identity"] or {}) == 0
+    assert len(report["source_package_identities"]) == 3
 
 
 def test_command_wrapper_handles_missing_dpkg_query(monkeypatch):
