@@ -65,7 +65,7 @@ A second entry with an identical correlation key before an exit:
 - stores the new entry as the active candidate;
 - marks the reduction partial.
 
-Malformed records are counted and skipped. Invalid values do not get silently coerced to zero. The reducer rejects a bool as an integer for all numeric fields.
+Malformed records are counted and skipped. Invalid values do not get silently coerced to zero. The reducer rejects a bool as an integer for all numeric fields. event_type must be a string before it is checked against the accepted event set; this prevents an unhashable JSON list/object from raising inside the reducer. raw_clockid, when supplied, must fit signed 32-bit clockid_t; modes_read_status must be a bounded string; raw_modes is accepted only as uint32 when the read status is ok. Invalid typed fields reject the record instead of leaking arbitrary nested objects into output.
 
 ## 5. Per-CPU sequence accounting
 
