@@ -305,3 +305,5 @@
 - [46 — Linux clock-adjustment post-copy kernel-handler observation reducer](46_linux_clock_adjustment_kernel_observation_reducer.md)
 
 - [47 — Linux clock-adjustment syscall / post-copy handler correlation](47_linux_clock_adjustment_syscall_handler_correlation.md)
+
+- [48 — Linux clock-adjustment capture integrity and shutdown drain](48_linux_clock_adjustment_capture_integrity_and_drain.md)
