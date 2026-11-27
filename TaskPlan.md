@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.290
+- 文档版本：v0.3.291
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1668,3 +1668,13 @@
 - 已新增 Navigation 58 记录上述证据和严格验收边界，提交 `4e6e6c75c5a08d9067c68a1b4e0fd0872522c452`。无 sudo、无 sysctl 修改、无 tracefs mount/enable、无 BPF load/attach、无时钟修改。
 - 方案决策：当前环境 BTF introspection 可用于下一阶段设计；fentry/fexit 暂保留候选，static linkage 与函数符号不可读使 attachability 未证实；syscall tracepoint fallback 因 tracefs permission denied 仍未知。不能在现有证据下选定任何运行时采集路线。
 - 下一步：优先完善纯离线 schema-v2 event envelope 与 invocation-ID reducers；同时准备一份最小权限、只读的补充探测步骤，待用户明确授权后再决定是否用具备适当权限的上下文读取 tracefs/function tracing inventory。Orin 必须独立采集，不得以该 VM 报告代替。仅 nav 分支，不合并 main。
+
+
+## 本轮 schema-v2 invocation identity 实现（2026-11-27 / v0.3.291）
+
+- 将 `linux_clock_adjustment_session.py` 的 envelope validator 从仅支持 schema v1 扩展为兼容 v1 + v2；v1 保持 legacy，不伪造 invocation ID。v2 必须携带 `task_instance_id`、`event_id`、`invocation_id`；handler stream 还必须声明 `parent_context_status`，matched 必须提供 parent syscall invocation ID，unavailable/stack_overflow/no_active_context 不得提供 parent ID。syscall stream 禁止携带 handler parent 字段。
+- 新增 `linux_clock_adjustment_invocation_reducer.py`，以 (session, boot, producer, stream, task lifetime, invocation ID) 精确配对；不依赖 CPU sequence 或用户态 arrival order，支持 entry/exit 跨 CPU。对 duplicate event ID、重复 entry/exit、unmatched side、subject/PID 不一致、handler parent identity mismatch、entry/exit 时间逆序 fail-closed。
+- 新增 session validator schema-v2 tests 与 invocation reducer tests，覆盖跨 CPU 迁移、逆序到达、同线程不同 invocation 嵌套、重复 event ID/entry、缺失 exit、时间逆序、handler parent mismatch、schema-v1 不自动升级等。
+- 提交：validator `8bfb54d095b56c300e582ffe435a032f6c5b0b46`；类型检查 hardening `b6ef9a75e2eeb1665efd7ae6ffb8eda7b5fd230b`；validator tests `7194863dc6ff96db3c693c3eb92f875ebc7c709d`；invocation reducer `7ebc377046e79a989da546529019d64b0e9516f7`；reducer tests `eaf8ccce26a3662b8f43549afa68c18d1ffac25f`；Navigation 50 `458d61884b1961e626b521e39b57e66e02ea3f01`；Navigation 57 `7de7debff6fb75f9ccbf51ef1d7107bd3a285f4e`。
+- 验证边界：代码与 synthetic tests 已提交，等待 GNSS Runtime 与 ROS 2 Package CI 最终结果；当前 reducer 仅处理已具备 schema-v2 envelope 的离线 records，尚未接入统一 capture report，也没有真实 producer 生成这些 IDs。schema-v1 reducers/joiner 尚未替换；不能宣称 live cross-CPU pairing 已验证。
+- 下一步：把 strict syscall/handler invocation reports 接入 unified capture report，增加独立 gates；再将 joiner 改为基于 `parent_syscall_invocation_id` 精确关联，并保留 schema-v1 interval/LIFO 兼容路径。随后再研究 producer-side task storage/ID allocator 的 BPF map design。仅 nav 分支，不合并 main。
