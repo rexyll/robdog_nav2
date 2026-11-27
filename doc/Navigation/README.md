@@ -319,3 +319,5 @@
 - [51 — Linux kernel trace capability probe for clock-adjustment evidence](51_linux_kernel_trace_capability_probe.md)
 
 - [52 — Linux BPF runtime-policy preflight inventory](52_linux_bpf_runtime_policy_preflight.md)
+
+- [53 — vmlinux BTF handler-function inventory](53_linux_vmlinux_btf_handler_inventory.md)
