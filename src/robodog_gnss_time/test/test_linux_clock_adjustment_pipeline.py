@@ -294,7 +294,7 @@ def producer_global_snapshot(**overrides):
             "active_syscall_invocations": 0,
             "active_handler_invocations": 0,
             "inflight_bpf_callbacks": 0,
-            "task_context_reservations": 2,
+            "task_context_reservations": 0,
         },
     }
     value.update(overrides)
