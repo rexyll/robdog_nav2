@@ -115,7 +115,8 @@ def reduce_clock_adjustment_events(
     if max_pending < 1:
         raise ValueError("max_pending must be at least 1")
 
-    pending: dict[tuple[str, int, str], dict[str, Any]] = {}
+    pending: dict[tuple[str, int, str], list[dict[str, Any]]] = {}
+    pending_count = 0
     last_sequence: dict[tuple[str, int], int] = {}
     pairs: list[dict[str, Any]] = []
     unpaired_entries: list[dict[str, Any]] = []
@@ -132,6 +133,7 @@ def reduce_clock_adjustment_events(
         "entry_pair_completed": 0,
         "orphan_exit": 0,
         "inflight_overwrite": 0,
+        "nested_syscall_entries": 0,
         "inflight_capacity_drop": 0,
     }
 
@@ -187,15 +189,8 @@ def reduce_clock_adjustment_events(
         key = (event["boot_id"], event["pid_tgid"], event["syscall"])
         if event["event_type"] == "syscall_enter":
             counts["syscall_entry_seen"] += 1
-            if key in pending:
-                previous_entry = pending.pop(key)
-                unpaired_entries.append({
-                    **previous_entry,
-                    "unpaired_reason": "superseded_by_duplicate_entry",
-                })
-                counts["inflight_overwrite"] += 1
-                issues.append({"code": "duplicate_entry_overwrite", "pid_tgid": event["pid_tgid"], "syscall": event["syscall"]})
-            if len(pending) >= max_pending:
+            stack = pending.setdefault(key, [])
+            if pending_count >= max_pending:
                 counts["inflight_capacity_drop"] += 1
                 unpaired_entries.append({
                     **event,
@@ -203,11 +198,17 @@ def reduce_clock_adjustment_events(
                 })
                 issues.append({"code": "inflight_capacity_exceeded", "pid_tgid": event["pid_tgid"], "syscall": event["syscall"]})
                 continue
-            pending[key] = event
+            if stack:
+                counts["nested_syscall_entries"] += 1
+            stack.append(event)
+            pending_count += 1
             continue
 
         counts["syscall_exit_seen"] += 1
-        entry = pending.pop(key, None)
+        stack = pending.get(key)
+        entry = stack.pop() if stack else None
+        if stack == []:
+            pending.pop(key, None)
         if entry is None:
             counts["orphan_exit"] += 1
             orphan_exits.append(event)
@@ -219,6 +220,7 @@ def reduce_clock_adjustment_events(
             })
             continue
 
+        pending_count -= 1
         if event["monotonic_ns"] < entry["monotonic_ns"]:
             unpaired_entries.append({
                 **entry,
@@ -256,22 +258,24 @@ def reduce_clock_adjustment_events(
         pairs.append(pair)
         counts["entry_pair_completed"] += 1
 
-    for entry in pending.values():
-        unpaired_entries.append({
-            **entry,
-            "unpaired_reason": "no_matching_exit_in_input",
-        })
-        issues.append({
-            "code": "entry_without_exit",
-            "boot_id": entry["boot_id"],
-            "pid_tgid": entry["pid_tgid"],
-            "syscall": entry["syscall"],
-        })
+    for stack in pending.values():
+        for entry in stack:
+            unpaired_entries.append({
+                **entry,
+                "unpaired_reason": "no_matching_exit_in_input",
+            })
+            issues.append({
+                "code": "entry_without_exit",
+                "boot_id": entry["boot_id"],
+                "pid_tgid": entry["pid_tgid"],
+                "syscall": entry["syscall"],
+            })
 
     reduction_status = "consistent" if not issues else "partial"
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "reduction_status": reduction_status,
+        "pairing_policy": "lifo_same_thread_syscall_stack_without_invocation_cookie",
         "capture_coverage_status": "not_assessed",
         "clock_effect_status": "not_measured",
         "max_pending": max_pending,
