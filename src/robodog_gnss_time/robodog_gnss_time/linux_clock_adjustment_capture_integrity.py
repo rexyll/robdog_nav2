@@ -347,4 +347,7 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
     }
 
 
-__all__ = [\n    "audit_clock_adjustment_capture_integrity",\n    "audit_clock_adjustment_producer_runtime_counters",\n]
+__all__ = [
+    "audit_clock_adjustment_capture_integrity",
+    "audit_clock_adjustment_producer_runtime_counters",
+]
