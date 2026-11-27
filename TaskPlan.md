@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.295
+- 文档版本：v0.3.296
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1721,3 +1721,14 @@
 - Navigation 59 新增 atomic allocator source audit、Ubuntu package provenance、只读 dpkg-query/apt-cache 核对命令和 source artifact pinning 步骤，提交 `c8c14aa73ea0dcd069d3c918c7b740fac9b28e29`。
 - 外部证据：Ubuntu Noble linux-image package metadata 与 changelog；linux-buildinfo metadata；Ubuntu linux-source-7.0.0 package description。公开 package listing 不能代替 VM 安装状态。无下载/安装、无权限提升、无 BPF load。
 - 下一步：等待用户可选地提供上述只读 dpkg 输出，锁定 Ubuntu patchset；在此之前以 upstream v7.0 为设计参考，不将其当作 exact kernel source。随后写 BPF C wire structs 与 bounded cmpxchg pseudocode 的静态审计，不 attach。仅 nav 分支，不合并 main。
+
+
+## 本轮 BPF wire ABI 与 bounded allocator 设计（2026-11-27 / v0.3.296）
+
+- 新增 Navigation 60：定义固定宽度 ring-buffer event ABI、userspace hex ID serialization、共享 global ARRAY counter map、stream-specific per-CPU sequence maps、bounded 64-bit CMPXCHG allocator伪代码、task storage slot reservation、syscall/handler 固定栈 state machine、overflow-depth suppression、ringbuf failure accounting 与 stop/quiesce/detach/drain 顺序。
+- 明确 syscall 与 handler programs 必须复用同一 global event ID map object/FD；每个 stream 仍保留独立 per-CPU sequence domain。event_id 仅用于唯一性，不作为跨 CPU 时间排序。event entry emit 失败时 frame 保存 emit_enabled=false，exit 不得制造 orphan pair。
+- 明确 task-context reservation 是容量 gauge，不是 final zero gate：任务可能在 capture 结束时仍存活并持有 idle Task Storage；session map 在 detach/drain 后销毁。若 task-exit hook 漏掉有 pending frame 的 task，则 active invocation gauges 不归零，report partial；漏掉 idle task exit 可能导致保守 capacity rejection。
+- 修正 Navigation 59/60 对 task exit accounting 的过度要求，区分 active task reservations 与 active syscall/handler invocation quiescence。
+- 提交：Navigation 60 `1588380cb20cb2396ccd592e0a0893d7cd6fdb67`；Navigation 59 修订 `f6efb9e1fc4839daeb3edf0cd97b58d375f52a24`；Navigation 60 语义修订 `c1c3ce20d5d435aa4ada4427e78c157ca3af33da`；README `408595e37114a66d51719e11c5b581fffe41072e`。
+- 验证边界：仅静态设计和上游源码审计；没有 BPF C 源码、没有 clang 编译、没有 verifier run、没有 map 创建或 probe attach。最新运行时代码基线仍为 `2cb503bc...`，两项 CI success。 
+- 下一步：检查 Navigation 48 producer counter reconciliation 是否覆盖新增 task-context/allocator/overflow/drop counters；将新增 counters 映射到 capture integrity schema，避免设计 counter 无法进入最终 unified report。随后建立纯 Python synthetic producer-state simulator，验证 overflow/failed-entry suppression/task-exit cleanup 的状态机，不加载 BPF。仅 nav 分支，不合并 main。
