@@ -95,7 +95,7 @@ The current session envelope schema v1 carries capture/session/stream identity a
 
 The existing schema-v2 reducers remain valid for synthetic fixtures and legacy captures without invocation IDs. They must continue to label their policy as LIFO-without-cookie.
 
-A future schema-v3 reducer should:
+The implemented schema-v2 invocation reducer now provides the initial strict pairing path. It:
 1. pair syscall entry/exit by `(boot_id, task_instance_id, syscall_invocation_id)`;
 2. pair handler entry/exit by `(boot_id, task_instance_id, handler_invocation_id)`;
 3. associate handler to syscall by exact `parent_syscall_invocation_id`;
@@ -135,7 +135,7 @@ Before a producer is implemented:
 4. Confirm bounded map types, atomic/sequence allocation primitives, verifier support and resource limits.
 5. Define syscall ABI normalization for native and compat syscall tracepoint names.
 6. Define stop/detach, final counter snapshot and ring-buffer drain ordering.
-7. Add synthetic schema-v3 fixtures before any BPF load.
+7. Add synthetic schema-v2 fixtures before any BPF load.
 8. Obtain explicit authorization before attaching probes or performing clock-changing tests.
 
-Current status remains design-only. No BPF object is loaded, no probe is attached, no tracepoint is enabled, and no clock is changed.
+The schema-v2 pure validator and invocation-ID reducer are implemented with synthetic tests. Producer-side ID allocation and runtime capture remain design-only. No BPF object is loaded, no probe is attached, no tracepoint is enabled, and no clock is changed.
