@@ -423,3 +423,15 @@ the requested JSON output file. Omit `--output` to print JSON to stdout.
 Retain the raw report plus kernel/systemd version details before selecting an
 instrumentation design. See
 `doc/Navigation/41_linuxptp_phc_host_clock_evidence_contract.md` §12.
+
+
+#### Clock-adjustment syscall ABI variants
+
+The read-only kernel probe inventories implementation-name tracepoint pairs for
+`clock_adjtime`, `clock_adjtime32`, `adjtimex`, and
+`adjtimex_time32`. A 32-bit time64 syscall-table alias can resolve to the
+ordinary `clock_adjtime` implementation and therefore does not necessarily
+have a separate `clock_adjtime64` tracepoint. Event availability is still
+read from the target's tracefs `available_events` and each event's `format`
+file; architecture-specific syscall numbers are not inferred by the collector.
+See `doc/Navigation/56_linux_clock_adjustment_syscall_tracepoint_abi_coverage.md`.
