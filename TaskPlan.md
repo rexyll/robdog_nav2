@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.270
+- 文档版本：v0.3.271
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1473,3 +1473,14 @@
 - CI 仅证明 Ubuntu/ROS Humble+Jazzy 中只读 inventory parser 的 synthetic fixture 测试与 ROS package 构建通过；没有采集真实 Orin/VM 的 available_filter_functions、没有解析目标 BTF FUNC、没有执行 fentry/kprobe attach，也没有启动 live collector 或修改时钟。
 - 代码与测试提交：`dd3c15414ddb20e40d0ae812b332710ea6bc6602` / `e31679af34b80523a34d11955697772cebcd91f6`；Navigation 51 `e6bbaea6c9fe511e8d9c01520182174a319fa8b3`；README `3d8a9718c87291e93c79b26c52114fe2479253ea`。
 - 下一步不是继续增加离线猜测：需在通用 Linux VM 执行只读 capability probe，保存 JSON 原始报告并审计实际 syscall tracepoint 和 handler symbol visibility；若缺少 VM 现场报告，应明确标记待用户/VM 执行。目标 Orin BSP 仍单独验证。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.271）
+
+- 在只读内核能力探测器中新增 runtime policy/process security inventory：读取 `unprivileged_bpf_disabled`、`perf_event_paranoid`、`kptr_restrict`、securityfs lockdown active mode，以及当前探测进程 `/proc/self/status` 的 Uid/Gid/CapEff/CapBnd/NoNewPrivs/Seccomp/Seccomp_filters。
+- 缺失或不可读的 policy 文件保持 not_found/permission_denied 等状态，不推断默认值；lockdown 仅在读取到 bracketed active mode 时报告。CapEff 与 seccomp 仅代表运行探测器的进程。
+- 文档明确这些信息仅是 preflight evidence，不是 BPF attach authorization oracle；unprivileged_bpf_disabled 不代表特权进程能否加载特定 program，perf_event_paranoid 不是通用 BPF verdict；LSM、namespace、capabilities、seccomp、lockdown、BPF command/program/map 类型和 verifier 仍可能拒绝。
+- 严格只读：不调用 bpf()/perf_event_open()，不提权、不修改 sysctl/lockdown/tracefs，不改系统时钟。新增 Navigation 52 和 README 索引。
+- 新增两项合成测试，覆盖 policy/security 文件可读、lockdown active mode、CapEff/Seccomp 提取及文件缺失 fail-closed。代码提交：probe `45ea93204fcfc134a848dc549bd3acb800d8c755`；tests `baae42a3ef12a147e3390cc27f38472f72afc17f`；Navigation 52 `71620cf33018488570618879de8e02f9eb98d373`；README `f854dc9d54f871daaf5c970049960783e82e5ea7`。
+- GNSS runtime CI run `45924642728`：Humble/Jammy 与 Jazzy/Noble 各 **299/299 passed，0 errors/failures/skipped**；ROS 2 package CI run `45924642739`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。日志仍出现 rosdep unresolved ERROR 提示，但后续构建/pytest 成功，按非阻断环境提示记录。
+- 该 CI 只证明通用 Ubuntu/ROS 容器中的 parser/fixture 合成测试及 package CI；没有真实 VM/Orin policy report，没有 BTF FUNC parse、BPF load/attach 或 live collector 结果。下一步应取得通用 Linux VM 的原始只读 JSON 报告，再基于实测决定 attach test；Orin BSP 仍独立 Gate。N1/N9 未验收，仅 nav 分支推进，不合并 main。
