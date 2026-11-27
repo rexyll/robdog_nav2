@@ -339,3 +339,5 @@
 - [61 — Linux clock-adjustment pure-Python producer state model](61_linux_clock_adjustment_pure_python_producer_state_model.md)
 
 - [62 — Linux clock-adjustment BPF CO-RE and verifier review](62_linux_clock_adjustment_bpf_core_and_verifier_review.md)
+
+- [63 — Running Ubuntu kernel package provenance probe](63_running_ubuntu_kernel_package_provenance_probe.md)
