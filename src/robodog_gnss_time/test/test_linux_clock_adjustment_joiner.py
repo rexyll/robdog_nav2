@@ -65,3 +65,38 @@ def test_invalid_wrapper_id_and_report_shape_rejected():
 def test_bool_timestamp_rejected():
     r=correlate_clock_adjustment_observations(*reports([sc(start=True)],[kh()]))
     assert "invalid_syscall_pair" in [x["code"] for x in r["issues"]]
+
+
+def test_clock_adjtime_can_own_dispatch_and_nested_adjtimex_handlers():
+    syscalls = [sc("clock_adjtime", start=100, end=400, ret=-14)]
+    handlers = [
+        kh("do_clock_adjtime", start=120, end=380, ret=0),
+        kh("do_adjtimex", start=180, end=300, ret=0),
+    ]
+    r = correlate_clock_adjustment_observations(
+        *reports(syscalls, handlers), wrapper_contract_id=CONTRACT
+    )
+    assert r["schema_version"] == 2
+    assert r["reduction_status"] == "consistent"
+    assert r["counts"]["joined_pairs"] == 2
+    by_handler = {item["handler"]: item for item in r["joins"]}
+    assert by_handler["do_clock_adjtime"]["relation"] == "syscall_dispatch_handler"
+    assert by_handler["do_clock_adjtime"]["copyback_failure_inferred_from_pinned_wrapper"]
+    assert by_handler["do_adjtimex"]["relation"] == "nested_clock_callback_handler"
+    assert not by_handler["do_adjtimex"]["copyback_failure_inferred_from_pinned_wrapper"]
+
+
+def test_adjtimex_directly_owns_do_adjtimex_handler():
+    r = correlate_clock_adjustment_observations(
+        *reports([sc("adjtimex")], [kh("do_adjtimex")])
+    )
+    assert r["counts"]["joined_pairs"] == 1
+    assert r["joins"][0]["relation"] == "direct_syscall_handler"
+
+
+def test_clock_adjtime_does_not_require_nested_adjtimex_handler():
+    r = correlate_clock_adjustment_observations(
+        *reports([sc("clock_adjtime")], [kh("do_clock_adjtime")])
+    )
+    assert r["counts"]["joined_pairs"] == 1
+    assert r["reduction_status"] == "consistent"
