@@ -88,6 +88,7 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         _file_owner(f"/usr/lib/modules/{release}/vmlinuz"),
     ]
     installed = [row for row in package_rows if row.get("status") == "installed"]
+    installed_names = {row.get("binary_package") for row in installed}
     source_identities = sorted({
         (row.get("source_package"), row.get("source_version"))
         for row in installed
@@ -116,6 +117,8 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
             {"source_package": name, "source_version": version}
             for name, version in source_identities
         ],
+        "installed_binary_packages": sorted(installed_names),
+        "issues": issues,
         "interpretation": (
             "dpkg ownership and installed control metadata only. This identifies "
             "the installed binary/source package relationship; it does not fetch "
