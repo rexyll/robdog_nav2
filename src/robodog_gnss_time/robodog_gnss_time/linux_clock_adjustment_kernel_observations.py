@@ -95,11 +95,12 @@ def _interpret_handler_return(value: int) -> str:
 def reduce_kernel_clock_adjustment_observations(
     events: Iterable[dict[str, Any]], max_pending: int = 4096
 ) -> dict[str, Any]:
-    """Pair internal handler entry/return records by boot, thread and handler.
+    """Pair internal handler records using a per-thread, per-handler LIFO stack.
 
     The caller must supply this handler-observation stream in event order.
-    Per-CPU sequence numbers are scoped to this stream. This reducer does not
-    correlate the records to outer syscall entry/exit records.
+    Per-CPU sequence numbers are scoped to this stream. Without a producer-side
+    invocation cookie, LIFO is a conservative nesting assumption, not call-stack
+    proof. This reducer does not correlate records to outer syscall events.
     """
     if isinstance(max_pending, bool) or not isinstance(max_pending, int):
         raise TypeError("max_pending must be an integer, not bool")
@@ -123,6 +124,7 @@ def reduce_kernel_clock_adjustment_observations(
         "handler_pairs_completed": 0,
         "orphan_handler_returns": 0,
         "duplicate_handler_entries": 0,
+        "nested_handler_entries": 0,
         "pending_capacity_drops": 0,
     }
 
@@ -170,21 +172,23 @@ def reduce_kernel_clock_adjustment_observations(
         key = (event["boot_id"], event["pid_tgid"], event["handler"])
         if event["event_type"] == "kernel_handler_enter":
             counts["handler_entries_seen"] += 1
-            if key in pending:
-                old = pending.pop(key)
-                unpaired.append({**old, "unpaired_reason": "superseded_by_duplicate_handler_entry"})
-                counts["duplicate_handler_entries"] += 1
-                issues.append({"code": "duplicate_handler_entry", "pid_tgid": event["pid_tgid"], "handler": event["handler"]})
-            if len(pending) >= max_pending:
+            active_count = sum(len(stack) for stack in pending.values())
+            stack = pending.setdefault(key, [])
+            if stack:
+                counts["nested_handler_entries"] += 1
+            if active_count >= max_pending:
                 counts["pending_capacity_drops"] += 1
                 unpaired.append({**event, "unpaired_reason": "pending_capacity_exceeded"})
                 issues.append({"code": "pending_capacity_exceeded", "pid_tgid": event["pid_tgid"], "handler": event["handler"]})
                 continue
-            pending[key] = event
+            stack.append(event)
             continue
 
         counts["handler_returns_seen"] += 1
-        entry = pending.pop(key, None)
+        stack = pending.get(key)
+        entry = stack.pop() if stack else None
+        if stack == []:
+            pending.pop(key, None)
         if entry is None:
             counts["orphan_handler_returns"] += 1
             orphan_exits.append(event)
@@ -213,20 +217,22 @@ def reduce_kernel_clock_adjustment_observations(
             "raw_clockid": entry.get("raw_clockid"),
             "raw_handler_return": event["return_value"],
             "handler_return_interpretation": _interpret_handler_return(event["return_value"]),
+            "pairing_method": "lifo_same_thread_handler_stack",
             "outer_syscall_correlation": "not_joined",
             "clock_effect": "not_measured",
         }
         pairs.append(pair)
         counts["handler_pairs_completed"] += 1
 
-    for entry in pending.values():
-        unpaired.append({**entry, "unpaired_reason": "no_matching_handler_return"})
-        issues.append({
-            "code": "handler_entry_without_return",
-            "boot_id": entry["boot_id"],
-            "pid_tgid": entry["pid_tgid"],
-            "handler": entry["handler"],
-        })
+    for stack in pending.values():
+        for entry in stack:
+            unpaired.append({**entry, "unpaired_reason": "no_matching_handler_return"})
+            issues.append({
+                "code": "handler_entry_without_return",
+                "boot_id": entry["boot_id"],
+                "pid_tgid": entry["pid_tgid"],
+                "handler": entry["handler"],
+            })
 
     return {
         "schema_version": 1,
@@ -235,6 +241,7 @@ def reduce_kernel_clock_adjustment_observations(
         "capture_coverage_status": "not_assessed",
         "clock_effect_status": "not_measured",
         "max_pending": max_pending,
+        "pairing_policy": "lifo_same_thread_handler_stack_without_invocation_cookie",
         "counts": counts,
         "pairs": pairs,
         "unpaired_entries": unpaired,
