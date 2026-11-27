@@ -321,3 +321,5 @@
 - [52 — Linux BPF runtime-policy preflight inventory](52_linux_bpf_runtime_policy_preflight.md)
 
 - [53 — vmlinux BTF handler-function inventory](53_linux_vmlinux_btf_handler_inventory.md)
+
+- [54 — Kernel probe provenance and BTF artifact identity](54_kernel_probe_provenance_and_btf_identity.md)
