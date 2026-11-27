@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.288
+- 文档版本：v0.3.289
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1645,3 +1645,13 @@
 - 提交：Navigation 50 `ceabe4b818d9ab7bf3852a1be2224741833fe77c`；Navigation 57 `8868d23c4311bfba667ac1525ced0b30aceed524`。
 - 后续实现顺序固定为：先扩展 session envelope validator 与 schema-v2 tests；再升级 syscall/handler reducers 到 invocation-ID pairing；再升级 joiner 按 parent_syscall_invocation_id 精确关联；最后更新 unified pipeline report，确保 legacy schema-v1 输入仍显式标记 legacy/LIFO，而不是伪造 ID。
 - CI 基线：包含 joiner one-to-many 与 syscall LIFO reducer 的提交 `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已通过 GNSS Runtime 与 ROS 2 Package CI。文档更新不触发运行时代码验证。无 live collector/BPF/实机效果证据。
+
+
+## 本轮 task-local context 存储可行性审计（2026-11-27 / v0.3.289）
+
+- 对 Linux v6.12 源码进行 task storage 审计：`BPF_MAP_TYPE_TASK_STORAGE` 的数据绑定在 task 对象生命周期，`free_task()` 在释放 task_struct 前调用 `bpf_task_storage_free()`；因此它可避免单纯以可复用 pid_tgid 为 key 时的旧状态被新任务继承。
+- 同时发现关键限制：v6.12 `task_storage_map_ops.map_get_next_key` 指向 `notsupp_get_next_key`，返回 `-ENOTSUPP`，用户态不能用普通 map iteration 枚举所有 task-local storage。因此不能仅凭 task storage 自动释放就声称 final pending syscall 数为 0。需要 producer-wide active counters，并在 task exit/lifecycle hook 对未完成 invocation 计数；无法读取或 reconcile 时必须 partial。
+- `bpf_task_storage_get` 在 v6.12 tracing helper dispatcher 中注册；外部 helper reference 列出 KPROBE、TRACEPOINT、RAW_TRACEPOINT、TRACING 等程序类型支持，但具体 attach/program type、helper 参数约束和 verifier 仍须目标 kernel 实测。此项不是通用 capability probe 已验证能力。
+- 更新 Navigation 57，新增 task-local storage 方案、自动生命周期清理、不可枚举限制、task-exit accounting 需求与 v6.12 源码引用。提交 `3d28b3013a42a2df72de707e7ca8483ef8598ecb`。
+- 设计结论：task storage 是值得优先验证的候选，不是已选型。后续对比 bounded hash + task-lifetime token；重点验证 helper availability、task exit hook 顺序、固定栈内存上限、producer active counters 与最终 quiescence reconciliation。当前不实现 BPF producer，不做 attach。
+- 本轮只更新设计文档；最近代码基线 `bd5056cb...` 的 GNSS Runtime 与 ROS 2 Package CI 均 success。VM live capability JSON 仍未提供，Orin/BSP 未验证。仅 nav 分支，不合并 main。
