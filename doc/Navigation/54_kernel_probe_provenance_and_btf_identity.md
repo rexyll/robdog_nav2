@@ -27,3 +27,17 @@ The optional bpftool inventory also records `bpftool version` output when the ve
 Synthetic tests cover fixture/collector metadata separation and BTF SHA-256. CI validates only synthetic fixture behavior. A real report must be generated on the intended Linux VM; do not copy an unrelated `/proc/self/status` or uname result into a fixture and label it as target evidence. Orin BSP evidence must be collected separately.
 
 The probe still does not load BPF, attach fentry/kprobe, enable tracepoints, or change system configuration.
+
+
+## 5. Live Linux VM collection command
+
+From the repository root on the intended Linux VM, run without sudo:
+
+```bash
+python3 src/robodog_gnss_time/robodog_gnss_time/linux_kernel_trace_capabilities.py \
+  --output "$HOME/kernel-trace-capabilities.json"
+```
+
+The default `--root /` inspects that VM's live procfs/sysfs. The output includes kernel release and boot ID, BTF size/SHA-256, bpftool version (when available), tracepoint inventory, handler function visibility, and FUNC/FUNC_PROTO parameter references. Preserve the JSON unchanged when returning it for review. Do not run against a copied rootfs and label the result as live-host evidence.
+
+The command is read-only with respect to kernel tracing and clock state. It does not need sudo for its own operation; individual observations may be unavailable due to normal permissions. Do not change sysctls, mount tracefs, enable tracepoints, or attempt clock adjustment to make the report more complete.
