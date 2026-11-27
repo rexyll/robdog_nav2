@@ -325,3 +325,7 @@
 - [54 — Kernel probe provenance and BTF artifact identity](54_kernel_probe_provenance_and_btf_identity.md)
 
 - [55 — Linux clock-adjustment handler call-path semantics](55_linux_clock_adjustment_handler_call_path_semantics.md)
+
+
+- [56 — Linux clock-adjustment syscall tracepoint ABI coverage](56_linux_clock_adjustment_syscall_tracepoint_abi_coverage.md)
+- [57 — Linux clock-adjustment invocation identity and cross-CPU ordering contract](57_linux_clock_adjustment_invocation_identity_and_ordering.md)
