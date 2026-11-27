@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.266
+- 文档版本：v0.3.267
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1435,3 +1435,13 @@
 - 代码/测试提交分别为 pipeline module `707da93178bc03e59c1e8498f51914aaa397a2aa` 与 cross-stage tests `8f0f4fadadd1465ae797ee92befd0d03e93d8d08`。最终 nav head 为本 TaskPlan 更新提交。
 - CI 只证明 Ubuntu/ROS Humble+Jazzy 环境下 262 项 Python package tests 与 ROS package CI 通过；不证明 live collector、内核 hook、真实 ringbuf/queue/writer 丢失计数、目标 Orin/BSP 兼容、覆盖完整或物理时钟效果。
 - 分支核对：nav 指向本轮 TaskPlan 更新；main 仍为 `0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`，未修改。N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.267）
+
+- 新增 `linux_clock_adjustment_session.py`：定义 versioned event envelope v1，统一 capture_session_id、boot_id、producer_id、stream_id、stream_kind、CPU、sequence、CLOCK_MONOTONIC 时间戳与 payload；拒绝未知 schema、错误类型、零序号、payload 覆盖 envelope identity/order 字段，以及 stream_kind/event_type 不匹配。
+- 固化 sequence scope 为 `(capture_session_id, boot_id, producer_id, stream_id, cpu)`；syscall 与 kernel-handler 使用独立 stream ID/sequence domain，不允许将过滤后的全局序列误解释为 producer 丢失。Envelope validator 输出可送入既有 reducer 的受控 legacy event 与独立 identity。
+- 新增 capture lifecycle reducer，要求严格有序：created → producers_attached → running → stop_requested → producers_quiesced → ring_buffer_drained → consumer_queue_drained → writer_flushed → writer_closed → finalized；校验 session/boot identity 连续、CLOCK_MONOTONIC 不回退，以及 final snapshot 在 writer close 后且 queue/callback/pending syscall/pending handler/in-flight writer 全部为 0。
+- 将 lifecycle audit 接入 unified offline capture report，作为第八个必需 gate；缺少 lifecycle transitions/final snapshot 时报告必须 partial。现有七个 producer/pipeline/count/boot/syscall/handler/join gates 保持独立。
+- 新增 Navigation 50 文档、README 索引和合成测试，覆盖 envelope 类型/版本、伪造 payload 字段、stream-kind mismatch、恶意 unhashable 输入、lifecycle 顺序/身份/单调时间和最终 quiescence。
+- 本轮仍为纯 Python 合同验证与离线 reducer；没有实现 live eBPF/tracepoint/fentry、ring-buffer consumer、worker queue、writer 或 session orchestration；没有运行内核 hook 或修改时钟。通用 Linux VM 的 live capture 验证仍待后续阶段；Orin/BSP/BTF 和 E5 时钟效果仍为硬件/目标环境 Gate。仅在 nav 分支推进，N1/N9 未验收，不合并 main。
