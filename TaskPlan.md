@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.307
+- 文档版本：v0.3.308
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1843,3 +1843,13 @@
 - 代码提交：f6bbe3d87ae2b6e7e9809ebae86cdfc097dd03d5；测试提交：14bfe0031bef72374942728b1cc884b13fb35737；Navigation 63 文档修订：c53fd7861820e0180740c55fc49d5b78c8f708f5。
 - 验证状态：等待最新 GNSS Runtime 与 ROS 2 Package CI。尚未触发或执行任何 VM 命令；未安装包、未下载源码、未 load/attach BPF。仅 nav 分支，不合并 main。
 - 下一步：CI 通过后等待用户上传 $HOME/kernel-package-provenance.json；在此期间可继续静态审查 provenance report schema 和 exact source package retrieval procedure，但不以公开候选版本替代 VM 实测版本。
+
+
+## 本轮 kernel provenance source metadata completeness hardening（2026-11-27 / v0.3.308）
+
+- 进一步审查发现：collector 原本只要求至少一个 kernel-code package 提供 source package/version 且整体 identity 唯一；若另一个已安装的 kernel-code package 缺少 source metadata，仍可能被忽略而报告 observed。
+- 已增加 fail-closed gate：每个已安装 kernel-code binary package（unsigned image、modules、extra modules、headers、buildinfo）都必须提供 source package 与 source version；任何一个缺失均记录 installed_kernel_code_package_source_metadata_incomplete 并返回 partial。
+- 新增测试：modules package 缺少 source metadata、headers package 有完整 identity 时仍必须 partial，避免其他 package 的完整信息掩盖缺失。
+- 代码提交 d7239833eed2b89aefde57297178a85e538541fc；测试提交 c6710331b857cfb6975ca92a3a5e9c1da1f7e05b；Navigation 63 文档修订 e28ef5dbd0be48fc77e55bdb457d7288f7f01539。
+- 以上均为只读 provenance 工具的静态逻辑与 synthetic tests；尚未读取用户 VM 的 dpkg 数据库，未下载/安装包，未执行 BPF。
+- 下一步：等待本轮最新 CI；通过后请用户按 Navigation 63 §2 运行命令并上传 JSON。拿到真实 package source identity 后，再获取 exact Ubuntu source package 与 patch series，核对实际 helper/map/program permission 和 cleanup 实现。仅 nav 分支，不合并 main。
