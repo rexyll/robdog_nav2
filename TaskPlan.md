@@ -1,7 +1,7 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.253
-- 更新日期：2026-11-26
+- 文档版本：v0.3.254
+- 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
 - 项目目标：以四足机器人为载体，研究、设计并最终集成完整的 ROS 2 导航模块，覆盖任务管理、传感器接入与时间同步、定位/状态估计/SLAM、环境感知、地图与地形表达、可通行性、全局/局部规划、动态避障、Nav2（仅为其中一个子系统）、四足运动接口、独立安全、运行时部署、监控和分层验证。
@@ -1224,3 +1224,38 @@
   下一步仍先取得用户目标 Orin 的只读 capability JSON，再固定 kernel/ARM64
   ABI/tracepoint format/helper/权限后决定最小实现切片。保持仅 nav 分支，
   N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.254）
+
+- 根据固定 LinuxPTP 上游 commit 227bbd4715bf4cb735be4947e987032f41457585
+  与 Linux v6.12 内核/UAPI 源码，新增
+  doc/Navigation/43_phc2sys_clockadj_source_to_syscall_mapping.md，逐条映射
+  phc2sys update_clock()、clockadj_step()、clockadj_set_freq()、
+  sysclk_set_sync()、leap/TAI metadata 与 clock_adjtime 请求。
+- 关键发现：SERVO_JUMP 的 step 成功后会 fall through 到 locked 分支继续频率调整；
+  对 CLOCK_REALTIME 还可能调用 ADJ_STATUS|ADJ_MAXERROR。因此一个 servo update
+  不应被假设为只发出一个 step syscall。modes=0 的 get_freq/max_freq 是查询，
+  ADJ_STATUS / ADJ_TAI 是时间状态/历元元数据请求，不是 step。
+- 明确 clock_adjtime 按 clock ID 进入不同内核路径：CLOCK_REALTIME 走 system
+  adjtimex/timekeeping；动态 clock ID 走 POSIX dynamic clock 的 fd/driver
+  callback；Linux v6.12 PTP clock 对 ADJ_SETOFFSET、ADJ_FREQUENCY、ADJ_OFFSET
+  做自身分支处理。故 ADJ_OFFSET 不可跨系统时钟与 PHC 统一解释为渐进 slew，
+  其他 modes 也不能假设 PHC driver 与 system clock 同义。
+- 发现并修正 syscall outcome 解释边界：Linux clock_adjtime/adjtimex 采用
+  copy_from_user → clock handler → copy_to_user 流程；copy_to_user 可在 handler
+  执行后返回 -EFAULT。sys_exit 的 -EFAULT 因而不能证明时钟操作未执行；
+  CLOCK_REALTIME 路径还可能返回 TIME_* 非负状态码，不应只按 return==0 视为成功。
+  已修订 doc42 的 E3 和 syscall_outcome 语义。
+- 新增纯 Python linux_timex_modes.py，只解码 uint32 modes 请求位，不读取
+  用户指针、不访问 PHC、不加载 eBPF；处理 ADJ_OFFSET_SINGLESHOT /
+  ADJ_OFFSET_SS_READ 特殊多位值、操作位/分辨率修饰位分离、未知位保留、
+  ADJ_MICRO 与 ADJ_NANO 冲突提示，且不推断 clock target 或效果。
+- 新增 test_linux_timex_modes.py，覆盖零 modes 查询、ADJ_SETOFFSET、
+  ADJ_OFFSET、ADJ_FREQUENCY+ADJ_TICK、多类 metadata、legacy 特殊值、未知位、
+  分辨率冲突、bool/非整数和 uint32 越界拒绝。代码/测试已提交，等待本轮
+  GNSS runtime CI 与 ROS 2 package CI 实际结果；未以提交成功代替测试通过。
+- 未使用/声称 Orin 实机能力；未加载 tracing/eBPF、未启 audit、未修改系统时钟或
+  PHC。后续可在无硬件条件下继续做通用事件 envelope/reducer 和合成测试；
+  ARM64 ABI、目标内核、PHC 驱动、真实丢事件/负载、Orin runtime 仍需实物授权。
+  保持仅 nav 分支，N1/N9 未验收，不合并 main。
