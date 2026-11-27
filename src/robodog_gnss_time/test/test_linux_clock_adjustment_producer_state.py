@@ -318,3 +318,21 @@ def test_session_allocator_blocks_gauge_mutation_after_detach():
         session.end_invocation("syscall")
     with pytest.raises(RuntimeError):
         session.release_task_context(task)
+
+
+def test_two_task_interleaving_exit_cleanup_preserves_other_tasks_active_gauge():
+    session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=2)
+    task_a = session.create_task_context()
+    task_b = session.create_task_context()
+    session.begin_invocation("syscall")
+    session.begin_invocation("syscall")
+    session.release_task_context(task_a, pending_syscalls=1)
+    assert session.active_syscall_invocations == 1
+    session.end_invocation("syscall")
+    session.release_task_context(task_b)
+    assert session.active_syscall_invocations == 0
+    assert session.task_context_reservations == 0
+    session.detach()
+    snapshot = session.global_snapshot()
+    assert snapshot["gauges"]["active_syscall_invocations"] == 0
+    assert snapshot["counters"]["task_exit_with_pending_syscalls"] == 1
