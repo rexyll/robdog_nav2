@@ -138,4 +138,4 @@ Before a producer is implemented:
 7. Add synthetic schema-v2 fixtures before any BPF load.
 8. Obtain explicit authorization before attaching probes or performing clock-changing tests.
 
-The schema-v2 pure validator, invocation-ID reducer, exact parent-ID joiner and unified-report gates are implemented with synthetic tests. Producer-side ID allocation and runtime capture remain design-only. No BPF object is loaded, no probe is attached, no tracepoint is enabled, and no clock is changed.
+The schema-v2 pure validator, invocation-ID reducer, exact parent-ID joiner, cross-stream event-ID uniqueness audit and unified-report gates are implemented with synthetic tests. Producer-side ID allocation and runtime capture remain design-only. No BPF object is loaded, no probe is attached, no tracepoint is enabled, and no clock is changed.
