@@ -228,9 +228,9 @@ def test_session_allocator_cas_contention_and_exhaustion_fail_closed():
 def test_session_allocator_task_exit_with_pending_frames_releases_gauges():
     session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=1)
     task = session.create_task_context()
-    session.begin_invocation("syscall")
-    session.begin_invocation("handler")
-    session.release_task_context(task, pending_syscalls=1, pending_handlers=1)
+    session.begin_invocation(task, "syscall")
+    session.begin_invocation(task, "handler")
+    session.release_task_context(task)
     session.detach()
     snapshot = session.global_snapshot()
     assert snapshot["gauges"]["active_syscall_invocations"] == 0
@@ -315,7 +315,7 @@ def test_session_allocator_blocks_gauge_mutation_after_detach():
     task = session.create_task_context()
     session.detach()
     with pytest.raises(RuntimeError):
-        session.end_invocation("syscall")
+        session.end_invocation(task, "syscall")
     with pytest.raises(RuntimeError):
         session.release_task_context(task)
 
@@ -324,11 +324,11 @@ def test_two_task_interleaving_exit_cleanup_preserves_other_tasks_active_gauge()
     session = ClockAdjustmentProducerSessionAllocator(max_tracked_tasks=2)
     task_a = session.create_task_context()
     task_b = session.create_task_context()
-    session.begin_invocation("syscall")
-    session.begin_invocation("syscall")
-    session.release_task_context(task_a, pending_syscalls=1)
+    session.begin_invocation(task_a, "syscall")
+    session.begin_invocation(task_b, "syscall")
+    session.release_task_context(task_a)
     assert session.active_syscall_invocations == 1
-    session.end_invocation("syscall")
+    session.end_invocation(task_b, "syscall")
     session.release_task_context(task_b)
     assert session.active_syscall_invocations == 0
     assert session.task_context_reservations == 0
