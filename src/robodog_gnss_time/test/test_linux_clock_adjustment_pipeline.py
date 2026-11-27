@@ -154,3 +154,79 @@ def test_unified_report_requires_lifecycle_gate():
     assert report["gates"]["capture_lifecycle"] is False
     assert report["capture_lifecycle"]["lifecycle_status"] == "partial"
     assert report["capture_report_status"] == "partial"
+
+
+def invocation_event(kind, event_type, event_id, invocation_id, timestamp,
+                     sequence, parent_id=None):
+    payload = {
+        "event_type": event_type,
+        "pid_tgid": 4294967297,
+        "syscall": "clock_adjtime" if kind == "syscall" else None,
+        "handler": "do_clock_adjtime" if kind == "kernel_handler" else None,
+    }
+    payload = {key: value for key, value in payload.items() if value is not None}
+    record = {
+        "schema_version": 2,
+        "capture_session_id": "capture-1",
+        "boot_id": "boot-a",
+        "producer_id": "producer",
+        "stream_id": "syscall-stream" if kind == "syscall" else "handler-stream",
+        "stream_kind": kind,
+        "cpu": 0,
+        "sequence": sequence,
+        "monotonic_ns": timestamp,
+        "task_instance_id": "task-1",
+        "event_id": event_id,
+        "invocation_id": invocation_id,
+        "payload": payload,
+    }
+    if kind == "kernel_handler":
+        record["parent_context_status"] = "matched"
+        record["parent_syscall_invocation_id"] = parent_id
+    return record
+
+
+def test_unified_report_integrates_schema_v2_invocation_and_parent_join_gates():
+    syscalls = [
+        invocation_event("syscall", "syscall_enter", "s-enter", "sys-1", 100, 1),
+        invocation_event("syscall", "syscall_exit", "s-exit", "sys-1", 400, 2),
+    ]
+    handlers = [
+        invocation_event("kernel_handler", "kernel_handler_enter", "h-enter",
+                         "handler-1", 150, 1, "sys-1"),
+        invocation_event("kernel_handler", "kernel_handler_exit", "h-exit",
+                         "handler-1", 350, 2, "sys-1"),
+    ]
+    report = build_clock_adjustment_capture_report(
+        [], [], [], {"per_cpu": []}, {"per_cpu": []}, {},
+        snapshot(), snapshot(), None,
+        syscall_envelopes=syscalls, handler_envelopes=handlers,
+    )
+    assert report["invocation_identity_mode"] == "schema_v2_required"
+    assert report["gates"]["syscall_invocation_reduction"] is True
+    assert report["gates"]["handler_invocation_reduction"] is True
+    assert report["gates"]["invocation_parent_join"] is True
+    assert report["invocation_parent_join"]["counts"]["joined_pairs"] == 1
+    assert report["capture_report_status"] == "partial"
+
+
+def test_unified_report_invocation_gate_fails_on_parent_mismatch():
+    syscalls = [
+        invocation_event("syscall", "syscall_enter", "s-enter", "sys-1", 100, 1),
+        invocation_event("syscall", "syscall_exit", "s-exit", "sys-1", 400, 2),
+    ]
+    handlers = [
+        invocation_event("kernel_handler", "kernel_handler_enter", "h-enter",
+                         "handler-1", 150, 1, "wrong-parent"),
+        invocation_event("kernel_handler", "kernel_handler_exit", "h-exit",
+                         "handler-1", 350, 2, "wrong-parent"),
+    ]
+    report = build_clock_adjustment_capture_report(
+        [], [], [], {"per_cpu": []}, {"per_cpu": []}, {},
+        snapshot(), snapshot(), None,
+        syscall_envelopes=syscalls, handler_envelopes=handlers,
+    )
+    assert report["gates"]["syscall_invocation_reduction"] is True
+    assert report["gates"]["handler_invocation_reduction"] is True
+    assert report["gates"]["invocation_parent_join"] is False
+    assert report["capture_report_status"] == "partial"
