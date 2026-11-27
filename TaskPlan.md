@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.272
+- 文档版本：v0.3.273
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1493,3 +1493,12 @@
 - 新增三项合成测试覆盖 FUNC record present/absent、bpftool missing、命令失败 fail-closed；新增 Navigation 53 并更新 Navigation README。代码提交：probe `71c1d119842a0a559f7b4b0b46eaff45bca9ee9d`；tests `308a9635c7fac7649f7439397553ae1ac1271721`；Navigation 53 `59de64d3a038a29483540b8625e0af1b5fb79b7a`；README `17c08b93ffe3c024304ff5f8ed8b1df0909ffdaf`。
 - GNSS runtime CI run `45925251702`：Humble/Jammy 与 Jazzy/Noble 各 **302/302 passed，0 errors/failures/skipped**。ROS 2 package CI run `45925251650`：Humble/Jammy 与 Jazzy/Noble 两个 job 均 success。日志仍出现 rosdep unresolved ERROR 提示，后续构建与 pytest 成功；继续作为非阻断环境提示披露。
 - 本轮 CI 只验证 bpftool 输出解析和错误路径的 synthetic fixtures；CI 未实际依赖 bpftool、未检查真实内核 BTF、未执行 BPF load/attach，也未取得通用 VM 或 Orin BSP 报告。下一步仍需在通用 Linux VM 本机运行只读 probe，并保留完整 JSON、kernel release、BTF 与 bpftool 版本/来源；之后再审查 FUNC_PROTO 参数图。Orin BSP 独立验证。N1/N9 未验收，仅 nav 分支推进，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.273）
+
+- 修正 Navigation 53 的 BTF 检查：不再解析易受格式/缩进影响的 raw 文本正则，改用上游 bpftool 支持的 JSON 输出 `bpftool -j btf dump file <path>`。上游 bpftool JSON 对每个 BTF type 提供 `id/kind/name`，FUNC 提供 `type_id/linkage`，FUNC_PROTO 提供 `ret_type_id/vlen/params[{name,type_id}]`；源码证据见 bpftool 的 `dump_btf_type` 与 `dump_btf_raw` 实现（https://kernel.googlesource.com/pub/scm/linux/kernel/git/mricon/linux/+/refs/heads/b4/docs-pgp-guide/tools/bpf/bpftool/btf.c）。
+- 新增 FUNC → FUNC_PROTO 关联和返回/参数 type ID 引用完整性检查；有限深度解析 TYPEDEF、CONST、VOLATILE、RESTRICT、TYPE_TAG、PTR 类型链。区分 `prototype_resolved`、`prototype_incomplete`、`invalid_func_proto_reference`、`func_record_absent`、重复 FUNC 等情况；无效 JSON、命令失败等仍保持 unknown/fail-closed。
+- 测试覆盖结构化 JSON、返回值与参数类型、typedef/pointer 链、缺失 FUNC_PROTO、缺失参数 type ID、bpftool 缺失、命令失败及无效 JSON。代码提交：`60492f0d7741c2a5032a36e2b474e3eabf74e840`；测试提交：`81370f6f1e4a8c8027359168d336c7cb1a6c4e14`；文档提交：`650c90e5398f9e3bf60277b736f892765534741c`。
+- 上游结构化输出证据：bpftool JSON 输出字段定义（FUNC/FUNC_PROTO）及顶层 `types` 数组实现，参见 bpftool 源码；该来源证明工具输出结构，不证明任何目标 Linux 内核实际含有目标 handler BTF。
+- 本轮尚未取得真实 Linux VM 的 BTF JSON，也未在 Orin BSP 上运行；CI 只验证 parser 和 synthetic fixtures。下一步在收集 VM JSON 后审查两个 handler 的实际参数类型与调用语义，再决定是否构造 fentry 程序；不因 prototype_resolved 自动宣告可 attach。N1/N9 未验收，仅 nav 分支推进，不合并 main。
