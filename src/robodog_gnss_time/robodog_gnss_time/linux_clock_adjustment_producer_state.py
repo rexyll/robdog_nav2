@@ -318,6 +318,10 @@ class ClockAdjustmentProducerSessionAllocator:
         self.counters = ClockAdjustmentProducerState._zero_counters()
 
     def allocate_event_id(self, cas_attempts=1):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
+        if not isinstance(cas_attempts, int) or isinstance(cas_attempts, bool) or cas_attempts < 1:
+            raise ValueError("cas_attempts must be a positive integer")
         self.counters["event_id_allocation_attempts"] += 1
         if (cas_attempts > self.max_cas_retries
                 or self.next_event_id <= 0
@@ -333,6 +337,8 @@ class ClockAdjustmentProducerSessionAllocator:
                             task_id_cas_attempts=1):
         if self.producer_detached:
             raise RuntimeError("producer session is detached")
+        if not isinstance(task_id_cas_attempts, int) or isinstance(task_id_cas_attempts, bool) or task_id_cas_attempts < 1:
+            raise ValueError("task_id_cas_attempts must be a positive integer")
         self.counters["task_context_admission_attempts"] += 1
         if len(self.active_tasks) >= self.max_tracked_tasks:
             self.counters["task_context_capacity_rejected"] += 1
@@ -363,19 +369,26 @@ class ClockAdjustmentProducerSessionAllocator:
         self.next_invocation_seq[task_id] = 1
         return task_id
 
-    def allocate_invocation_id(self, task_instance_id, success=True):
+    def allocate_invocation_id(self, task_instance_id, kind="syscall", success=True):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
         if task_instance_id not in self.active_tasks:
             raise KeyError("unknown or exited task context")
-        self.counters["syscall_invocation_allocation_attempts"] += 1
+        if kind not in ("syscall", "handler"):
+            raise ValueError("kind must be syscall or handler")
+        prefix = kind + "_invocation_allocation_"
+        self.counters[prefix + "attempts"] += 1
         if not success or self.next_invocation_seq[task_instance_id] >= (1 << 64) - 1:
-            self.counters["syscall_invocation_allocation_failures"] += 1
+            self.counters[prefix + "failures"] += 1
             return None
         value = self.next_invocation_seq[task_instance_id]
         self.next_invocation_seq[task_instance_id] += 1
-        self.counters["syscall_invocation_allocation_successes"] += 1
+        self.counters[prefix + "successes"] += 1
         return f"{value:016x}"
 
     def begin_invocation(self, kind):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
         if kind == "syscall":
             self.active_syscall_invocations += 1
         elif kind == "handler":
@@ -397,6 +410,8 @@ class ClockAdjustmentProducerSessionAllocator:
 
     def release_task_context(self, task_instance_id,
                              pending_syscalls=0, pending_handlers=0):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
         if task_instance_id not in self.active_tasks:
             raise KeyError("task context already released or unknown")
         if (not isinstance(pending_syscalls, int) or isinstance(pending_syscalls, bool)
