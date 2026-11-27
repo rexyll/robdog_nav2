@@ -23,6 +23,42 @@ Therefore, between snapshots:
 
 The consumer input must be a dedicated, unfiltered stream. If records are filtered, sampled, or merged from unrelated streams, this reconciliation is invalid and must not be used.
 
+
+## 2A. Global allocator and task-context snapshots (schema v2)
+
+In addition to the existing per-CPU sequence snapshots, a producer may include a `global` object in both initial and final snapshots. The object contains identical `capture_session_id` / `boot_id`, cumulative `counters`, and `gauges`. The final global snapshot must declare `snapshot_after_producer_detach=true`.
+
+Required cumulative counters:
+- event ID allocation attempts/successes/failures;
+- task-instance ID allocation attempts/successes/failures;
+- task-context admission attempts/admitted/capacity-rejected;
+- task-context create attempts/successes/failures;
+- task-context initialization attempts/successes/failures;
+- syscall and handler invocation-ID allocation attempts/successes/failures;
+- CPU sequence allocation failures;
+- syscall/handler stack overflow and pop mismatch;
+- handler parent-context unavailable;
+- task exits observed and task exits with pending syscall/handler frames.
+
+Required gauges:
+- `active_syscall_invocations`;
+- `active_handler_invocations`;
+- `inflight_bpf_callbacks`;
+- `task_context_reservations`.
+
+The global audit checks:
+- each allocation/admission/create/init attempt equation;
+- task-context init attempts equal successful storage creates and task-instance ID allocation attempts;
+- task-context reservation delta equals admitted reservations minus create failures, init failures and observed task exits;
+- all counters are monotonic and session/boot identity is stable;
+- initial active gauges are zero;
+- final active syscall/handler invocation and in-flight callback gauges are zero;
+- final snapshot was taken after producer detach.
+
+A nonzero final `task_context_reservations` is allowed: live tasks may still own idle Task Storage entries. The session map is destroyed after detach/drain. This gauge is a capacity reservation count, not a final quiescence requirement.
+
+Any allocator failure, capacity rejection, stack overflow, pop mismatch, unavailable handler parent, task exit with pending frames, unreadable counter, equation mismatch, or nonzero final invocation/callback gauge makes runtime integrity partial. Task exit observations are not compared with total created contexts as a zero-sum equation because live tasks may remain at session end.
+
 ## 3. Consumer reconciliation
 
 Each received record carries only the identity envelope needed here: `producer_id`, `boot_id`, `cpu`, `sequence`. Sequences are one-based and scoped to producer + boot + CPU.
@@ -55,7 +91,7 @@ The controller should first disable new event production, then wait for producer
 
 `integrity_status=complete` means only that the supplied snapshots, dedicated event records, and drain declarations reconcile under this contract. It does not prove the producer counters are truthful, that instrumentation covered every relevant kernel path, or that a clock changed. Capture coverage and physical clock effect remain independent evidence gates.
 
-The reducer never echoes raw pointers or arbitrary event payloads.
+The reducer never echoes raw pointers or arbitrary event payloads. When the optional global schema-v2 snapshot is present, it also returns a separate global runtime audit; absence of both global snapshots preserves the legacy per-CPU-only mode, while presence of only one is partial.
 
 ## 6. Validation
 
