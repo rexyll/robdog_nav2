@@ -397,6 +397,8 @@ class ClockAdjustmentProducerSessionAllocator:
             raise ValueError("kind must be syscall or handler")
 
     def end_invocation(self, kind):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
         if kind == "syscall":
             if self.active_syscall_invocations <= 0:
                 raise RuntimeError("syscall invocation gauge underflow")
