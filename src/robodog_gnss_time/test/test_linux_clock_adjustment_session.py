@@ -39,7 +39,8 @@ def test_valid_envelope_projects_legacy_reducer_event():
 
 
 @pytest.mark.parametrize("field,value", [
-    ("schema_version", 2),
+    ("schema_version", 3),
+    ("schema_version", []),
     ("capture_session_id", ""),
     ("boot_id", None),
     ("producer_id", "x" * 129),
@@ -80,6 +81,103 @@ def test_stream_kind_must_match_event_type(kind, event_type):
 
 def test_non_mapping_envelope_does_not_raise():
     assert validate_clock_adjustment_event_envelope([])["status"] == "invalid"
+
+
+
+def envelope_v2(**overrides):
+    value = envelope()
+    value.update({
+        "schema_version": 2,
+        "task_instance_id": "task-life-01",
+        "event_id": "event-0001",
+        "invocation_id": "syscall-inv-01",
+    })
+    value.update(overrides)
+    return value
+
+
+def test_schema_v2_valid_syscall_envelope_projects_invocation_identity():
+    result = validate_clock_adjustment_event_envelope(envelope_v2())
+    assert result["status"] == "valid"
+    assert result["identity"]["schema_version"] == 2
+    assert result["identity"]["task_instance_id"] == "task-life-01"
+    assert result["event"]["event_id"] == "event-0001"
+    assert result["event"]["invocation_id"] == "syscall-inv-01"
+
+
+def test_schema_v2_valid_handler_parent_context_is_preserved():
+    record = envelope_v2(
+        stream_kind="kernel_handler",
+        payload={
+            "event_type": "kernel_handler_enter",
+            "pid_tgid": 4294967297,
+            "handler": "do_adjtimex",
+        },
+        invocation_id="handler-inv-01",
+        parent_syscall_invocation_id="syscall-inv-01",
+        parent_context_status="matched",
+    )
+    result = validate_clock_adjustment_event_envelope(record)
+    assert result["status"] == "valid"
+    assert result["event"]["parent_syscall_invocation_id"] == "syscall-inv-01"
+    assert result["event"]["parent_context_status"] == "matched"
+
+
+@pytest.mark.parametrize("status,parent,code", [
+    ("matched", None, "matched_parent_context_missing_id"),
+    ("unavailable", "syscall-inv-01", "unavailable_parent_context_has_id"),
+    ("stack_overflow", "syscall-inv-01", "unavailable_parent_context_has_id"),
+    ("no_active_context", "syscall-inv-01", "unavailable_parent_context_has_id"),
+    ({}, None, "invalid_parent_context_status"),
+])
+def test_schema_v2_handler_parent_context_fails_closed(status, parent, code):
+    record = envelope_v2(
+        stream_kind="kernel_handler",
+        payload={"event_type": "kernel_handler_enter"},
+        invocation_id="handler-inv-01",
+        parent_context_status=status,
+    )
+    if parent is not None:
+        record["parent_syscall_invocation_id"] = parent
+    result = validate_clock_adjustment_event_envelope(record)
+    assert result["status"] == "invalid"
+    assert code in [item["code"] for item in result["issues"]]
+
+
+def test_schema_v2_syscall_rejects_handler_parent_fields():
+    record = envelope_v2(parent_context_status="matched")
+    result = validate_clock_adjustment_event_envelope(record)
+    assert result["status"] == "invalid"
+    assert "syscall_envelope_has_handler_parent_fields" in [
+        item["code"] for item in result["issues"]
+    ]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("task_instance_id", ""),
+    ("event_id", None),
+    ("invocation_id", 1),
+])
+def test_schema_v2_requires_opaque_identity_strings(field, value):
+    result = validate_clock_adjustment_event_envelope(envelope_v2(**{field: value}))
+    assert result["status"] == "invalid"
+    assert "invalid_invocation_identity" in [item["code"] for item in result["issues"]]
+
+
+def test_schema_v2_payload_cannot_override_new_envelope_identity():
+    record = envelope_v2(payload={
+        "event_type": "syscall_enter",
+        "invocation_id": "spoofed",
+    })
+    result = validate_clock_adjustment_event_envelope(record)
+    assert result["status"] == "invalid"
+    assert result["issues"][0]["code"] == "payload_overrides_envelope_field"
+
+
+def test_schema_v1_remains_accepted_as_legacy_without_fabricated_ids():
+    result = validate_clock_adjustment_event_envelope(envelope())
+    assert result["status"] == "valid"
+    assert "invocation_id" not in result["event"]
 
 
 def lifecycle():
