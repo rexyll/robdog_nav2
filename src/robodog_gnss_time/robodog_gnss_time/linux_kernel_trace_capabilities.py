@@ -257,15 +257,140 @@ def _handler_symbol_observation(path):
     }
 
 
+def _resolve_btf_type(type_id, types_by_id, seen=None, depth=0):
+    """Resolve a BTF type reference conservatively, preserving modifier layers."""
+    if type_id == 0:
+        return {"status": "resolved", "kind": "VOID", "name": "void"}
+    if isinstance(type_id, bool) or not isinstance(type_id, int):
+        return {"status": "invalid_type_id"}
+    if depth >= 8:
+        return {"status": "depth_limit", "type_id": type_id}
+    seen = set() if seen is None else set(seen)
+    if type_id in seen:
+        return {"status": "cycle", "type_id": type_id}
+    item = types_by_id.get(type_id)
+    if not isinstance(item, dict):
+        return {"status": "missing_type", "type_id": type_id}
+    kind = item.get("kind")
+    result = {
+        "status": "resolved",
+        "type_id": type_id,
+        "kind": kind,
+        "name": item.get("name"),
+    }
+    if kind in {"TYPEDEF", "CONST", "VOLATILE", "RESTRICT", "TYPE_TAG", "PTR"}:
+        seen.add(type_id)
+        target = item.get("type_id")
+        result["target"] = _resolve_btf_type(
+            target, types_by_id, seen=seen, depth=depth + 1
+        )
+        if result["target"].get("status") != "resolved":
+            result["status"] = "incomplete"
+    return result
+
+
+def _parse_btf_handler_functions(document):
+    """Parse bpftool JSON and validate FUNC -> FUNC_PROTO -> parameter references."""
+    if not isinstance(document, dict) or not isinstance(document.get("types"), list):
+        return {
+            "status": "invalid_document",
+            "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+        }
+    types_by_id = {}
+    for item in document["types"]:
+        if not isinstance(item, dict):
+            return {
+                "status": "invalid_document",
+                "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+            }
+        type_id = item.get("id")
+        if isinstance(type_id, bool) or not isinstance(type_id, int) or type_id <= 0:
+            return {
+                "status": "invalid_document",
+                "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+            }
+        if type_id in types_by_id:
+            return {
+                "status": "duplicate_type_id",
+                "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+            }
+        types_by_id[type_id] = item
+
+    found = {}
+    for item in types_by_id.values():
+        if item.get("kind") == "FUNC" and item.get("name") in _HANDLER_SYMBOLS:
+            found.setdefault(item["name"], []).append(item)
+
+    symbols = {}
+    for name in _HANDLER_SYMBOLS:
+        records = found.get(name, [])
+        if not records:
+            symbols[name] = {"status": "func_record_absent"}
+            continue
+        if len(records) != 1:
+            symbols[name] = {"status": "ambiguous_func_records", "record_count": len(records)}
+            continue
+        func = records[0]
+        proto_id = func.get("type_id")
+        proto = types_by_id.get(proto_id) if isinstance(proto_id, int) and not isinstance(proto_id, bool) else None
+        if not isinstance(proto, dict) or proto.get("kind") != "FUNC_PROTO":
+            symbols[name] = {
+                "status": "invalid_func_proto_reference",
+                "func_type_id": proto_id,
+            }
+            continue
+        params = proto.get("params")
+        vlen = proto.get("vlen")
+        if (
+            not isinstance(params, list)
+            or isinstance(vlen, bool)
+            or not isinstance(vlen, int)
+            or vlen != len(params)
+        ):
+            symbols[name] = {
+                "status": "invalid_func_proto",
+                "func_type_id": proto_id,
+                "declared_parameter_count": vlen,
+                "observed_parameter_count": len(params) if isinstance(params, list) else None,
+            }
+            continue
+        return_type = _resolve_btf_type(proto.get("ret_type_id"), types_by_id)
+        parsed_params = []
+        refs_valid = return_type.get("status") == "resolved"
+        for index, param in enumerate(params):
+            if not isinstance(param, dict):
+                refs_valid = False
+                parsed_params.append({"index": index, "status": "invalid_parameter"})
+                continue
+            resolved = _resolve_btf_type(param.get("type_id"), types_by_id)
+            if resolved.get("status") != "resolved":
+                refs_valid = False
+            parsed_params.append({
+                "index": index,
+                "name": param.get("name"),
+                "type": resolved,
+            })
+        symbols[name] = {
+            "status": "prototype_resolved" if refs_valid else "prototype_incomplete",
+            "func_type_id": func.get("id"),
+            "func_proto_type_id": proto_id,
+            "linkage": func.get("linkage"),
+            "return_type": return_type,
+            "parameter_count": vlen,
+            "parameters": parsed_params,
+        }
+    return {"status": "observed", "symbols": symbols}
+
+
 def _btf_handler_function_inventory(path):
-    """Optionally inspect vmlinux BTF FUNC records via bpftool; never loads BPF."""
+    """Optionally inspect vmlinux BTF FUNC and FUNC_PROTO records via bpftool JSON."""
     tool = shutil.which("bpftool")
     if not tool:
         return {
             "status": "tool_unavailable",
             "tool": None,
             "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
-            "interpretation": "bpftool is unavailable; BTF FUNC records were not inspected.",
+            "interpretation": "bpftool is unavailable; BTF function prototypes were not inspected.",
         }
     if not Path(path).is_file():
         return {
@@ -274,7 +399,7 @@ def _btf_handler_function_inventory(path):
             "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
             "interpretation": "The vmlinux BTF file is unavailable; no BTF dump was attempted.",
         }
-    command = [tool, "btf", "dump", "file", str(path), "format", "raw"]
+    command = [tool, "-j", "btf", "dump", "file", str(path)]
     try:
         completed = subprocess.run(
             command, check=False, capture_output=True, text=True,
@@ -282,7 +407,7 @@ def _btf_handler_function_inventory(path):
         )
     except subprocess.TimeoutExpired:
         status = "timeout"
-        detail = "bpftool BTF dump exceeded 20 seconds."
+        detail = "bpftool BTF JSON dump exceeded 20 seconds."
     except OSError as exc:
         status = "execution_error"
         detail = str(exc)
@@ -291,39 +416,33 @@ def _btf_handler_function_inventory(path):
             status = "command_failed"
             detail = completed.stderr.strip()[:2000]
         else:
-            status = "observed"
-            detail = None
-            found = {}
-            for line in completed.stdout.splitlines():
-                match = re.search(r"\[\d+\]\s+FUNC\s+'([^']+)'", line)
-                if match and match.group(1) in _HANDLER_SYMBOLS:
-                    found[match.group(1)] = line.strip()
-            return {
-                "status": status,
-                "tool": tool,
-                "command": command,
-                "symbols": {
-                    name: {
-                        "status": "func_record_present" if name in found else "func_record_absent",
-                        "record": found.get(name),
-                    }
-                    for name in _HANDLER_SYMBOLS
-                },
-                "interpretation": (
-                    "A BTF FUNC record is evidence that the symbol is represented in this BTF "
-                    "dump only. It does not prove a usable FUNC_PROTO, fentry attachability, "
-                    "verifier acceptance, or permission to attach."
-                ),
-            }
+            try:
+                document = json.loads(completed.stdout)
+            except (TypeError, json.JSONDecodeError) as exc:
+                status = "invalid_json"
+                detail = str(exc)
+            else:
+                parsed = _parse_btf_handler_functions(document)
+                return {
+                    "status": parsed["status"],
+                    "tool": tool,
+                    "command": command,
+                    "symbols": parsed["symbols"],
+                    "interpretation": (
+                        "FUNC records are linked to FUNC_PROTO records and referenced return/"
+                        "parameter type IDs are checked against this BTF dump. Resolved type "
+                        "chains are descriptive only; this does not prove fentry attachability, "
+                        "verifier acceptance, symbol stability, or permission to attach."
+                    ),
+                }
     return {
         "status": status,
         "tool": tool,
         "command": command,
         "detail": detail,
         "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
-        "interpretation": "BTF function inventory could not be completed; no attach was attempted.",
+        "interpretation": "BTF function prototype inventory could not be completed; no attach was attempted.",
     }
-
 
 def _runtime_policy_observation(rooted):
     """Read BPF/perf policy and this process security context without changing it."""
