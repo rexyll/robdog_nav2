@@ -144,7 +144,8 @@ def audit_clock_adjustment_capture_integrity(events, initial_snapshot, final_sna
             "sequence_allocated_delta": deltas["sequence_allocated"],
             "ringbuf_reserve_failures_delta": expected_reserve_failures,
             "ringbuf_submit_successes_delta": expected_submitted,
-            "received_records": len(seqs), "missing_sequence_ranges": missing_ranges,\n            "missing_sequence_count": missing_count,
+            "received_records": len(seqs), "missing_sequence_ranges": missing_ranges,
+            "missing_sequence_count": missing_count,
             "status": "consistent" if not out_of_range and len(seqs) == expected_submitted
                       and missing_count == expected_reserve_failures
                       and deltas["sequence_allocated"] == expected_reserve_failures + expected_submitted
