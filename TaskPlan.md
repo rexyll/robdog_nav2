@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.274
+- 文档版本：v0.3.275
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1510,3 +1510,12 @@
 - 过程记录：先提交实现的中间提交 `60492f0d7741c2a5032a36e2b474e3eabf74e840` 触发旧测试夹具与新 JSON parser 不匹配，GNSS runtime run `45926346707` 的 Humble job 失败（301 passed / 1 failed，原测试仍提供 raw 文本而实现已改为 JSON）；随后提交同步更新 JSON fixtures 与新增异常测试 `81370f6f1e4a8c8027359168d336c7cb1a6c4e14`，最新 CI 全绿。该失败属于提交间测试未同步，不是忽略的持续失败。
 - CI 日志仍出现 rosdep unresolved ERROR 提示，但依赖构建和测试流程结束成功；继续作为非阻断环境提示记录。
 - 当前 nav HEAD：`55b86da770688a0413f646ebd40d390acdcaa8e2`；main HEAD：`0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`，main 未修改。当前阶段仍没有真实 VM 的 BTF JSON / bpftool 版本与内核 release，也没有 fentry/kprobe attach 证据；不能据此选定最终采集 hook。下一步收集目标 Linux VM 的完整只读 JSON，再做函数参数语义对照。Orin BSP 需独立验证。
+
+
+## 本轮增量（2026-11-27 / v0.3.275）
+
+- 为真实 VM 取证报告补齐来源与 artifact identity：报告升级为 `schema_version=2`，显式标记 `collection_mode=live_host|rootfs_fixture`；rootfs fixture 下不再把执行探测器的宿主 uname 误写为目标 kernel release/machine/system，未显式传入 `--kernel-release` 时目标 release 保持 unknown，且不猜测读取 `/boot/config-None`。
+- 记录目标 boot_id、CLOCK_MONOTONIC/CLOCK_REALTIME 采集时钟名称、collector_host 与 target kernel 分离字段；对可读 vmlinux BTF 计算 SHA-256 和文件大小；记录 bpftool version 命令状态/输出。哈希只用于 BTF 字节身份核对，不代表 BTF 语义有效或可挂载。
+- 新增 Navigation 54：`doc/Navigation/54_kernel_probe_provenance_and_btf_identity.md`；增加 fixture/collector metadata 分离及 BTF SHA-256 合成测试。代码提交 `03293a1405ff12055460843ecadbe5d24ce1a40a`；测试提交 `4293b149626fe100ff5e31c2697aa19163117916`；文档提交 `9198bf080efb43c16df01dea948f819ae78166d1`；Navigation README `bea89cc172c9bc6313f4892eaaaa897901054d9d`。
+- 最新 CI 正在运行：GNSS runtime run `45926586710`；ROS 2 package run `45926586674`。提交时两者尚未完成，本台账不预先宣告通过；此前结构化 BTF parser 最新已完成 CI：run `45926365951` 的两平台各 304/304 passed，run `45926365962` 两平台均 success。
+- 下一步：等待当前 CI 结果；随后在通用 Linux VM 本机执行只读探测并提交 JSON 报告（至少保留 kernel release、boot_id、BTF SHA-256、bpftool version、两个 handler FUNC/FUNC_PROTO 及参数类型）。不要用 rootfs fixture 的 collector_host 元数据替代目标 VM。真实 attach 仍是单独 Gate；不执行任何改时钟 syscall。Orin BSP 单独复验。N1/N9 未验收，仅 nav 分支推进，不合并 main。
