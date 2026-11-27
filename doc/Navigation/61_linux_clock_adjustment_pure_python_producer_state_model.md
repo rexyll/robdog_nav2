@@ -37,7 +37,7 @@ The reference model was added in `linux_clock_adjustment_producer_state.py`; `Cl
 10. Refusal to detach with active invocations and refusal of duplicate task exit.
 11. Two-task interleaving with globally unique event IDs and task-scoped invocation IDs.
 12. Task-context capacity rejection, create failure, task-ID allocation failure, CAS contention and 64-bit exhaustion.
-13. Interleaved two-task invocation gauges and task-exit cleanup without clearing another task's active invocation.
+13. Interleaved two-task invocation gauges and task-exit cleanup without clearing another task's active invocation; pending depths are attributed to the exiting task before global gauges are decremented.
 14. Post-detach allocation, invocation and task-exit mutations are rejected.
 13. Global snapshot reconciliation through the producer runtime counter auditor, including live idle Task Storage at detach.
 
