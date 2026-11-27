@@ -45,7 +45,7 @@ The final zero queue/in-flight gauges are required so the last equation cannot h
 4. E2b/E3a kernel-handler reducer (Navigation 46);
 5. conservative syscall/handler interval join (Navigation 47).
 
-Each gate remains separately visible. The unified report also requires producer `received_records` to equal pipeline `consumer_records_read`, and requires the pipeline boot ID to equal the producer snapshot boot-ID set. Overall status is `consistent` only if all seven gates pass. The report does not collapse missing evidence into a single “clock adjustment succeeded” claim.
+Each gate remains separately visible. The unified report also requires producer `received_records` to equal pipeline `consumer_records_read`, and requires the pipeline boot ID to equal the producer snapshot boot-ID set. An eighth mandatory gate audits the ordered capture lifecycle and final quiescence snapshot (Navigation 50). Overall status is `consistent` only if all eight gates pass. The report does not collapse missing evidence into a single “clock adjustment succeeded” claim.
 
 ## 5. Evidence and limitations
 
