@@ -110,6 +110,7 @@ def reduce_kernel_clock_adjustment_observations(
         raise TypeError("events must be an iterable of event mappings")
 
     pending = {}
+    pending_count = 0
     last_sequence = {}
     pairs = []
     unpaired = []
@@ -172,16 +173,16 @@ def reduce_kernel_clock_adjustment_observations(
         key = (event["boot_id"], event["pid_tgid"], event["handler"])
         if event["event_type"] == "kernel_handler_enter":
             counts["handler_entries_seen"] += 1
-            active_count = sum(len(stack) for stack in pending.values())
             stack = pending.setdefault(key, [])
             if stack:
                 counts["nested_handler_entries"] += 1
-            if active_count >= max_pending:
+            if pending_count >= max_pending:
                 counts["pending_capacity_drops"] += 1
                 unpaired.append({**event, "unpaired_reason": "pending_capacity_exceeded"})
                 issues.append({"code": "pending_capacity_exceeded", "pid_tgid": event["pid_tgid"], "handler": event["handler"]})
                 continue
             stack.append(event)
+            pending_count += 1
             continue
 
         counts["handler_returns_seen"] += 1
@@ -194,6 +195,7 @@ def reduce_kernel_clock_adjustment_observations(
             orphan_exits.append(event)
             issues.append({"code": "orphan_handler_return", "pid_tgid": event["pid_tgid"], "handler": event["handler"]})
             continue
+        pending_count -= 1
         if event["monotonic_ns"] < entry["monotonic_ns"]:
             unpaired.append({**entry, "unpaired_reason": "handler_return_precedes_entry"})
             orphan_exits.append(event)
@@ -235,7 +237,7 @@ def reduce_kernel_clock_adjustment_observations(
             })
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "reduction_status": "consistent" if not issues else "partial",
         "evidence_stage": "post_copy_kernel_request",
         "capture_coverage_status": "not_assessed",
