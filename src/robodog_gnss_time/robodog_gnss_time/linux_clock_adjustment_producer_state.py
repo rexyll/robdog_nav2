@@ -410,6 +410,10 @@ class ClockAdjustmentProducerSessionAllocator:
             raise ValueError("kind must be syscall or handler")
         if self.task_active_invocations[task_instance_id][kind] <= 0:
             raise RuntimeError(kind + " invocation gauge underflow for task")
+        global_value = (self.active_syscall_invocations if kind == "syscall"
+                        else self.active_handler_invocations)
+        if global_value <= 0:
+            raise RuntimeError(kind + " invocation gauge underflow for session")
         self.task_active_invocations[task_instance_id][kind] -= 1
         if kind == "syscall":
             self.active_syscall_invocations -= 1
@@ -424,6 +428,9 @@ class ClockAdjustmentProducerSessionAllocator:
         pending = self.task_active_invocations[task_instance_id]
         pending_syscalls = pending["syscall"]
         pending_handlers = pending["handler"]
+        if (pending_syscalls > self.active_syscall_invocations
+                or pending_handlers > self.active_handler_invocations):
+            raise RuntimeError("task pending counts exceed session active gauges")
         self.counters["task_exit_observed"] += 1
         if pending_syscalls:
             self.counters["task_exit_with_pending_syscalls"] += 1
