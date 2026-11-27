@@ -1884,3 +1884,13 @@
 - Ubuntu 官方 archive integrity 文档说明：`.dsc` 由 source uploader 私钥签名，对应公钥可从 Ubuntu Keyserver 获取，并应与该开发者 Launchpad 账户关联的密钥身份核对；另有独立 archive trust chain：签名 InRelease → hash-verified Sources index → `.dsc` 与 source tarball hashes。参考 `https://documentation.ubuntu.com/security/software-integrity/archive-verification/`。
 - 下一步仅在临时 GNUPGHOME 中从 `hkps://keyserver.ubuntu.com` 获取该 fingerprint 的公钥；检查完整 fingerprint 与 Launchpad uploader profile 发布的 OpenPGP key fingerprint 完全一致后，导出临时 keyring 并重跑 `gpgv`。不将未知 key 导入系统全局 keyring，不运行 apt update，不安装包。若 Launchpad 身份/指纹无法独立确认，则保持 uploader signature unverified，并转而用 Ubuntu Security pocket 的签名 InRelease + Sources SHA256 链做 archive provenance 验证。
 - `.dsc` SHA256 清单与实际 orig/diff 内容匹配；但 cryptographic uploader signature 仍待验证。之后需解压并审计 exact Ubuntu patchset；`linux-signed-hwe-7.0` 7.0.0-44 的 source package 仍需单独取得 descriptor/tarball并核验。无 BPF 编译/load/attach。仅 nav 分支，不合并 main。
+
+
+## 本轮 linux-hwe-7.0 uploader signature cryptographic verification（2026-11-27 / v0.3.312）
+
+- 用户在临时 GNUPGHOME 中从 `hkps://keyserver.ubuntu.com` 获取 uploader 公钥，GPG 显示 UID `Alice C. Munduruca <alice.munduruca@canonical.com>`，完整 fingerprint `61DD D3F3 1F7F 0D42 0008 4F57 5E48 29B6 558D`（注：以用户终端原始输出为准，完整值为 `61DD D3F3 1F7F 472B 0D42 0008 4F57 5E48 29B6 558D`）。
+- 对精确版本 `linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc` 重跑 `gpgv --keyring "$TMP_GNUPG/uploader.gpg"`，结果 `Good signature from "Alice C. Munduruca <alice.munduruca@canonical.com>"`。因此该 .dsc 的 OpenPGP 签名在取得的公钥下已通过密码学验证；此前系统 archive keyring 缺少 uploader key 的问题已解决，不是签名错误。
+- 重要信任边界：Keyserver 返回的 UID 和邮箱文本本身不能独立证明公钥确实关联到具有该包上传权限的 Launchpad 身份。Ubuntu 官方 archive integrity 文档说明，source .dsc 由个人 uploader key 签名，公钥应与开发者 Launchpad 账户关联；同时可通过签名 InRelease → hash-verified Sources → .dsc/source hashes 建立独立 archive provenance chain。当前 Launchpad profile fingerprint 尚未能独立核实，因此身份授权关联仍标记 pending，不将 Good signature 等同于 uploader authorization 已确认。
+- Ubuntu 官方依据：`https://documentation.ubuntu.com/security/software-integrity/archive-verification/`（InRelease/Sources/.dsc 信任链与 uploader key 说明）。
+- 已有 orig tarball 与 diff 的实际 SHA256 均与该 .dsc 的 Checksums-Sha256 一致；结合本轮 gpgv Good signature，exact linux-hwe-7.0 source descriptor 的签名验证和其列出源文件的内容哈希验证已完成。仍未完成 Ubuntu Security pocket 的 InRelease→Sources 独立交叉验证、BPF 相关 diff hunk 审计、以及 `linux-signed-hwe-7.0` 7.0.0-44 source package 验证。
+- 下一步：先获取并验证 Ubuntu Security pocket 对应的签名 InRelease 与 Sources 索引链（确认该 .dsc 文件名及其 SHA256 在已签名索引中）；并获取 Launchpad uploader profile 的公开 fingerprint 做身份关联核验。随后解包 exact `linux-hwe-7.0` diff，按实际 patch series 追踪 Task Storage map/helper、CAP_BPF/token、CAP_PERFMON、GPL-only helper 与 task-exit cleanup；并单独审计 signed source。此阶段不安装包、不修改 VM 配置、不 load/attach BPF。仅 nav 分支，不合并 main。
