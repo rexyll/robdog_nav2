@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import platform
 import re
+import shutil
+import subprocess
 import time
 
 
@@ -255,6 +257,74 @@ def _handler_symbol_observation(path):
     }
 
 
+def _btf_handler_function_inventory(path):
+    """Optionally inspect vmlinux BTF FUNC records via bpftool; never loads BPF."""
+    tool = shutil.which("bpftool")
+    if not tool:
+        return {
+            "status": "tool_unavailable",
+            "tool": None,
+            "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+            "interpretation": "bpftool is unavailable; BTF FUNC records were not inspected.",
+        }
+    if not Path(path).is_file():
+        return {
+            "status": "btf_unavailable",
+            "tool": tool,
+            "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+            "interpretation": "The vmlinux BTF file is unavailable; no BTF dump was attempted.",
+        }
+    command = [tool, "btf", "dump", "file", str(path), "format", "raw"]
+    try:
+        completed = subprocess.run(
+            command, check=False, capture_output=True, text=True,
+            encoding="utf-8", errors="replace", timeout=20,
+        )
+    except subprocess.TimeoutExpired:
+        status = "timeout"
+        detail = "bpftool BTF dump exceeded 20 seconds."
+    except OSError as exc:
+        status = "execution_error"
+        detail = str(exc)
+    else:
+        if completed.returncode != 0:
+            status = "command_failed"
+            detail = completed.stderr.strip()[:2000]
+        else:
+            status = "observed"
+            detail = None
+            found = {}
+            for line in completed.stdout.splitlines():
+                match = re.search(r"\[\d+\]\s+FUNC\s+'([^']+)'", line)
+                if match and match.group(1) in _HANDLER_SYMBOLS:
+                    found[match.group(1)] = line.strip()
+            return {
+                "status": status,
+                "tool": tool,
+                "command": command,
+                "symbols": {
+                    name: {
+                        "status": "func_record_present" if name in found else "func_record_absent",
+                        "record": found.get(name),
+                    }
+                    for name in _HANDLER_SYMBOLS
+                },
+                "interpretation": (
+                    "A BTF FUNC record is evidence that the symbol is represented in this BTF "
+                    "dump only. It does not prove a usable FUNC_PROTO, fentry attachability, "
+                    "verifier acceptance, or permission to attach."
+                ),
+            }
+    return {
+        "status": status,
+        "tool": tool,
+        "command": command,
+        "detail": detail,
+        "symbols": {name: {"status": "unknown"} for name in _HANDLER_SYMBOLS},
+        "interpretation": "BTF function inventory could not be completed; no attach was attempted.",
+    }
+
+
 def _runtime_policy_observation(rooted):
     """Read BPF/perf policy and this process security context without changing it."""
     policy_paths = {
@@ -346,6 +416,7 @@ def collect_linux_kernel_trace_capabilities(root="/", kernel_release=None):
         },
         "kernel_config_sources": config_sources,
         "btf": btf,
+        "btf_handler_functions": _btf_handler_function_inventory(rooted("/sys/kernel/btf/vmlinux")),
         "handler_function_symbols": handler_symbols,
         "runtime_policy": _runtime_policy_observation(rooted),
         "tracefs": tracefs,
