@@ -107,16 +107,17 @@ def collect_linux_kernel_package_provenance(kernel_release=None):
         "kernel_modules_extra", "kernel_headers", "kernel_buildinfo",
     })
     signed_image_source_identities = identities_for({"signed_image"})
-    owner_packages = sorted({
-        owner["package"]
-        for item in file_owners
-        for owner in item.get("owners", [])
-    })
+    # The running image must itself be owned by an installed image package.
+    # Ownership of config/modules files is not a substitute for /boot/vmlinuz.
+    image_path_owners = {
+        owner["package"].split(":", 1)[0]
+        for owner in file_owners[0].get("owners", [])
+    }
     installed_image_packages = {
-        row.get("binary_package") for row in installed
+        row.get("binary_package", "").split(":", 1)[0] for row in installed
         if row.get("binary_package_role") in {"signed_image", "kernel_image_unsigned"}
     }
-    image_owner_observed = bool(installed_image_packages.intersection(owner_packages))
+    image_owner_observed = bool(installed_image_packages.intersection(image_path_owners))
     issues = []
     if not installed:
         issues.append({"code": "no_installed_kernel_binary_packages"})
