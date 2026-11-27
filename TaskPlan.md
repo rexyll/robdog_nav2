@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.285
+- 文档版本：v0.3.286
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1617,3 +1617,12 @@
 - 提交：joiner one-to-many `f38cfbc3a55fcdf4d4785348c989361db3e74962`；joiner tests `db71acd9ad7c2e5f52175ab5d5625b9e6c0322d0`；Navigation 47 `3322b154db6945e929e1bc842e5bfd7c4055f6c0`；syscall reducer `34c32f16f850b54b81612147c866373a7abbf210`；syscall tests `bd5056cbebf55edb6aa05d1f73697f3e448a82e3`；Navigation 44 文档 `7415790bcdaa0629b429f92455d2aee27e040256`。
 - 验证边界：CI 尚未完成；仅 synthetic reducer/joiner tests 设计验证，不能证明 kernel capture ordering 或跨 CPU 迁移时事件交付顺序。LIFO 无 invocation cookie 时仍不是严格 ancestry proof；若 producer 有丢失/乱序，可能将 exit 分配给最近 pending entry，因此必须在后续 producer contract 中引入 invocation identity 或明确失配/丢失信号。未启用 tracing/BPF，未改变系统时钟。
 - 下一步：审查 reducer 在跨 CPU 迁移时如何定义 per-CPU sequence 与同线程事件总序；完善 producer sequence/cookie/drop/drain contract。检查 joiner 同一 handler 嵌套及同线程 nested syscall 的 interval ambiguity。CI 最终结果与 VM live capability JSON 仍是后续 Gate。仅 nav 分支，不合并 main。
+
+
+## 本轮 CI 回归结果与后续限制（2026-11-27 / v0.3.286）
+
+- 确认上一轮 compat tracepoint 修复最终 CI：GNSS Runtime run `45928975034`（head `831711a...`）success；ROS 2 Package run `45928975043` success。
+- one-to-many joiner 早期提交 `f38cfbc...` 与测试替换前的 `db71acd...` 对应 GNSS Runtime CI 失败，根因是旧测试 `test_multiple_handlers_cannot_claim_one_syscall` 仍断言一对一所有权。该测试已替换为 `test_one_syscall_can_have_multiple_handler_observations`，提交 `7d7d682993a213e25914b522e0c32063e8b8233d`；该提交的 GNSS Runtime 与 ROS 2 Package 两项 CI 均 success（run `45929373001` / `45929373003`）。
+- syscall LIFO reducer 提交 `34c32f16...`：ROS 2 Package CI run `45929459562` success；GNSS Runtime run `45929459560` failure，失败来自同一分支此前遗留的旧 joiner 测试断言，并非 syscall reducer 测试失败。最终包含 joiner 测试替换 + syscall LIFO reducer + tests 的 head `bd5056cbebf55edb6aa05d1f73697f3e448a82e3` 已获得 GNSS Runtime run `45929462353` success 与 ROS 2 Package run `45929462345` success。
+- 当前 nav HEAD 在本 TaskPlan 更新前为 `bd5056cb...`；本轮文档提交后以远端 branch ref 为准。上述 CI 只覆盖对应提交，不代表 live kernel trace capture、BPF attach、Orin BSP 或真实 clock/PHC 效果已验证。
+- 下一步：继续明确 producer 对同线程跨 CPU 迁移事件排序的保证；per-CPU sequence 不能单独证明跨 CPU 全序，LIFO 无 invocation cookie 仍属启发式。然后定义 producer-side invocation cookie、drop counter、stop/drain/final snapshot 的统一 envelope。VM live capability JSON 仍未取得，用户需从最新 nav 拉取后运行只读探测器。N1/N9 未验收，仅 nav 分支，不合并 main。
