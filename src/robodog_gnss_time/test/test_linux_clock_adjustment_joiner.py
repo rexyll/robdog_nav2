@@ -39,10 +39,16 @@ def test_equal_width_candidates_are_ambiguous():
     r=correlate_clock_adjustment_observations(*reports([sc(),sc()],[kh()]))
     assert "ambiguous_nested_syscall_candidates" in [x["code"] for x in r["issues"]]
 
-def test_multiple_handlers_cannot_claim_one_syscall():
-    r=correlate_clock_adjustment_observations(*reports([sc()],[kh(),kh(start=160,end=260)]))
-    assert "multiple_handlers_for_one_syscall" in [x["code"] for x in r["issues"]]
-    assert r["counts"]["joined_pairs"]==0
+def test_one_syscall_can_have_multiple_handler_observations():
+    r = correlate_clock_adjustment_observations(
+        *reports(
+            [sc(start=100, end=400)],
+            [kh("do_clock_adjtime", start=120, end=380),
+             kh("do_adjtimex", start=180, end=300)],
+        )
+    )
+    assert r["reduction_status"] == "consistent"
+    assert r["counts"]["joined_pairs"] == 2
 
 def test_copyback_inference_off_by_default():
     r=correlate_clock_adjustment_observations(*reports([sc(ret=-14)],[kh()]))
