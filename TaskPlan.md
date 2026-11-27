@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.283
+- 文档版本：v0.3.284
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1597,3 +1597,13 @@
 - 修复测试夹具：为 `sys_enter/exit_clock_adjtime32` 与 `sys_enter/exit_adjtimex_time32` 创建对应 format 文件。提交 `d9044bc1026906a5c393fe0170e9c559bff3be73`。随后将 nested counter 的递增移动到容量检查之后，确保只计入实际接受的嵌套 entry，提交 `831711a49beaab97f745f9dc2f77e1b7c75b4984`。
 - 修复后 CI 仍在运行；不得将早期失败忽略，也不得将后续运行中状态写成通过。等待最新 nav HEAD 对应的 GNSS Runtime 与 ROS 2 Package 两套 CI 最终结果。
 - 当前变更仅在 nav；main HEAD 未触碰。未执行 tracepoint enable、BPF load/attach 或时钟调整 syscall。VM live capability JSON 仍待用户同步最新 nav 后运行采集器获得。
+
+
+## 本轮增量（2026-11-27 / v0.3.284）
+
+- 深审 Navigation 47 joiner 与 Navigation 55 调用路径语义后，发现 joiner 原先隐含一对一假设：每个 syscall 只能拥有一个 handler interval；这与 `clock_adjtime` 的源码调用路径不符。clock dispatch handler `do_clock_adjtime` 在特定 clock callback 路径下还可能调用 `do_adjtimex`，而直接 `adjtimex` syscall 则直接进入 `do_adjtimex`。
+- 修正 syscall→handler 允许关系：`clock_adjtime`/`clock_adjtime32` 可包含 `do_clock_adjtime` 与条件性的嵌套 `do_adjtimex`；`adjtimex`/`adjtimex_time32` 只映射 `do_adjtimex`。每个 handler interval 仍选择唯一最窄的完整包含 syscall interval；相同宽度候选仍 fail-closed。一个 syscall 可关联多个 handler interval，不再错误地产生 `multiple_handlers_for_one_syscall`。
+- Joiner 输出 schema 升级 v2，新增关系分类：`syscall_dispatch_handler`、`nested_clock_callback_handler`、`direct_syscall_handler`。copy-back EFAULT 推断只对 pinned wrapper 对应的顶层 handler 开启；`clock_adjtime*` 内部嵌套的 `do_adjtimex` 不会重复被标记为 copy-back 证据。
+- 新增/调整 synthetic tests：clock_adjtime 同时关联 dispatch handler 与 nested do_adjtimex；直接 adjtimex 关联 do_adjtimex；clock_adjtime 不要求一定观测到 nested callback；删除旧的一对一冲突假设测试。代码提交 joiner `f38cfbc3a55fcdf4d4785348c989361db3e74962`，测试提交 `db71acd9ad7c2e5f52175ab5d5625b9e6c0322d0`，替换测试与 Navigation 47 文档提交见本节更新历史。
+- 验证边界：代码已推送，CI 尚未完成；synthetic tests 只验证 reducer/joiner 的逻辑关系，不证明特定目标 kernel 的 callback 路径。interval containment 仍不是 call-stack proof；同线程信号处理器中的嵌套 syscall 可能需要 invocation cookie/parent context 消歧。未加载 BPF、未启用 tracepoint、未修改时钟。
+- 下一步：检查 joiner 对同一 handler 的嵌套 interval 和同线程嵌套 syscall 的歧义策略；随后检查 outer syscall reducer 目前的 duplicate-entry overwrite 是否同样需要 LIFO stack，以免信号处理器嵌套同名 syscall 时丢失外层 entry。等待 GNSS Runtime CI 最终结果，VM live capability JSON 仍待用户提供。仅 nav 分支，不合并 main。
