@@ -307,3 +307,14 @@ def test_session_allocator_task_id_and_invocation_id_exhaustion_do_not_wrap():
     session2.next_invocation_seq[task] = (1 << 64) - 1
     assert session2.allocate_invocation_id(task, kind="handler") is None
     assert session2.counters["handler_invocation_allocation_failures"] == 1
+
+
+def test_session_allocator_blocks_gauge_mutation_after_detach():
+    import pytest
+    session = ClockAdjustmentProducerSessionAllocator()
+    task = session.create_task_context()
+    session.detach()
+    with pytest.raises(RuntimeError):
+        session.end_invocation("syscall")
+    with pytest.raises(RuntimeError):
+        session.release_task_context(task)
