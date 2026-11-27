@@ -75,11 +75,11 @@ The exact reconciliation equations and terminal outcome rules remain in Navigati
 
 When both `syscall_envelopes` and `handler_envelopes` are supplied to the unified report builder, it runs strict invocation reducers for each stream and an exact parent-ID join. The report adds three mandatory gates: syscall invocation reduction, handler invocation reduction, and invocation parent join. Supplying only one stream or a non-list value fails closed. Omitting both keeps the report in explicit legacy mode and does not claim schema-v2 verification.
 
-The exact join key is `(capture_session_id, boot_id, task_instance_id, parent_syscall_invocation_id)`. It additionally checks PID equality, supported syscall/handler mapping and interval containment; a syscall may own multiple handler observations. It never falls back to nearest timestamp when parent identity is missing or ambiguous.
+The exact join key is `(capture_session_id, boot_id, task_instance_id, parent_syscall_invocation_id)`. It additionally checks PID equality, supported syscall/handler mapping and interval containment; a syscall may own multiple handler observations. It never falls back to nearest timestamp when parent identity is missing or ambiguous. Event IDs are audited across both streams with a single `(capture_session_id, boot_id)` uniqueness scope. The exact join preserves syscall/handler return values; copy-back inference remains disabled unless the pinned Linux v6.12 wrapper contract is explicitly supplied and the top-level handler/outer-return conditions both match.
 
 ## 5A. Legacy and strict paths
 
-The strict invocation reducer is an additional schema-v2 path; it does not replace the schema-v1 LIFO reducers yet. Its pairing key includes session, boot, producer, stream, task lifetime and invocation ID. It reports duplicate event IDs, duplicate entry/exit sides, unmatched sides, subject mismatches, parent-context mismatches and timestamp reversals as partial.
+The strict invocation reducer is an additional schema-v2 path; it does not replace the schema-v1 LIFO reducers yet. Its pairing key includes session, boot, producer, stream, task lifetime and invocation ID. It reports duplicate event IDs, duplicate entry/exit sides, unmatched sides, subject mismatches, parent-context mismatches and timestamp reversals as partial. It preserves raw_clockid, raw TIMEX modes and their classification, plus the outer syscall or internal handler return value and a stage-specific return interpretation.
 
 For each envelope:
 1. validate schema and session/stream identity;
@@ -92,7 +92,7 @@ The validator does not itself prove that a producer emitted all events, that a c
 
 ## 6. Tests and remaining work
 
-Synthetic tests cover v1 compatibility, v2 identity projection, handler parent-context states, schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
+Synthetic tests cover v1 compatibility, v2 identity projection, handler parent-context states, cross-stream event-ID collisions, exact parent-ID joins, native/compat relation labels, pinned-wrapper copy-back gating, raw request/return preservation, schema/version/type rejection, payload attempts to override envelope fields, stream-kind/event-type mismatch, malformed unhashable values, lifecycle ordering, identity continuity, monotonic-time regression, and final quiescence.
 
 Remaining implementation gates:
 - migrate existing syscall/handler payload reducers to consume strict invocation pairs without losing legacy report fields;
