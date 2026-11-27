@@ -200,3 +200,23 @@ def test_invocation_join_relation_labels_follow_native_and_compat_mapping(
     result = correlate_clock_adjustment_invocation_observations(syscall, handler)
     assert result["reduction_status"] == "consistent"
     assert result["joins"][0]["relation"] == expected_relation
+
+
+def test_invocation_join_copyback_inference_requires_pinned_wrapper_contract():
+    from robodog_gnss_time.linux_clock_adjustment_joiner import (
+        correlate_clock_adjustment_invocation_observations,
+    )
+    syscall_pair = invocation_sc("clock_adjtime", "sys-1", 100, 400)
+    syscall_pair["raw_return_value"] = -14
+    handler_pair = invocation_kh("do_clock_adjtime", "h-1", "sys-1", 120, 380)
+    handler_pair["raw_handler_return"] = 0
+    syscall = {"reduction_status": "consistent", "pairs": [syscall_pair]}
+    handlers = {"reduction_status": "consistent", "pairs": [handler_pair]}
+    default = correlate_clock_adjustment_invocation_observations(syscall, handlers)
+    pinned = correlate_clock_adjustment_invocation_observations(
+        syscall, handlers, wrapper_contract_id=CONTRACT
+    )
+    assert not default["joins"][0]["copyback_failure_inferred_from_pinned_wrapper"]
+    assert pinned["joins"][0]["copyback_failure_inferred_from_pinned_wrapper"]
+    assert pinned["joins"][0]["raw_syscall_return"] == -14
+    assert pinned["joins"][0]["raw_handler_return"] == 0
