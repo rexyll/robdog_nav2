@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.254
+- 文档版本：v0.3.255
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1258,4 +1258,25 @@
 - 未使用/声称 Orin 实机能力；未加载 tracing/eBPF、未启 audit、未修改系统时钟或
   PHC。后续可在无硬件条件下继续做通用事件 envelope/reducer 和合成测试；
   ARM64 ABI、目标内核、PHC 驱动、真实丢事件/负载、Orin runtime 仍需实物授权。
+  保持仅 nav 分支，N1/N9 未验收，不合并 main。
+
+
+## 本轮增量（2026-11-27 / v0.3.255）
+
+- 新增纯 Python syscall event reducer：
+  src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_events.py；
+  配套测试 test_linux_clock_adjustment_events.py。按
+  (boot_id, pid_tgid, syscall) 配对，按 (boot_id, cpu) 隔离 per-CPU sequence；
+  保留 raw return value、timex modes decode 和 CLOCK_EFFECT_NOT_MEASURED 边界。
+- reducer 对 orphan exit、entry 无 exit、重复 entry overwrite、pending capacity
+  overflow、跨 boot 不配对、exit 时间早于 entry、malformed event、sequence gap/
+  regression 显式输出 issue code 并降为 partial；默认 pending capacity=4096。
+- 对返回值不做成功/无副作用的过度推断：非负值保留为 handler status observation；
+  -EFAULT 标为 copy-stage ambiguous；其他 errno 标为 effect unresolved。
+- 新增 doc/Navigation/44_linux_clock_adjustment_event_reducer_contract.md，
+  记录输入 envelope、身份键、有界队列、序号、return semantics、输出和验证边界；
+  更新 doc43 与 Navigation README。
+- 本切片不需要 Orin、PHC 或 tracing 权限；不读取用户指针、不启动 eBPF。
+  GNSS runtime CI / package CI 针对此新增代码与合成测试仍待本轮最终结果确认；
+  通过 CI 也只代表 Python package tests，不代表内核事件覆盖或实际 clock effect。
   保持仅 nav 分支，N1/N9 未验收，不合并 main。
