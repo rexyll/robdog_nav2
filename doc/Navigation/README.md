@@ -315,3 +315,5 @@
 - [50 — Linux clock-adjustment capture session and event envelope](50_linux_clock_adjustment_capture_session_and_event_envelope.md)
 - [Capture event-envelope and lifecycle validator](../../src/robodog_gnss_time/robodog_gnss_time/linux_clock_adjustment_session.py)
 - [Capture event-envelope and lifecycle tests](../../src/robodog_gnss_time/test/test_linux_clock_adjustment_session.py)
+
+- [51 — Linux kernel trace capability probe for clock-adjustment evidence](51_linux_kernel_trace_capability_probe.md)
