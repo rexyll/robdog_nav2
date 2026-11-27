@@ -1,6 +1,6 @@
 # RobDog 完整导航模块项目总任务计划（唯一进度台账）
 
-- 文档版本：v0.3.276
+- 文档版本：v0.3.277
 - 更新日期：2026-11-27
 - 默认分支：`main`
 - 仓库：https://github.com/rexyll/robdog_nav2
@@ -1526,3 +1526,14 @@
 - Navigation 54 / probe provenance 变更 CI 已完成：GNSS runtime run `45926586710`，Humble/Jammy 与 Jazzy/Noble 各 **306/306 passed，0 errors/failures/skipped**；ROS 2 package run `45926586674`，两个 job 均 success。
 - CI 日志仍有 rosdep unresolved ERROR 提示，但两个平台的 colcon build/test 均成功，pytest 结果完整；此提示继续保留为非阻断环境告警，不将其描述为零告警。
 - 当前 nav HEAD：`919cf4ce9ab5c7c62dd84474ac545e5cee2d1fca`；main HEAD：`0cb9bb430391cc6c6038ea42f5940d5a2378e6d6`。main 未修改。
+
+
+## 本轮操作手册补充（2026-11-27 / v0.3.277）
+
+- Navigation 54 增加通用 Linux VM 的实际采集命令，默认直接检查 live host，输出到 `$HOME/kernel-trace-capabilities.json`；无需 sudo，不要求修改 sysctl、mount tracefs、开启 tracepoint 或触发时钟调整。观察项因权限不可读时保留 unavailable 状态，不为完整性而提权。
+- 用户侧待执行命令：
+  ```bash
+  python3 src/robodog_gnss_time/robodog_gnss_time/linux_kernel_trace_capabilities.py \
+    --output "$HOME/kernel-trace-capabilities.json"
+  ```
+- 待回传 JSON 后才能进入目标函数参数语义审核；目前仍未获得用户 VM 实际报告，未做任何 BPF attach。Orin BSP 必须独立采集。
