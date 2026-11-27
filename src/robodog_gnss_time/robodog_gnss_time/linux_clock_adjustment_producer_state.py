@@ -297,4 +297,153 @@ class ClockAdjustmentProducerState:
         return {"per_cpu": [dict(value) for _, value in sorted(self.per_cpu.items())]}
 
 
-__all__ = ["ClockAdjustmentProducerState"]
+class ClockAdjustmentProducerSessionAllocator:
+    """Session-wide reference allocator shared by multiple task contexts."""
+
+    def __init__(self, max_tracked_tasks=128, max_cas_retries=8,
+                 start_event_id=1, start_task_instance_seq=1):
+        if max_tracked_tasks < 1 or max_cas_retries < 1:
+            raise ValueError("capacity and CAS retry bound must be positive")
+        self.max_tracked_tasks = max_tracked_tasks
+        self.max_cas_retries = max_cas_retries
+        self.next_event_id = start_event_id
+        self.next_task_instance_seq = start_task_instance_seq
+        self.next_invocation_seq = {}
+        self.active_tasks = set()
+        self.task_context_reservations = 0
+        self.active_syscall_invocations = 0
+        self.active_handler_invocations = 0
+        self.inflight_bpf_callbacks = 0
+        self.producer_detached = False
+        self.counters = ClockAdjustmentProducerState._zero_counters()
+
+    def allocate_event_id(self, cas_attempts=1):
+        self.counters["event_id_allocation_attempts"] += 1
+        if (cas_attempts > self.max_cas_retries
+                or self.next_event_id <= 0
+                or self.next_event_id >= (1 << 64) - 1):
+            self.counters["event_id_allocation_failures"] += 1
+            return None
+        value = self.next_event_id
+        self.next_event_id += 1
+        self.counters["event_id_allocation_successes"] += 1
+        return f"{value:016x}"
+
+    def create_task_context(self, create_ok=True, task_id_ok=True,
+                            task_id_cas_attempts=1):
+        if self.producer_detached:
+            raise RuntimeError("producer session is detached")
+        self.counters["task_context_admission_attempts"] += 1
+        if len(self.active_tasks) >= self.max_tracked_tasks:
+            self.counters["task_context_capacity_rejected"] += 1
+            return None
+        self.counters["task_context_admitted"] += 1
+        self.task_context_reservations += 1
+        self.counters["task_context_create_attempts"] += 1
+        if not create_ok:
+            self.counters["task_context_create_failures"] += 1
+            self.task_context_reservations -= 1
+            return None
+        self.counters["task_context_create_successes"] += 1
+        self.counters["task_context_init_attempts"] += 1
+        self.counters["task_instance_id_allocation_attempts"] += 1
+        if (not task_id_ok or task_id_cas_attempts > self.max_cas_retries
+                or self.next_task_instance_seq <= 0
+                or self.next_task_instance_seq >= (1 << 64) - 1):
+            self.counters["task_instance_id_allocation_failures"] += 1
+            self.counters["task_context_init_failures"] += 1
+            self.task_context_reservations -= 1
+            return None
+        value = self.next_task_instance_seq
+        self.next_task_instance_seq += 1
+        task_id = f"{value:016x}"
+        self.counters["task_instance_id_allocation_successes"] += 1
+        self.counters["task_context_init_successes"] += 1
+        self.active_tasks.add(task_id)
+        self.next_invocation_seq[task_id] = 1
+        return task_id
+
+    def allocate_invocation_id(self, task_instance_id, success=True):
+        if task_instance_id not in self.active_tasks:
+            raise KeyError("unknown or exited task context")
+        self.counters["syscall_invocation_allocation_attempts"] += 1
+        if not success or self.next_invocation_seq[task_instance_id] >= (1 << 64) - 1:
+            self.counters["syscall_invocation_allocation_failures"] += 1
+            return None
+        value = self.next_invocation_seq[task_instance_id]
+        self.next_invocation_seq[task_instance_id] += 1
+        self.counters["syscall_invocation_allocation_successes"] += 1
+        return f"{value:016x}"
+
+    def begin_invocation(self, kind):
+        if kind == "syscall":
+            self.active_syscall_invocations += 1
+        elif kind == "handler":
+            self.active_handler_invocations += 1
+        else:
+            raise ValueError("kind must be syscall or handler")
+
+    def end_invocation(self, kind):
+        if kind == "syscall":
+            if self.active_syscall_invocations <= 0:
+                raise RuntimeError("syscall invocation gauge underflow")
+            self.active_syscall_invocations -= 1
+        elif kind == "handler":
+            if self.active_handler_invocations <= 0:
+                raise RuntimeError("handler invocation gauge underflow")
+            self.active_handler_invocations -= 1
+        else:
+            raise ValueError("kind must be syscall or handler")
+
+    def release_task_context(self, task_instance_id,
+                             pending_syscalls=0, pending_handlers=0):
+        if task_instance_id not in self.active_tasks:
+            raise KeyError("task context already released or unknown")
+        if (not isinstance(pending_syscalls, int) or isinstance(pending_syscalls, bool)
+                or pending_syscalls < 0
+                or not isinstance(pending_handlers, int) or isinstance(pending_handlers, bool)
+                or pending_handlers < 0):
+            raise ValueError("pending invocation counts must be nonnegative integers")
+        if pending_syscalls > self.active_syscall_invocations:
+            raise RuntimeError("pending syscall count exceeds active gauge")
+        if pending_handlers > self.active_handler_invocations:
+            raise RuntimeError("pending handler count exceeds active gauge")
+        self.counters["task_exit_observed"] += 1
+        if pending_syscalls:
+            self.counters["task_exit_with_pending_syscalls"] += 1
+            self.active_syscall_invocations -= pending_syscalls
+        if pending_handlers:
+            self.counters["task_exit_with_pending_handlers"] += 1
+            self.active_handler_invocations -= pending_handlers
+        self.active_tasks.remove(task_instance_id)
+        self.next_invocation_seq.pop(task_instance_id, None)
+        self.task_context_reservations -= 1
+
+    def detach(self):
+        if self.active_syscall_invocations or self.active_handler_invocations:
+            raise RuntimeError("cannot detach with active invocations")
+        if self.inflight_bpf_callbacks:
+            raise RuntimeError("cannot detach with in-flight callbacks")
+        self.producer_detached = True
+
+    def global_snapshot(self, capture_session_id="capture-01", boot_id="boot-01"):
+        return {
+            "capture_session_id": capture_session_id,
+            "boot_id": boot_id,
+            "snapshot_after_producer_detach": self.producer_detached,
+            "counters": dict(self.counters),
+            "gauges": {
+                "active_syscall_invocations": self.active_syscall_invocations,
+                "active_handler_invocations": self.active_handler_invocations,
+                "inflight_bpf_callbacks": self.inflight_bpf_callbacks,
+                "task_context_reservations": self.task_context_reservations,
+            },
+        }
+
+
+
+
+__all__ = [
+    "ClockAdjustmentProducerState",
+    "ClockAdjustmentProducerSessionAllocator",
+]
