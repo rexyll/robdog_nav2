@@ -1,0 +1,142 @@
+
+############################################################
+FILE: kernel/bpf/bpf_task_storage.c
+############################################################
+46:void bpf_task_storage_free(struct task_struct *task)
+56:	bpf_local_storage_destroy(local_storage);
+119:	sdata = bpf_local_storage_update(
+169:BPF_CALL_5(bpf_task_storage_get, struct bpf_map *, map, struct task_struct *,
+182:	/* only allocate new storage, when the task is refcounted */
+183:	if (refcount_read(&task->usage) &&
+185:		sdata = bpf_local_storage_update(
+194:BPF_CALL_2(bpf_task_storage_delete, struct bpf_map *, map, struct task_struct *,
+202:	 * is guaranteed. Either by being refcounted or by being protected
+215:	return bpf_local_storage_map_alloc(attr, &task_cache, true);
+220:	bpf_local_storage_map_free(map, &task_cache);
+226:	.map_alloc_check = bpf_local_storage_map_alloc_check,
+239:const struct bpf_func_proto bpf_task_storage_get_proto = {
+240:	.func = bpf_task_storage_get,
+250:const struct bpf_func_proto bpf_task_storage_delete_proto = {
+251:	.func = bpf_task_storage_delete,
+
+############################################################
+FILE: kernel/bpf/bpf_local_storage.c
+############################################################
+88:		atomic_set(&selem->state, 0);
+106:static void __bpf_local_storage_free_trace_rcu(struct rcu_head *rcu)
+119:static void __bpf_local_storage_free(struct bpf_local_storage *local_storage,
+123:		kfree_rcu(local_storage, rcu);
+125:		call_rcu_tasks_trace(&local_storage->rcu,
+126:				     __bpf_local_storage_free_trace_rcu);
+129:static void bpf_local_storage_free_rcu(struct rcu_head *rcu)
+137:static void bpf_local_storage_free_trace_rcu(struct rcu_head *rcu)
+143:	bpf_local_storage_free_rcu(rcu);
+146:static void bpf_local_storage_free(struct bpf_local_storage *local_storage,
+153:		__bpf_local_storage_free(local_storage, reuse_now);
+158:		call_rcu(&local_storage->rcu, bpf_local_storage_free_rcu);
+162:	call_rcu_tasks_trace(&local_storage->rcu,
+163:			     bpf_local_storage_free_trace_rcu);
+196:		call_rcu(&selem->rcu, __bpf_selem_free_rcu);
+198:		call_rcu_tasks_trace(&selem->rcu, __bpf_selem_free_trace_rcu);
+207:	/* The bpf_local_storage_map_free will wait for rcu_barrier */
+242:		call_rcu(&selem->rcu, bpf_selem_free_rcu);
+246:	call_rcu_tasks_trace(&selem->rcu, bpf_selem_free_trace_rcu);
+275:	if (pin_owner && !refcount_inc_not_zero(&local_storage->owner_refcnt))
+290:		refcount_dec(&local_storage->owner_refcnt);
+425:		bpf_local_storage_free(local_storage, false);
+433: * bpf_local_storage_destroy() or bpf_local_storage_map_free().
+502:		atomic_or(in_map_free ? SELEM_MAP_UNLINKED : SELEM_STORAGE_UNLINKED, &selem->state);
+511:	    atomic_cmpxchg(&selem->state, SELEM_UNLINKED, SELEM_TOFREE) == SELEM_UNLINKED)
+515:		bpf_local_storage_free(local_storage, true);
+584:	refcount_set(&storage->owner_refcnt, 1);
+619:	bpf_local_storage_free(storage, true);
+630:bpf_local_storage_update(void *owner, struct bpf_local_storage_map *smap,
+788:int bpf_local_storage_map_alloc_check(union bpf_attr *attr)
+819:u32 bpf_local_storage_destroy(struct bpf_local_storage *local_storage)
+828:	 * It is racing with bpf_local_storage_map_free() alone
+835:	if (!refcount_dec_and_test(&local_storage->owner_refcnt)) {
+836:		while (refcount_read(&local_storage->owner_refcnt))
+839:		 * Paired with refcount_dec() in bpf_selem_unlink_nofail()
+859:bpf_local_storage_map_alloc(union bpf_attr *attr,
+908:void bpf_local_storage_map_free(struct bpf_map *map,
+924:	synchronize_rcu();
+963:	synchronize_rcu();
+
+############################################################
+FILE: kernel/fork.c
+############################################################
+177:void __weak arch_release_task_struct(struct task_struct *tsk)
+188:static inline void free_task_struct(struct task_struct *tsk)
+288:	call_rcu(&vm_stack->rcu, thread_stack_free_rcu);
+403:	call_rcu(rh, thread_stack_free_rcu);
+437:	call_rcu(rh, thread_stack_free_rcu);
+513:static void release_task_stack(struct task_struct *tsk)
+525:		release_task_stack(tsk);
+529:void free_task(struct task_struct *tsk)
+542:	release_task_stack(tsk);
+552:	arch_release_task_struct(tsk);
+555:	bpf_task_storage_free(tsk);
+556:	free_task_struct(tsk);
+558:EXPORT_SYMBOL(free_task);
+776:void __put_task_struct(struct task_struct *tsk)
+791:	free_task(tsk);
+793:EXPORT_SYMBOL_GPL(__put_task_struct);
+795:void __put_task_struct_rcu_cb(struct rcu_head *rhp)
+799:	__put_task_struct(task);
+801:EXPORT_SYMBOL_GPL(__put_task_struct_rcu_cb);
+894:int __weak arch_dup_task_struct(struct task_struct *dst,
+909:static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+920:	err = arch_dup_task_struct(tsk, orig);
+942:	 * the usage counts on the error path calling free_task.
+1011:	free_task_struct(tsk);
+1443:	put_task_struct(child);
+1816:static inline void rcu_copy_process(struct task_struct *p)
+1906:static void __delayed_free_task(struct rcu_head *rhp)
+1910:	free_task(tsk);
+1913:static __always_inline void delayed_free_task(struct task_struct *tsk)
+1916:		call_rcu(&tsk->rcu, __delayed_free_task);
+1918:		free_task(tsk);
+1964:__latent_entropy struct task_struct *copy_process(
+2050:	p = dup_task_struct(current, node);
+2097:	 * If multiple threads are within copy_process(), then this check
+2105:	delayacct_tsk_init(p);	/* Must remain after dup_task_struct() */
+2110:	rcu_copy_process(p);
+2385:	klp_copy_process(p);
+2471:	uprobe_copy_process(p, clone_flags);
+2520:	perf_event_free_task(p);
+2524:	lockdep_free_task(p);
+2539:	delayed_free_task(p);
+2574:	task = copy_process(&init_struct_pid, 0, cpu_to_node(cpu), &args);
+2601:	return copy_process(NULL, 0, node, &args);
+2653:	p = copy_process(NULL, trace, NUMA_NO_NODE, args);
+
+############################################################
+FILE: kernel/exit.c
+############################################################
+128: * For things release_task() would like to do *after* tasklist_lock is released.
+130:struct release_task_post {
+134:static void __unhash_process(struct release_task_post *post, struct task_struct *p,
+159:static void __exit_signal(struct release_task_post *post, struct task_struct *tsk)
+223:static void delayed_put_task_struct(struct rcu_head *rhp)
+231:	put_task_struct(tsk);
+234:void put_task_struct_rcu_user(struct task_struct *task)
+237:		call_rcu(&task->rcu, delayed_put_task_struct);
+244:void release_task(struct task_struct *p)
+246:	struct release_task_post post;
+264:	ptrace_release_task(p);
+307:	put_task_struct_rcu_user(p);
+619:		release_task(p);
+671:* Any that need to be release_task'd are put on the @dead list.
+777:		release_task(p);
+896:void __noreturn do_exit(long code)
+907:		kthread_do_exit(kthread, code);
+976:	exit_task_work(tsk);
+1018:	lockdep_free_task(tsk);
+1021:EXPORT_SYMBOL(do_exit);
+1080:	do_exit(signr);
+1085:	do_exit((error_code&0xff)<<8);
+1118:	do_exit(exit_code);
+1191:		put_task_struct(p);
+1280:		release_task(p);
+1380:	put_task_struct(p);
+1430:	put_task_struct(p);
