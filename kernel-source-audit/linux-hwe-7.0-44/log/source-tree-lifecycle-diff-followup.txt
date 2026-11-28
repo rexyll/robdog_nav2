@@ -1,0 +1,564 @@
+===== REMAINING TARGETED DIFF =====
+@@ -95,6 +95,7 @@
+ #include <linux/thread_info.h>
+ #include <linux/kstack_erase.h>
+ #include <linux/kasan.h>
++#include <linux/randomize_kstack.h>
+ #include <linux/scs.h>
+ #include <linux/io_uring.h>
+ #include <linux/io_uring_types.h>
+@@ -121,6 +122,11 @@
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/task.h>
++#ifdef CONFIG_USER_NS
++extern int unprivileged_userns_clone;
++#else
++#define unprivileged_userns_clone 0
++#endif
+ 
+ #include <kunit/visibility.h>
+ 
+@@ -1002,6 +1008,11 @@
+ 	tsk->mm_cid.active = 0;
+ 	INIT_HLIST_NODE(&tsk->mm_cid.node);
+ #endif
++
++#ifdef CONFIG_BPF_SYSCALL
++	RCU_INIT_POINTER(tsk->bpf_storage, NULL);
++	tsk->bpf_ctx = NULL;
++#endif
+ 	return tsk;
+ 
+ free_stack:
+@@ -1056,7 +1067,6 @@
+ {
+ #ifdef CONFIG_UPROBES
+ 	mm->uprobes_state.xol_area = NULL;
+-	arch_uprobe_init_state(mm);
+ #endif
+ }
+ 
+@@ -1630,6 +1640,7 @@
+ 
+ 	if (clone_flags & CLONE_FILES) {
+ 		atomic_inc(&oldf->count);
++		tsk->files = oldf;
+ 		return 0;
+ 	}
+ 
+@@ -1948,9 +1959,11 @@
+ 
+ static bool need_futex_hash_allocate_default(u64 clone_flags)
+ {
+-	if ((clone_flags & (CLONE_THREAD | CLONE_VM)) != (CLONE_THREAD | CLONE_VM))
+-		return false;
+-	return true;
++	/*
++	 * Allocate a default futex hash for any sibling that will
++	 * share the parent's mm.
++	 */
++	return clone_flags & CLONE_VM;
+ }
+ 
+ /*
+@@ -1984,6 +1997,10 @@
+ 	if ((clone_flags & (CLONE_NEWUSER|CLONE_FS)) == (CLONE_NEWUSER|CLONE_FS))
+ 		return ERR_PTR(-EINVAL);
+ 
++	if ((clone_flags & CLONE_NEWUSER) && !unprivileged_userns_clone)
++		if (!capable(CAP_SYS_ADMIN))
++			return ERR_PTR(-EPERM);
++
+ 	/*
+ 	 * Thread groups must share signals as well, and detached threads
+ 	 * can only be started up within the thread group.
+@@ -2109,6 +2126,8 @@
+ 	INIT_LIST_HEAD(&p->sibling);
+ 	rcu_copy_process(p);
+ 	p->vfork_done = NULL;
++	/* Set by copy_files(), exit_files() on the error path skips NULL. */
++	p->files = NULL;
+ 	spin_lock_init(&p->alloc_lock);
+ 
+ 	init_sigpending(&p->pending);
+@@ -2182,10 +2201,6 @@
+ 	p->sequential_io	= 0;
+ 	p->sequential_io_avg	= 0;
+ #endif
+-#ifdef CONFIG_BPF_SYSCALL
+-	RCU_INIT_POINTER(p->bpf_storage, NULL);
+-	p->bpf_ctx = NULL;
+-#endif
+ 
+ 	unwind_task_init(p);
+ 
+@@ -2213,7 +2228,7 @@
+ 		goto bad_fork_cleanup_semundo;
+ 	retval = copy_fs(clone_flags, p);
+ 	if (retval)
+-		goto bad_fork_cleanup_files;
++		goto bad_fork_cleanup_semundo;
+ 	retval = copy_sighand(clone_flags, p);
+ 	if (retval)
+ 		goto bad_fork_cleanup_fs;
+@@ -2233,6 +2248,7 @@
+ 	if (retval)
+ 		goto bad_fork_cleanup_io;
+ 
++	random_kstack_task_init(p);
+ 	stackleak_task_init(p);
+ 
+ 	if (pid != &init_struct_pid) {
+@@ -2268,6 +2284,7 @@
+ 
+ #ifdef CONFIG_BLOCK
+ 	p->plug = NULL;
++	p->flags &= ~PF_BLOCK_TS;
+ #endif
+ 	futex_init_task(p);
+ 
+@@ -2336,10 +2353,6 @@
+ 	if (retval)
+ 		goto bad_fork_cancel_cgroup;
+ 
+-	/*
+-	 * Allocate a default futex hash for the user process once the first
+-	 * thread spawns.
+-	 */
+ 	if (need_futex_hash_allocate_default(clone_flags)) {
+ 		retval = futex_hash_allocate_default();
+ 		if (retval)
+@@ -2508,8 +2521,6 @@
+ 	__cleanup_sighand(p->sighand);
+ bad_fork_cleanup_fs:
+ 	exit_fs(p); /* blocking */
+-bad_fork_cleanup_files:
+-	exit_files(p); /* blocking */
+ bad_fork_cleanup_semundo:
+ 	exit_sem(p);
+ bad_fork_cleanup_security:
+@@ -2520,6 +2531,8 @@
+ 	perf_event_free_task(p);
+ bad_fork_sched_cancel_fork:
+ 	sched_cancel_fork(p);
++	/* ->release() of a file may need scx_fork_rwsem for write. */
++	exit_files(p); /* blocking */
+ bad_fork_cleanup_policy:
+ 	lockdep_free_task(p);
+ #ifdef CONFIG_NUMA
+@@ -2598,6 +2611,10 @@
+ 		.user_worker	= 1,
+ 	};
+ 
++	/* A creator past its fatal signal or its coredump point gets no thread. */
++	if (current->flags & (PF_SIGNALED | PF_POSTCOREDUMP))
++		return ERR_PTR(-EINTR);
++
+ 	return copy_process(NULL, 0, node, &args);
+ }
+ 
+@@ -3151,6 +3168,12 @@
+ 	if (unshare_flags & CLONE_NEWNS)
+ 		unshare_flags |= CLONE_FS;
+ 
++	if ((unshare_flags & CLONE_NEWUSER) && !unprivileged_userns_clone) {
++		err = -EPERM;
++		if (!capable(CAP_SYS_ADMIN))
++			goto bad_unshare_out;
++	}
++
+ 	err = check_unshare_flags(unshare_flags);
+ 	if (err)
+ 		goto bad_unshare_out;
+@@ -3174,11 +3197,10 @@
+ 					 new_cred, new_fs);
+ 	if (err)
+ 		goto bad_unshare_cleanup_cred;
+-
+ 	if (new_cred) {
+ 		err = set_cred_ucounts(new_cred);
+ 		if (err)
+-			goto bad_unshare_cleanup_cred;
++			goto bad_unshare_cleanup_nsproxy;
+ 	}
+ 
+ 	if (new_fs || new_fd || do_sysvsem || new_cred || new_nsproxy) {
+@@ -3194,8 +3216,10 @@
+ 			shm_init_task(current);
+ 		}
+ 
+-		if (new_nsproxy)
++		if (new_nsproxy) {
+ 			switch_task_namespaces(current, new_nsproxy);
++			new_nsproxy = NULL;
++		}
+ 
+ 		task_lock(current);
+ 
+@@ -3224,13 +3248,16 @@
+ 
+ 	perf_event_namespaces(current);
+ 
++bad_unshare_cleanup_nsproxy:
++	/* never installed, so no active references to drop */
++	if (new_nsproxy)
++		nsproxy_free(new_nsproxy);
+ bad_unshare_cleanup_cred:
+ 	if (new_cred)
+ 		put_cred(new_cred);
+ bad_unshare_cleanup_fd:
+ 	if (new_fd)
+ 		put_files_struct(new_fd);
+-
+ bad_unshare_cleanup_fs:
+ 	if (new_fs)
+ 		free_fs_struct(new_fs);
+### kernel/exit.c
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/exit.c	2026-04-13 04:48:06.000000000 +0800
++++ kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/exit.c	2026-11-27 17:52:17.000000000 +0800
+@@ -212,7 +212,12 @@
+ 	__unhash_process(post, tsk, group_dead);
+ 	write_sequnlock(&sig->stats_lock);
+ 
+-	tsk->sighand = NULL;
++	/*
++	 * Ensure that all preceeding state is visible. Pairs with
++	 * the smp_acquire__after_ctrl_dep() in the sighand == NULL
++	 * path of lock_task_sighand().
++	 */
++	smp_store_release(&tsk->sighand, NULL);
+ 	spin_unlock(&sighand->siglock);
+ 
+ 	__cleanup_sighand(sighand);
+@@ -257,8 +262,11 @@
+ 	pidfs_exit(p);
+ 	cgroup_task_release(p);
+ 
+-	/* Retrieve @thread_pid before __unhash_process() may set it to NULL. */
+-	thread_pid = task_pid(p);
++	/*
++	 * Pin @thread_pid before __unhash_process() clears it. The last
++	 * PIDTYPE detach can otherwise free it before proc_flush_pid().
++	 */
++	thread_pid = get_pid(task_pid(p));
+ 
+ 	write_lock_irq(&tasklist_lock);
+ 	ptrace_release_task(p);
+@@ -287,20 +295,21 @@
+ 	}
+ 
+ 	write_unlock_irq(&tasklist_lock);
+-	/* @thread_pid can't go away until free_pids() below */
+ 	proc_flush_pid(thread_pid);
++	put_pid(thread_pid);
+ 	exit_cred_namespaces(p);
+ 	add_device_randomness(&p->se.sum_exec_runtime,
+ 			      sizeof(p->se.sum_exec_runtime));
+ 	free_pids(post.pids);
+ 	release_thread(p);
+ 	/*
+-	 * This task was already removed from the process/thread/pid lists
+-	 * and lock_task_sighand(p) can't succeed. Nobody else can touch
+-	 * ->pending or, if group dead, signal->shared_pending. We can call
+-	 * flush_sigqueue() lockless.
++	 * This task was already removed from the process/thread/pid lists and
++	 * lock_task_sighand(p) can't succeed. If it's the group leader then
++	 * flush tsk->signal->shared_pending. tsk->pending has been flushed
++	 * already in exit_signals(). Nothing else can touch
++	 * signal->shared_pending anymore, so flush_sigqueue() can be invoked
++	 * lockless.
+ 	 */
+-	flush_sigqueue(&p->pending);
+ 	if (thread_group_leader(p))
+ 		flush_sigqueue(&p->signal->shared_pending);
+ 
+@@ -571,6 +580,7 @@
+ 	 */
+ 	smp_mb__after_spinlock();
+ 	local_irq_disable();
++	current->user_dumpable = (get_dumpable(mm) == SUID_DUMP_USER);
+ 	current->mm = NULL;
+ 	membarrier_update_current_mm(NULL);
+ 	enter_lazy_tlb(mm, current);
+@@ -968,10 +978,11 @@
+ 
+ 	exit_sem(tsk);
+ 	exit_shm(tsk);
+-	exit_files(tsk);
+-	exit_fs(tsk);
++	/* Hang the tty up before the last close of it can clear the session. */
+ 	if (group_dead)
+ 		disassociate_ctty(1);
++	exit_files(tsk);
++	exit_fs(tsk);
+ 	exit_nsproxy_namespaces(tsk);
+ 	exit_task_work(tsk);
+ 	exit_thread(tsk);
+@@ -1074,6 +1085,7 @@
+ 		futex_exit_recursive(tsk);
+ 		tsk->exit_state = EXIT_DEAD;
+ 		refcount_inc(&tsk->rcu_users);
++		preempt_disable();
+ 		do_task_dead();
+ 	}
+ 
+@@ -1718,7 +1730,7 @@
+ 	add_wait_queue(&current->signal->wait_chldexit, &wo->child_wait);
+ 
+ 	do {
+-		set_current_state(TASK_INTERRUPTIBLE);
++		set_current_state(TASK_INTERRUPTIBLE | TASK_FREEZABLE);
+ 		retval = __do_wait(wo);
+ 		if (retval != -ERESTARTSYS)
+ 			break;
+
+===== NMI GUARD IN UBUNTU PATCH =====
+44523-+
+44524-+	/*
+44525-+	 * The guest does not enable KVM_ASYNC_PF_SEND_ALWAYS, so the host
+44526-+	 * delivers async #PF only to user mode (or as a #PF VM-exit, which KVM
+44527-+	 * reads itself). A #PF from kernel mode can still arrive between that
+44528-+	 * delivery and the read of the reason flags, inside an NMI that
+44529-+	 * interrupted it, for instance perf reading user memory for a call
+44530-+	 * chain. Such a fault is not async, so leave the async PF flags
+44531-+	 * untouched for the outer handler.  Outside NMI context, on the other
+44532-+	 * hand, async PF flags on a kernel-mode fault mean the host is broken.
+44533-+	 */
+44534-+	if (!user_mode(regs)) {
+44535:+		if (likely(in_nmi()))
+44536-+			return false;
+44537-+		state = irqentry_enter(regs);
+44538-+		instrumentation_begin();
+44539-+		panic("Host injected async #PF in kernel mode\n");
+44540-+	}
+44541- 
+44542-+	flags = kvm_read_and_reset_apf_flags();
+44543- 	if (!flags)
+44544- 		return false;
+44545- 
+44546-@@ -290,8 +318,6 @@
+44547- 		panic("Host injected async #PF in interrupt disabled region\n");
+--
+520587- 	.ret_type	= RET_INTEGER,
+520588--	.arg1_type	= ARG_ANYTHING,
+520589-+	.arg1_type	= ARG_SCALAR,
+520590- 	.arg2_type	= ARG_PTR_TO_FUNC,
+520591- 	.arg3_type	= ARG_PTR_TO_STACK_OR_NULL,
+520592- 	.arg4_type	= ARG_ANYTHING,
+520593---- linux-hwe-7.0-7.0.0.orig/kernel/bpf/bpf_local_storage.c
+520594-+++ linux-hwe-7.0-7.0.0/kernel/bpf/bpf_local_storage.c
+520595-@@ -393,6 +393,9 @@
+520596- 	unsigned long flags;
+520597- 	int err;
+520598- 
+520599:+	if (in_nmi())
+520600-+		return -EOPNOTSUPP;
+520601-+
+520602- 	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+520603- 		/* selem has already been unlinked from sk */
+520604- 		return 0;
+520605---- linux-hwe-7.0-7.0.0.orig/kernel/bpf/bpf_lru_list.c
+520606-+++ linux-hwe-7.0-7.0.0/kernel/bpf/bpf_lru_list.c
+520607-@@ -13,23 +13,8 @@
+520608- #define PERCPU_FREE_TARGET		(4)
+520609- #define PERCPU_NR_SCANS			PERCPU_FREE_TARGET
+520610- 
+520611--/* Helpers to get the local list index */
+--
+528025- 	if (!css_uses_rstat(css))
+528026- 		return;
+528027- 
+528028- 	lockdep_assert_preemption_disabled();
+528029- 
+528030- 	/*
+528031--	 * For archs withnot nmi safe cmpxchg or percpu ops support, ignore
+528032--	 * the requests from nmi context.
+528033-+	 * The lockless insertion below relies on NMI-safe cmpxchg;
+528034-+	 * bail out in NMI on archs that don't provide it.
+528035- 	 */
+528036--	if ((!IS_ENABLED(CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG) ||
+528037:-	     !IS_ENABLED(CONFIG_ARCH_HAS_NMI_SAFE_THIS_CPU_OPS)) && in_nmi())
+528038:+	if (!IS_ENABLED(CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG) && in_nmi())
+528039- 		return;
+528040- 
+528041- 	rstatc = css_rstat_cpu(css, cpu);
+528042-@@ -125,6 +122,18 @@
+528043- 	llist_add(&rstatc->lnode, lhead);
+528044- }
+528045- 
+528046-+/*
+528047-+ * BPF-facing wrapper for __css_rstat_updated(). Validate the caller-provided
+528048-+ * CPU before passing it to the internal rstat updater.
+528049-+ */
+528050-+__bpf_kfunc void css_rstat_updated(struct cgroup_subsys_state *css, int cpu)
+--
+550745-+	 * contribute further charges.
+550746-+	 */
+550747-+	if (tsk_is_oom_victim(current) &&
+550748-+	    mm_flags_test(MMF_OOM_SKIP, current->signal->oom_mm))
+550749-+		goto nomem;
+550750-+
+550751- 	__memcg_memory_event(mem_over_limit, MEMCG_MAX, allow_spinning);
+550752- 	raised_max_event = true;
+550753- 
+550754-@@ -2583,7 +2599,7 @@
+550755- 		struct mem_cgroup_per_node *pn = memcg->nodeinfo[pgdat->node_id];
+550756- 
+550757: 		/* preemption is disabled in_nmi(). */
+550758--		css_rstat_updated(&memcg->css, smp_processor_id());
+550759-+		__css_rstat_updated(&memcg->css, smp_processor_id());
+550760- 		if (idx == NR_SLAB_RECLAIMABLE_B)
+550761- 			atomic_add(nr, &pn->slab_reclaimable);
+550762- 		else
+550763-@@ -2807,7 +2823,7 @@
+550764- 		mod_memcg_state(memcg, MEMCG_KMEM, val);
+550765- 	} else {
+550766: 		/* preemption is disabled in_nmi(). */
+550767--		css_rstat_updated(&memcg->css, smp_processor_id());
+550768-+		__css_rstat_updated(&memcg->css, smp_processor_id());
+550769- 		atomic_add(val, &memcg->kmem_stat);
+550770- 	}
+550771- }
+550772-@@ -2854,7 +2870,7 @@
+550773- 
+550774- 	memcg = get_mem_cgroup_from_objcg(objcg);
+550775- 
+550776--	ret = try_charge_memcg(memcg, gfp, nr_pages);
+550777-+	ret = try_charge(memcg, gfp, nr_pages);
+550778- 	if (ret)
+--
+552041- 	 */
+552042- 	if (zero_tags)
+552043--		init = !tag_clear_highpages(page, 1 << order);
+552044-+		init = tag_clear_highpages(page, 1 << order, /* clear_pages= */init);
+552045- 
+552046- 	if (!should_skip_kasan_unpoison(gfp_flags) &&
+552047- 	    kasan_unpoison_pages(page, order, init)) {
+552048-@@ -2995,8 +3003,10 @@
+552049- 		migratetype = MIGRATE_MOVABLE;
+552050- 	}
+552051- 
+552052--	if (unlikely((fpi_flags & FPI_TRYLOCK) && IS_ENABLED(CONFIG_PREEMPT_RT)
+552053:-		     && (in_nmi() || in_hardirq()))) {
+552054-+	if (unlikely((fpi_flags & FPI_TRYLOCK) &&
+552055-+		     ((IS_ENABLED(CONFIG_PREEMPT_RT) &&
+552056:+		       (in_nmi() || in_hardirq())) ||
+552057:+		      (!IS_ENABLED(CONFIG_SMP) && in_nmi())))) {
+552058- 		add_page_to_zone_llist(zone, page, order);
+552059- 		return;
+552060- 	}
+552061-@@ -4169,18 +4179,67 @@
+552062- 	struct page *page = NULL;
+552063- 	unsigned long pflags;
+552064- 	unsigned int noreclaim_flag;
+552065-+	struct capture_control capc = {
+552066-+		.zone = NULL,
+552067-+		.migratetype = ac->migratetype,
+552068-+		.order = order,
+552069-+		.page = NULL,
+--
+552147-+	/* Match the slowpath compaction promotion in __alloc_pages_direct_compact */
+552148-+	if ((alloc_flags & ALLOC_NOFRAGMENT) && ac->migratetype != MIGRATE_MOVABLE)
+552149-+		reclaim_order = max(order, pageblock_order);
+552150- 
+552151- 	psi_memstall_enter(&pflags);
+552152--	*did_some_progress = __perform_reclaim(gfp_mask, order, ac);
+552153-+	*did_some_progress = __perform_reclaim(gfp_mask, reclaim_order, ac);
+552154- 	if (unlikely(!(*did_some_progress)))
+552155- 		goto out;
+552156- 
+552157-@@ -7798,6 +7862,11 @@
+552158- 	 */
+552159: 	if (IS_ENABLED(CONFIG_PREEMPT_RT) && (in_nmi() || in_hardirq()))
+552160- 		return NULL;
+552161-+
+552162-+	/* On UP, spin_trylock() always succeeds even when it is locked */
+552163:+	if (!IS_ENABLED(CONFIG_SMP) && in_nmi())
+552164-+		return NULL;
+552165-+
+552166- 	if (!pcp_allowed_order(order))
+552167- 		return NULL;
+552168- 
+552169---- linux-hwe-7.0-7.0.0.orig/mm/page_io.c
+552170-+++ linux-hwe-7.0-7.0.0/mm/page_io.c
+552171-@@ -486,7 +486,7 @@
+552172- 
+552173- 	if (ret == sio->len) {
+552174- 		for (p = 0; p < sio->pages; p++) {
+552175--			struct folio *folio = page_folio(sio->bvec[p].bv_page);
+--
+553301- 
+553302- 	/*
+553303-@@ -5077,7 +5089,7 @@
+553304- 	 * simply flush and free it.
+553305- 	 */
+553306- 	if (!barn || data_race(barn->nr_full) >= MAX_FULL_SHEAVES ||
+553307--	    refill_sheaf(s, sheaf, gfp)) {
+553308-+	    refill_sheaf(s, sheaf, gfp | __GFP_NOMEMALLOC | __GFP_NOWARN)) {
+553309- 		sheaf_flush_unused(s, sheaf);
+553310- 		free_empty_sheaf(s, sheaf);
+553311- 		return;
+553312-@@ -5304,6 +5316,10 @@
+553313: 	if (IS_ENABLED(CONFIG_PREEMPT_RT) && (in_nmi() || in_hardirq()))
+553314- 		return NULL;
+553315- 
+553316-+	/* On UP, spin_trylock() always succeeds even when it is locked */
+553317:+	if (!IS_ENABLED(CONFIG_SMP) && in_nmi())
+553318-+		return NULL;
+553319-+
+553320- retry:
+553321- 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
+553322- 		return NULL;
+553323-@@ -5719,7 +5735,8 @@
+553324- 	if (!allow_spin)
+553325- 		return NULL;
+553326- 
+553327--	empty = alloc_empty_sheaf(s, GFP_NOWAIT);
+553328-+	/* Don't wake up kswapd, it will cause deadlock under pi_lock */
+553329-+	empty = alloc_empty_sheaf(s, __GFP_NOWARN);
+--
+554574-+		if (!p4d_free_pud_page(p4d, addr))
+554575-+			return 0;
+554576-+		return p4d_set_huge(p4d, phys_addr, prot);
+554577-+	}
+554578- }
+554579- 
+554580- static int vmap_p4d_range(pgd_t *pgd, unsigned long addr, unsigned long end,
+554581-@@ -3209,7 +3231,7 @@
+554582- 	struct vm_struct *area;
+554583- 	unsigned long requested_size = size;
+554584- 
+554585--	BUG_ON(in_interrupt());
+554586:+	BUG_ON(in_nmi() || in_hardirq());
+554587- 	size = ALIGN(size, 1ul << shift);
+554588- 	if (unlikely(!size))
+554589- 		return NULL;
+554590-@@ -3276,6 +3298,7 @@
+554591- 				  NUMA_NO_NODE, GFP_KERNEL,
+554592- 				  __builtin_return_address(0));
+554593- }
+554594-+EXPORT_SYMBOL(get_vm_area);
+554595- 
+554596- struct vm_struct *get_vm_area_caller(unsigned long size, unsigned long flags,
+554597- 				const void *caller)
+554598-@@ -4361,7 +4384,7 @@
+
+===== PATCH FILE PATHS FOR LIFECYCLE SOURCES =====
+520593:--- linux-hwe-7.0-7.0.0.orig/kernel/bpf/bpf_local_storage.c
+529828:--- linux-hwe-7.0-7.0.0.orig/kernel/exit.c
+529925:--- linux-hwe-7.0-7.0.0.orig/kernel/fork.c
+
+===== SOURCE FILE VERSION AND HASHES =====
+--- kernel/bpf/bpf_local_storage.c
+bd95df254dcaac6127b06c056fc20d866e4b333d41ce9cdf5203b8d56db59669  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c
+60a855cd9596ea0eb155dd85eea0bf56f575df4e6eba0fba8231de511494634b  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/bpf/bpf_local_storage.c
+--- kernel/bpf/bpf_task_storage.c
+d3fbe7fbd0dad8c7e4f5bfa9080f8f1d5bfd27cffc24c81f70c9549e19b177ab  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c
+d3fbe7fbd0dad8c7e4f5bfa9080f8f1d5bfd27cffc24c81f70c9549e19b177ab  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/bpf/bpf_task_storage.c
+--- kernel/fork.c
+b393692a3f342f9a197da17a3f94754faafc4a44ef06b35e9867d5dc6dc8baa0  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c
+138826f43b9c0361c76f26bf70ddc0f4df09ef1ec3ab2090ed29a202117eb9de  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/fork.c
+--- kernel/exit.c
+b76cee0df63eca5fd64bfa5ff82db64241415b37366a707ba41986fc1122cf3a  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/exit.c
+3c7f2b8c89cc09bf847fcf5b13c5c2fa81d7fb0a7cd7a8dc972034094ccee19c  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/exit.c
