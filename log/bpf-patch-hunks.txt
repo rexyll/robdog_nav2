@@ -1,0 +1,319 @@
+
+===== FILE: include/linux/bpf.h =====
+@@ -3036,7 +3064,6 @@
+ 						 const struct bpf_prog *prog);
+ void bpf_task_storage_free(struct task_struct *task);
+ void bpf_cgrp_storage_free(struct cgroup *cgroup);
+-bool bpf_prog_has_kfunc_call(const struct bpf_prog *prog);
+ const struct btf_func_model *
+ bpf_jit_find_kfunc_model(const struct bpf_prog *prog,
+ 			 const struct bpf_insn *insn);
+
+===== FILE: include/linux/lsm_hooks.h =====
+@@ -119,6 +120,7 @@
+ 	unsigned int lbs_bpf_map;
+ 	unsigned int lbs_bpf_prog;
+ 	unsigned int lbs_bpf_token;
++	bool lbs_secmark; /* expressed desire for secmark use */
+ };
+ 
+ /*
+
+===== FILE: kernel/bpf/bpf_lsm.c =====
+@@ -292,7 +295,6 @@
+ BTF_ID(func, bpf_lsm_bpf_map_free)
+ BTF_ID(func, bpf_lsm_bpf_prog)
+ BTF_ID(func, bpf_lsm_bpf_prog_load)
+-BTF_ID(func, bpf_lsm_bpf_prog_free)
+ BTF_ID(func, bpf_lsm_bpf_token_create)
+ BTF_ID(func, bpf_lsm_bpf_token_free)
+ BTF_ID(func, bpf_lsm_bpf_token_cmd)
+
+===== FILE: kernel/bpf/helpers.c =====
+@@ -4139,7 +4166,7 @@
+ 	struct bpf_map *map;
+ 	void *map_val;
+ 	enum task_work_notify_mode mode;
+-	bpf_task_work_callback_t callback_fn;
++	bpf_callback_t callback_fn;
+ 	struct rcu_head rcu;
+ } __aligned(8);
+ 
+
+===== FILE: kernel/bpf/helpers.c =====
+@@ -4214,7 +4241,8 @@
+ 	key = (void *)map_key_from_value(ctx->map, ctx->map_val, &idx);
+ 
+ 	migrate_disable();
+-	ctx->callback_fn(ctx->map, key, ctx->map_val);
++	ctx->callback_fn((u64)(long)ctx->map, (u64)(long)key,
++			 (u64)(long)ctx->map_val, 0, 0);
+ 	migrate_enable();
+ 
+ 	bpf_task_work_ctx_reset(ctx);
+
+===== FILE: kernel/bpf/helpers.c =====
+@@ -4327,7 +4355,7 @@
+ }
+ 
+ static int bpf_task_work_schedule(struct task_struct *task, struct bpf_task_work *tw,
+-				  struct bpf_map *map, bpf_task_work_callback_t callback_fn,
++				  struct bpf_map *map, void *callback_fn,
+ 				  struct bpf_prog_aux *aux, enum task_work_notify_mode mode)
+ {
+ 	struct bpf_prog *prog;
+
+===== FILE: kernel/bpf/syscall.c =====
+@@ -807,6 +807,11 @@
+ 	bpf_task_work_cancel_and_free(obj + rec->task_work_off);
+ }
+ 
++void bpf_obj_cancel_fields(struct bpf_map *map, void *obj)
++{
++	bpf_map_free_internal_structs(map, obj);
++}
++
+ void bpf_obj_free_fields(const struct btf_record *rec, void *obj)
+ {
+ 	const struct btf_field *fields;
+
+===== FILE: kernel/events/core.c =====
+@@ -7538,9 +7602,11 @@
+ {
+ 	/*
+ 	 * Both perf_pending_task() and perf_pending_irq() can race with the
+-	 * task exiting.
++	 * task exiting or exec-ing. We can determine if such a race has
++	 * occurred by checking if perf_event_exit_task(), which will set
++	 * ctx->task to TASK_TOMBSTONE, has already been called.
+ 	 */
+-	if (current->flags & PF_EXITING)
++	if (event->ctx->task == TASK_TOMBSTONE)
+ 		return;
+ 
+ 	/*
+
+===== FILE: kernel/exit.c =====
+@@ -968,10 +978,11 @@
+ 
+ 	exit_sem(tsk);
+ 	exit_shm(tsk);
+-	exit_files(tsk);
+-	exit_fs(tsk);
++	/* Hang the tty up before the last close of it can clear the session. */
+ 	if (group_dead)
+ 		disassociate_ctty(1);
++	exit_files(tsk);
++	exit_fs(tsk);
+ 	exit_nsproxy_namespaces(tsk);
+ 	exit_task_work(tsk);
+ 	exit_thread(tsk);
+
+===== FILE: security/lsm_init.c =====
+@@ -314,6 +316,14 @@
+ 	lsm_blob_size_update(&blobs->lbs_bpf_map, &blob_sizes.lbs_bpf_map);
+ 	lsm_blob_size_update(&blobs->lbs_bpf_prog, &blob_sizes.lbs_bpf_prog);
+ 	lsm_blob_size_update(&blobs->lbs_bpf_token, &blob_sizes.lbs_bpf_token);
++
++	if (blobs->lbs_secmark) {
++		if (blob_sizes.lbs_secmark)
++			blobs->lbs_secmark = false;
++		else
++			blob_sizes.lbs_secmark = true;
++	}
++
+ }
+ 
+ /**
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7132,24 +7386,6 @@
+ 			    BPF__PROG_RUN, NULL);
+ }
+ 
+-static u32 selinux_bpffs_creator_sid(u32 fd)
+-{
+-	struct path path;
+-	struct super_block *sb;
+-	struct superblock_security_struct *sbsec;
+-
+-	CLASS(fd, f)(fd);
+-
+-	if (fd_empty(f))
+-		return SECSID_NULL;
+-
+-	path = fd_file(f)->f_path;
+-	sb = path.dentry->d_sb;
+-	sbsec = selinux_superblock(sb);
+-
+-	return sbsec->creator_sid;
+-}
+-
+ static int selinux_bpf_map_create(struct bpf_map *map, union bpf_attr *attr,
+ 				  struct bpf_token *token, bool kernel)
+ {
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7162,7 +7398,7 @@
+ 	if (!token)
+ 		ssid = bpfsec->sid;
+ 	else
+-		ssid = selinux_bpffs_creator_sid(attr->map_token_fd);
++		ssid = selinux_bpf_token_security(token)->grantor_sid;
+ 
+ 	return avc_has_perm(ssid, bpfsec->sid, SECCLASS_BPF, BPF__MAP_CREATE,
+ 			    NULL);
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7180,7 +7416,7 @@
+ 	if (!token)
+ 		ssid = bpfsec->sid;
+ 	else
+-		ssid = selinux_bpffs_creator_sid(attr->prog_token_fd);
++		ssid = selinux_bpf_token_security(token)->grantor_sid;
+ 
+ 	return avc_has_perm(ssid, bpfsec->sid, SECCLASS_BPF, BPF__PROG_LOAD,
+ 			    NULL);
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7194,12 +7430,14 @@
+ 				    const struct path *path)
+ {
+ 	struct bpf_security_struct *bpfsec;
+-	u32 sid = selinux_bpffs_creator_sid(attr->token_create.bpffs_fd);
++	struct superblock_security_struct *sbsec;
+ 	int err;
+ 
++	sbsec = selinux_superblock(path->dentry->d_sb);
++
+ 	bpfsec = selinux_bpf_token_security(token);
+ 	bpfsec->sid = current_sid();
+-	bpfsec->grantor_sid = sid;
++	bpfsec->grantor_sid = sbsec->creator_sid;
+ 
+ 	bpfsec->perms = 0;
+ 	/**
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7208,15 +7446,15 @@
+ 	 * in the allowed_cmds bitmap.
+ 	 */
+ 	if (bpf_token_cmd(token, BPF_MAP_CREATE)) {
+-		err = avc_has_perm(bpfsec->sid, sid, SECCLASS_BPF,
+-				   BPF__MAP_CREATE_AS, NULL);
++		err = avc_has_perm(bpfsec->sid, bpfsec->grantor_sid,
++				   SECCLASS_BPF, BPF__MAP_CREATE_AS, NULL);
+ 		if (err)
+ 			return err;
+ 		bpfsec->perms |= BPF__MAP_CREATE;
+ 	}
+ 	if (bpf_token_cmd(token, BPF_PROG_LOAD)) {
+-		err = avc_has_perm(bpfsec->sid, sid, SECCLASS_BPF,
+-				   BPF__PROG_LOAD_AS, NULL);
++		err = avc_has_perm(bpfsec->sid, bpfsec->grantor_sid,
++				   SECCLASS_BPF, BPF__PROG_LOAD_AS, NULL);
+ 		if (err)
+ 			return err;
+ 		bpfsec->perms |= BPF__PROG_LOAD;
+
+===== FILE: security/selinux/hooks.c =====
+@@ -7408,6 +7647,7 @@
+ 	.lbs_bpf_map = sizeof(struct bpf_security_struct),
+ 	.lbs_bpf_prog = sizeof(struct bpf_security_struct),
+ 	.lbs_bpf_token = sizeof(struct bpf_security_struct),
++	.lbs_secmark = true,
+ };
+ 
+ /*
+
+===== FILE: tools/perf/builtin-ftrace.c =====
+@@ -71,18 +71,11 @@
+ 
+ static bool check_ftrace_capable(void)
+ {
+-	bool used_root;
+-
+-	if (perf_cap__capable(CAP_PERFMON, &used_root))
+-		return true;
+-
+-	if (!used_root && perf_cap__capable(CAP_SYS_ADMIN, &used_root))
++	if (perf_cap__capable(CAP_PERFMON) ||
++	    perf_cap__capable(CAP_SYS_ADMIN))
+ 		return true;
+ 
+-	pr_err("ftrace only works for %s!\n",
+-		used_root ? "root"
+-			  : "users with the CAP_PERFMON or CAP_SYS_ADMIN capability"
+-		);
++	pr_err("ftrace only works for users with the CAP_PERFMON or CAP_SYS_ADMIN capability!\n");
+ 	return false;
+ }
+ 
+
+===== FILE: tools/perf/util/bpf-filter.c =====
+@@ -629,24 +629,20 @@
+ 
+ static bool check_bpf_filter_capable(void)
+ {
+-	bool used_root;
++	int fd;
+ 
+-	if (perf_cap__capable(CAP_BPF, &used_root))
++	if (perf_cap__capable(CAP_BPF))
+ 		return true;
+ 
+-	if (!used_root) {
+-		/* Check if root already pinned the filter programs and maps */
+-		int fd = get_pinned_fd("filters");
+-
+-		if (fd >= 0) {
+-			close(fd);
+-			return true;
+-		}
++	/* Check if root already pinned the filter programs and maps */
++	fd = get_pinned_fd("filters");
++	if (fd >= 0) {
++		close(fd);
++		return true;
+ 	}
+ 
+-	pr_err("Error: BPF filter only works for %s!\n"
+-	       "\tPlease run 'perf record --setup-filter pin' as root first.\n",
+-	       used_root ? "root" : "users with the CAP_BPF capability");
++	pr_err("Error: BPF filter only works for users with the CAP_BPF capability!\n"
++	       "\tPlease run 'perf record --setup-filter pin' as root first.\n");
+ 
+ 	return false;
+ }
+
+===== FILE: tools/perf/util/cap.h =====
+@@ -18,7 +18,6 @@
+ #define CAP_BPF		39
+ #endif
+ 
+-/* Query if a capability is supported, used_root is set if the fallback root check was used. */
+-bool perf_cap__capable(int cap, bool *used_root);
++bool perf_cap__capable(int cap);
+ 
+ #endif /* __PERF_CAP_H */
+
+===== FILE: tools/perf/util/util.c =====
+@@ -380,15 +380,9 @@
+ 
+ bool perf_event_paranoid_check(int max_level)
+ {
+-	bool used_root;
+-
+-	if (perf_cap__capable(CAP_SYS_ADMIN, &used_root))
+-		return true;
+-
+-	if (!used_root && perf_cap__capable(CAP_PERFMON, &used_root))
+-		return true;
+-
+-	return perf_event_paranoid() <= max_level;
++	return perf_cap__capable(CAP_SYS_ADMIN) ||
++	       perf_cap__capable(CAP_PERFMON) ||
++	       perf_event_paranoid() <= max_level;
+ }
+ 
+ int perf_tip(char **strp, const char *dirpath)
