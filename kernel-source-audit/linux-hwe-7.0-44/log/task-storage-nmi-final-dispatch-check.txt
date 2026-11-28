@@ -1,0 +1,874 @@
+===== bpf_tracing_func_proto DEFINITION =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1232-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1233-	/* This helper call is inlined by verifier. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1234-	return ((u64 *)ctx)[-1] & 0xFF;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1235-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1236-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1237-static const struct bpf_func_proto bpf_get_func_arg_cnt_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1238-	.func		= get_func_arg_cnt,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1239-	.ret_type	= RET_INTEGER,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1240-	.arg1_type	= ARG_PTR_TO_CTX,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1241-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1242-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1243-static const struct bpf_func_proto *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1244:bpf_tracing_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1245-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1246-	const struct bpf_func_proto *func_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1247-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1248-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1249-	case BPF_FUNC_get_smp_processor_id:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1250-		return &bpf_get_smp_processor_id_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1251-#ifdef CONFIG_ARCH_HAS_NON_OVERLAPPING_ADDRESS_SPACE
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1252-	case BPF_FUNC_probe_read:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1253-		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1254-		       NULL : &bpf_probe_read_compat_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1255-	case BPF_FUNC_probe_read_str:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1256-		return security_locked_down(LOCKDOWN_BPF_READ_KERNEL) < 0 ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1257-		       NULL : &bpf_probe_read_compat_str_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1258-#endif
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1259-	case BPF_FUNC_get_func_ip:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1260-		return &bpf_get_func_ip_proto_tracing;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1261-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1262-		break;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1263-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1264-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1265-	func_proto = bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1266-	if (func_proto)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1267-		return func_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1268-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1269-	if (!bpf_token_capable(prog->aux->token, CAP_SYS_ADMIN))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1270-		return NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1271-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1272-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1273-	case BPF_FUNC_probe_write_user:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1274-		return security_locked_down(LOCKDOWN_BPF_WRITE_USER) < 0 ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1275-		       NULL : &bpf_probe_write_user_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1276-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1277-		return NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1278-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1279-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1280-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1281-static bool is_kprobe_multi(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1282-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1283-	return prog->expected_attach_type == BPF_TRACE_KPROBE_MULTI ||
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1284-	       prog->expected_attach_type == BPF_TRACE_KPROBE_SESSION;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1285-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1286-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1287-static inline bool is_kprobe_session(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1288-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1289-	return prog->type == BPF_PROG_TYPE_KPROBE &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1290-	       prog->expected_attach_type == BPF_TRACE_KPROBE_SESSION;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1291-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1292-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1293-static inline bool is_uprobe_multi(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1294-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1295-	return prog->expected_attach_type == BPF_TRACE_UPROBE_MULTI ||
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1296-	       prog->expected_attach_type == BPF_TRACE_UPROBE_SESSION;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1297-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1298-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1299-static inline bool is_uprobe_session(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1300-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1301-	return prog->type == BPF_PROG_TYPE_KPROBE &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1302-	       prog->expected_attach_type == BPF_TRACE_UPROBE_SESSION;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1303-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1304-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1305-static inline bool is_trace_fsession(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1306-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1307-	return prog->type == BPF_PROG_TYPE_TRACING &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1308-	       prog->expected_attach_type == BPF_TRACE_FSESSION;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1309-}
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1326-		if (is_kprobe_multi(prog))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1327-			return &bpf_get_func_ip_proto_kprobe_multi;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1328-		if (is_uprobe_multi(prog))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1329-			return &bpf_get_func_ip_proto_uprobe_multi;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1330-		return &bpf_get_func_ip_proto_kprobe;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1331-	case BPF_FUNC_get_attach_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1332-		if (is_kprobe_multi(prog))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1333-			return &bpf_get_attach_cookie_proto_kmulti;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1334-		if (is_uprobe_multi(prog))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1335-			return &bpf_get_attach_cookie_proto_umulti;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1336-		return &bpf_get_attach_cookie_proto_trace;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1337-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1338:		return bpf_tracing_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1339-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1340-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1341-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1342-/* bpf+kprobe programs can access fields of 'struct pt_regs' */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1343-static bool kprobe_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1344-					const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1345-					struct bpf_insn_access_aux *info)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1346-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1347-	if (off < 0 || off >= sizeof(struct pt_regs))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1348-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1349-	if (off % size != 0)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1350-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1351-	/*
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1352-	 * Assertion for 32 bit to make sure last 8 byte access
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1353-	 * (BPF_DW) to the last 4 byte member is disallowed.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1354-	 */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1355-	if (off + size > sizeof(struct pt_regs))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1356-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1357-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1358-	if (type == BPF_WRITE)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1359-		prog->aux->kprobe_write_ctx = true;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1360-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1361-	return true;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1362-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1363-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1364-const struct bpf_verifier_ops kprobe_verifier_ops = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1365-	.get_func_proto  = kprobe_prog_func_proto,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1366-	.is_valid_access = kprobe_prog_is_valid_access,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1367-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1368-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1369-const struct bpf_prog_ops kprobe_prog_ops = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1370-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1371-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1372-BPF_CALL_5(bpf_perf_event_output_tp, void *, tp_buff, struct bpf_map *, map,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1373-	   u64, flags, void *, data, u64, size)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1374-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1375-	struct pt_regs *regs = *(struct pt_regs **)tp_buff;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1376-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1377-	/*
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1378-	 * r1 points to perf tracepoint buffer where first 8 bytes are hidden
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1379-	 * from bpf program and contain a pointer to 'struct pt_regs'. Fetch it
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1380-	 * from there and call the same bpf_perf_event_output() helper inline.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1381-	 */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1382-	return ____bpf_perf_event_output(regs, map, flags, data, size);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1383-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1384-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1385-static const struct bpf_func_proto bpf_perf_event_output_proto_tp = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1386-	.func		= bpf_perf_event_output_tp,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1387-	.gpl_only	= true,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1388-	.ret_type	= RET_INTEGER,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1389-	.arg1_type	= ARG_PTR_TO_CTX,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1390-	.arg2_type	= ARG_CONST_MAP_PTR,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1391-	.arg3_type	= ARG_ANYTHING,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1392-	.arg4_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1393-	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1394-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1395-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1396-BPF_CALL_3(bpf_get_stackid_tp, void *, tp_buff, struct bpf_map *, map,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1397-	   u64, flags)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1398-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1399-	struct pt_regs *regs = *(struct pt_regs **)tp_buff;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1400-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1401-	/*
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1402-	 * Same comment as in bpf_perf_event_output_tp(), only that this time
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1403-	 * the other helper's function body cannot be inlined due to being
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1439-tp_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1440-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1441-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1442-	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1443-		return &bpf_perf_event_output_proto_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1444-	case BPF_FUNC_get_stackid:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1445-		return &bpf_get_stackid_proto_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1446-	case BPF_FUNC_get_stack:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1447-		return &bpf_get_stack_proto_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1448-	case BPF_FUNC_get_attach_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1449-		return &bpf_get_attach_cookie_proto_trace;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1450-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1451:		return bpf_tracing_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1452-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1453-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1454-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1455-static bool tp_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1456-				    const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1457-				    struct bpf_insn_access_aux *info)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1458-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1459-	if (off < sizeof(void *) || off >= PERF_MAX_TRACE_SIZE)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1460-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1461-	if (type != BPF_READ)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1462-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1463-	if (off % size != 0)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1464-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1465-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1466-	BUILD_BUG_ON(PERF_MAX_TRACE_SIZE % sizeof(__u64));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1467-	return true;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1468-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1469-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1470-const struct bpf_verifier_ops tracepoint_verifier_ops = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1471-	.get_func_proto  = tp_prog_func_proto,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1472-	.is_valid_access = tp_prog_is_valid_access,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1473-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1474-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1475-const struct bpf_prog_ops tracepoint_prog_ops = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1476-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1477-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1478-BPF_CALL_3(bpf_perf_prog_read_value, struct bpf_perf_event_data_kern *, ctx,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1479-	   struct bpf_perf_event_value *, buf, u32, size)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1480-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1481-	int err = -EINVAL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1482-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1483-	if (unlikely(size != sizeof(struct bpf_perf_event_value)))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1484-		goto clear;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1485-	err = perf_event_read_local(ctx->event, &buf->counter, &buf->enabled,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1486-				    &buf->running);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1487-	if (unlikely(err))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1488-		goto clear;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1489-	return 0;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1490-clear:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1491-	memset(buf, 0, size);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1492-	return err;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1493-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1494-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1495-static const struct bpf_func_proto bpf_perf_prog_read_value_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1496-         .func           = bpf_perf_prog_read_value,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1497-         .gpl_only       = true,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1498-         .ret_type       = RET_INTEGER,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1499-         .arg1_type      = ARG_PTR_TO_CTX,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1500-         .arg2_type      = ARG_PTR_TO_UNINIT_MEM,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1501-         .arg3_type      = ARG_CONST_SIZE,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1502-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1503-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1504-BPF_CALL_4(bpf_read_branch_records, struct bpf_perf_event_data_kern *, ctx,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1505-	   void *, buf, u32, size, u64, flags)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1506-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1507-	static const u32 br_entry_size = sizeof(struct perf_branch_entry);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1508-	struct perf_branch_stack *br_stack = ctx->data->br_stack;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1509-	u32 to_copy;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1510-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1511-	if (unlikely(flags & ~BPF_F_GET_BRANCH_RECORDS_SIZE))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1512-		return -EINVAL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1513-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1514-	if (unlikely(!(ctx->data->sample_flags & PERF_SAMPLE_BRANCH_STACK)))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1515-		return -ENOENT;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1516-
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1547-		return &bpf_perf_event_output_proto_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1548-	case BPF_FUNC_get_stackid:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1549-		return &bpf_get_stackid_proto_pe;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1550-	case BPF_FUNC_get_stack:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1551-		return &bpf_get_stack_proto_pe;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1552-	case BPF_FUNC_perf_prog_read_value:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1553-		return &bpf_perf_prog_read_value_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1554-	case BPF_FUNC_read_branch_records:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1555-		return &bpf_read_branch_records_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1556-	case BPF_FUNC_get_attach_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1557-		return &bpf_get_attach_cookie_proto_pe;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1558-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1559:		return bpf_tracing_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1560-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1561-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1562-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1563-/*
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1564- * bpf_raw_tp_regs are separate from bpf_pt_regs used from skb/xdp
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1565- * to avoid potential recursive reuse issue when/if tracepoints are added
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1566- * inside bpf_*_event_output, bpf_get_stackid and/or bpf_get_stack.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1567- *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1568- * Since raw tracepoints run despite bpf_prog_active, support concurrent usage
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1569- * in normal, irq, and nmi context.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1570- */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1571-struct bpf_raw_tp_regs {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1572-	struct pt_regs regs[3];
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1573-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1574-static DEFINE_PER_CPU(struct bpf_raw_tp_regs, bpf_raw_tp_regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1575-static DEFINE_PER_CPU(int, bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1576-static struct pt_regs *get_bpf_raw_tp_regs(void)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1577-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1578-	struct bpf_raw_tp_regs *tp_regs = this_cpu_ptr(&bpf_raw_tp_regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1579-	int nest_level = this_cpu_inc_return(bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1580-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1581-	if (nest_level > ARRAY_SIZE(tp_regs->regs)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1582-		this_cpu_dec(bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1583-		return ERR_PTR(-EBUSY);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1584-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1585-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1586-	return &tp_regs->regs[nest_level - 1];
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1587-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1588-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1589-static void put_bpf_raw_tp_regs(void)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1590-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1591-	this_cpu_dec(bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1592-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1593-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1594-BPF_CALL_5(bpf_perf_event_output_raw_tp, struct bpf_raw_tracepoint_args *, args,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1595-	   struct bpf_map *, map, u64, flags, void *, data, u64, size)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1596-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1597-	struct pt_regs *regs = get_bpf_raw_tp_regs();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1598-	int ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1599-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1600-	if (IS_ERR(regs))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1601-		return PTR_ERR(regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1602-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1603-	perf_fetch_caller_regs(regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1604-	ret = ____bpf_perf_event_output(regs, map, flags, data, size);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1605-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1606-	put_bpf_raw_tp_regs();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1607-	return ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1608-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1609-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1610-static const struct bpf_func_proto bpf_perf_event_output_proto_raw_tp = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1611-	.func		= bpf_perf_event_output_raw_tp,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1612-	.gpl_only	= true,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1613-	.ret_type	= RET_INTEGER,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1614-	.arg1_type	= ARG_PTR_TO_CTX,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1615-	.arg2_type	= ARG_CONST_MAP_PTR,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1616-	.arg3_type	= ARG_ANYTHING,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1617-	.arg4_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1618-	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1619-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1620-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1621-extern const struct bpf_func_proto bpf_skb_output_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1622-extern const struct bpf_func_proto bpf_xdp_output_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1623-extern const struct bpf_func_proto bpf_xdp_get_buff_len_trace_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1624-
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1678-raw_tp_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1679-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1680-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1681-	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1682-		return &bpf_perf_event_output_proto_raw_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1683-	case BPF_FUNC_get_stackid:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1684-		return &bpf_get_stackid_proto_raw_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1685-	case BPF_FUNC_get_stack:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1686-		return &bpf_get_stack_proto_raw_tp;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1687-	case BPF_FUNC_get_attach_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1688-		return &bpf_get_attach_cookie_proto_tracing;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1689-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1690:		return bpf_tracing_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1691-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1692-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1693-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1694-const struct bpf_func_proto *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1695-tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1696-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1697-	const struct bpf_func_proto *fn;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1698-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1699-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1700-#ifdef CONFIG_NET
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1701-	case BPF_FUNC_skb_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1702-		return &bpf_skb_output_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1703-	case BPF_FUNC_xdp_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1704-		return &bpf_xdp_output_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1705-	case BPF_FUNC_skc_to_tcp6_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1706-		return &bpf_skc_to_tcp6_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1707-	case BPF_FUNC_skc_to_tcp_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1708-		return &bpf_skc_to_tcp_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1709-	case BPF_FUNC_skc_to_tcp_timewait_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1710-		return &bpf_skc_to_tcp_timewait_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1711-	case BPF_FUNC_skc_to_tcp_request_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1712-		return &bpf_skc_to_tcp_request_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1713-	case BPF_FUNC_skc_to_udp6_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1714-		return &bpf_skc_to_udp6_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1715-	case BPF_FUNC_skc_to_unix_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1716-		return &bpf_skc_to_unix_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1717-	case BPF_FUNC_skc_to_mptcp_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1718-		return &bpf_skc_to_mptcp_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1719-	case BPF_FUNC_sk_storage_get:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1720-		return &bpf_sk_storage_get_tracing_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1721-	case BPF_FUNC_sk_storage_delete:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1722-		return &bpf_sk_storage_delete_tracing_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1723-	case BPF_FUNC_sock_from_file:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1724-		return &bpf_sock_from_file_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1725-	case BPF_FUNC_get_socket_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1726-		return &bpf_get_socket_ptr_cookie_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1727-	case BPF_FUNC_xdp_get_buff_len:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1728-		return &bpf_xdp_get_buff_len_trace_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1729-#endif
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1730-	case BPF_FUNC_seq_printf:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1731-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1732-		       &bpf_seq_printf_proto :
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1733-		       NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1734-	case BPF_FUNC_seq_write:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1735-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1736-		       &bpf_seq_write_proto :
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1737-		       NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1738-	case BPF_FUNC_seq_printf_btf:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1739-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1740-		       &bpf_seq_printf_btf_proto :
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1741-		       NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1742-	case BPF_FUNC_d_path:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1743-		return &bpf_d_path_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1744-	case BPF_FUNC_get_func_arg:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1745-		if (bpf_prog_has_trampoline(prog) ||
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1746-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1747-			return &bpf_get_func_arg_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1748-		return NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1749-	case BPF_FUNC_get_func_ret:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1750-		return bpf_prog_has_trampoline(prog) ? &bpf_get_func_ret_proto : NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1751-	case BPF_FUNC_get_func_arg_cnt:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1752-		if (bpf_prog_has_trampoline(prog) ||
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1753-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1754-			return &bpf_get_func_arg_cnt_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1755-		return NULL;
+
+===== bpf_base_func_proto CALLERS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1257-		       NULL : &bpf_probe_read_compat_str_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1258-#endif
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1259-	case BPF_FUNC_get_func_ip:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1260-		return &bpf_get_func_ip_proto_tracing;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1261-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1262-		break;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1263-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1264-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1265:	func_proto = bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1266-	if (func_proto)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1267-		return func_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1268-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1269-	if (!bpf_token_capable(prog->aux->token, CAP_SYS_ADMIN))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1270-		return NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1271-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1272-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1273-	case BPF_FUNC_probe_write_user:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1274-		return security_locked_down(LOCKDOWN_BPF_WRITE_USER) < 0 ?
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1275-		       NULL : &bpf_probe_write_user_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1276-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1277-		return NULL;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2044-const struct bpf_func_proto bpf_perf_event_read_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2045-const struct bpf_func_proto bpf_send_signal_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2046-const struct bpf_func_proto bpf_send_signal_thread_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2047-const struct bpf_func_proto bpf_get_task_stack_sleepable_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2048-const struct bpf_func_proto bpf_get_task_stack_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2049-const struct bpf_func_proto bpf_get_branch_snapshot_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2050-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2051-const struct bpf_func_proto *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2052:bpf_base_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2053-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2054-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2055-	case BPF_FUNC_map_lookup_elem:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2056-		return &bpf_map_lookup_elem_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2057-	case BPF_FUNC_map_update_elem:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2058-		return &bpf_map_update_elem_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2059-	case BPF_FUNC_map_delete_elem:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2060-		return &bpf_map_delete_elem_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2061-	case BPF_FUNC_map_push_elem:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2062-		return &bpf_map_push_elem_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2063-	case BPF_FUNC_map_pop_elem:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c-2064-		return &bpf_map_pop_elem_proto;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1818-	func_proto = cgroup_common_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1819-	if (func_proto)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1820-		return func_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1821-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1822-	switch (func_id) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1823-	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1824-		return &bpf_event_output_data_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1825-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:1826:		return bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1827-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1828-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1829-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1830-static bool cgroup_dev_is_valid_access(int off, int size,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1831-				       enum bpf_access_type type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1832-				       const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1833-				       struct bpf_insn_access_aux *info)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1834-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1835-	const int size_default = sizeof(__u32);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1836-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1837-	if (type == BPF_WRITE)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-1838-		return false;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2375-		return &bpf_sysctl_get_new_value_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2376-	case BPF_FUNC_sysctl_set_new_value:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2377-		return &bpf_sysctl_set_new_value_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2378-	case BPF_FUNC_ktime_get_coarse_ns:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2379-		return &bpf_ktime_get_coarse_ns_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2380-	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2381-		return &bpf_event_output_data_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2382-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:2383:		return bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2384-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2385-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2386-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2387-static bool sysctl_is_valid_access(int off, int size, enum bpf_access_type type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2388-				   const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2389-				   struct bpf_insn_access_aux *info)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2390-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2391-	const int size_default = sizeof(__u32);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2392-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2393-	if (off < 0 || off + size > sizeof(struct bpf_sysctl) || off % size)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2394-		return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2395-
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2528-#endif
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2529-#ifdef CONFIG_INET
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2530-	case BPF_FUNC_tcp_sock:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2531-		return &bpf_tcp_sock_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2532-#endif
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2533-	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2534-		return &bpf_event_output_data_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2535-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:2536:		return bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2537-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2538-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2539-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2540-static bool cg_sockopt_is_valid_access(int off, int size,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2541-				       enum bpf_access_type type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2542-				       const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2543-				       struct bpf_insn_access_aux *info)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2544-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2545-	const int size_default = sizeof(__u32);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2546-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2547-	if (off < 0 || off >= sizeof(struct bpf_sockopt))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c-2548-		return false;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6450-	.arg1_type	= ARG_ANYTHING,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6451-	.arg2_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6452-	.arg3_type	= ARG_CONST_SIZE,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6453-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6454-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6455-const struct bpf_func_proto * __weak
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6456-tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6457-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:6458:	return bpf_base_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6459-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6460-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6461-BPF_CALL_1(bpf_sys_close, u32, fd)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6462-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6463-	/* When bpf program calls this helper there should not be
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6464-	 * an fdget() without matching completed fdput().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6465-	 * This helper is allowed in the following callchain only:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6466-	 * sys_bpf->prog_test_run->bpf_prog->bpf_sys_close
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6467-	 */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6468-	return close_fd(fd);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6469-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c-6470-
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3027-const char *btf_find_decl_tag_value(const struct btf *btf, const struct btf_type *pt,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3028-				    int comp_idx, const char *tag_key);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3029-int btf_find_next_decl_tag(const struct btf *btf, const struct btf_type *pt,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3030-			   int comp_idx, const char *tag_key, int last_id);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3031-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3032-struct bpf_prog *bpf_prog_by_id(u32 id);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3033-struct bpf_link *bpf_link_by_id(u32 id);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3034-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h:3035:const struct bpf_func_proto *bpf_base_func_proto(enum bpf_func_id func_id,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3036-						 const struct bpf_prog *prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3037-void bpf_task_storage_free(struct task_struct *task);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3038-void bpf_cgrp_storage_free(struct cgroup *cgroup);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3039-bool bpf_prog_has_kfunc_call(const struct bpf_prog *prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3040-const struct btf_func_model *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3041-bpf_jit_find_kfunc_model(const struct bpf_prog *prog,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3042-			 const struct bpf_insn *insn);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3043-int bpf_get_kfunc_addr(const struct bpf_prog *prog, u32 func_id,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3044-		       u16 btf_fd_idx, u8 **func_addr);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3045-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3046-struct bpf_core_ctx {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3047-	struct bpf_verifier_log *log;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3305-				    int off, int size, enum bpf_access_type atype,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3306-				    u32 *next_btf_id, enum bpf_type_flag *flag,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3307-				    const char **field_name)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3308-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3309-	return -EACCES;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3310-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3311-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3312-static inline const struct bpf_func_proto *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h:3313:bpf_base_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3314-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3315-	return NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3316-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3317-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3318-static inline void bpf_task_storage_free(struct task_struct *task)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3319-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3320-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3321-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3322-static inline bool bpf_prog_has_kfunc_call(const struct bpf_prog *prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3323-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3324-	return false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h-3325-}
+
+===== RAW TRACEPOINT NMI CONTEXT =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1556-	case BPF_FUNC_get_attach_cookie:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1557-		return &bpf_get_attach_cookie_proto_pe;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1558-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1559-		return bpf_tracing_func_proto(func_id, prog);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1560-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1561-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1562-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1563-/*
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1564- * bpf_raw_tp_regs are separate from bpf_pt_regs used from skb/xdp
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1565- * to avoid potential recursive reuse issue when/if tracepoints are added
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1566- * inside bpf_*_event_output, bpf_get_stackid and/or bpf_get_stack.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1567- *
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1568: * Since raw tracepoints run despite bpf_prog_active, support concurrent usage
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1569- * in normal, irq, and nmi context.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1570- */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1571-struct bpf_raw_tp_regs {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1572-	struct pt_regs regs[3];
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1573-};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1574-static DEFINE_PER_CPU(struct bpf_raw_tp_regs, bpf_raw_tp_regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1575-static DEFINE_PER_CPU(int, bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1576-static struct pt_regs *get_bpf_raw_tp_regs(void)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1577-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1578-	struct bpf_raw_tp_regs *tp_regs = this_cpu_ptr(&bpf_raw_tp_regs);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1579-	int nest_level = this_cpu_inc_return(bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1580-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1581-	if (nest_level > ARRAY_SIZE(tp_regs->regs)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1582-		this_cpu_dec(bpf_raw_tp_nest_level);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c-1583-		return ERR_PTR(-EBUSY);
+
+===== PERF NMI HANDLER CALL CHAIN =====
+10564-
+10565-int perf_event_account_interrupt(struct perf_event *event)
+10566-{
+10567-	return __perf_event_account_interrupt(event, 1);
+10568-}
+10569-
+10570-static inline bool sample_is_allowed(struct perf_event *event, struct pt_regs *regs)
+10571-{
+10572-	/*
+10573-	 * Due to interrupt latency (AKA "skid"), we may enter the
+10574-	 * kernel before taking an overflow, even if the PMU is only
+10575-	 * counting user events.
+10576-	 */
+10577-	if (event->attr.exclude_kernel && !user_mode(regs))
+10578-		return false;
+10579-
+10580-	return true;
+10581-}
+10582-
+10583-#ifdef CONFIG_BPF_SYSCALL
+10584:static int bpf_overflow_handler(struct perf_event *event,
+10585-				struct perf_sample_data *data,
+10586-				struct pt_regs *regs)
+10587-{
+10588-	struct bpf_perf_event_data_kern ctx = {
+10589-		.data = data,
+10590-		.event = event,
+10591-	};
+10592-	struct bpf_prog *prog;
+10593-	int ret = 0;
+10594-
+10595-	ctx.regs = perf_arch_bpf_user_pt_regs(regs);
+10596-	if (unlikely(__this_cpu_inc_return(bpf_prog_active) != 1))
+10597-		goto out;
+10598-	rcu_read_lock();
+10599-	prog = READ_ONCE(event->prog);
+10600-	if (prog) {
+10601-		perf_prepare_sample(data, event, regs);
+10602-		ret = bpf_prog_run(prog, &ctx);
+10603-	}
+10604-	rcu_read_unlock();
+10605-out:
+10606-	__this_cpu_dec(bpf_prog_active);
+10607-
+10608-	return ret;
+10609-}
+10610-
+10611-static inline int perf_event_set_bpf_handler(struct perf_event *event,
+10612-					     struct bpf_prog *prog,
+10613-					     u64 bpf_cookie)
+10614-{
+10615-	if (event->overflow_handler_context)
+10616-		/* hw breakpoint or kernel counter */
+10617-		return -EINVAL;
+10618-
+10619-	if (event->prog)
+--
+10638-		 */
+10639-		return -EPROTO;
+10640-	}
+10641-
+10642-	event->prog = prog;
+10643-	event->bpf_cookie = bpf_cookie;
+10644-	return 0;
+10645-}
+10646-
+10647-static inline void perf_event_free_bpf_handler(struct perf_event *event)
+10648-{
+10649-	struct bpf_prog *prog = event->prog;
+10650-
+10651-	if (!prog)
+10652-		return;
+10653-
+10654-	event->prog = NULL;
+10655-	bpf_prog_put(prog);
+10656-}
+10657-#else
+10658:static inline int bpf_overflow_handler(struct perf_event *event,
+10659-				       struct perf_sample_data *data,
+10660-				       struct pt_regs *regs)
+10661-{
+10662-	return 1;
+10663-}
+10664-
+10665-static inline int perf_event_set_bpf_handler(struct perf_event *event,
+10666-					     struct bpf_prog *prog,
+10667-					     u64 bpf_cookie)
+10668-{
+10669-	return -EOPNOTSUPP;
+10670-}
+10671-
+10672-static inline void perf_event_free_bpf_handler(struct perf_event *event)
+10673-{
+10674-}
+10675-#endif
+10676-
+10677-/*
+10678- * Generic event overflow handling, sampling.
+10679- */
+10680-
+10681:static int __perf_event_overflow(struct perf_event *event,
+10682-				 int throttle, struct perf_sample_data *data,
+10683-				 struct pt_regs *regs)
+10684-{
+10685-	int events = atomic_read(&event->event_limit);
+10686-	int ret = 0;
+10687-
+10688-	/*
+10689-	 * Non-sampling counters might still use the PMI to fold short
+10690-	 * hardware counters, ignore those.
+10691-	 */
+10692-	if (unlikely(!is_sampling_event(event)))
+10693-		return 0;
+10694-
+10695-	ret = __perf_event_account_interrupt(event, throttle);
+10696-
+10697-	if (event->attr.aux_pause)
+10698-		perf_event_aux_pause(event->aux_event, true);
+10699-
+10700-	if (event->prog && event->prog->type == BPF_PROG_TYPE_PERF_EVENT &&
+10701:	    !bpf_overflow_handler(event, data, regs))
+10702-		goto out;
+10703-
+10704-	/*
+10705-	 * XXX event_limit might not quite work as expected on inherited
+10706-	 * events
+10707-	 */
+10708-
+10709-	event->pending_kill = POLL_IN;
+10710-	if (events && atomic_dec_and_test(&event->event_limit)) {
+10711-		ret = 1;
+10712-		event->pending_kill = POLL_HUP;
+10713-		perf_event_disable_inatomic(event);
+10714-		event->pmu->stop(event, 0);
+10715-	}
+10716-
+10717-	if (event->attr.sigtrap) {
+10718-		/*
+10719-		 * The desired behaviour of sigtrap vs invalid samples is a bit
+10720-		 * tricky; on the one hand, one should not loose the SIGTRAP if
+10721-		 * it is the first event, on the other hand, we should also not
+10722-		 * trigger the WARN or override the data address.
+10723-		 */
+10724-		bool valid_sample = sample_is_allowed(event, regs);
+10725-		unsigned int pending_id = 1;
+10726-		enum task_work_notify_mode notify_mode;
+10727-
+10728-		if (regs)
+10729-			pending_id = hash32_ptr((void *)instruction_pointer(regs)) ?: 1;
+10730-
+10731-		notify_mode = in_nmi() ? TWA_NMI_CURRENT : TWA_RESUME;
+10732-
+10733-		if (!event->pending_work &&
+10734-		    !task_work_add(current, &event->pending_task, notify_mode)) {
+10735-			event->pending_work = pending_id;
+10736-			local_inc(&event->ctx->nr_no_switch_fast);
+--
+10764-		irq_work_queue(&event->pending_irq);
+10765-	}
+10766-out:
+10767-	if (event->attr.aux_resume)
+10768-		perf_event_aux_pause(event->aux_event, false);
+10769-
+10770-	return ret;
+10771-}
+10772-
+10773-int perf_event_overflow(struct perf_event *event,
+10774-			struct perf_sample_data *data,
+10775-			struct pt_regs *regs)
+10776-{
+10777-	/*
+10778-	 * Entry point from hardware PMI, interrupts should be disabled here.
+10779-	 * This serializes us against perf_event_remove_from_context() in
+10780-	 * things like perf_event_release_kernel().
+10781-	 */
+10782-	lockdep_assert_irqs_disabled();
+10783-
+10784:	return __perf_event_overflow(event, 1, data, regs);
+10785-}
+10786-
+10787-/*
+10788- * Generic software event infrastructure
+10789- */
+10790-
+10791-struct swevent_htable {
+10792-	struct swevent_hlist		*swevent_hlist;
+10793-	struct mutex			hlist_mutex;
+10794-	int				hlist_refcount;
+10795-};
+10796-static DEFINE_PER_CPU(struct swevent_htable, swevent_htable);
+10797-
+10798-/*
+10799- * We directly increment event->count and keep a second value in
+10800- * event->hw.period_left to count intervals. This period event
+10801- * is kept in the range [-sample_period, 0] so that we can use the
+10802- * sign as trigger.
+10803- */
+10804-
+10805-u64 perf_swevent_set_period(struct perf_event *event)
+10806-{
+10807-	struct hw_perf_event *hwc = &event->hw;
+10808-	u64 period = hwc->last_period;
+10809-	u64 nr, offset;
+10810-	s64 old, val;
+10811-
+10812-	hwc->last_period = hwc->sample_period;
+10813-
+10814-	old = local64_read(&hwc->period_left);
+10815-	do {
+10816-		val = old;
+10817-		if (val < 0)
+10818-			return 0;
+10819-
+--
+10822-		val -= offset;
+10823-	} while (!local64_try_cmpxchg(&hwc->period_left, &old, val));
+10824-
+10825-	return nr;
+10826-}
+10827-
+10828-static void perf_swevent_overflow(struct perf_event *event, u64 overflow,
+10829-				    struct perf_sample_data *data,
+10830-				    struct pt_regs *regs)
+10831-{
+10832-	struct hw_perf_event *hwc = &event->hw;
+10833-	int throttle = 0;
+10834-
+10835-	if (!overflow)
+10836-		overflow = perf_swevent_set_period(event);
+10837-
+10838-	if (hwc->interrupts == MAX_INTERRUPTS)
+10839-		return;
+10840-
+10841-	for (; overflow; overflow--) {
+10842:		if (__perf_event_overflow(event, throttle,
+10843-					    data, regs)) {
+10844-			/*
+10845-			 * We inhibit the overflow from happening when
+10846-			 * hwc->interrupts == MAX_INTERRUPTS.
+10847-			 */
+10848-			break;
+10849-		}
+10850-		throttle = 1;
+10851-	}
+10852-}
+10853-
+10854-static void perf_swevent_event(struct perf_event *event, u64 nr,
+10855-			       struct perf_sample_data *data,
+10856-			       struct pt_regs *regs)
+10857-{
+10858-	struct hw_perf_event *hwc = &event->hw;
+10859-
+10860-	/*
+10861-	 * This is:
+10862-	 *   - software		preempt
+10863-	 *   - tracepoint	preempt
+10864-	 *   -   tp_target_task	irq (ctx->lock)
+10865-	 *   - uprobes		preempt/irq
+10866-	 *   - kprobes		preempt/irq
+10867-	 *   - hw_breakpoint	irq
+10868-	 *
+10869-	 * Any of these are sufficient to hold off RCU and thus ensure @event
+10870-	 * exists.
+10871-	 */
+10872-	lockdep_assert_preemption_disabled();
+10873-	local64_add(nr, &event->count);
+10874-
+10875-	if (!regs)
+10876-		return;
+10877-
