@@ -1,0 +1,802 @@
+===== SOURCE IDENTITY =====
+VERSION = 7
+PATCHLEVEL = 0
+SUBLEVEL = 0
+EXTRAVERSION =
+NAME = Baby Opossum Posse
+
+===== dup_task_struct =====
+894-int __weak arch_dup_task_struct(struct task_struct *dst,
+895-					       struct task_struct *src)
+896-{
+897-	*dst = *src;
+898-	return 0;
+899-}
+900-
+901-void set_task_stack_end_magic(struct task_struct *tsk)
+902-{
+903-	unsigned long *stackend;
+904-
+905-	stackend = end_of_stack(tsk);
+906-	*stackend = STACK_END_MAGIC;	/* for overflow detection */
+907-}
+908-
+909:static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+910-{
+911-	struct task_struct *tsk;
+912-	int err;
+913-
+914-	if (node == NUMA_NO_NODE)
+915-		node = tsk_fork_get_node(orig);
+916-	tsk = alloc_task_struct_node(node);
+917-	if (!tsk)
+918-		return NULL;
+919-
+920-	err = arch_dup_task_struct(tsk, orig);
+921-	if (err)
+922-		goto free_tsk;
+923-
+924-	err = alloc_thread_stack_node(tsk, node);
+925-	if (err)
+926-		goto free_tsk;
+927-
+928-#ifdef CONFIG_THREAD_INFO_IN_TASK
+929-	refcount_set(&tsk->stack_refcount, 1);
+930-#endif
+931-	account_kernel_stack(tsk, 1);
+932-
+933-	err = scs_prepare(tsk, node);
+934-	if (err)
+935-		goto free_stack;
+936-
+937-#ifdef CONFIG_SECCOMP
+938-	/*
+939-	 * We must handle setting up seccomp filters once we're under
+940-	 * the sighand lock in case orig has changed between now and
+941-	 * then. Until then, filter must be NULL to avoid messing up
+942-	 * the usage counts on the error path calling free_task.
+943-	 */
+944-	tsk->seccomp.filter = NULL;
+945-#endif
+946-
+947-	setup_thread_stack(tsk, orig);
+948-	clear_user_return_notifier(tsk);
+949-	clear_tsk_need_resched(tsk);
+950-	set_task_stack_end_magic(tsk);
+951-	clear_syscall_work_syscall_user_dispatch(tsk);
+952-
+953-#ifdef CONFIG_STACKPROTECTOR
+954-	tsk->stack_canary = get_random_canary();
+955-#endif
+956-	if (orig->cpus_ptr == &orig->cpus_mask)
+957-		tsk->cpus_ptr = &tsk->cpus_mask;
+958-	dup_user_cpus_ptr(tsk, orig, node);
+959-
+960-	/*
+961-	 * One for the user space visible state that goes away when reaped.
+962-	 * One for the scheduler.
+963-	 */
+964-	refcount_set(&tsk->rcu_users, 2);
+965-	/* One for the rcu users */
+966-	refcount_set(&tsk->usage, 1);
+967-#ifdef CONFIG_BLK_DEV_IO_TRACE
+968-	tsk->btrace_seq = 0;
+969-#endif
+970-	tsk->splice_pipe = NULL;
+971-	tsk->task_frag.page = NULL;
+972-	tsk->wake_q.next = NULL;
+973-	tsk->worker_private = NULL;
+974-
+975-	kcov_task_init(tsk);
+976-	kmsan_task_create(tsk);
+977-	kmap_local_fork(tsk);
+978-
+979-#ifdef CONFIG_FAULT_INJECTION
+980-	tsk->fail_nth = 0;
+981-#endif
+982-
+983-#ifdef CONFIG_BLK_CGROUP
+984-	tsk->throttle_disk = NULL;
+985-	tsk->use_memdelay = 0;
+986-#endif
+987-
+988-#ifdef CONFIG_ARCH_HAS_CPU_PASID
+989-	tsk->pasid_activated = 0;
+990-#endif
+991-
+992-#ifdef CONFIG_MEMCG
+993-	tsk->active_memcg = NULL;
+994-#endif
+995-
+996-#ifdef CONFIG_X86_BUS_LOCK_DETECT
+997-	tsk->reported_split_lock = 0;
+998-#endif
+999-
+1000-#ifdef CONFIG_SCHED_MM_CID
+1001-	tsk->mm_cid.cid = MM_CID_UNSET;
+1002-	tsk->mm_cid.active = 0;
+1003-	INIT_HLIST_NODE(&tsk->mm_cid.node);
+1004-#endif
+1005-	return tsk;
+1006-
+1007-free_stack:
+1008-	exit_task_stack_account(tsk);
+1009-	free_thread_stack(tsk);
+1010-free_tsk:
+1011-	free_task_struct(tsk);
+1012-	return NULL;
+1013-}
+1014-
+1015-__cacheline_aligned_in_smp DEFINE_SPINLOCK(mmlist_lock);
+1016-
+1017-static unsigned long default_dump_filter = MMF_DUMP_FILTER_DEFAULT;
+1018-
+1019-static int __init coredump_filter_setup(char *s)
+1020-{
+1021-	default_dump_filter =
+1022-		(simple_strtoul(s, NULL, 0) << MMF_DUMP_FILTER_SHIFT) &
+1023-		MMF_DUMP_FILTER_MASK;
+1024-	return 1;
+1025-}
+1026-
+1027-__setup("coredump_filter=", coredump_filter_setup);
+1028-
+1029-#include <linux/init_task.h>
+1030-
+1031-static void mm_init_aio(struct mm_struct *mm)
+1032-{
+1033-#ifdef CONFIG_AIO
+1034-	spin_lock_init(&mm->ioctx_lock);
+1035-	mm->ioctx_table = NULL;
+1036-#endif
+1037-}
+1038-
+1039-static __always_inline void mm_clear_owner(struct mm_struct *mm,
+1040-					   struct task_struct *p)
+1041-{
+1042-#ifdef CONFIG_MEMCG
+1043-	if (mm->owner == p)
+1044-		WRITE_ONCE(mm->owner, NULL);
+1045-#endif
+1046-}
+1047-
+1048-static void mm_init_owner(struct mm_struct *mm, struct task_struct *p)
+1049-{
+1050-#ifdef CONFIG_MEMCG
+1051-	mm->owner = p;
+1052-#endif
+1053-}
+1054-
+1055-static void mm_init_uprobes_state(struct mm_struct *mm)
+1056-{
+1057-#ifdef CONFIG_UPROBES
+1058-	mm->uprobes_state.xol_area = NULL;
+1059-	arch_uprobe_init_state(mm);
+1060-#endif
+1061-}
+1062-
+1063-static void mmap_init_lock(struct mm_struct *mm)
+1064-{
+1065-	init_rwsem(&mm->mmap_lock);
+1066-	mm_lock_seqcount_init(mm);
+1067-#ifdef CONFIG_PER_VMA_LOCK
+1068-	rcuwait_init(&mm->vma_writer_wait);
+1069-#endif
+1070-}
+1071-
+1072-static struct mm_struct *mm_init(struct mm_struct *mm, struct task_struct *p,
+1073-	struct user_namespace *user_ns)
+1074-{
+1075-	mt_init_flags(&mm->mm_mt, MM_MT_FLAGS);
+1076-	mt_set_external_lock(&mm->mm_mt, &mm->mmap_lock);
+1077-	atomic_set(&mm->mm_users, 1);
+1078-	atomic_set(&mm->mm_count, 1);
+1079-	seqcount_init(&mm->write_protect_seq);
+1080-	mmap_init_lock(mm);
+1081-	INIT_LIST_HEAD(&mm->mmlist);
+1082-	mm_pgtables_bytes_init(mm);
+1083-	mm->map_count = 0;
+1084-	mm->locked_vm = 0;
+1085-	atomic64_set(&mm->pinned_vm, 0);
+1086-	memset(&mm->rss_stat, 0, sizeof(mm->rss_stat));
+1087-	spin_lock_init(&mm->page_table_lock);
+1088-	spin_lock_init(&mm->arg_lock);
+1089-	mm_init_cpumask(mm);
+
+===== free_task =====
+519-}
+520-
+521-#ifdef CONFIG_THREAD_INFO_IN_TASK
+522-void put_task_stack(struct task_struct *tsk)
+523-{
+524-	if (refcount_dec_and_test(&tsk->stack_refcount))
+525-		release_task_stack(tsk);
+526-}
+527-#endif
+528-
+529:void free_task(struct task_struct *tsk)
+530-{
+531-#ifdef CONFIG_SECCOMP
+532-	WARN_ON_ONCE(tsk->seccomp.filter);
+533-#endif
+534-	release_user_cpus_ptr(tsk);
+535-	scs_release(tsk);
+536-
+537-#ifndef CONFIG_THREAD_INFO_IN_TASK
+538-	/*
+539-	 * The task is finally done with both the stack and thread_info,
+540-	 * so free both.
+541-	 */
+542-	release_task_stack(tsk);
+543-#else
+544-	/*
+545-	 * If the task had a separate stack allocation, it should be gone
+546-	 * by now.
+547-	 */
+548-	WARN_ON_ONCE(refcount_read(&tsk->stack_refcount) != 0);
+549-#endif
+550-	rt_mutex_debug_task_free(tsk);
+551-	ftrace_graph_exit_task(tsk);
+552-	arch_release_task_struct(tsk);
+553-	if (tsk->flags & PF_KTHREAD)
+554-		free_kthread_struct(tsk);
+555-	bpf_task_storage_free(tsk);
+556-	free_task_struct(tsk);
+557-}
+558-EXPORT_SYMBOL(free_task);
+559-
+560-void dup_mm_exe_file(struct mm_struct *mm, struct mm_struct *oldmm)
+561-{
+562-	struct file *exe_file;
+563-
+564-	exe_file = get_mm_exe_file(oldmm);
+
+===== copy_process INITIALIZATION AND CLEANUP =====
+
+===== copy_process FAILURE LABELS =====
+2082-	DEBUG_LOCKS_WARN_ON(!p->softirqs_enabled);
+2083-#endif
+2084-	retval = copy_creds(p, clone_flags);
+2085-	if (retval < 0)
+2086-		goto bad_fork_free;
+2087-
+2088-	retval = -EAGAIN;
+2089-	if (is_rlimit_overlimit(task_ucounts(p), UCOUNT_RLIMIT_NPROC, rlimit(RLIMIT_NPROC))) {
+2090-		if (p->real_cred->user != INIT_USER &&
+2091-		    !capable(CAP_SYS_RESOURCE) && !capable(CAP_SYS_ADMIN))
+2092:			goto bad_fork_cleanup_count;
+2093-	}
+2094-	current->flags &= ~PF_NPROC_EXCEEDED;
+2095-
+2096-	/*
+2097-	 * If multiple threads are within copy_process(), then this check
+2098-	 * triggers too late. This doesn't hurt, the check is only there
+2099-	 * to stop root fork bombs.
+2100-	 */
+2101-	retval = -EAGAIN;
+2102-	if (data_race(nr_threads >= max_threads))
+2103:		goto bad_fork_cleanup_count;
+2104-
+2105-	delayacct_tsk_init(p);	/* Must remain after dup_task_struct() */
+2106-	p->flags &= ~(PF_SUPERPRIV | PF_WQ_WORKER | PF_IDLE | PF_NO_SETAFFINITY);
+2107-	p->flags |= PF_FORKNOEXEC;
+2108-	INIT_LIST_HEAD(&p->children);
+2109-	INIT_LIST_HEAD(&p->sibling);
+2110-	rcu_copy_process(p);
+2111-	p->vfork_done = NULL;
+2112-	spin_lock_init(&p->alloc_lock);
+2113-
+2114-	init_sigpending(&p->pending);
+2115-
+2116-	p->utime = p->stime = p->gtime = 0;
+2117-#ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
+2118-	p->utimescaled = p->stimescaled = 0;
+2119-#endif
+2120-	prev_cputime_init(&p->prev_cputime);
+2121-
+2122-#ifdef CONFIG_VIRT_CPU_ACCOUNTING_GEN
+2123-	seqcount_init(&p->vtime.seqcount);
+2124-	p->vtime.starttime = 0;
+2125-	p->vtime.state = VTIME_INACTIVE;
+2126-#endif
+2127-
+2128-#ifdef CONFIG_IO_URING
+2129-	p->io_uring = NULL;
+2130-	retval = io_uring_fork(p);
+2131-	if (unlikely(retval))
+2132:		goto bad_fork_cleanup_delayacct;
+2133-	retval = -EAGAIN;
+2134-#endif
+2135-
+2136-	p->default_timer_slack_ns = current->timer_slack_ns;
+2137-
+2138-#ifdef CONFIG_PSI
+2139-	p->psi_flags = 0;
+2140-#endif
+2141-
+2142-	task_io_accounting_init(&p->ioac);
+2143-	acct_clear_integrals(p);
+2144-
+2145-	posix_cputimers_init(&p->posix_cputimers);
+2146-	tick_dep_init_task(p);
+2147-
+2148-	p->io_context = NULL;
+2149-	audit_set_context(p, NULL);
+2150-	cgroup_fork(p);
+2151-	if (args->kthread) {
+2152-		if (!set_kthread_struct(p))
+2153:			goto bad_fork_cleanup_delayacct;
+2154-	}
+2155-#ifdef CONFIG_NUMA
+2156-	p->mempolicy = mpol_dup(p->mempolicy);
+2157-	if (IS_ERR(p->mempolicy)) {
+2158-		retval = PTR_ERR(p->mempolicy);
+2159-		p->mempolicy = NULL;
+2160:		goto bad_fork_cleanup_delayacct;
+2161-	}
+2162-#endif
+2163-#ifdef CONFIG_CPUSETS
+2164-	p->cpuset_mem_spread_rotor = NUMA_NO_NODE;
+2165-	seqcount_spinlock_init(&p->mems_allowed_seq, &p->alloc_lock);
+2166-#endif
+2167-#ifdef CONFIG_TRACE_IRQFLAGS
+2168-	memset(&p->irqtrace, 0, sizeof(p->irqtrace));
+2169-	p->irqtrace.hardirq_disable_ip	= _THIS_IP_;
+2170-	p->irqtrace.softirq_enable_ip	= _THIS_IP_;
+2171-	p->softirqs_enabled		= 1;
+2172-	p->softirq_context		= 0;
+2173-#endif
+2174-
+2175-	p->pagefault_disabled = 0;
+2176-
+2177-	lockdep_init_task(p);
+2178-
+2179-	p->blocked_on = NULL; /* not blocked yet */
+2180-
+2181-#ifdef CONFIG_BCACHE
+2182-	p->sequential_io	= 0;
+2183-	p->sequential_io_avg	= 0;
+2184-#endif
+2185-#ifdef CONFIG_BPF_SYSCALL
+2186-	RCU_INIT_POINTER(p->bpf_storage, NULL);
+2187-	p->bpf_ctx = NULL;
+2188-#endif
+2189-
+2190-	unwind_task_init(p);
+2191-
+2192-	/* Perform scheduler related setup. Assign this task to a CPU. */
+2193-	retval = sched_fork(clone_flags, p);
+2194-	if (retval)
+2195:		goto bad_fork_cleanup_policy;
+2196-
+2197-	retval = perf_event_init_task(p, clone_flags);
+2198-	if (retval)
+2199-		goto bad_fork_sched_cancel_fork;
+2200-	retval = audit_alloc(p);
+2201-	if (retval)
+2202:		goto bad_fork_cleanup_perf;
+2203-	/* copy all the process information */
+2204-	shm_init_task(p);
+2205-	retval = security_task_alloc(p, clone_flags);
+2206-	if (retval)
+2207:		goto bad_fork_cleanup_audit;
+2208-	retval = copy_semundo(clone_flags, p);
+2209-	if (retval)
+2210:		goto bad_fork_cleanup_security;
+2211-	retval = copy_files(clone_flags, p, args->no_files);
+2212-	if (retval)
+2213:		goto bad_fork_cleanup_semundo;
+2214-	retval = copy_fs(clone_flags, p);
+2215-	if (retval)
+2216:		goto bad_fork_cleanup_files;
+2217-	retval = copy_sighand(clone_flags, p);
+2218-	if (retval)
+2219:		goto bad_fork_cleanup_fs;
+2220-	retval = copy_signal(clone_flags, p);
+2221-	if (retval)
+2222:		goto bad_fork_cleanup_sighand;
+2223-	retval = copy_mm(clone_flags, p);
+2224-	if (retval)
+2225:		goto bad_fork_cleanup_signal;
+2226-	retval = copy_namespaces(clone_flags, p);
+2227-	if (retval)
+2228:		goto bad_fork_cleanup_mm;
+2229-	retval = copy_io(clone_flags, p);
+2230-	if (retval)
+2231:		goto bad_fork_cleanup_namespaces;
+2232-	retval = copy_thread(p, args);
+2233-	if (retval)
+2234:		goto bad_fork_cleanup_io;
+2235-
+2236-	stackleak_task_init(p);
+2237-
+2238-	if (pid != &init_struct_pid) {
+2239-		pid = alloc_pid(p->nsproxy->pid_ns_for_children, args->set_tid,
+2240-				args->set_tid_size);
+2241-		if (IS_ERR(pid)) {
+2242-			retval = PTR_ERR(pid);
+2243:			goto bad_fork_cleanup_thread;
+2244-		}
+2245-	}
+2246-
+2247-	/*
+2248-	 * This has to happen after we've potentially unshared the file
+2249-	 * descriptor table (so that the pidfd doesn't leak into the child
+2250-	 * if the fd table isn't shared).
+2251-	 */
+2252-	if (clone_flags & CLONE_PIDFD) {
+2253-		int flags = (clone_flags & CLONE_THREAD) ? PIDFD_THREAD : 0;
+2254-
+2255-		/*
+2256-		 * Note that no task has been attached to @pid yet indicate
+2257-		 * that via CLONE_PIDFD.
+2258-		 */
+2259-		retval = pidfd_prepare(pid, flags | PIDFD_STALE, &pidfile);
+2260-		if (retval < 0)
+2261-			goto bad_fork_free_pid;
+2262-		pidfd = retval;
+2263-
+2264-		retval = put_user(pidfd, args->pidfd);
+2265-		if (retval)
+2266-			goto bad_fork_put_pidfd;
+2267-	}
+2268-
+2269-#ifdef CONFIG_BLOCK
+2270-	p->plug = NULL;
+2271-#endif
+2272-	futex_init_task(p);
+2273-
+2274-	/*
+2275-	 * sigaltstack should be cleared when sharing the same VM
+2276-	 */
+2277-	if ((clone_flags & (CLONE_VM|CLONE_VFORK)) == CLONE_VM)
+2278-		sas_ss_reset(p);
+2279-
+2280-	/*
+2281-	 * Syscall tracing and stepping should be turned off in the
+2282-	 * child regardless of CLONE_PTRACE.
+2283-	 */
+2284-	user_disable_single_step(p);
+2285-	clear_task_syscall_work(p, SYSCALL_TRACE);
+2286-#if defined(CONFIG_GENERIC_ENTRY) || defined(TIF_SYSCALL_EMU)
+2287-	clear_task_syscall_work(p, SYSCALL_EMU);
+2288-#endif
+2289-	clear_tsk_latency_tracing(p);
+2290-
+2291-	/* ok, now we should be set up.. */
+2292-	p->pid = pid_nr(pid);
+2293-	if (clone_flags & CLONE_THREAD) {
+2294-		p->group_leader = current->group_leader;
+2295-		p->tgid = current->tgid;
+2296-	} else {
+2297-		p->group_leader = p;
+2298-		p->tgid = p->pid;
+2299-	}
+2300-
+2301-	p->nr_dirtied = 0;
+2302-	p->nr_dirtied_pause = 128 >> (PAGE_SHIFT - 10);
+2303-	p->dirty_paused_when = 0;
+2304-
+2305-	p->pdeath_signal = 0;
+2306-	p->task_works = NULL;
+2307-	clear_posix_cputimers_work(p);
+2308-
+2309-#ifdef CONFIG_KRETPROBES
+2310-	p->kretprobe_instances.first = NULL;
+2311-#endif
+2312-#ifdef CONFIG_RETHOOK
+2313-	p->rethooks.first = NULL;
+2314-#endif
+2315-
+2316-	/*
+2317-	 * Ensure that the cgroup subsystem policies allow the new process to be
+2318-	 * forked. It should be noted that the new process's css_set can be changed
+2319-	 * between here and cgroup_post_fork() if an organisation operation is in
+2320-	 * progress.
+2321-	 */
+2322-	retval = cgroup_can_fork(p, args);
+2323-	if (retval)
+2324-		goto bad_fork_put_pidfd;
+2325-
+2326-	/*
+2327-	 * Now that the cgroups are pinned, re-clone the parent cgroup and put
+2328-	 * the new task on the correct runqueue. All this *before* the task
+2329-	 * becomes visible.
+2330-	 *
+2331-	 * This isn't part of ->can_fork() because while the re-cloning is
+2332-	 * cgroup specific, it unconditionally needs to place the task on a
+2333-	 * runqueue.
+2334-	 */
+2335-	retval = sched_cgroup_fork(p, args);
+2336-	if (retval)
+2337-		goto bad_fork_cancel_cgroup;
+2338-
+2339-	/*
+2340-	 * Allocate a default futex hash for the user process once the first
+2341-	 * thread spawns.
+2342-	 */
+2343-	if (need_futex_hash_allocate_default(clone_flags)) {
+--
+2482-bad_fork_cancel_cgroup:
+2483-	cgroup_cancel_fork(p, args);
+2484-bad_fork_put_pidfd:
+2485-	if (clone_flags & CLONE_PIDFD) {
+2486-		fput(pidfile);
+2487-		put_unused_fd(pidfd);
+2488-	}
+2489-bad_fork_free_pid:
+2490-	if (pid != &init_struct_pid)
+2491-		free_pid(pid);
+2492:bad_fork_cleanup_thread:
+2493-	exit_thread(p);
+2494:bad_fork_cleanup_io:
+2495-	if (p->io_context)
+2496-		exit_io_context(p);
+2497:bad_fork_cleanup_namespaces:
+2498-	exit_nsproxy_namespaces(p);
+2499:bad_fork_cleanup_mm:
+2500-	if (p->mm) {
+2501-		mm_clear_owner(p->mm, p);
+2502-		mmput(p->mm);
+2503-	}
+2504:bad_fork_cleanup_signal:
+2505-	if (!(clone_flags & CLONE_THREAD))
+2506-		free_signal_struct(p->signal);
+2507:bad_fork_cleanup_sighand:
+2508-	__cleanup_sighand(p->sighand);
+2509:bad_fork_cleanup_fs:
+2510-	exit_fs(p); /* blocking */
+2511:bad_fork_cleanup_files:
+2512-	exit_files(p); /* blocking */
+2513:bad_fork_cleanup_semundo:
+2514-	exit_sem(p);
+2515:bad_fork_cleanup_security:
+2516-	security_task_free(p);
+2517:bad_fork_cleanup_audit:
+2518-	audit_free(p);
+2519:bad_fork_cleanup_perf:
+2520-	perf_event_free_task(p);
+2521-bad_fork_sched_cancel_fork:
+2522-	sched_cancel_fork(p);
+2523:bad_fork_cleanup_policy:
+2524-	lockdep_free_task(p);
+2525-#ifdef CONFIG_NUMA
+2526-	mpol_put(p->mempolicy);
+2527-#endif
+2528:bad_fork_cleanup_delayacct:
+2529-	io_uring_free(p);
+2530-	delayacct_tsk_free(p);
+2531:bad_fork_cleanup_count:
+2532-	dec_rlimit_ucounts(task_ucounts(p), UCOUNT_RLIMIT_NPROC, 1);
+2533-	exit_cred_namespaces(p);
+2534-	exit_creds(p);
+2535-bad_fork_free:
+2536-	WRITE_ONCE(p->__state, TASK_DEAD);
+2537-	exit_task_stack_account(p);
+2538-	put_task_stack(p);
+2539-	delayed_free_task(p);
+2540-fork_out:
+2541-	spin_lock_irq(&current->sighand->siglock);
+2542-	hlist_del_init(&delayed.node);
+2543-	spin_unlock_irq(&current->sighand->siglock);
+2544-	return ERR_PTR(retval);
+2545-}
+2546-
+2547-static inline void init_idle_pids(struct task_struct *idle)
+2548-{
+2549-	enum pid_type type;
+2550-
+2551-	for (type = PIDTYPE_PID; type < PIDTYPE_MAX; ++type) {
+2552-		INIT_HLIST_NODE(&idle->pid_links[type]); /* not really needed */
+2553-		init_task_pid(idle, type, &init_struct_pid);
+2554-	}
+2555-}
+2556-
+2557-static int idle_dummy(void *dummy)
+2558-{
+2559-	/* This function is never called */
+2560-	return 0;
+2561-}
+2562-
+2563-struct task_struct * __init fork_idle(int cpu)
+2564-{
+2565-	struct task_struct *task;
+2566-	struct kernel_clone_args args = {
+2567-		.flags		= CLONE_VM,
+2568-		.fn		= &idle_dummy,
+2569-		.fn_arg		= NULL,
+2570-		.kthread	= 1,
+2571-		.idle		= 1,
+2572-	};
+2573-
+2574-	task = copy_process(&init_struct_pid, 0, cpu_to_node(cpu), &args);
+2575-	if (!IS_ERR(task)) {
+2576-		init_idle_pids(task);
+2577-		init_idle(task, cpu);
+2578-	}
+2579-
+2580-	return task;
+2581-}
+2582-
+2583-/*
+2584- * This is like kernel_clone(), but shaved down and tailored to just
+2585- * creating io_uring workers. It returns a created task, or an error pointer.
+2586- * The returned task is inactive, and the caller must fire it up through
+2587- * wake_up_new_task(p). All signals are blocked in the created task.
+2588- */
+2589-struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node)
+2590-{
+2591-	unsigned long flags = CLONE_FS|CLONE_FILES|CLONE_SIGHAND|CLONE_THREAD|
+2592-			      CLONE_IO|CLONE_VM|CLONE_UNTRACED;
+2593-	struct kernel_clone_args args = {
+2594-		.flags		= flags,
+2595-		.fn		= fn,
+2596-		.fn_arg		= arg,
+2597-		.io_thread	= 1,
+2598-		.user_worker	= 1,
+2599-	};
+2600-
+2601-	return copy_process(NULL, 0, node, &args);
+2602-}
+2603-
+2604-/*
+2605- *  Ok, this is the main fork-routine.
+2606- *
+2607- * It copies the process, and if successful kick-starts
+2608- * it and waits for it to finish using the VM if required.
+2609- *
+2610- * args->exit_signal is expected to be checked for sanity by the caller.
+2611- */
+2612-pid_t kernel_clone(struct kernel_clone_args *args)
+2613-{
+2614-	u64 clone_flags = args->flags;
+2615-	struct completion vfork;
+2616-	struct pid *pid;
+2617-	struct task_struct *p;
+2618-	int trace = 0;
+2619-	pid_t nr;
+2620-
+2621-	/*
+2622-	 * For legacy clone() calls, CLONE_PIDFD uses the parent_tid argument
+2623-	 * to return the pidfd. Hence, CLONE_PIDFD and CLONE_PARENT_SETTID are
+2624-	 * mutually exclusive. With clone3() CLONE_PIDFD has grown a separate
+2625-	 * field in struct clone_args and it still doesn't make sense to have
+2626-	 * them both point at the same memory location. Performing this check
+2627-	 * here has the advantage that we don't need to have a separate helper
+2628-	 * to check for legacy clone().
+2629-	 */
+2630-	if ((clone_flags & CLONE_PIDFD) &&
+2631-	    (clone_flags & CLONE_PARENT_SETTID) &&
+
+===== TASK STORAGE REFERENCES IN FORK =====
+524-	if (refcount_dec_and_test(&tsk->stack_refcount))
+525-		release_task_stack(tsk);
+526-}
+527-#endif
+528-
+529:void free_task(struct task_struct *tsk)
+530-{
+531-#ifdef CONFIG_SECCOMP
+532-	WARN_ON_ONCE(tsk->seccomp.filter);
+533-#endif
+534-	release_user_cpus_ptr(tsk);
+--
+786-	security_task_free(tsk);
+787-	exit_creds(tsk);
+788-	delayacct_tsk_free(tsk);
+789-	put_signal_struct(tsk->signal);
+790-	sched_core_free(tsk);
+791:	free_task(tsk);
+792-}
+793-EXPORT_SYMBOL_GPL(__put_task_struct);
+794-
+795-void __put_task_struct_rcu_cb(struct rcu_head *rhp)
+796-{
+--
+1901-
+1902-	*ret_file = pidfs_file;
+1903-	return take_fd(pidfd);
+1904-}
+1905-
+1906:static void __delayed_free_task(struct rcu_head *rhp)
+1907-{
+1908-	struct task_struct *tsk = container_of(rhp, struct task_struct, rcu);
+1909-
+1910:	free_task(tsk);
+1911-}
+1912-
+1913:static __always_inline void delayed_free_task(struct task_struct *tsk)
+1914-{
+1915-	if (IS_ENABLED(CONFIG_MEMCG))
+1916-		call_rcu(&tsk->rcu, __delayed_free_task);
+1917-	else
+1918:		free_task(tsk);
+1919-}
+1920-
+1921-static void copy_oom_score_adj(u64 clone_flags, struct task_struct *tsk)
+1922-{
+1923-	/* Skip if kernel thread */
+--
+2181-#ifdef CONFIG_BCACHE
+2182-	p->sequential_io	= 0;
+2183-	p->sequential_io_avg	= 0;
+2184-#endif
+2185-#ifdef CONFIG_BPF_SYSCALL
+2186:	RCU_INIT_POINTER(p->bpf_storage, NULL);
+2187:	p->bpf_ctx = NULL;
+2188-#endif
+2189-
+2190-	unwind_task_init(p);
+2191-
+2192-	/* Perform scheduler related setup. Assign this task to a CPU. */
+--
+2515-bad_fork_cleanup_security:
+2516-	security_task_free(p);
+2517-bad_fork_cleanup_audit:
+2518-	audit_free(p);
+2519-bad_fork_cleanup_perf:
+2520:	perf_event_free_task(p);
+2521-bad_fork_sched_cancel_fork:
+2522-	sched_cancel_fork(p);
+2523-bad_fork_cleanup_policy:
+2524:	lockdep_free_task(p);
+2525-#ifdef CONFIG_NUMA
+2526-	mpol_put(p->mempolicy);
+2527-#endif
+2528-bad_fork_cleanup_delayacct:
+2529-	io_uring_free(p);
+--
+2534-	exit_creds(p);
+2535-bad_fork_free:
+2536-	WRITE_ONCE(p->__state, TASK_DEAD);
+2537-	exit_task_stack_account(p);
+2538-	put_task_stack(p);
+2539:	delayed_free_task(p);
+2540-fork_out:
+2541-	spin_lock_irq(&current->sighand->siglock);
+2542-	hlist_del_init(&delayed.node);
+2543-	spin_unlock_irq(&current->sighand->siglock);
+2544-	return ERR_PTR(retval);
+
+===== TASK STORAGE CLEANUP IMPLEMENTATION =====
+36-
+37-	task_storage =
+38-		rcu_dereference_check(task->bpf_storage, bpf_rcu_lock_held());
+39-	if (!task_storage)
+40-		return NULL;
+41-
+42-	smap = (struct bpf_local_storage_map *)map;
+43-	return bpf_local_storage_lookup(task_storage, smap, cacheit_lockit);
+44-}
+45-
+46:void bpf_task_storage_free(struct task_struct *task)
+47-{
+48-	struct bpf_local_storage *local_storage;
+49-
+50-	rcu_read_lock();
+51-
+52-	local_storage = rcu_dereference(task->bpf_storage);
+53-	if (!local_storage)
+54-		goto out;
+55-
+56-	bpf_local_storage_destroy(local_storage);
+57-out:
+58-	rcu_read_unlock();
+59-}
+60-
+61-static void *bpf_pid_task_storage_lookup_elem(struct bpf_map *map, void *key)
+62-{
+63-	struct bpf_local_storage_data *sdata;
+64-	struct task_struct *task;
+65-	unsigned int f_flags;
+66-	struct pid *pid;
+67-	int fd, err;
+68-
+69-	fd = *(int *)key;
+70-	pid = pidfd_get_pid(fd, &f_flags);
+71-	if (IS_ERR(pid))
+72-		return ERR_CAST(pid);
+73-
+74-	/* We should be in an RCU read side critical section, it should be safe
+75-	 * to call pid_task.
+76-	 */
