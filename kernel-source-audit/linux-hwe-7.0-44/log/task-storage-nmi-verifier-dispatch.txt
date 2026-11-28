@@ -1,0 +1,1739 @@
+===== BASE HELPER DISPATCH =====
+2044-const struct bpf_func_proto bpf_perf_event_read_proto __weak;
+2045-const struct bpf_func_proto bpf_send_signal_proto __weak;
+2046-const struct bpf_func_proto bpf_send_signal_thread_proto __weak;
+2047-const struct bpf_func_proto bpf_get_task_stack_sleepable_proto __weak;
+2048-const struct bpf_func_proto bpf_get_task_stack_proto __weak;
+2049-const struct bpf_func_proto bpf_get_branch_snapshot_proto __weak;
+2050-
+2051-const struct bpf_func_proto *
+2052:bpf_base_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+2053-{
+2054-	switch (func_id) {
+2055-	case BPF_FUNC_map_lookup_elem:
+2056-		return &bpf_map_lookup_elem_proto;
+2057-	case BPF_FUNC_map_update_elem:
+2058-		return &bpf_map_update_elem_proto;
+2059-	case BPF_FUNC_map_delete_elem:
+2060-		return &bpf_map_delete_elem_proto;
+2061-	case BPF_FUNC_map_push_elem:
+2062-		return &bpf_map_push_elem_proto;
+2063-	case BPF_FUNC_map_pop_elem:
+2064-		return &bpf_map_pop_elem_proto;
+2065-	case BPF_FUNC_map_peek_elem:
+2066-		return &bpf_map_peek_elem_proto;
+2067-	case BPF_FUNC_map_lookup_percpu_elem:
+2068-		return &bpf_map_lookup_percpu_elem_proto;
+2069-	case BPF_FUNC_get_prandom_u32:
+2070-		return &bpf_get_prandom_u32_proto;
+2071-	case BPF_FUNC_get_smp_processor_id:
+2072-		return &bpf_get_raw_smp_processor_id_proto;
+2073-	case BPF_FUNC_get_numa_node_id:
+2074-		return &bpf_get_numa_node_id_proto;
+2075-	case BPF_FUNC_tail_call:
+2076-		return &bpf_tail_call_proto;
+2077-	case BPF_FUNC_ktime_get_ns:
+2078-		return &bpf_ktime_get_ns_proto;
+2079-	case BPF_FUNC_ktime_get_boot_ns:
+2080-		return &bpf_ktime_get_boot_ns_proto;
+2081-	case BPF_FUNC_ktime_get_tai_ns:
+2082-		return &bpf_ktime_get_tai_ns_proto;
+2083-	case BPF_FUNC_ringbuf_output:
+2084-		return &bpf_ringbuf_output_proto;
+2085-	case BPF_FUNC_ringbuf_reserve:
+2086-		return &bpf_ringbuf_reserve_proto;
+2087-	case BPF_FUNC_ringbuf_submit:
+2088-		return &bpf_ringbuf_submit_proto;
+2089-	case BPF_FUNC_ringbuf_discard:
+2090-		return &bpf_ringbuf_discard_proto;
+2091-	case BPF_FUNC_ringbuf_query:
+2092-		return &bpf_ringbuf_query_proto;
+2093-	case BPF_FUNC_strncmp:
+2094-		return &bpf_strncmp_proto;
+2095-	case BPF_FUNC_strtol:
+2096-		return &bpf_strtol_proto;
+2097-	case BPF_FUNC_strtoul:
+2098-		return &bpf_strtoul_proto;
+2099-	case BPF_FUNC_get_current_pid_tgid:
+2100-		return &bpf_get_current_pid_tgid_proto;
+2101-	case BPF_FUNC_get_ns_current_pid_tgid:
+2102-		return &bpf_get_ns_current_pid_tgid_proto;
+2103-	case BPF_FUNC_get_current_uid_gid:
+2104-		return &bpf_get_current_uid_gid_proto;
+2105-	default:
+2106-		break;
+2107-	}
+2108-
+2109-	if (!bpf_token_capable(prog->aux->token, CAP_BPF))
+2110-		return NULL;
+2111-
+2112-	switch (func_id) {
+2113-	case BPF_FUNC_spin_lock:
+2114-		return &bpf_spin_lock_proto;
+2115-	case BPF_FUNC_spin_unlock:
+2116-		return &bpf_spin_unlock_proto;
+2117-	case BPF_FUNC_jiffies64:
+2118-		return &bpf_jiffies64_proto;
+2119-	case BPF_FUNC_per_cpu_ptr:
+2120-		return &bpf_per_cpu_ptr_proto;
+2121-	case BPF_FUNC_this_cpu_ptr:
+2122-		return &bpf_this_cpu_ptr_proto;
+2123-	case BPF_FUNC_timer_init:
+2124-		return &bpf_timer_init_proto;
+2125-	case BPF_FUNC_timer_set_callback:
+2126-		return &bpf_timer_set_callback_proto;
+2127-	case BPF_FUNC_timer_start:
+2128-		return &bpf_timer_start_proto;
+2129-	case BPF_FUNC_timer_cancel:
+2130-		return &bpf_timer_cancel_proto;
+2131-	case BPF_FUNC_kptr_xchg:
+2132-		return &bpf_kptr_xchg_proto;
+2133-	case BPF_FUNC_for_each_map_elem:
+2134-		return &bpf_for_each_map_elem_proto;
+2135-	case BPF_FUNC_loop:
+2136-		return &bpf_loop_proto;
+2137-	case BPF_FUNC_user_ringbuf_drain:
+2138-		return &bpf_user_ringbuf_drain_proto;
+2139-	case BPF_FUNC_ringbuf_reserve_dynptr:
+2140-		return &bpf_ringbuf_reserve_dynptr_proto;
+2141-	case BPF_FUNC_ringbuf_submit_dynptr:
+2142-		return &bpf_ringbuf_submit_dynptr_proto;
+--
+2222-	case BPF_FUNC_get_branch_snapshot:
+2223-		return &bpf_get_branch_snapshot_proto;
+2224-	case BPF_FUNC_find_vma:
+2225-		return &bpf_find_vma_proto;
+2226-	default:
+2227-		return NULL;
+2228-	}
+2229-}
+2230:EXPORT_SYMBOL_GPL(bpf_base_func_proto);
+2231-
+2232-void bpf_list_head_free(const struct btf_field *field, void *list_head,
+2233-			struct bpf_spin_lock *spin_lock)
+2234-{
+2235-	struct list_head *head = list_head, *orig_head = list_head;
+2236-
+2237-	BUILD_BUG_ON(sizeof(struct list_head) > sizeof(struct bpf_list_head));
+2238-	BUILD_BUG_ON(__alignof__(struct list_head) > __alignof__(struct bpf_list_head));
+2239-
+2240-	/* Do the actual list draining outside the lock to not hold the lock for
+2241-	 * too long, and also prevent deadlocks if tracing programs end up
+2242-	 * executing on entry/exit of functions called inside the critical
+2243-	 * section, and end up doing map ops that call bpf_list_head_free for
+2244-	 * the same map value again.
+2245-	 */
+2246-	__bpf_spin_lock_irqsave(spin_lock);
+2247-	if (!head->next || list_empty(head))
+2248-		goto unlock;
+2249-	head = head->next;
+2250-unlock:
+2251-	INIT_LIST_HEAD(orig_head);
+2252-	__bpf_spin_unlock_irqrestore(spin_lock);
+2253-
+2254-	while (head != orig_head) {
+2255-		void *obj = head;
+2256-
+2257-		obj -= field->graph_root.node_offset;
+2258-		head = head->next;
+2259-		/* The contained type can also have resources, including a
+2260-		 * bpf_list_head which needs to be freed.
+2261-		 */
+2262-		__bpf_obj_drop_impl(obj, field->graph_root.value_rec, false);
+2263-	}
+2264-}
+2265-
+2266-/* Like rbtree_postorder_for_each_entry_safe, but 'pos' and 'n' are
+2267- * 'rb_node *', so field name of rb_node within containing struct is not
+2268- * needed.
+2269- *
+2270- * Since bpf_rb_tree's node type has a corresponding struct btf_field with
+2271- * graph_root.node_offset, it's not necessary to know field name
+2272- * or type of node struct
+2273- */
+2274-#define bpf_rbtree_postorder_for_each_entry_safe(pos, n, root) \
+2275-	for (pos = rb_first_postorder(root); \
+2276-	    pos && ({ n = rb_next_postorder(pos); 1; }); \
+2277-	    pos = n)
+2278-
+2279-void bpf_rb_root_free(const struct btf_field *field, void *rb_root,
+2280-		      struct bpf_spin_lock *spin_lock)
+2281-{
+2282-	struct rb_root_cached orig_root, *root = rb_root;
+2283-	struct rb_node *pos, *n;
+2284-	void *obj;
+2285-
+2286-	BUILD_BUG_ON(sizeof(struct rb_root_cached) > sizeof(struct bpf_rb_root));
+2287-	BUILD_BUG_ON(__alignof__(struct rb_root_cached) > __alignof__(struct bpf_rb_root));
+2288-
+2289-	__bpf_spin_lock_irqsave(spin_lock);
+2290-	orig_root = *root;
+2291-	*root = RB_ROOT_CACHED;
+2292-	__bpf_spin_unlock_irqrestore(spin_lock);
+2293-
+2294-	bpf_rbtree_postorder_for_each_entry_safe(pos, n, &orig_root.rb_root) {
+2295-		obj = pos;
+2296-		obj -= field->graph_root.node_offset;
+2297-
+2298-
+2299-		__bpf_obj_drop_impl(obj, field->graph_root.value_rec, false);
+2300-	}
+2301-}
+2302-
+2303-__bpf_kfunc_start_defs();
+2304-
+2305-__bpf_kfunc void *bpf_obj_new_impl(u64 local_type_id__k, void *meta__ign)
+2306-{
+2307-	struct btf_struct_meta *meta = meta__ign;
+2308-	u64 size = local_type_id__k;
+2309-	void *p;
+2310-
+2311-	p = bpf_mem_alloc(&bpf_global_ma, size);
+2312-	if (!p)
+2313-		return NULL;
+2314-	if (meta)
+2315-		bpf_obj_init(meta->record, p);
+2316-	return p;
+2317-}
+2318-
+2319-__bpf_kfunc void *bpf_percpu_obj_new_impl(u64 local_type_id__k, void *meta__ign)
+2320-{
+
+===== PERF EVENT HELPER DISPATCH =====
+1535-	.ret_type       = RET_INTEGER,
+1536-	.arg1_type      = ARG_PTR_TO_CTX,
+1537-	.arg2_type      = ARG_PTR_TO_MEM_OR_NULL | MEM_WRITE,
+1538-	.arg3_type      = ARG_CONST_SIZE_OR_ZERO,
+1539-	.arg4_type      = ARG_ANYTHING,
+1540-};
+1541-
+1542-static const struct bpf_func_proto *
+1543:pe_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1544-{
+1545-	switch (func_id) {
+1546-	case BPF_FUNC_perf_event_output:
+1547-		return &bpf_perf_event_output_proto_tp;
+1548-	case BPF_FUNC_get_stackid:
+1549-		return &bpf_get_stackid_proto_pe;
+1550-	case BPF_FUNC_get_stack:
+1551-		return &bpf_get_stack_proto_pe;
+1552-	case BPF_FUNC_perf_prog_read_value:
+1553-		return &bpf_perf_prog_read_value_proto;
+1554-	case BPF_FUNC_read_branch_records:
+1555-		return &bpf_read_branch_records_proto;
+1556-	case BPF_FUNC_get_attach_cookie:
+1557-		return &bpf_get_attach_cookie_proto_pe;
+1558-	default:
+1559-		return bpf_tracing_func_proto(func_id, prog);
+1560-	}
+1561-}
+1562-
+1563-/*
+1564- * bpf_raw_tp_regs are separate from bpf_pt_regs used from skb/xdp
+1565- * to avoid potential recursive reuse issue when/if tracepoints are added
+1566- * inside bpf_*_event_output, bpf_get_stackid and/or bpf_get_stack.
+1567- *
+1568- * Since raw tracepoints run despite bpf_prog_active, support concurrent usage
+1569- * in normal, irq, and nmi context.
+1570- */
+1571-struct bpf_raw_tp_regs {
+1572-	struct pt_regs regs[3];
+1573-};
+1574-static DEFINE_PER_CPU(struct bpf_raw_tp_regs, bpf_raw_tp_regs);
+1575-static DEFINE_PER_CPU(int, bpf_raw_tp_nest_level);
+1576-static struct pt_regs *get_bpf_raw_tp_regs(void)
+1577-{
+1578-	struct bpf_raw_tp_regs *tp_regs = this_cpu_ptr(&bpf_raw_tp_regs);
+1579-	int nest_level = this_cpu_inc_return(bpf_raw_tp_nest_level);
+1580-
+1581-	if (nest_level > ARRAY_SIZE(tp_regs->regs)) {
+1582-		this_cpu_dec(bpf_raw_tp_nest_level);
+1583-		return ERR_PTR(-EBUSY);
+1584-	}
+1585-
+1586-	return &tp_regs->regs[nest_level - 1];
+1587-}
+1588-
+1589-static void put_bpf_raw_tp_regs(void)
+1590-{
+1591-	this_cpu_dec(bpf_raw_tp_nest_level);
+1592-}
+1593-
+1594-BPF_CALL_5(bpf_perf_event_output_raw_tp, struct bpf_raw_tracepoint_args *, args,
+1595-	   struct bpf_map *, map, u64, flags, void *, data, u64, size)
+1596-{
+1597-	struct pt_regs *regs = get_bpf_raw_tp_regs();
+1598-	int ret;
+1599-
+1600-	if (IS_ERR(regs))
+1601-		return PTR_ERR(regs);
+1602-
+1603-	perf_fetch_caller_regs(regs);
+1604-	ret = ____bpf_perf_event_output(regs, map, flags, data, size);
+1605-
+1606-	put_bpf_raw_tp_regs();
+1607-	return ret;
+1608-}
+1609-
+1610-static const struct bpf_func_proto bpf_perf_event_output_proto_raw_tp = {
+1611-	.func		= bpf_perf_event_output_raw_tp,
+1612-	.gpl_only	= true,
+1613-	.ret_type	= RET_INTEGER,
+1614-	.arg1_type	= ARG_PTR_TO_CTX,
+1615-	.arg2_type	= ARG_CONST_MAP_PTR,
+1616-	.arg3_type	= ARG_ANYTHING,
+1617-	.arg4_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+1618-	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
+1619-};
+1620-
+1621-extern const struct bpf_func_proto bpf_skb_output_proto;
+1622-extern const struct bpf_func_proto bpf_xdp_output_proto;
+1623-extern const struct bpf_func_proto bpf_xdp_get_buff_len_trace_proto;
+1624-
+1625-BPF_CALL_3(bpf_get_stackid_raw_tp, struct bpf_raw_tracepoint_args *, args,
+1626-	   struct bpf_map *, map, u64, flags)
+1627-{
+1628-	struct pt_regs *regs = get_bpf_raw_tp_regs();
+1629-	int ret;
+1630-
+1631-	if (IS_ERR(regs))
+1632-		return PTR_ERR(regs);
+1633-
+1634-	perf_fetch_caller_regs(regs);
+1635-	/* similar to bpf_perf_event_output_tp, but pt_regs fetched differently */
+1636-	ret = bpf_get_stackid((unsigned long) regs, (unsigned long) map,
+1637-			      flags, 0, 0);
+1638-	put_bpf_raw_tp_regs();
+1639-	return ret;
+1640-}
+1641-
+1642-static const struct bpf_func_proto bpf_get_stackid_proto_raw_tp = {
+1643-	.func		= bpf_get_stackid_raw_tp,
+--
+1900-				      si->off);
+1901-		break;
+1902-	}
+1903-
+1904-	return insn - insn_buf;
+1905-}
+1906-
+1907-const struct bpf_verifier_ops perf_event_verifier_ops = {
+1908:	.get_func_proto		= pe_prog_func_proto,
+1909-	.is_valid_access	= pe_prog_is_valid_access,
+1910-	.convert_ctx_access	= pe_prog_convert_ctx_access,
+1911-};
+1912-
+1913-const struct bpf_prog_ops perf_event_prog_ops = {
+1914-};
+1915-
+1916-static DEFINE_MUTEX(bpf_event_mutex);
+1917-
+1918-#define BPF_TRACE_MAX_PROGS 64
+1919-
+1920-int perf_event_attach_bpf_prog(struct perf_event *event,
+1921-			       struct bpf_prog *prog,
+1922-			       u64 bpf_cookie)
+1923-{
+1924-	struct bpf_prog_array *old_array;
+1925-	struct bpf_prog_array *new_array;
+1926-	int ret = -EEXIST;
+1927-
+1928-	/*
+1929-	 * Kprobe override only works if they are on the function entry,
+1930-	 * and only if they are on the opt-in list.
+1931-	 */
+1932-	if (prog->kprobe_override &&
+1933-	    (!trace_kprobe_on_func_entry(event->tp_event) ||
+1934-	     !trace_kprobe_error_injectable(event->tp_event)))
+1935-		return -EINVAL;
+1936-
+1937-	mutex_lock(&bpf_event_mutex);
+1938-
+1939-	if (event->prog)
+1940-		goto unlock;
+1941-
+1942-	old_array = bpf_event_rcu_dereference(event->tp_event->prog_array);
+1943-	if (old_array &&
+1944-	    bpf_prog_array_length(old_array) >= BPF_TRACE_MAX_PROGS) {
+1945-		ret = -E2BIG;
+1946-		goto unlock;
+1947-	}
+1948-
+1949-	ret = bpf_prog_array_copy(old_array, NULL, prog, bpf_cookie, &new_array);
+1950-	if (ret < 0)
+1951-		goto unlock;
+1952-
+1953-	/* set the new array to event->tp_event and set event->prog */
+1954-	event->prog = prog;
+1955-	event->bpf_cookie = bpf_cookie;
+1956-	rcu_assign_pointer(event->tp_event->prog_array, new_array);
+1957-	bpf_prog_array_free_sleepable(old_array);
+1958-
+1959-unlock:
+1960-	mutex_unlock(&bpf_event_mutex);
+1961-	return ret;
+1962-}
+1963-
+1964-void perf_event_detach_bpf_prog(struct perf_event *event)
+1965-{
+1966-	struct bpf_prog_array *old_array;
+1967-	struct bpf_prog_array *new_array;
+1968-	struct bpf_prog *prog = NULL;
+1969-	int ret;
+1970-
+1971-	mutex_lock(&bpf_event_mutex);
+1972-
+1973-	if (!event->prog)
+1974-		goto unlock;
+1975-
+1976-	old_array = bpf_event_rcu_dereference(event->tp_event->prog_array);
+1977-	if (!old_array)
+1978-		goto put;
+1979-
+1980-	ret = bpf_prog_array_copy(old_array, event->prog, NULL, 0, &new_array);
+1981-	if (ret < 0) {
+1982-		bpf_prog_array_delete_safe(old_array, event->prog);
+1983-	} else {
+1984-		rcu_assign_pointer(event->tp_event->prog_array, new_array);
+1985-		bpf_prog_array_free_sleepable(old_array);
+1986-	}
+1987-
+1988-put:
+1989-	prog = event->prog;
+1990-	event->prog = NULL;
+1991-
+1992-unlock:
+1993-	mutex_unlock(&bpf_event_mutex);
+1994-
+1995-	if (prog) {
+1996-		/*
+1997-		 * It could be that the bpf_prog is not sleepable (and will be freed
+1998-		 * via normal RCU), but is called from a point that supports sleepable
+1999-		 * programs and uses tasks-trace-RCU.
+2000-		 */
+2001-		synchronize_rcu_tasks_trace();
+2002-
+2003-		bpf_prog_put(prog);
+2004-	}
+2005-}
+2006-
+2007-int perf_event_query_prog_array(struct perf_event *event, void __user *info)
+2008-{
+
+===== KPROBE HELPER DISPATCH =====
+1304-
+1305-static inline bool is_trace_fsession(const struct bpf_prog *prog)
+1306-{
+1307-	return prog->type == BPF_PROG_TYPE_TRACING &&
+1308-	       prog->expected_attach_type == BPF_TRACE_FSESSION;
+1309-}
+1310-
+1311-static const struct bpf_func_proto *
+1312:kprobe_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1313-{
+1314-	switch (func_id) {
+1315-	case BPF_FUNC_perf_event_output:
+1316-		return &bpf_perf_event_output_proto;
+1317-	case BPF_FUNC_get_stackid:
+1318-		return &bpf_get_stackid_proto;
+1319-	case BPF_FUNC_get_stack:
+1320-		return prog->sleepable ? &bpf_get_stack_sleepable_proto : &bpf_get_stack_proto;
+1321-#ifdef CONFIG_BPF_KPROBE_OVERRIDE
+1322-	case BPF_FUNC_override_return:
+1323-		return &bpf_override_return_proto;
+1324-#endif
+1325-	case BPF_FUNC_get_func_ip:
+1326-		if (is_kprobe_multi(prog))
+1327-			return &bpf_get_func_ip_proto_kprobe_multi;
+1328-		if (is_uprobe_multi(prog))
+1329-			return &bpf_get_func_ip_proto_uprobe_multi;
+1330-		return &bpf_get_func_ip_proto_kprobe;
+1331-	case BPF_FUNC_get_attach_cookie:
+1332-		if (is_kprobe_multi(prog))
+1333-			return &bpf_get_attach_cookie_proto_kmulti;
+1334-		if (is_uprobe_multi(prog))
+1335-			return &bpf_get_attach_cookie_proto_umulti;
+1336-		return &bpf_get_attach_cookie_proto_trace;
+1337-	default:
+1338-		return bpf_tracing_func_proto(func_id, prog);
+1339-	}
+1340-}
+1341-
+1342-/* bpf+kprobe programs can access fields of 'struct pt_regs' */
+1343-static bool kprobe_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+1344-					const struct bpf_prog *prog,
+1345-					struct bpf_insn_access_aux *info)
+1346-{
+1347-	if (off < 0 || off >= sizeof(struct pt_regs))
+1348-		return false;
+1349-	if (off % size != 0)
+1350-		return false;
+1351-	/*
+1352-	 * Assertion for 32 bit to make sure last 8 byte access
+1353-	 * (BPF_DW) to the last 4 byte member is disallowed.
+1354-	 */
+1355-	if (off + size > sizeof(struct pt_regs))
+1356-		return false;
+1357-
+1358-	if (type == BPF_WRITE)
+1359-		prog->aux->kprobe_write_ctx = true;
+1360-
+1361-	return true;
+1362-}
+1363-
+1364-const struct bpf_verifier_ops kprobe_verifier_ops = {
+1365:	.get_func_proto  = kprobe_prog_func_proto,
+1366-	.is_valid_access = kprobe_prog_is_valid_access,
+1367-};
+1368-
+1369-const struct bpf_prog_ops kprobe_prog_ops = {
+1370-};
+1371-
+1372-BPF_CALL_5(bpf_perf_event_output_tp, void *, tp_buff, struct bpf_map *, map,
+1373-	   u64, flags, void *, data, u64, size)
+1374-{
+1375-	struct pt_regs *regs = *(struct pt_regs **)tp_buff;
+1376-
+1377-	/*
+1378-	 * r1 points to perf tracepoint buffer where first 8 bytes are hidden
+1379-	 * from bpf program and contain a pointer to 'struct pt_regs'. Fetch it
+1380-	 * from there and call the same bpf_perf_event_output() helper inline.
+1381-	 */
+1382-	return ____bpf_perf_event_output(regs, map, flags, data, size);
+1383-}
+1384-
+1385-static const struct bpf_func_proto bpf_perf_event_output_proto_tp = {
+1386-	.func		= bpf_perf_event_output_tp,
+1387-	.gpl_only	= true,
+1388-	.ret_type	= RET_INTEGER,
+1389-	.arg1_type	= ARG_PTR_TO_CTX,
+1390-	.arg2_type	= ARG_CONST_MAP_PTR,
+1391-	.arg3_type	= ARG_ANYTHING,
+1392-	.arg4_type	= ARG_PTR_TO_MEM | MEM_RDONLY,
+1393-	.arg5_type	= ARG_CONST_SIZE_OR_ZERO,
+1394-};
+1395-
+1396-BPF_CALL_3(bpf_get_stackid_tp, void *, tp_buff, struct bpf_map *, map,
+1397-	   u64, flags)
+1398-{
+1399-	struct pt_regs *regs = *(struct pt_regs **)tp_buff;
+1400-
+1401-	/*
+1402-	 * Same comment as in bpf_perf_event_output_tp(), only that this time
+1403-	 * the other helper's function body cannot be inlined due to being
+1404-	 * external, thus we need to call raw helper function.
+1405-	 */
+1406-	return bpf_get_stackid((unsigned long) regs, (unsigned long) map,
+1407-			       flags, 0, 0);
+1408-}
+1409-
+1410-static const struct bpf_func_proto bpf_get_stackid_proto_tp = {
+1411-	.func		= bpf_get_stackid_tp,
+1412-	.gpl_only	= true,
+1413-	.ret_type	= RET_INTEGER,
+1414-	.arg1_type	= ARG_PTR_TO_CTX,
+1415-	.arg2_type	= ARG_CONST_MAP_PTR,
+1416-	.arg3_type	= ARG_ANYTHING,
+1417-};
+1418-
+1419-BPF_CALL_4(bpf_get_stack_tp, void *, tp_buff, void *, buf, u32, size,
+1420-	   u64, flags)
+1421-{
+1422-	struct pt_regs *regs = *(struct pt_regs **)tp_buff;
+1423-
+1424-	return bpf_get_stack((unsigned long) regs, (unsigned long) buf,
+1425-			     (unsigned long) size, flags, 0);
+1426-}
+1427-
+1428-static const struct bpf_func_proto bpf_get_stack_proto_tp = {
+1429-	.func		= bpf_get_stack_tp,
+1430-	.gpl_only	= true,
+1431-	.ret_type	= RET_INTEGER,
+1432-	.arg1_type	= ARG_PTR_TO_CTX,
+1433-	.arg2_type	= ARG_PTR_TO_UNINIT_MEM,
+1434-	.arg3_type	= ARG_CONST_SIZE_OR_ZERO,
+1435-	.arg4_type	= ARG_ANYTHING,
+1436-};
+1437-
+1438-static const struct bpf_func_proto *
+1439-tp_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1440-{
+1441-	switch (func_id) {
+1442-	case BPF_FUNC_perf_event_output:
+1443-		return &bpf_perf_event_output_proto_tp;
+1444-	case BPF_FUNC_get_stackid:
+1445-		return &bpf_get_stackid_proto_tp;
+1446-	case BPF_FUNC_get_stack:
+1447-		return &bpf_get_stack_proto_tp;
+1448-	case BPF_FUNC_get_attach_cookie:
+1449-		return &bpf_get_attach_cookie_proto_trace;
+1450-	default:
+1451-		return bpf_tracing_func_proto(func_id, prog);
+1452-	}
+1453-}
+1454-
+1455-static bool tp_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+1456-				    const struct bpf_prog *prog,
+1457-				    struct bpf_insn_access_aux *info)
+1458-{
+1459-	if (off < sizeof(void *) || off >= PERF_MAX_TRACE_SIZE)
+1460-		return false;
+1461-	if (type != BPF_READ)
+1462-		return false;
+1463-	if (off % size != 0)
+1464-		return false;
+1465-
+
+===== RAW TRACEPOINT HELPER DISPATCH =====
+1670-	.ret_type	= RET_INTEGER,
+1671-	.arg1_type	= ARG_PTR_TO_CTX,
+1672-	.arg2_type	= ARG_PTR_TO_UNINIT_MEM,
+1673-	.arg3_type	= ARG_CONST_SIZE_OR_ZERO,
+1674-	.arg4_type	= ARG_ANYTHING,
+1675-};
+1676-
+1677-static const struct bpf_func_proto *
+1678:raw_tp_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1679-{
+1680-	switch (func_id) {
+1681-	case BPF_FUNC_perf_event_output:
+1682-		return &bpf_perf_event_output_proto_raw_tp;
+1683-	case BPF_FUNC_get_stackid:
+1684-		return &bpf_get_stackid_proto_raw_tp;
+1685-	case BPF_FUNC_get_stack:
+1686-		return &bpf_get_stack_proto_raw_tp;
+1687-	case BPF_FUNC_get_attach_cookie:
+1688-		return &bpf_get_attach_cookie_proto_tracing;
+1689-	default:
+1690-		return bpf_tracing_func_proto(func_id, prog);
+1691-	}
+1692-}
+1693-
+1694-const struct bpf_func_proto *
+1695-tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1696-{
+1697-	const struct bpf_func_proto *fn;
+1698-
+1699-	switch (func_id) {
+1700-#ifdef CONFIG_NET
+1701-	case BPF_FUNC_skb_output:
+1702-		return &bpf_skb_output_proto;
+1703-	case BPF_FUNC_xdp_output:
+1704-		return &bpf_xdp_output_proto;
+1705-	case BPF_FUNC_skc_to_tcp6_sock:
+1706-		return &bpf_skc_to_tcp6_sock_proto;
+1707-	case BPF_FUNC_skc_to_tcp_sock:
+1708-		return &bpf_skc_to_tcp_sock_proto;
+1709-	case BPF_FUNC_skc_to_tcp_timewait_sock:
+1710-		return &bpf_skc_to_tcp_timewait_sock_proto;
+1711-	case BPF_FUNC_skc_to_tcp_request_sock:
+1712-		return &bpf_skc_to_tcp_request_sock_proto;
+1713-	case BPF_FUNC_skc_to_udp6_sock:
+1714-		return &bpf_skc_to_udp6_sock_proto;
+1715-	case BPF_FUNC_skc_to_unix_sock:
+1716-		return &bpf_skc_to_unix_sock_proto;
+1717-	case BPF_FUNC_skc_to_mptcp_sock:
+1718-		return &bpf_skc_to_mptcp_sock_proto;
+1719-	case BPF_FUNC_sk_storage_get:
+1720-		return &bpf_sk_storage_get_tracing_proto;
+1721-	case BPF_FUNC_sk_storage_delete:
+1722-		return &bpf_sk_storage_delete_tracing_proto;
+1723-	case BPF_FUNC_sock_from_file:
+1724-		return &bpf_sock_from_file_proto;
+1725-	case BPF_FUNC_get_socket_cookie:
+1726-		return &bpf_get_socket_ptr_cookie_proto;
+1727-	case BPF_FUNC_xdp_get_buff_len:
+1728-		return &bpf_xdp_get_buff_len_trace_proto;
+1729-#endif
+1730-	case BPF_FUNC_seq_printf:
+1731-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1732-		       &bpf_seq_printf_proto :
+1733-		       NULL;
+1734-	case BPF_FUNC_seq_write:
+1735-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1736-		       &bpf_seq_write_proto :
+1737-		       NULL;
+1738-	case BPF_FUNC_seq_printf_btf:
+1739-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1740-		       &bpf_seq_printf_btf_proto :
+1741-		       NULL;
+1742-	case BPF_FUNC_d_path:
+1743-		return &bpf_d_path_proto;
+1744-	case BPF_FUNC_get_func_arg:
+1745-		if (bpf_prog_has_trampoline(prog) ||
+1746-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1747-			return &bpf_get_func_arg_proto;
+1748-		return NULL;
+1749-	case BPF_FUNC_get_func_ret:
+1750-		return bpf_prog_has_trampoline(prog) ? &bpf_get_func_ret_proto : NULL;
+1751-	case BPF_FUNC_get_func_arg_cnt:
+1752-		if (bpf_prog_has_trampoline(prog) ||
+1753-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1754-			return &bpf_get_func_arg_cnt_proto;
+1755-		return NULL;
+1756-	case BPF_FUNC_get_attach_cookie:
+1757-		if (prog->type == BPF_PROG_TYPE_TRACING &&
+1758-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1759-			return &bpf_get_attach_cookie_proto_tracing;
+1760-		return bpf_prog_has_trampoline(prog) ? &bpf_get_attach_cookie_proto_tracing : NULL;
+1761-	default:
+1762:		fn = raw_tp_prog_func_proto(func_id, prog);
+1763-		if (!fn && prog->expected_attach_type == BPF_TRACE_ITER)
+1764-			fn = bpf_iter_get_func_proto(func_id, prog);
+1765-		return fn;
+1766-	}
+1767-}
+1768-
+1769-static bool raw_tp_prog_is_valid_access(int off, int size,
+1770-					enum bpf_access_type type,
+1771-					const struct bpf_prog *prog,
+1772-					struct bpf_insn_access_aux *info)
+1773-{
+1774-	return bpf_tracing_ctx_access(off, size, type);
+1775-}
+1776-
+1777-static bool tracing_prog_is_valid_access(int off, int size,
+1778-					 enum bpf_access_type type,
+1779-					 const struct bpf_prog *prog,
+1780-					 struct bpf_insn_access_aux *info)
+1781-{
+1782-	return bpf_tracing_btf_ctx_access(off, size, type, prog, info);
+1783-}
+1784-
+1785-int __weak bpf_prog_test_run_tracing(struct bpf_prog *prog,
+1786-				     const union bpf_attr *kattr,
+1787-				     union bpf_attr __user *uattr)
+1788-{
+1789-	return -ENOTSUPP;
+1790-}
+1791-
+1792-const struct bpf_verifier_ops raw_tracepoint_verifier_ops = {
+1793:	.get_func_proto  = raw_tp_prog_func_proto,
+1794-	.is_valid_access = raw_tp_prog_is_valid_access,
+1795-};
+1796-
+1797-const struct bpf_prog_ops raw_tracepoint_prog_ops = {
+1798-#ifdef CONFIG_NET
+1799-	.test_run = bpf_prog_test_run_raw_tp,
+1800-#endif
+1801-};
+1802-
+1803-const struct bpf_verifier_ops tracing_verifier_ops = {
+1804-	.get_func_proto  = tracing_prog_func_proto,
+1805-	.is_valid_access = tracing_prog_is_valid_access,
+1806-};
+1807-
+1808-const struct bpf_prog_ops tracing_prog_ops = {
+1809-	.test_run = bpf_prog_test_run_tracing,
+1810-};
+1811-
+1812-static bool raw_tp_writable_prog_is_valid_access(int off, int size,
+1813-						 enum bpf_access_type type,
+1814-						 const struct bpf_prog *prog,
+1815-						 struct bpf_insn_access_aux *info)
+1816-{
+1817-	if (off == 0) {
+1818-		if (size != sizeof(u64) || type != BPF_READ)
+1819-			return false;
+1820-		info->reg_type = PTR_TO_TP_BUFFER;
+1821-	}
+1822-	return raw_tp_prog_is_valid_access(off, size, type, prog, info);
+1823-}
+1824-
+1825-const struct bpf_verifier_ops raw_tracepoint_writable_verifier_ops = {
+1826:	.get_func_proto  = raw_tp_prog_func_proto,
+1827-	.is_valid_access = raw_tp_writable_prog_is_valid_access,
+1828-};
+1829-
+1830-const struct bpf_prog_ops raw_tracepoint_writable_prog_ops = {
+1831-};
+1832-
+1833-static bool pe_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+1834-				    const struct bpf_prog *prog,
+1835-				    struct bpf_insn_access_aux *info)
+1836-{
+1837-	const int size_u64 = sizeof(u64);
+1838-
+1839-	if (off < 0 || off >= sizeof(struct bpf_perf_event_data))
+1840-		return false;
+1841-	if (type != BPF_READ)
+1842-		return false;
+1843-	if (off % size != 0) {
+1844-		if (sizeof(unsigned long) != 4)
+1845-			return false;
+1846-		if (size != 8)
+1847-			return false;
+1848-		if (off % size != 4)
+1849-			return false;
+1850-	}
+1851-
+1852-	switch (off) {
+1853-	case bpf_ctx_range(struct bpf_perf_event_data, sample_period):
+1854-		bpf_ctx_record_field_size(info, size_u64);
+1855-		if (!bpf_ctx_narrow_access_ok(off, size, size_u64))
+1856-			return false;
+1857-		break;
+1858-	case bpf_ctx_range(struct bpf_perf_event_data, addr):
+1859-		bpf_ctx_record_field_size(info, size_u64);
+1860-		if (!bpf_ctx_narrow_access_ok(off, size, size_u64))
+1861-			return false;
+1862-		break;
+1863-	default:
+1864-		if (size != sizeof(long))
+1865-			return false;
+1866-	}
+1867-
+1868-	return true;
+1869-}
+1870-
+1871-static u32 pe_prog_convert_ctx_access(enum bpf_access_type type,
+1872-				      const struct bpf_insn *si,
+1873-				      struct bpf_insn *insn_buf,
+1874-				      struct bpf_prog *prog, u32 *target_size)
+1875-{
+1876-	struct bpf_insn *insn = insn_buf;
+1877-
+1878-	switch (si->off) {
+1879-	case offsetof(struct bpf_perf_event_data, sample_period):
+1880-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1881-						       data), si->dst_reg, si->src_reg,
+1882-				      offsetof(struct bpf_perf_event_data_kern, data));
+1883-		*insn++ = BPF_LDX_MEM(BPF_DW, si->dst_reg, si->dst_reg,
+1884-				      bpf_target_off(struct perf_sample_data, period, 8,
+1885-						     target_size));
+1886-		break;
+1887-	case offsetof(struct bpf_perf_event_data, addr):
+1888-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1889-						       data), si->dst_reg, si->src_reg,
+1890-				      offsetof(struct bpf_perf_event_data_kern, data));
+1891-		*insn++ = BPF_LDX_MEM(BPF_DW, si->dst_reg, si->dst_reg,
+1892-				      bpf_target_off(struct perf_sample_data, addr, 8,
+1893-						     target_size));
+1894-		break;
+1895-	default:
+1896-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1897-						       regs), si->dst_reg, si->src_reg,
+1898-				      offsetof(struct bpf_perf_event_data_kern, regs));
+1899-		*insn++ = BPF_LDX_MEM(BPF_SIZEOF(long), si->dst_reg, si->dst_reg,
+1900-				      si->off);
+1901-		break;
+1902-	}
+1903-
+1904-	return insn - insn_buf;
+1905-}
+1906-
+1907-const struct bpf_verifier_ops perf_event_verifier_ops = {
+1908-	.get_func_proto		= pe_prog_func_proto,
+1909-	.is_valid_access	= pe_prog_is_valid_access,
+1910-	.convert_ctx_access	= pe_prog_convert_ctx_access,
+1911-};
+1912-
+1913-const struct bpf_prog_ops perf_event_prog_ops = {
+1914-};
+1915-
+1916-static DEFINE_MUTEX(bpf_event_mutex);
+
+===== TRACING HELPER DISPATCH =====
+1687-	case BPF_FUNC_get_attach_cookie:
+1688-		return &bpf_get_attach_cookie_proto_tracing;
+1689-	default:
+1690-		return bpf_tracing_func_proto(func_id, prog);
+1691-	}
+1692-}
+1693-
+1694-const struct bpf_func_proto *
+1695:tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+1696-{
+1697-	const struct bpf_func_proto *fn;
+1698-
+1699-	switch (func_id) {
+1700-#ifdef CONFIG_NET
+1701-	case BPF_FUNC_skb_output:
+1702-		return &bpf_skb_output_proto;
+1703-	case BPF_FUNC_xdp_output:
+1704-		return &bpf_xdp_output_proto;
+1705-	case BPF_FUNC_skc_to_tcp6_sock:
+1706-		return &bpf_skc_to_tcp6_sock_proto;
+1707-	case BPF_FUNC_skc_to_tcp_sock:
+1708-		return &bpf_skc_to_tcp_sock_proto;
+1709-	case BPF_FUNC_skc_to_tcp_timewait_sock:
+1710-		return &bpf_skc_to_tcp_timewait_sock_proto;
+1711-	case BPF_FUNC_skc_to_tcp_request_sock:
+1712-		return &bpf_skc_to_tcp_request_sock_proto;
+1713-	case BPF_FUNC_skc_to_udp6_sock:
+1714-		return &bpf_skc_to_udp6_sock_proto;
+1715-	case BPF_FUNC_skc_to_unix_sock:
+1716-		return &bpf_skc_to_unix_sock_proto;
+1717-	case BPF_FUNC_skc_to_mptcp_sock:
+1718-		return &bpf_skc_to_mptcp_sock_proto;
+1719-	case BPF_FUNC_sk_storage_get:
+1720-		return &bpf_sk_storage_get_tracing_proto;
+1721-	case BPF_FUNC_sk_storage_delete:
+1722-		return &bpf_sk_storage_delete_tracing_proto;
+1723-	case BPF_FUNC_sock_from_file:
+1724-		return &bpf_sock_from_file_proto;
+1725-	case BPF_FUNC_get_socket_cookie:
+1726-		return &bpf_get_socket_ptr_cookie_proto;
+1727-	case BPF_FUNC_xdp_get_buff_len:
+1728-		return &bpf_xdp_get_buff_len_trace_proto;
+1729-#endif
+1730-	case BPF_FUNC_seq_printf:
+1731-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1732-		       &bpf_seq_printf_proto :
+1733-		       NULL;
+1734-	case BPF_FUNC_seq_write:
+1735-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1736-		       &bpf_seq_write_proto :
+1737-		       NULL;
+1738-	case BPF_FUNC_seq_printf_btf:
+1739-		return prog->expected_attach_type == BPF_TRACE_ITER ?
+1740-		       &bpf_seq_printf_btf_proto :
+1741-		       NULL;
+1742-	case BPF_FUNC_d_path:
+1743-		return &bpf_d_path_proto;
+1744-	case BPF_FUNC_get_func_arg:
+1745-		if (bpf_prog_has_trampoline(prog) ||
+1746-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1747-			return &bpf_get_func_arg_proto;
+1748-		return NULL;
+1749-	case BPF_FUNC_get_func_ret:
+1750-		return bpf_prog_has_trampoline(prog) ? &bpf_get_func_ret_proto : NULL;
+1751-	case BPF_FUNC_get_func_arg_cnt:
+1752-		if (bpf_prog_has_trampoline(prog) ||
+1753-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1754-			return &bpf_get_func_arg_cnt_proto;
+1755-		return NULL;
+1756-	case BPF_FUNC_get_attach_cookie:
+1757-		if (prog->type == BPF_PROG_TYPE_TRACING &&
+1758-		    prog->expected_attach_type == BPF_TRACE_RAW_TP)
+1759-			return &bpf_get_attach_cookie_proto_tracing;
+1760-		return bpf_prog_has_trampoline(prog) ? &bpf_get_attach_cookie_proto_tracing : NULL;
+1761-	default:
+1762-		fn = raw_tp_prog_func_proto(func_id, prog);
+1763-		if (!fn && prog->expected_attach_type == BPF_TRACE_ITER)
+1764-			fn = bpf_iter_get_func_proto(func_id, prog);
+1765-		return fn;
+1766-	}
+1767-}
+1768-
+1769-static bool raw_tp_prog_is_valid_access(int off, int size,
+1770-					enum bpf_access_type type,
+1771-					const struct bpf_prog *prog,
+1772-					struct bpf_insn_access_aux *info)
+1773-{
+1774-	return bpf_tracing_ctx_access(off, size, type);
+1775-}
+1776-
+1777-static bool tracing_prog_is_valid_access(int off, int size,
+1778-					 enum bpf_access_type type,
+1779-					 const struct bpf_prog *prog,
+1780-					 struct bpf_insn_access_aux *info)
+1781-{
+1782-	return bpf_tracing_btf_ctx_access(off, size, type, prog, info);
+1783-}
+1784-
+1785-int __weak bpf_prog_test_run_tracing(struct bpf_prog *prog,
+1786-				     const union bpf_attr *kattr,
+1787-				     union bpf_attr __user *uattr)
+1788-{
+1789-	return -ENOTSUPP;
+1790-}
+1791-
+1792-const struct bpf_verifier_ops raw_tracepoint_verifier_ops = {
+1793-	.get_func_proto  = raw_tp_prog_func_proto,
+1794-	.is_valid_access = raw_tp_prog_is_valid_access,
+1795-};
+1796-
+1797-const struct bpf_prog_ops raw_tracepoint_prog_ops = {
+1798-#ifdef CONFIG_NET
+1799-	.test_run = bpf_prog_test_run_raw_tp,
+1800-#endif
+1801-};
+1802-
+1803-const struct bpf_verifier_ops tracing_verifier_ops = {
+1804:	.get_func_proto  = tracing_prog_func_proto,
+1805-	.is_valid_access = tracing_prog_is_valid_access,
+1806-};
+1807-
+1808-const struct bpf_prog_ops tracing_prog_ops = {
+1809-	.test_run = bpf_prog_test_run_tracing,
+1810-};
+1811-
+1812-static bool raw_tp_writable_prog_is_valid_access(int off, int size,
+1813-						 enum bpf_access_type type,
+1814-						 const struct bpf_prog *prog,
+1815-						 struct bpf_insn_access_aux *info)
+1816-{
+1817-	if (off == 0) {
+1818-		if (size != sizeof(u64) || type != BPF_READ)
+1819-			return false;
+1820-		info->reg_type = PTR_TO_TP_BUFFER;
+1821-	}
+1822-	return raw_tp_prog_is_valid_access(off, size, type, prog, info);
+1823-}
+1824-
+1825-const struct bpf_verifier_ops raw_tracepoint_writable_verifier_ops = {
+1826-	.get_func_proto  = raw_tp_prog_func_proto,
+1827-	.is_valid_access = raw_tp_writable_prog_is_valid_access,
+1828-};
+1829-
+1830-const struct bpf_prog_ops raw_tracepoint_writable_prog_ops = {
+1831-};
+1832-
+1833-static bool pe_prog_is_valid_access(int off, int size, enum bpf_access_type type,
+1834-				    const struct bpf_prog *prog,
+1835-				    struct bpf_insn_access_aux *info)
+1836-{
+1837-	const int size_u64 = sizeof(u64);
+1838-
+1839-	if (off < 0 || off >= sizeof(struct bpf_perf_event_data))
+1840-		return false;
+1841-	if (type != BPF_READ)
+1842-		return false;
+1843-	if (off % size != 0) {
+1844-		if (sizeof(unsigned long) != 4)
+1845-			return false;
+1846-		if (size != 8)
+1847-			return false;
+1848-		if (off % size != 4)
+1849-			return false;
+1850-	}
+1851-
+1852-	switch (off) {
+1853-	case bpf_ctx_range(struct bpf_perf_event_data, sample_period):
+1854-		bpf_ctx_record_field_size(info, size_u64);
+1855-		if (!bpf_ctx_narrow_access_ok(off, size, size_u64))
+1856-			return false;
+1857-		break;
+1858-	case bpf_ctx_range(struct bpf_perf_event_data, addr):
+1859-		bpf_ctx_record_field_size(info, size_u64);
+1860-		if (!bpf_ctx_narrow_access_ok(off, size, size_u64))
+1861-			return false;
+1862-		break;
+1863-	default:
+1864-		if (size != sizeof(long))
+1865-			return false;
+1866-	}
+1867-
+1868-	return true;
+1869-}
+1870-
+1871-static u32 pe_prog_convert_ctx_access(enum bpf_access_type type,
+1872-				      const struct bpf_insn *si,
+1873-				      struct bpf_insn *insn_buf,
+1874-				      struct bpf_prog *prog, u32 *target_size)
+1875-{
+1876-	struct bpf_insn *insn = insn_buf;
+1877-
+1878-	switch (si->off) {
+1879-	case offsetof(struct bpf_perf_event_data, sample_period):
+1880-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1881-						       data), si->dst_reg, si->src_reg,
+1882-				      offsetof(struct bpf_perf_event_data_kern, data));
+1883-		*insn++ = BPF_LDX_MEM(BPF_DW, si->dst_reg, si->dst_reg,
+1884-				      bpf_target_off(struct perf_sample_data, period, 8,
+1885-						     target_size));
+1886-		break;
+1887-	case offsetof(struct bpf_perf_event_data, addr):
+1888-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1889-						       data), si->dst_reg, si->src_reg,
+1890-				      offsetof(struct bpf_perf_event_data_kern, data));
+1891-		*insn++ = BPF_LDX_MEM(BPF_DW, si->dst_reg, si->dst_reg,
+1892-				      bpf_target_off(struct perf_sample_data, addr, 8,
+1893-						     target_size));
+1894-		break;
+1895-	default:
+1896-		*insn++ = BPF_LDX_MEM(BPF_FIELD_SIZEOF(struct bpf_perf_event_data_kern,
+1897-						       regs), si->dst_reg, si->src_reg,
+1898-				      offsetof(struct bpf_perf_event_data_kern, regs));
+1899-		*insn++ = BPF_LDX_MEM(BPF_SIZEOF(long), si->dst_reg, si->dst_reg,
+1900-				      si->off);
+1901-		break;
+1902-	}
+1903-
+1904-	return insn - insn_buf;
+
+===== INODE LSM DISPATCH =====
+217-static const struct bpf_func_proto bpf_get_attach_cookie_proto = {
+218-	.func		= bpf_get_attach_cookie,
+219-	.gpl_only	= false,
+220-	.ret_type	= RET_INTEGER,
+221-	.arg1_type	= ARG_PTR_TO_CTX,
+222-};
+223-
+224-static const struct bpf_func_proto *
+225:bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+226-{
+227-	const struct bpf_func_proto *func_proto;
+228-
+229-	if (prog->expected_attach_type == BPF_LSM_CGROUP) {
+230-		func_proto = cgroup_common_func_proto(func_id, prog);
+231-		if (func_proto)
+232-			return func_proto;
+233-	}
+234-
+235-	switch (func_id) {
+236-	case BPF_FUNC_inode_storage_get:
+237-		return &bpf_inode_storage_get_proto;
+238-	case BPF_FUNC_inode_storage_delete:
+239-		return &bpf_inode_storage_delete_proto;
+240-#ifdef CONFIG_NET
+241-	case BPF_FUNC_sk_storage_get:
+242-		return &bpf_sk_storage_get_proto;
+243-	case BPF_FUNC_sk_storage_delete:
+244-		return &bpf_sk_storage_delete_proto;
+245-#endif /* CONFIG_NET */
+246-	case BPF_FUNC_spin_lock:
+247-		return &bpf_spin_lock_proto;
+248-	case BPF_FUNC_spin_unlock:
+249-		return &bpf_spin_unlock_proto;
+250-	case BPF_FUNC_bprm_opts_set:
+251-		return &bpf_bprm_opts_set_proto;
+252-	case BPF_FUNC_ima_inode_hash:
+253-		return &bpf_ima_inode_hash_proto;
+254-	case BPF_FUNC_ima_file_hash:
+255-		return &bpf_ima_file_hash_proto;
+256-	case BPF_FUNC_get_attach_cookie:
+257-		return bpf_prog_has_trampoline(prog) ? &bpf_get_attach_cookie_proto : NULL;
+258-#ifdef CONFIG_NET
+259-	case BPF_FUNC_setsockopt:
+260-		if (prog->expected_attach_type != BPF_LSM_CGROUP)
+261-			return NULL;
+262-		if (btf_id_set_contains(&bpf_lsm_locked_sockopt_hooks,
+263-					prog->aux->attach_btf_id))
+264-			return &bpf_sk_setsockopt_proto;
+265-		if (btf_id_set_contains(&bpf_lsm_unlocked_sockopt_hooks,
+266-					prog->aux->attach_btf_id))
+267-			return &bpf_unlocked_sk_setsockopt_proto;
+268-		return NULL;
+269-	case BPF_FUNC_getsockopt:
+270-		if (prog->expected_attach_type != BPF_LSM_CGROUP)
+271-			return NULL;
+272-		if (btf_id_set_contains(&bpf_lsm_locked_sockopt_hooks,
+273-					prog->aux->attach_btf_id))
+274-			return &bpf_sk_getsockopt_proto;
+275-		if (btf_id_set_contains(&bpf_lsm_unlocked_sockopt_hooks,
+276-					prog->aux->attach_btf_id))
+277-			return &bpf_unlocked_sk_getsockopt_proto;
+278-		return NULL;
+279-#endif
+280-	default:
+--
+406-{
+407-	return !btf_id_set_contains(&untrusted_lsm_hooks, prog->aux->attach_btf_id);
+408-}
+409-
+410-const struct bpf_prog_ops lsm_prog_ops = {
+411-};
+412-
+413-const struct bpf_verifier_ops lsm_verifier_ops = {
+414:	.get_func_proto = bpf_lsm_func_proto,
+415-	.is_valid_access = btf_ctx_access,
+416-};
+417-
+418-/* hooks return 0 or 1 */
+419-BTF_SET_START(bool_lsm_hooks)
+420-#ifdef CONFIG_SECURITY_NETWORK_XFRM
+421-BTF_ID(func, bpf_lsm_xfrm_state_pol_flow_match)
+422-#endif
+423-#ifdef CONFIG_AUDIT
+424-BTF_ID(func, bpf_lsm_audit_rule_known)
+425-#endif
+426-BTF_ID(func, bpf_lsm_inode_xattr_skipcap)
+427-BTF_SET_END(bool_lsm_hooks)
+428-
+429-int bpf_lsm_get_retval_range(const struct bpf_prog *prog,
+430-			     struct bpf_retval_range *retval_range)
+431-{
+432-	/* no return value range for void hooks */
+433-	if (!prog->aux->attach_func_proto->type)
+434-		return -EINVAL;
+435-
+436-	if (btf_id_set_contains(&bool_lsm_hooks, prog->aux->attach_btf_id)) {
+437-		retval_range->minval = 0;
+438-		retval_range->maxval = 1;
+439-	} else {
+440-		/* All other available LSM hooks, except task_prctl, return 0
+441-		 * on success and negative error code on failure.
+442-		 * To keep things simple, we only allow bpf progs to return 0
+443-		 * or negative errno for task_prctl too.
+444-		 */
+445-		retval_range->minval = -MAX_ERRNO;
+446-		retval_range->maxval = 0;
+447-	}
+448-	return 0;
+449-}
+
+===== SOCKET FILTER DISPATCH FUNCTIONS =====
+8263-			return NULL;
+8264-		}
+8265-	default:
+8266-		return bpf_sk_base_func_proto(func_id, prog);
+8267-	}
+8268-}
+8269-
+8270-static const struct bpf_func_proto *
+8271:sk_filter_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8272-{
+8273-	switch (func_id) {
+8274-	case BPF_FUNC_skb_load_bytes:
+8275-		return &bpf_skb_load_bytes_proto;
+8276-	case BPF_FUNC_skb_load_bytes_relative:
+8277-		return &bpf_skb_load_bytes_relative_proto;
+8278-	case BPF_FUNC_get_socket_cookie:
+8279-		return &bpf_get_socket_cookie_proto;
+8280-	case BPF_FUNC_get_netns_cookie:
+8281-		return &bpf_get_netns_cookie_proto;
+8282-	case BPF_FUNC_get_socket_uid:
+8283-		return &bpf_get_socket_uid_proto;
+8284-	case BPF_FUNC_perf_event_output:
+8285-		return &bpf_skb_event_output_proto;
+8286-	default:
+8287-		return bpf_sk_base_func_proto(func_id, prog);
+8288-	}
+8289-}
+8290-
+8291-const struct bpf_func_proto bpf_sk_storage_get_proto __weak;
+8292-const struct bpf_func_proto bpf_sk_storage_delete_proto __weak;
+8293-
+8294-static const struct bpf_func_proto *
+8295-cg_skb_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8296-{
+8297-	const struct bpf_func_proto *func_proto;
+8298-
+8299-	func_proto = cgroup_common_func_proto(func_id, prog);
+8300-	if (func_proto)
+8301-		return func_proto;
+8302-
+8303-	switch (func_id) {
+8304-	case BPF_FUNC_sk_fullsock:
+8305-		return &bpf_sk_fullsock_proto;
+8306-	case BPF_FUNC_sk_storage_get:
+8307-		return &bpf_sk_storage_get_proto;
+8308-	case BPF_FUNC_sk_storage_delete:
+8309-		return &bpf_sk_storage_delete_proto;
+8310-	case BPF_FUNC_perf_event_output:
+8311-		return &bpf_skb_event_output_proto;
+8312-#ifdef CONFIG_SOCK_CGROUP_DATA
+8313-	case BPF_FUNC_skb_cgroup_id:
+8314-		return &bpf_skb_cgroup_id_proto;
+8315-	case BPF_FUNC_skb_ancestor_cgroup_id:
+8316-		return &bpf_skb_ancestor_cgroup_id_proto;
+8317-	case BPF_FUNC_sk_cgroup_id:
+8318-		return &bpf_sk_cgroup_id_proto;
+8319-	case BPF_FUNC_sk_ancestor_cgroup_id:
+8320-		return &bpf_sk_ancestor_cgroup_id_proto;
+8321-#endif
+8322-#ifdef CONFIG_INET
+8323-	case BPF_FUNC_sk_lookup_tcp:
+8324-		return &bpf_sk_lookup_tcp_proto;
+8325-	case BPF_FUNC_sk_lookup_udp:
+8326-		return &bpf_sk_lookup_udp_proto;
+8327-	case BPF_FUNC_sk_release:
+8328-		return &bpf_sk_release_proto;
+8329-	case BPF_FUNC_skc_lookup_tcp:
+8330-		return &bpf_skc_lookup_tcp_proto;
+8331-	case BPF_FUNC_tcp_sock:
+8332-		return &bpf_tcp_sock_proto;
+8333-	case BPF_FUNC_get_listener_sock:
+8334-		return &bpf_get_listener_sock_proto;
+8335-	case BPF_FUNC_skb_ecn_set_ce:
+8336-		return &bpf_skb_ecn_set_ce_proto;
+8337-#endif
+8338-	default:
+8339:		return sk_filter_func_proto(func_id, prog);
+8340-	}
+8341-}
+8342-
+8343-static const struct bpf_func_proto *
+8344:tc_cls_act_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8345-{
+8346-	switch (func_id) {
+8347-	case BPF_FUNC_skb_store_bytes:
+8348-		return &bpf_skb_store_bytes_proto;
+8349-	case BPF_FUNC_skb_load_bytes:
+8350-		return &bpf_skb_load_bytes_proto;
+8351-	case BPF_FUNC_skb_load_bytes_relative:
+8352-		return &bpf_skb_load_bytes_relative_proto;
+8353-	case BPF_FUNC_skb_pull_data:
+8354-		return &bpf_skb_pull_data_proto;
+8355-	case BPF_FUNC_csum_diff:
+8356-		return &bpf_csum_diff_proto;
+8357-	case BPF_FUNC_csum_update:
+8358-		return &bpf_csum_update_proto;
+8359-	case BPF_FUNC_csum_level:
+8360-		return &bpf_csum_level_proto;
+8361-	case BPF_FUNC_l3_csum_replace:
+8362-		return &bpf_l3_csum_replace_proto;
+8363-	case BPF_FUNC_l4_csum_replace:
+8364-		return &bpf_l4_csum_replace_proto;
+8365-	case BPF_FUNC_clone_redirect:
+8366-		return &bpf_clone_redirect_proto;
+8367-	case BPF_FUNC_get_cgroup_classid:
+8368-		return &bpf_get_cgroup_classid_proto;
+8369-	case BPF_FUNC_skb_vlan_push:
+8370-		return &bpf_skb_vlan_push_proto;
+8371-	case BPF_FUNC_skb_vlan_pop:
+8372-		return &bpf_skb_vlan_pop_proto;
+8373-	case BPF_FUNC_skb_change_proto:
+8374-		return &bpf_skb_change_proto_proto;
+8375-	case BPF_FUNC_skb_change_type:
+8376-		return &bpf_skb_change_type_proto;
+8377-	case BPF_FUNC_skb_adjust_room:
+8378-		return &bpf_skb_adjust_room_proto;
+8379-	case BPF_FUNC_skb_change_tail:
+8380-		return &bpf_skb_change_tail_proto;
+8381-	case BPF_FUNC_skb_change_head:
+8382-		return &bpf_skb_change_head_proto;
+8383-	case BPF_FUNC_skb_get_tunnel_key:
+8384-		return &bpf_skb_get_tunnel_key_proto;
+8385-	case BPF_FUNC_skb_set_tunnel_key:
+8386-		return bpf_get_skb_set_tunnel_proto(func_id);
+8387-	case BPF_FUNC_skb_get_tunnel_opt:
+8388-		return &bpf_skb_get_tunnel_opt_proto;
+8389-	case BPF_FUNC_skb_set_tunnel_opt:
+8390-		return bpf_get_skb_set_tunnel_proto(func_id);
+8391-	case BPF_FUNC_redirect:
+8392-		return &bpf_redirect_proto;
+8393-	case BPF_FUNC_redirect_neigh:
+8394-		return &bpf_redirect_neigh_proto;
+8395-	case BPF_FUNC_redirect_peer:
+8396-		return &bpf_redirect_peer_proto;
+8397-	case BPF_FUNC_get_route_realm:
+8398-		return &bpf_get_route_realm_proto;
+8399-	case BPF_FUNC_get_hash_recalc:
+8400-		return &bpf_get_hash_recalc_proto;
+8401-	case BPF_FUNC_set_hash_invalid:
+8402-		return &bpf_set_hash_invalid_proto;
+8403-	case BPF_FUNC_set_hash:
+8404-		return &bpf_set_hash_proto;
+8405-	case BPF_FUNC_perf_event_output:
+8406-		return &bpf_skb_event_output_proto;
+8407-	case BPF_FUNC_get_smp_processor_id:
+8408-		return &bpf_get_smp_processor_id_proto;
+8409-	case BPF_FUNC_skb_under_cgroup:
+--
+8548-	BTF_TYPE_EMIT(struct nf_conn___init);
+8549-#endif
+8550-}
+8551-
+8552-const struct bpf_func_proto bpf_sock_map_update_proto __weak;
+8553-const struct bpf_func_proto bpf_sock_hash_update_proto __weak;
+8554-
+8555-static const struct bpf_func_proto *
+8556:sock_ops_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8557-{
+8558-	const struct bpf_func_proto *func_proto;
+8559-
+8560-	func_proto = cgroup_common_func_proto(func_id, prog);
+8561-	if (func_proto)
+8562-		return func_proto;
+8563-
+8564-	switch (func_id) {
+8565-	case BPF_FUNC_setsockopt:
+8566-		return &bpf_sock_ops_setsockopt_proto;
+8567-	case BPF_FUNC_getsockopt:
+8568-		return &bpf_sock_ops_getsockopt_proto;
+8569-	case BPF_FUNC_sock_ops_cb_flags_set:
+8570-		return &bpf_sock_ops_cb_flags_set_proto;
+8571-	case BPF_FUNC_sock_map_update:
+8572-		return &bpf_sock_map_update_proto;
+8573-	case BPF_FUNC_sock_hash_update:
+8574-		return &bpf_sock_hash_update_proto;
+8575-	case BPF_FUNC_get_socket_cookie:
+8576-		return &bpf_get_socket_cookie_sock_ops_proto;
+8577-	case BPF_FUNC_perf_event_output:
+8578-		return &bpf_event_output_data_proto;
+8579-	case BPF_FUNC_sk_storage_get:
+8580-		return &bpf_sk_storage_get_proto;
+8581-	case BPF_FUNC_sk_storage_delete:
+8582-		return &bpf_sk_storage_delete_proto;
+8583-	case BPF_FUNC_get_netns_cookie:
+8584-		return &bpf_get_netns_cookie_sock_ops_proto;
+8585-#ifdef CONFIG_INET
+8586-	case BPF_FUNC_load_hdr_opt:
+8587-		return &bpf_sock_ops_load_hdr_opt_proto;
+8588-	case BPF_FUNC_store_hdr_opt:
+8589-		return &bpf_sock_ops_store_hdr_opt_proto;
+8590-	case BPF_FUNC_reserve_hdr_opt:
+8591-		return &bpf_sock_ops_reserve_hdr_opt_proto;
+8592-	case BPF_FUNC_tcp_sock:
+8593-		return &bpf_tcp_sock_proto;
+8594-#endif /* CONFIG_INET */
+8595-	default:
+8596-		return bpf_sk_base_func_proto(func_id, prog);
+8597-	}
+8598-}
+8599-
+8600-const struct bpf_func_proto bpf_msg_redirect_map_proto __weak;
+8601-const struct bpf_func_proto bpf_msg_redirect_hash_proto __weak;
+8602-
+8603-static const struct bpf_func_proto *
+8604:sk_msg_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8605-{
+8606-	switch (func_id) {
+8607-	case BPF_FUNC_msg_redirect_map:
+8608-		return &bpf_msg_redirect_map_proto;
+8609-	case BPF_FUNC_msg_redirect_hash:
+8610-		return &bpf_msg_redirect_hash_proto;
+8611-	case BPF_FUNC_msg_apply_bytes:
+8612-		return &bpf_msg_apply_bytes_proto;
+8613-	case BPF_FUNC_msg_cork_bytes:
+8614-		return &bpf_msg_cork_bytes_proto;
+8615-	case BPF_FUNC_msg_pull_data:
+8616-		return &bpf_msg_pull_data_proto;
+8617-	case BPF_FUNC_msg_push_data:
+8618-		return &bpf_msg_push_data_proto;
+8619-	case BPF_FUNC_msg_pop_data:
+8620-		return &bpf_msg_pop_data_proto;
+8621-	case BPF_FUNC_perf_event_output:
+8622-		return &bpf_event_output_data_proto;
+8623-	case BPF_FUNC_sk_storage_get:
+8624-		return &bpf_sk_storage_get_proto;
+8625-	case BPF_FUNC_sk_storage_delete:
+8626-		return &bpf_sk_storage_delete_proto;
+8627-	case BPF_FUNC_get_netns_cookie:
+8628-		return &bpf_get_netns_cookie_sk_msg_proto;
+8629-	default:
+8630-		return bpf_sk_base_func_proto(func_id, prog);
+8631-	}
+8632-}
+8633-
+8634-const struct bpf_func_proto bpf_sk_redirect_map_proto __weak;
+8635-const struct bpf_func_proto bpf_sk_redirect_hash_proto __weak;
+8636-
+8637-static const struct bpf_func_proto *
+8638:sk_skb_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8639-{
+8640-	switch (func_id) {
+8641-	case BPF_FUNC_skb_store_bytes:
+8642-		return &bpf_skb_store_bytes_proto;
+8643-	case BPF_FUNC_skb_load_bytes:
+8644-		return &bpf_skb_load_bytes_proto;
+8645-	case BPF_FUNC_skb_pull_data:
+8646-		return &sk_skb_pull_data_proto;
+8647-	case BPF_FUNC_skb_change_tail:
+8648-		return &sk_skb_change_tail_proto;
+8649-	case BPF_FUNC_skb_change_head:
+8650-		return &sk_skb_change_head_proto;
+8651-	case BPF_FUNC_skb_adjust_room:
+8652-		return &sk_skb_adjust_room_proto;
+8653-	case BPF_FUNC_get_socket_cookie:
+8654-		return &bpf_get_socket_cookie_proto;
+8655-	case BPF_FUNC_get_socket_uid:
+8656-		return &bpf_get_socket_uid_proto;
+8657-	case BPF_FUNC_sk_redirect_map:
+8658-		return &bpf_sk_redirect_map_proto;
+8659-	case BPF_FUNC_sk_redirect_hash:
+8660-		return &bpf_sk_redirect_hash_proto;
+8661-	case BPF_FUNC_perf_event_output:
+8662-		return &bpf_skb_event_output_proto;
+8663-#ifdef CONFIG_INET
+8664-	case BPF_FUNC_sk_lookup_tcp:
+8665-		return &bpf_sk_lookup_tcp_proto;
+8666-	case BPF_FUNC_sk_lookup_udp:
+8667-		return &bpf_sk_lookup_udp_proto;
+8668-	case BPF_FUNC_sk_release:
+8669-		return &bpf_sk_release_proto;
+8670-	case BPF_FUNC_skc_lookup_tcp:
+8671-		return &bpf_skc_lookup_tcp_proto;
+8672-#endif
+8673-	default:
+8674-		return bpf_sk_base_func_proto(func_id, prog);
+8675-	}
+8676-}
+8677-
+8678-static const struct bpf_func_proto *
+8679-flow_dissector_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8680-{
+8681-	switch (func_id) {
+8682-	case BPF_FUNC_skb_load_bytes:
+8683-		return &bpf_flow_dissector_load_bytes_proto;
+8684-	default:
+8685-		return bpf_sk_base_func_proto(func_id, prog);
+8686-	}
+8687-}
+8688-
+8689-static const struct bpf_func_proto *
+8690-lwt_out_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+8691-{
+8692-	switch (func_id) {
+8693-	case BPF_FUNC_skb_load_bytes:
+8694-		return &bpf_skb_load_bytes_proto;
+8695-	case BPF_FUNC_skb_pull_data:
+8696-		return &bpf_skb_pull_data_proto;
+8697-	case BPF_FUNC_csum_diff:
+8698-		return &bpf_csum_diff_proto;
+8699-	case BPF_FUNC_get_cgroup_classid:
+8700-		return &bpf_get_cgroup_classid_proto;
+8701-	case BPF_FUNC_get_route_realm:
+8702-		return &bpf_get_route_realm_proto;
+8703-	case BPF_FUNC_get_hash_recalc:
+--
+11206-				      offsetof(struct sk_msg, sk));
+11207-		break;
+11208-	}
+11209-
+11210-	return insn - insn_buf;
+11211-}
+11212-
+11213-const struct bpf_verifier_ops sk_filter_verifier_ops = {
+11214:	.get_func_proto		= sk_filter_func_proto,
+11215-	.is_valid_access	= sk_filter_is_valid_access,
+11216-	.convert_ctx_access	= bpf_convert_ctx_access,
+11217-	.gen_ld_abs		= bpf_gen_ld_abs,
+11218-};
+11219-
+11220-const struct bpf_prog_ops sk_filter_prog_ops = {
+11221-	.test_run		= bpf_prog_test_run_skb,
+11222-};
+11223-
+11224-const struct bpf_verifier_ops tc_cls_act_verifier_ops = {
+11225:	.get_func_proto		= tc_cls_act_func_proto,
+11226-	.is_valid_access	= tc_cls_act_is_valid_access,
+11227-	.convert_ctx_access	= tc_cls_act_convert_ctx_access,
+11228-	.gen_prologue		= tc_cls_act_prologue,
+11229-	.gen_ld_abs		= bpf_gen_ld_abs,
+11230-	.btf_struct_access	= tc_cls_act_btf_struct_access,
+11231-};
+11232-
+11233-const struct bpf_prog_ops tc_cls_act_prog_ops = {
+11234-	.test_run		= bpf_prog_test_run_skb,
+11235-};
+11236-
+11237-const struct bpf_verifier_ops xdp_verifier_ops = {
+11238-	.get_func_proto		= xdp_func_proto,
+11239-	.is_valid_access	= xdp_is_valid_access,
+11240-	.convert_ctx_access	= xdp_convert_ctx_access,
+11241-	.gen_prologue		= bpf_noop_prologue,
+11242-	.btf_struct_access	= xdp_btf_struct_access,
+11243-};
+11244-
+11245-const struct bpf_prog_ops xdp_prog_ops = {
+11246-	.test_run		= bpf_prog_test_run_xdp,
+11247-};
+11248-
+11249-const struct bpf_verifier_ops cg_skb_verifier_ops = {
+11250-	.get_func_proto		= cg_skb_func_proto,
+11251-	.is_valid_access	= cg_skb_is_valid_access,
+11252-	.convert_ctx_access	= bpf_convert_ctx_access,
+11253-};
+11254-
+11255-const struct bpf_prog_ops cg_skb_prog_ops = {
+11256-	.test_run		= bpf_prog_test_run_skb,
+11257-};
+11258-
+11259-const struct bpf_verifier_ops lwt_in_verifier_ops = {
+11260-	.get_func_proto		= lwt_in_func_proto,
+11261-	.is_valid_access	= lwt_is_valid_access,
+11262-	.convert_ctx_access	= bpf_convert_ctx_access,
+11263-};
+11264-
+11265-const struct bpf_prog_ops lwt_in_prog_ops = {
+11266-	.test_run		= bpf_prog_test_run_skb,
+11267-};
+11268-
+11269-const struct bpf_verifier_ops lwt_out_verifier_ops = {
+11270-	.get_func_proto		= lwt_out_func_proto,
+11271-	.is_valid_access	= lwt_is_valid_access,
+11272-	.convert_ctx_access	= bpf_convert_ctx_access,
+11273-};
+11274-
+11275-const struct bpf_prog_ops lwt_out_prog_ops = {
+11276-	.test_run		= bpf_prog_test_run_skb,
+11277-};
+11278-
+11279-const struct bpf_verifier_ops lwt_xmit_verifier_ops = {
+11280-	.get_func_proto		= lwt_xmit_func_proto,
+11281-	.is_valid_access	= lwt_is_valid_access,
+11282-	.convert_ctx_access	= bpf_convert_ctx_access,
+11283-	.gen_prologue		= tc_cls_act_prologue,
+11284-};
+11285-
+11286-const struct bpf_prog_ops lwt_xmit_prog_ops = {
+11287-	.test_run		= bpf_prog_test_run_skb,
+11288-};
+11289-
+11290-const struct bpf_verifier_ops lwt_seg6local_verifier_ops = {
+--
+11310-	.is_valid_access	= sock_addr_is_valid_access,
+11311-	.convert_ctx_access	= sock_addr_convert_ctx_access,
+11312-};
+11313-
+11314-const struct bpf_prog_ops cg_sock_addr_prog_ops = {
+11315-};
+11316-
+11317-const struct bpf_verifier_ops sock_ops_verifier_ops = {
+11318:	.get_func_proto		= sock_ops_func_proto,
+11319-	.is_valid_access	= sock_ops_is_valid_access,
+11320-	.convert_ctx_access	= sock_ops_convert_ctx_access,
+11321-};
+11322-
+11323-const struct bpf_prog_ops sock_ops_prog_ops = {
+11324-};
+11325-
+11326-const struct bpf_verifier_ops sk_skb_verifier_ops = {
+11327:	.get_func_proto		= sk_skb_func_proto,
+11328-	.is_valid_access	= sk_skb_is_valid_access,
+11329-	.convert_ctx_access	= sk_skb_convert_ctx_access,
+11330-	.gen_prologue		= sk_skb_prologue,
+11331-};
+11332-
+11333-const struct bpf_prog_ops sk_skb_prog_ops = {
+11334-};
+11335-
+11336-const struct bpf_verifier_ops sk_msg_verifier_ops = {
+11337:	.get_func_proto		= sk_msg_func_proto,
+11338-	.is_valid_access	= sk_msg_is_valid_access,
+11339-	.convert_ctx_access	= sk_msg_convert_ctx_access,
+11340-	.gen_prologue		= bpf_noop_prologue,
+11341-};
+11342-
+11343-const struct bpf_prog_ops sk_msg_prog_ops = {
+11344-};
+11345-
+11346-const struct bpf_verifier_ops flow_dissector_verifier_ops = {
+11347-	.get_func_proto		= flow_dissector_func_proto,
+11348-	.is_valid_access	= flow_dissector_is_valid_access,
+11349-	.convert_ctx_access	= flow_dissector_convert_ctx_access,
+11350-};
+11351-
+11352-const struct bpf_prog_ops flow_dissector_prog_ops = {
+11353-	.test_run		= bpf_prog_test_run_flow_dissector,
+11354-};
+11355-
+11356-int sk_detach_filter(struct sock *sk)
+11357-{
+11358-	int ret = -ENOENT;
+11359-	struct sk_filter *filter;
+11360-
+11361-	if (sock_flag(sk, SOCK_FILTER_LOCKED))
+11362-		return -EPERM;
+11363-
+11364-	filter = rcu_dereference_protected(sk->sk_filter,
+11365-					   lockdep_sock_is_held(sk));
+11366-	if (filter) {
+11367-		RCU_INIT_POINTER(sk->sk_filter, NULL);
+11368-		sk_filter_uncharge(sk, filter);
+11369-		ret = 0;
+11370-	}
+11371-
+11372-	return ret;
+11373-}
+11374-EXPORT_SYMBOL_GPL(sk_detach_filter);
+11375-
+11376-int sk_get_filter(struct sock *sk, sockptr_t optval, unsigned int len)
+11377-{
+11378-	struct sock_fprog_kern *fprog;
+11379-	struct sk_filter *filter;
+11380-	int ret = 0;
+11381-
+11382-	sockopt_lock_sock(sk);
+11383-	filter = rcu_dereference_protected(sk->sk_filter,
+11384-					   lockdep_sock_is_held(sk));
+11385-	if (!filter)
+11386-		goto out;
+11387-
+11388-	/* We're copying the filter that has been originally attached,
+11389-	 * so no conversion/decode needed anymore. eBPF programs that
+11390-	 * have no original program cannot be dumped through this.
+11391-	 */
+11392-	ret = -EACCES;
+11393-	fprog = filter->prog->orig_prog;
+11394-	if (!fprog)
+11395-		goto out;
+11396-
+11397-	ret = fprog->len;
+11398-	if (!len)
+11399-		/* User space only enquires number of filter blocks. */
+11400-		goto out;
+11401-
+11402-	ret = -EINVAL;
+
+===== PERF EVENT NMI EXECUTION PATH =====
+}
+
+static inline void perf_event_free_bpf_handler(struct perf_event *event)
+{
+}
+#endif
+
+/*
+ * Generic event overflow handling, sampling.
+ */
+
+static int __perf_event_overflow(struct perf_event *event,
+				 int throttle, struct perf_sample_data *data,
+				 struct pt_regs *regs)
+{
+	int events = atomic_read(&event->event_limit);
+	int ret = 0;
+
+	/*
+	 * Non-sampling counters might still use the PMI to fold short
+	 * hardware counters, ignore those.
+	 */
+	if (unlikely(!is_sampling_event(event)))
+		return 0;
+
+	ret = __perf_event_account_interrupt(event, throttle);
+
+	if (event->attr.aux_pause)
+		perf_event_aux_pause(event->aux_event, true);
+
+	if (event->prog && event->prog->type == BPF_PROG_TYPE_PERF_EVENT &&
+	    !bpf_overflow_handler(event, data, regs))
+		goto out;
+
+	/*
+	 * XXX event_limit might not quite work as expected on inherited
+	 * events
+	 */
+
+	event->pending_kill = POLL_IN;
+	if (events && atomic_dec_and_test(&event->event_limit)) {
+		ret = 1;
+		event->pending_kill = POLL_HUP;
+		perf_event_disable_inatomic(event);
+		event->pmu->stop(event, 0);
+	}
+
+	if (event->attr.sigtrap) {
+		/*
+		 * The desired behaviour of sigtrap vs invalid samples is a bit
+		 * tricky; on the one hand, one should not loose the SIGTRAP if
+		 * it is the first event, on the other hand, we should also not
+		 * trigger the WARN or override the data address.
+		 */
+		bool valid_sample = sample_is_allowed(event, regs);
+		unsigned int pending_id = 1;
+		enum task_work_notify_mode notify_mode;
+
+		if (regs)
+			pending_id = hash32_ptr((void *)instruction_pointer(regs)) ?: 1;
+
+		notify_mode = in_nmi() ? TWA_NMI_CURRENT : TWA_RESUME;
+
+		if (!event->pending_work &&
+		    !task_work_add(current, &event->pending_task, notify_mode)) {
+			event->pending_work = pending_id;
+			local_inc(&event->ctx->nr_no_switch_fast);
+			WARN_ON_ONCE(!atomic_long_inc_not_zero(&event->refcount));
+
+			event->pending_addr = 0;
+			if (valid_sample && (data->sample_flags & PERF_SAMPLE_ADDR))
+				event->pending_addr = data->addr;
+
+		} else if (event->attr.exclude_kernel && valid_sample) {
+			/*
+			 * Should not be able to return to user space without
+			 * consuming pending_work; with exceptions:
+			 *
+			 *  1. Where !exclude_kernel, events can overflow again
+			 *     in the kernel without returning to user space.
+			 *
+			 *  2. Events that can overflow again before the IRQ-
+			 *     work without user space progress (e.g. hrtimer).
+			 *     To approximate progress (with false negatives),
+			 *     check 32-bit hash of the current IP.
+			 */
