@@ -1,0 +1,1159 @@
+SOURCE_ROOT=kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source
+NOTE=Focused inode lifecycle and BPF LSM inventory.
+
+===== FILE: fs/btrfs/xattr.c =====
+
+--- lines 517-527 ---
+517: 	memalloc_nofs_restore(nofs_flag);
+518: 	return ret;
+519: }
+520: 
+521: int btrfs_xattr_security_init(struct btrfs_trans_handle *trans,
+522: 			      struct inode *inode, struct inode *dir,
+523: 			      const struct qstr *qstr)
+524: {
+525: 	return security_inode_init_security(inode, dir, qstr,
+526: 					    &btrfs_initxattrs, trans);
+527: }
+
+===== FILE: fs/ext2/xattr_security.c =====
+
+--- lines 43-59 ---
+43: 	}
+44: 	return err;
+45: }
+46: 
+47: int
+48: ext2_init_security(struct inode *inode, struct inode *dir,
+49: 		   const struct qstr *qstr)
+50: {
+51: 	return security_inode_init_security(inode, dir, qstr,
+52: 					    &ext2_initxattrs, NULL);
+53: }
+54: 
+55: const struct xattr_handler ext2_xattr_security_handler = {
+56: 	.prefix	= XATTR_SECURITY_PREFIX,
+57: 	.get	= ext2_xattr_security_get,
+58: 	.set	= ext2_xattr_security_set,
+59: };
+
+===== FILE: fs/ext4/xattr_security.c =====
+
+--- lines 50-66 ---
+50: 	}
+51: 	return err;
+52: }
+53: 
+54: int
+55: ext4_init_security(handle_t *handle, struct inode *inode, struct inode *dir,
+56: 		   const struct qstr *qstr)
+57: {
+58: 	return security_inode_init_security(inode, dir, qstr,
+59: 					    &ext4_initxattrs, handle);
+60: }
+61: 
+62: const struct xattr_handler ext4_xattr_security_handler = {
+63: 	.prefix	= XATTR_SECURITY_PREFIX,
+64: 	.get	= ext4_xattr_security_get,
+65: 	.set	= ext4_xattr_security_set,
+66: };
+
+===== FILE: fs/f2fs/xattr.c =====
+
+--- lines 150-170 ---
+150: 			break;
+151: 	}
+152: 	return err;
+153: }
+154: 
+155: int f2fs_init_security(struct inode *inode, struct inode *dir,
+156: 				const struct qstr *qstr, struct folio *ifolio)
+157: {
+158: 	return security_inode_init_security(inode, dir, qstr,
+159: 				f2fs_initxattrs, ifolio);
+160: }
+161: #endif
+162: 
+163: const struct xattr_handler f2fs_xattr_user_handler = {
+164: 	.prefix	= XATTR_USER_PREFIX,
+165: 	.flags	= F2FS_XATTR_INDEX_USER,
+166: 	.list	= f2fs_xattr_user_list,
+167: 	.get	= f2fs_xattr_generic_get,
+168: 	.set	= f2fs_xattr_generic_set,
+169: };
+170: 
+
+===== FILE: fs/gfs2/inode.c =====
+
+--- lines 877-897 ---
+877: 	if (acl) {
+878: 		error = __gfs2_set_acl(inode, acl, ACL_TYPE_ACCESS);
+879: 		if (error)
+880: 			goto fail_gunlock4;
+881: 		posix_acl_release(acl);
+882: 		acl = NULL;
+883: 	}
+884: 
+885: 	error = security_inode_init_security(&ip->i_inode, &dip->i_inode, name,
+886: 					     &gfs2_initxattrs, NULL);
+887: 	if (error)
+888: 		goto fail_gunlock4;
+889: 
+890: 	error = link_dinode(dip, name, ip, &da);
+891: 	if (error)
+892: 		goto fail_gunlock4;
+893: 
+894: 	mark_inode_dirty(inode);
+895: 	d_instantiate(dentry, inode);
+896: 	/* After instantiate, errors should result in evict which will destroy
+897: 	 * both inode and iopen glocks properly. */
+
+===== FILE: fs/hfsplus/xattr_security.c =====
+
+--- lines 63-79 ---
+63: 	}
+64: 	kfree(xattr_name);
+65: 	return err;
+66: }
+67: 
+68: int hfsplus_init_security(struct inode *inode, struct inode *dir,
+69: 				const struct qstr *qstr)
+70: {
+71: 	return security_inode_init_security(inode, dir, qstr,
+72: 					&hfsplus_initxattrs, NULL);
+73: }
+74: 
+75: const struct xattr_handler hfsplus_xattr_security_handler = {
+76: 	.prefix	= XATTR_SECURITY_PREFIX,
+77: 	.get	= hfsplus_security_getxattr,
+78: 	.set	= hfsplus_security_setxattr,
+79: };
+
+===== FILE: fs/inode.c =====
+
+--- lines 299-319 ---
+299: 	inode->i_acl = inode->i_default_acl = ACL_NOT_CACHED;
+300: #endif
+301: 
+302: #ifdef CONFIG_FSNOTIFY
+303: 	inode->i_fsnotify_mask = 0;
+304: #endif
+305: 	inode->i_flctx = NULL;
+306: 
+307: 	if (unlikely(security_inode_alloc(inode, gfp)))
+308: 		return -ENOMEM;
+309: 
+310: 	this_cpu_inc(nr_inodes);
+311: 
+312: 	return 0;
+313: }
+314: EXPORT_SYMBOL(inode_init_always_gfp);
+315: 
+316: void free_inode_nonrcu(struct inode *inode)
+317: {
+318: 	kmem_cache_free(inode_cachep, inode);
+319: }
+
+--- lines 364-384 ---
+364: 
+365: 	return inode;
+366: }
+367: 
+368: void __destroy_inode(struct inode *inode)
+369: {
+370: 	BUG_ON(inode_has_buffers(inode));
+371: 	inode_detach_wb(inode);
+372: 	security_inode_free(inode);
+373: 	fsnotify_inode_delete(inode);
+374: 	locks_free_lock_context(inode);
+375: 	if (!inode->i_nlink) {
+376: 		WARN_ON(atomic_long_read(&inode->i_sb->s_remove_count) == 0);
+377: 		atomic_long_dec(&inode->i_sb->s_remove_count);
+378: 	}
+379: 
+380: #ifdef CONFIG_FS_POSIX_ACL
+381: 	if (inode->i_acl && !is_uncached_acl(inode->i_acl))
+382: 		posix_acl_release(inode->i_acl);
+383: 	if (inode->i_default_acl && !is_uncached_acl(inode->i_default_acl))
+384: 		posix_acl_release(inode->i_default_acl);
+
+===== FILE: fs/jffs2/security.c =====
+
+--- lines 38-58 ---
+38: 	}
+39: 	return err;
+40: }
+41: 
+42: /* ---- Initial Security Label(s) Attachment ----------- */
+43: int jffs2_init_security(struct inode *inode, struct inode *dir,
+44: 			const struct qstr *qstr)
+45: {
+46: 	return security_inode_init_security(inode, dir, qstr,
+47: 					    &jffs2_initxattrs, NULL);
+48: }
+49: 
+50: /* ---- XATTR Handler for "security.*" ----------------- */
+51: static int jffs2_security_getxattr(const struct xattr_handler *handler,
+52: 				   struct dentry *unused, struct inode *inode,
+53: 				   const char *name, void *buffer, size_t size)
+54: {
+55: 	return do_jffs2_getxattr(inode, JFFS2_XPREFIX_SECURITY,
+56: 				 name, buffer, size);
+57: }
+58: 
+
+===== FILE: fs/jfs/xattr.c =====
+
+--- lines 1044-1055 ---
+1044: 			break;
+1045: 	}
+1046: 	return err;
+1047: }
+1048: 
+1049: int jfs_init_security(tid_t tid, struct inode *inode, struct inode *dir,
+1050: 		      const struct qstr *qstr)
+1051: {
+1052: 	return security_inode_init_security(inode, dir, qstr,
+1053: 					    &jfs_initxattrs, &tid);
+1054: }
+1055: #endif
+
+===== FILE: fs/ocfs2/xattr.c =====
+
+--- lines 7311-7331 ---
+7311: 			    struct ocfs2_security_xattr_info *si)
+7312: {
+7313: 	int ret;
+7314: 
+7315: 	/* check whether ocfs2 support feature xattr */
+7316: 	if (!ocfs2_supports_xattr(OCFS2_SB(dir->i_sb)))
+7317: 		return -EOPNOTSUPP;
+7318: 	if (si) {
+7319: 		ret = security_inode_init_security(inode, dir, qstr,
+7320: 						   &ocfs2_initxattrs, si);
+7321: 		/*
+7322: 		 * security_inode_init_security() does not return -EOPNOTSUPP,
+7323: 		 * we have to check the xattr ourselves.
+7324: 		 */
+7325: 		if (!ret && !si->name)
+7326: 			si->enable = 0;
+7327: 
+7328: 		return ret;
+7329: 	}
+7330: 
+7331: 	return security_inode_init_security(inode, dir, qstr,
+
+--- lines 7332-7334 ---
+7332: 					    &ocfs2_initxattrs, NULL);
+7333: }
+7334: 
+
+--- lines 7335-7343 ---
+7335: int ocfs2_init_security_set(handle_t *handle,
+7336: 			    struct inode *inode,
+7337: 			    struct buffer_head *di_bh,
+7338: 			    struct ocfs2_security_xattr_info *si,
+7339: 			    struct ocfs2_alloc_context *xattr_ac,
+7340: 			    struct ocfs2_alloc_context *data_ac)
+7341: {
+7342: 	return ocfs2_xattr_set_handle(handle, inode, di_bh,
+7343: 				     OCFS2_XATTR_INDEX_SECURITY,
+
+===== FILE: fs/ramfs/inode.c =====
+
+--- lines 97-117 ---
+97: static int
+98: ramfs_mknod(struct mnt_idmap *idmap, struct inode *dir,
+99: 	    struct dentry *dentry, umode_t mode, dev_t dev)
+100: {
+101: 	struct inode * inode = ramfs_get_inode(dir->i_sb, dir, mode, dev);
+102: 	int error = -ENOSPC;
+103: 
+104: 	if (inode) {
+105: 		error = security_inode_init_security(inode, dir,
+106: 						     &dentry->d_name, NULL,
+107: 						     NULL);
+108: 		if (error) {
+109: 			iput(inode);
+110: 			goto out;
+111: 		}
+112: 
+113: 		d_make_persistent(dentry, inode);
+114: 		error = 0;
+115: 		inode_set_mtime_to_ts(dir, inode_set_ctime_current(dir));
+116: 	}
+117: out:
+
+--- lines 138-158 ---
+138: {
+139: 	struct inode *inode;
+140: 	int error = -ENOSPC;
+141: 
+142: 	inode = ramfs_get_inode(dir->i_sb, dir, S_IFLNK|S_IRWXUGO, 0);
+143: 	if (inode) {
+144: 		int l = strlen(symname)+1;
+145: 
+146: 		error = security_inode_init_security(inode, dir,
+147: 						     &dentry->d_name, NULL,
+148: 						     NULL);
+149: 		if (error) {
+150: 			iput(inode);
+151: 			goto out;
+152: 		}
+153: 
+154: 		error = page_symlink(inode, symname, l);
+155: 		if (!error) {
+156: 			d_make_persistent(dentry, inode);
+157: 			inode_set_mtime_to_ts(dir,
+158: 					      inode_set_ctime_current(dir));
+
+--- lines 168-188 ---
+168: {
+169: 	struct inode *inode;
+170: 	int error;
+171: 
+172: 	inode = ramfs_get_inode(dir->i_sb, dir, mode, 0);
+173: 	if (!inode)
+174: 		return -ENOSPC;
+175: 
+176: 	error = security_inode_init_security(inode, dir,
+177: 					     &file_dentry(file)->d_name, NULL,
+178: 					     NULL);
+179: 	if (error) {
+180: 		iput(inode);
+181: 		goto out;
+182: 	}
+183: 
+184: 	d_tmpfile(file, inode);
+185: out:
+186: 	return finish_open_simple(file, error);
+187: }
+188: 
+
+===== FILE: fs/ubifs/xattr.c =====
+
+--- lines 632-652 ---
+632: 	return err;
+633: }
+634: 
+635: int ubifs_init_security(struct inode *dentry, struct inode *inode,
+636: 			const struct qstr *qstr)
+637: {
+638: 	int err;
+639: 
+640: 	err = security_inode_init_security(inode, dentry, qstr,
+641: 					   &init_xattrs, NULL);
+642: 	if (err) {
+643: 		struct ubifs_info *c = dentry->i_sb->s_fs_info;
+644: 		ubifs_err(c, "cannot initialize security for inode %lu, error %d",
+645: 			  inode->i_ino, err);
+646: 	}
+647: 	return err;
+648: }
+649: #endif
+650: 
+651: static int xattr_get(const struct xattr_handler *handler,
+652: 			   struct dentry *dentry, struct inode *inode,
+
+===== FILE: fs/xfs/xfs_iops.c =====
+
+--- lines 83-103 ---
+83:  * inode, of course, such that log replay can't cause these to be lost).
+84:  */
+85: int
+86: xfs_inode_init_security(
+87: 	struct inode	*inode,
+88: 	struct inode	*dir,
+89: 	const struct qstr *qstr)
+90: {
+91: 	return security_inode_init_security(inode, dir, qstr,
+92: 					     &xfs_initxattrs, NULL);
+93: }
+94: 
+95: static void
+96: xfs_dentry_to_name(
+97: 	struct xfs_name	*namep,
+98: 	struct dentry	*dentry)
+99: {
+100: 	namep->name = dentry->d_name.name;
+101: 	namep->len = dentry->d_name.len;
+102: 	namep->type = XFS_DIR3_FT_UNKNOWN;
+103: }
+
+===== FILE: include/linux/bpf_lsm.h =====
+
+--- lines 36-56 ---
+36: {
+37: 	if (unlikely(!inode->i_security))
+38: 		return NULL;
+39: 
+40: 	return inode->i_security + bpf_lsm_blob_sizes.lbs_inode;
+41: }
+42: 
+43: extern const struct bpf_func_proto bpf_inode_storage_get_proto;
+44: extern const struct bpf_func_proto bpf_inode_storage_delete_proto;
+45: void bpf_inode_storage_free(struct inode *inode);
+46: 
+47: void bpf_lsm_find_cgroup_shim(const struct bpf_prog *prog, bpf_func_t *bpf_func);
+48: 
+49: int bpf_lsm_get_retval_range(const struct bpf_prog *prog,
+50: 			     struct bpf_retval_range *range);
+51: int bpf_set_dentry_xattr_locked(struct dentry *dentry, const char *name__str,
+52: 				const struct bpf_dynptr *value_p, int flags);
+53: int bpf_remove_dentry_xattr_locked(struct dentry *dentry, const char *name__str);
+54: bool bpf_lsm_has_d_inode_locked(const struct bpf_prog *prog);
+55: 
+56: #else /* !CONFIG_BPF_LSM */
+
+===== FILE: include/linux/lsm_hook_defs.h =====
+
+--- lines 107-127 ---
+107: LSM_HOOK(int, 0, path_chmod, const struct path *path, umode_t mode)
+108: LSM_HOOK(int, 0, path_chown, const struct path *path, kuid_t uid, kgid_t gid)
+109: LSM_HOOK(int, 0, path_chroot, const struct path *path)
+110: #endif /* CONFIG_SECURITY_PATH */
+111: 
+112: /* Needed for inode based security check */
+113: LSM_HOOK(int, 0, path_notify, const struct path *path, u64 mask,
+114: 	 unsigned int obj_type)
+115: LSM_HOOK(int, 0, inode_alloc_security, struct inode *inode)
+116: LSM_HOOK(void, LSM_RET_VOID, inode_free_security, struct inode *inode)
+117: LSM_HOOK(void, LSM_RET_VOID, inode_free_security_rcu, void *inode_security)
+118: LSM_HOOK(int, -EOPNOTSUPP, inode_init_security, struct inode *inode,
+119: 	 struct inode *dir, const struct qstr *qstr, struct xattr *xattrs,
+120: 	 int *xattr_count)
+121: LSM_HOOK(int, 0, inode_init_security_anon, struct inode *inode,
+122: 	 const struct qstr *name, const struct inode *context_inode)
+123: LSM_HOOK(int, 0, inode_create, struct inode *dir, struct dentry *dentry,
+124: 	 umode_t mode)
+125: LSM_HOOK(void, LSM_RET_VOID, inode_post_create_tmpfile, struct mnt_idmap *idmap,
+126: 	 struct inode *inode)
+127: LSM_HOOK(int, 0, inode_link, struct dentry *old_dentry, struct inode *dir,
+
+--- lines 128-128 ---
+128: 	 struct dentry *new_dentry)
+
+--- lines 129-130 ---
+129: LSM_HOOK(int, 0, inode_unlink, struct inode *dir, struct dentry *dentry)
+130: LSM_HOOK(int, 0, inode_symlink, struct inode *dir, struct dentry *dentry,
+
+===== FILE: include/linux/security.h =====
+
+--- lines 391-411 ---
+391: 				  const char **xattr_name,
+392: 				  struct lsm_context *lsmcxt);
+393: int security_dentry_create_files_as(struct dentry *dentry, int mode,
+394: 					const struct qstr *name,
+395: 					const struct cred *old,
+396: 					struct cred *new);
+397: int security_path_notify(const struct path *path, u64 mask,
+398: 					unsigned int obj_type);
+399: int security_inode_alloc(struct inode *inode, gfp_t gfp);
+400: void security_inode_free(struct inode *inode);
+401: int security_inode_init_security(struct inode *inode, struct inode *dir,
+402: 				 const struct qstr *qstr,
+403: 				 initxattrs initxattrs, void *fs_data);
+404: int security_inode_init_security_anon(struct inode *inode,
+405: 				      const struct qstr *name,
+406: 				      const struct inode *context_inode);
+407: int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+408: void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409: 					struct inode *inode);
+410: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411: 			 struct dentry *new_dentry);
+
+--- lines 412-412 ---
+412: int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+
+--- lines 413-413 ---
+413: int security_inode_symlink(struct inode *dir, struct dentry *dentry,
+
+--- lines 849-869 ---
+849: }
+850: 
+851: static inline int security_path_notify(const struct path *path, u64 mask,
+852: 				unsigned int obj_type)
+853: {
+854: 	return 0;
+855: }
+856: 
+857: static inline int security_inode_alloc(struct inode *inode, gfp_t gfp)
+858: {
+859: 	return 0;
+860: }
+861: 
+862: static inline void security_inode_free(struct inode *inode)
+863: { }
+864: 
+865: static inline int security_dentry_init_security(struct dentry *dentry,
+866: 						 int mode,
+867: 						 const struct qstr *name,
+868: 						 const char **xattr_name,
+869: 						 struct lsm_context *lsmcxt)
+
+--- lines 870-874 ---
+870: {
+871: 	return -EOPNOTSUPP;
+872: }
+873: 
+874: static inline int security_dentry_create_files_as(struct dentry *dentry,
+
+--- lines 875-895 ---
+875: 						  int mode, const struct qstr *name,
+876: 						  const struct cred *old,
+877: 						  struct cred *new)
+878: {
+879: 	return 0;
+880: }
+881: 
+882: 
+883: static inline int security_inode_init_security(struct inode *inode,
+884: 						struct inode *dir,
+885: 						const struct qstr *qstr,
+886: 						const initxattrs xattrs,
+887: 						void *fs_data)
+888: {
+889: 	return 0;
+890: }
+891: 
+892: static inline int security_inode_init_security_anon(struct inode *inode,
+893: 						    const struct qstr *name,
+894: 						    const struct inode *context_inode)
+895: {
+
+===== FILE: include/uapi/linux/bpf.h =====
+
+--- lines 4910-4930 ---
+4910:  *		the initial value of a bpf_local_storage.  If *value* is
+4911:  *		**NULL**, the new bpf_local_storage will be zero initialized.
+4912:  *	Return
+4913:  *		A bpf_local_storage pointer is returned on success.
+4914:  *
+4915:  *		**NULL** if not found or there was an error in adding
+4916:  *		a new bpf_local_storage.
+4917:  *
+4918:  * int bpf_inode_storage_delete(struct bpf_map *map, void *inode)
+4919:  *	Description
+4920:  *		Delete a bpf_local_storage from an *inode*.
+4921:  *	Return
+4922:  *		0 on success.
+4923:  *
+4924:  *		**-ENOENT** if the bpf_local_storage cannot be found.
+4925:  *
+4926:  * long bpf_d_path(const struct path *path, char *buf, u32 sz)
+4927:  *	Description
+4928:  *		Return full path for given **struct path** object, which
+4929:  *		needs to be the kernel BTF *path* object. The path is
+4930:  *		returned in the provided buffer *buf* of size *sz* and
+
+===== FILE: kernel/bpf/bpf_inode_storage.c =====
+
+--- lines 210-225 ---
+210: 	.ret_type	= RET_PTR_TO_MAP_VALUE_OR_NULL,
+211: 	.arg1_type	= ARG_CONST_MAP_PTR,
+212: 	.arg2_type	= ARG_PTR_TO_BTF_ID_OR_NULL,
+213: 	.arg2_btf_id	= &bpf_inode_storage_btf_ids[0],
+214: 	.arg3_type	= ARG_PTR_TO_MAP_VALUE_OR_NULL,
+215: 	.arg4_type	= ARG_ANYTHING,
+216: };
+217: 
+218: const struct bpf_func_proto bpf_inode_storage_delete_proto = {
+219: 	.func		= bpf_inode_storage_delete,
+220: 	.gpl_only	= false,
+221: 	.ret_type	= RET_INTEGER,
+222: 	.arg1_type	= ARG_CONST_MAP_PTR,
+223: 	.arg2_type	= ARG_PTR_TO_BTF_ID_OR_NULL,
+224: 	.arg2_btf_id	= &bpf_inode_storage_btf_ids[0],
+225: };
+
+===== FILE: kernel/bpf/bpf_lsm.c =====
+
+--- lines 217-237 ---
+217: static const struct bpf_func_proto bpf_get_attach_cookie_proto = {
+218: 	.func		= bpf_get_attach_cookie,
+219: 	.gpl_only	= false,
+220: 	.ret_type	= RET_INTEGER,
+221: 	.arg1_type	= ARG_PTR_TO_CTX,
+222: };
+223: 
+224: static const struct bpf_func_proto *
+225: bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+226: {
+227: 	const struct bpf_func_proto *func_proto;
+228: 
+229: 	if (prog->expected_attach_type == BPF_LSM_CGROUP) {
+230: 		func_proto = cgroup_common_func_proto(func_id, prog);
+231: 		if (func_proto)
+232: 			return func_proto;
+233: 	}
+234: 
+235: 	switch (func_id) {
+236: 	case BPF_FUNC_inode_storage_get:
+237: 		return &bpf_inode_storage_get_proto;
+
+--- lines 238-251 ---
+238: 	case BPF_FUNC_inode_storage_delete:
+239: 		return &bpf_inode_storage_delete_proto;
+240: #ifdef CONFIG_NET
+241: 	case BPF_FUNC_sk_storage_get:
+242: 		return &bpf_sk_storage_get_proto;
+243: 	case BPF_FUNC_sk_storage_delete:
+244: 		return &bpf_sk_storage_delete_proto;
+245: #endif /* CONFIG_NET */
+246: 	case BPF_FUNC_spin_lock:
+247: 		return &bpf_spin_lock_proto;
+248: 	case BPF_FUNC_spin_unlock:
+249: 		return &bpf_spin_unlock_proto;
+250: 	case BPF_FUNC_bprm_opts_set:
+251: 		return &bpf_bprm_opts_set_proto;
+
+===== FILE: mm/shmem.c =====
+
+--- lines 3884-3904 ---
+3884: 	inode = shmem_get_inode(idmap, dir->i_sb, dir, mode, dev,
+3885: 				mk_vma_flags(VMA_NORESERVE_BIT));
+3886: 	if (IS_ERR(inode))
+3887: 		return PTR_ERR(inode);
+3888: 
+3889: 	error = simple_acl_create(dir, inode);
+3890: 	if (error)
+3891: 		goto out_iput;
+3892: 	error = security_inode_init_security(inode, dir, &dentry->d_name,
+3893: 					     shmem_initxattrs, NULL);
+3894: 	if (error && error != -EOPNOTSUPP)
+3895: 		goto out_iput;
+3896: 
+3897: 	error = simple_offset_add(shmem_get_offset_ctx(dir), dentry);
+3898: 	if (error)
+3899: 		goto out_iput;
+3900: 
+3901: 	dir->i_size += BOGO_DIRENT_SIZE;
+3902: 	inode_set_mtime_to_ts(dir, inode_set_ctime_current(dir));
+3903: 	inode_inc_iversion(dir);
+3904: 
+
+--- lines 3918-3938 ---
+3918: 	int error;
+3919: 
+3920: 	inode = shmem_get_inode(idmap, dir->i_sb, dir, mode, 0,
+3921: 				mk_vma_flags(VMA_NORESERVE_BIT));
+3922: 	if (IS_ERR(inode)) {
+3923: 		error = PTR_ERR(inode);
+3924: 		goto err_out;
+3925: 	}
+3926: 	error = security_inode_init_security(inode, dir, NULL,
+3927: 					     shmem_initxattrs, NULL);
+3928: 	if (error && error != -EOPNOTSUPP)
+3929: 		goto out_iput;
+3930: 	error = simple_acl_create(dir, inode);
+3931: 	if (error)
+3932: 		goto out_iput;
+3933: 	d_tmpfile(file, inode);
+3934: 
+3935: err_out:
+3936: 	return finish_open_simple(file, error);
+3937: out_iput:
+3938: 	iput(inode);
+
+--- lines 4114-4134 ---
+4114: 	if (len > PAGE_SIZE)
+4115: 		return -ENAMETOOLONG;
+4116: 
+4117: 	inode = shmem_get_inode(idmap, dir->i_sb, dir, S_IFLNK | 0777, 0,
+4118: 				mk_vma_flags(VMA_NORESERVE_BIT));
+4119: 	if (IS_ERR(inode))
+4120: 		return PTR_ERR(inode);
+4121: 
+4122: 	error = security_inode_init_security(inode, dir, &dentry->d_name,
+4123: 					     shmem_initxattrs, NULL);
+4124: 	if (error && error != -EOPNOTSUPP)
+4125: 		goto out_iput;
+4126: 
+4127: 	error = simple_offset_add(shmem_get_offset_ctx(dir), dentry);
+4128: 	if (error)
+4129: 		goto out_iput;
+4130: 
+4131: 	inode->i_size = len-1;
+4132: 	if (len <= SHORT_SYMLINK_LEN) {
+4133: 		link = kmemdup(symname, len, GFP_KERNEL);
+4134: 		if (!link) {
+
+--- lines 4242-4262 ---
+4242: /*
+4243:  * Superblocks without xattr inode operations may get some security.* xattr
+4244:  * support from the LSM "for free". As soon as we have any other xattrs
+4245:  * like ACLs, we also need to implement the security.* handlers at
+4246:  * filesystem level, though.
+4247:  */
+4248: 
+4249: /*
+4250:  * Callback for security_inode_init_security() for acquiring xattrs.
+4251:  */
+4252: static int shmem_initxattrs(struct inode *inode,
+4253: 			    const struct xattr *xattr_array, void *fs_info)
+4254: {
+4255: 	struct shmem_inode_info *info = SHMEM_I(inode);
+4256: 	struct shmem_sb_info *sbinfo = SHMEM_SB(inode->i_sb);
+4257: 	const struct xattr *xattr;
+4258: 	struct simple_xattr *new_xattr;
+4259: 	size_t ispace = 0;
+4260: 	size_t len;
+4261: 
+4262: 	if (sbinfo->max_inodes) {
+
+===== FILE: security/bpf/hooks.c =====
+
+--- lines 7-27 ---
+7: #include <linux/bpf_lsm.h>
+8: #include <uapi/linux/lsm.h>
+9: 
+10: static struct security_hook_list bpf_lsm_hooks[] __ro_after_init = {
+11: 	#define LSM_HOOK(RET, DEFAULT, NAME, ...) \
+12: 	LSM_HOOK_INIT(NAME, bpf_lsm_##NAME),
+13: 	#include <linux/lsm_hook_defs.h>
+14: 	#undef LSM_HOOK
+15: 	LSM_HOOK_INIT(inode_free_security, bpf_inode_storage_free),
+16: };
+17: 
+18: static const struct lsm_id bpf_lsmid = {
+19: 	.name = "bpf",
+20: 	.id = LSM_ID_BPF,
+21: };
+22: 
+23: static int __init bpf_lsm_init(void)
+24: {
+25: 	security_add_hooks(bpf_lsm_hooks, ARRAY_SIZE(bpf_lsm_hooks),
+26: 			   &bpf_lsmid);
+27: 	pr_info("LSM support for eBPF active\n");
+
+===== FILE: security/integrity/evm/evm_main.c =====
+
+--- lines 1018-1038 ---
+1018: 	struct xattr *xattr, *evm_xattr;
+1019: 	bool evm_protected_xattrs = false;
+1020: 	int rc;
+1021: 
+1022: 	if (!(evm_initialized & EVM_INIT_HMAC) || !xattrs)
+1023: 		return 0;
+1024: 
+1025: 	/*
+1026: 	 * security_inode_init_security() makes sure that the xattrs array is
+1027: 	 * contiguous, there is enough space for security.evm, and that there is
+1028: 	 * a terminator at the end of the array.
+1029: 	 */
+1030: 	for (xattr = xattrs; xattr->name; xattr++) {
+1031: 		if (evm_protected_xattr(xattr->name))
+1032: 			evm_protected_xattrs = true;
+1033: 	}
+1034: 
+1035: 	/* EVM xattr not needed. */
+1036: 	if (!evm_protected_xattrs)
+1037: 		return 0;
+1038: 
+
+--- lines 1063-1083 ---
+1063: 	return rc;
+1064: }
+1065: EXPORT_SYMBOL_GPL(evm_inode_init_security);
+1066: 
+1067: static int evm_inode_alloc_security(struct inode *inode)
+1068: {
+1069: 	struct evm_iint_cache *iint = evm_iint_inode(inode);
+1070: 
+1071: 	/* Called by security_inode_alloc(), it cannot be NULL. */
+1072: 	iint->flags = 0UL;
+1073: 	iint->evm_status = INTEGRITY_UNKNOWN;
+1074: 
+1075: 	return 0;
+1076: }
+1077: 
+1078: static void evm_file_release(struct file *file)
+1079: {
+1080: 	struct inode *inode = file_inode(file);
+1081: 	struct evm_iint_cache *iint = evm_iint_inode(inode);
+1082: 	fmode_t mode = file->f_mode;
+1083: 
+
+--- lines 1147-1167 ---
+1147: 	LSM_HOOK_INIT(inode_setxattr, evm_inode_setxattr),
+1148: 	LSM_HOOK_INIT(inode_post_setxattr, evm_inode_post_setxattr),
+1149: 	LSM_HOOK_INIT(inode_set_acl, evm_inode_set_acl),
+1150: 	LSM_HOOK_INIT(inode_post_set_acl, evm_inode_post_set_acl),
+1151: 	LSM_HOOK_INIT(inode_remove_acl, evm_inode_remove_acl),
+1152: 	LSM_HOOK_INIT(inode_post_remove_acl, evm_inode_post_remove_acl),
+1153: 	LSM_HOOK_INIT(inode_removexattr, evm_inode_removexattr),
+1154: 	LSM_HOOK_INIT(inode_post_removexattr, evm_inode_post_removexattr),
+1155: 	LSM_HOOK_INIT(inode_init_security, evm_inode_init_security),
+1156: 	LSM_HOOK_INIT(inode_alloc_security, evm_inode_alloc_security),
+1157: 	LSM_HOOK_INIT(file_release, evm_file_release),
+1158: 	LSM_HOOK_INIT(path_post_mknod, evm_post_path_mknod),
+1159: };
+1160: 
+1161: static const struct lsm_id evm_lsmid = {
+1162: 	.name = "evm",
+1163: 	.id = LSM_ID_EVM,
+1164: };
+1165: 
+1166: static int __init init_evm_lsm(void)
+1167: {
+
+--- lines 1168-1168 ---
+1168: 	security_add_hooks(evm_hooks, ARRAY_SIZE(evm_hooks), &evm_lsmid);
+
+===== FILE: security/security.c =====
+
+--- lines 1170-1190 ---
+1170:  */
+1171: int security_path_notify(const struct path *path, u64 mask,
+1172: 			 unsigned int obj_type)
+1173: {
+1174: 	return call_int_hook(path_notify, path, mask, obj_type);
+1175: }
+1176: 
+1177: /**
+1178:  * security_inode_alloc() - Allocate an inode LSM blob
+1179:  * @inode: the inode
+1180:  * @gfp: allocation flags
+1181:  *
+1182:  * Allocate and attach a security structure to @inode->i_security.  The
+1183:  * i_security field is initialized to NULL when the inode structure is
+1184:  * allocated.
+1185:  *
+1186:  * Return: Return 0 if operation was successful.
+1187:  */
+1188: int security_inode_alloc(struct inode *inode, gfp_t gfp)
+1189: {
+1190: 	int rc = lsm_inode_alloc(inode, gfp);
+
+--- lines 1191-1200 ---
+1191: 
+1192: 	if (unlikely(rc))
+1193: 		return rc;
+1194: 	rc = call_int_hook(inode_alloc_security, inode);
+1195: 	if (unlikely(rc))
+1196: 		security_inode_free(inode);
+1197: 	return rc;
+1198: }
+1199: 
+1200: static void inode_free_by_rcu(struct rcu_head *head)
+
+--- lines 1201-1206 ---
+1201: {
+1202: 	/* The rcu head is at the start of the inode blob */
+1203: 	call_void_hook(inode_free_security_rcu, head);
+1204: 	kmem_cache_free(lsm_inode_cache, head);
+1205: }
+1206: 
+
+--- lines 1207-1208 ---
+1207: /**
+1208:  * security_inode_free() - Free an inode's LSM blob
+
+--- lines 1209-1220 ---
+1209:  * @inode: the inode
+1210:  *
+1211:  * Release any LSM resources associated with @inode, although due to the
+1212:  * inode's RCU protections it is possible that the resources will not be
+1213:  * fully released until after the current RCU grace period has elapsed.
+1214:  *
+1215:  * It is important for LSMs to note that despite being present in a call to
+1216:  * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217:  * and calls to security_inode_permission() may be made during, or after,
+1218:  * a call to security_inode_free().  For this reason the inode->i_security
+1219:  * field is released via a call_rcu() callback and any LSMs which need to
+1220:  * retain inode state for use in security_inode_permission() should only
+
+--- lines 1221-1228 ---
+1221:  * release that state in the inode_free_security_rcu() LSM hook callback.
+1222:  */
+1223: void security_inode_free(struct inode *inode)
+1224: {
+1225: 	call_void_hook(inode_free_security, inode);
+1226: 	if (!inode->i_security)
+1227: 		return;
+1228: 	call_rcu((struct rcu_head *)inode->i_security, inode_free_by_rcu);
+
+--- lines 1229-1230 ---
+1229: }
+1230: 
+
+--- lines 1231-1235 ---
+1231: /**
+1232:  * security_dentry_init_security() - Perform dentry initialization
+1233:  * @dentry: the dentry to initialize
+1234:  * @mode: mode used to determine resource type
+1235:  * @name: name of the last path component
+
+--- lines 1236-1237 ---
+1236:  * @xattr_name: name of the security/LSM xattr
+1237:  * @lsmctx: pointer to the resulting LSM context
+
+--- lines 1272-1292 ---
+1272: 				    const struct cred *old, struct cred *new)
+1273: {
+1274: 	return call_int_hook(dentry_create_files_as, dentry, mode,
+1275: 			     name, old, new);
+1276: }
+1277: EXPORT_SYMBOL(security_dentry_create_files_as);
+1278: 
+1279: /**
+1280:  * security_inode_init_security() - Initialize an inode's LSM context
+1281:  * @inode: the inode
+1282:  * @dir: parent directory
+1283:  * @qstr: last component of the pathname
+1284:  * @initxattrs: callback function to write xattrs
+1285:  * @fs_data: filesystem specific data
+1286:  *
+1287:  * Obtain the security attribute name suffix and value to set on a newly
+1288:  * created inode and set up the incore security field for the new inode.  This
+1289:  * hook is called by the fs code as part of the inode creation transaction and
+1290:  * provides for atomic labeling of the inode, unlike the post_create/mkdir/...
+1291:  * hooks called by the VFS.
+1292:  *
+
+--- lines 1298-1318 ---
+1298:  * to the attribute value, to set ->value_len to the length of the value.  If
+1299:  * the security module does not use security attributes or does not wish to put
+1300:  * a security attribute on this particular inode, then it should return
+1301:  * -EOPNOTSUPP to skip this processing.
+1302:  *
+1303:  * Return: Returns 0 if the LSM successfully initialized all of the inode
+1304:  *         security attributes that are required, negative values otherwise.
+1305:  */
+1306: int security_inode_init_security(struct inode *inode, struct inode *dir,
+1307: 				 const struct qstr *qstr,
+1308: 				 const initxattrs initxattrs, void *fs_data)
+1309: {
+1310: 	struct lsm_static_call *scall;
+1311: 	struct xattr *new_xattrs = NULL;
+1312: 	int ret = -EOPNOTSUPP, xattr_count = 0;
+1313: 
+1314: 	if (unlikely(IS_PRIVATE(inode)))
+1315: 		return 0;
+1316: 
+1317: 	if (!blob_sizes.lbs_xattr_count)
+1318: 		return 0;
+
+--- lines 1320-1340 ---
+1320: 	if (initxattrs) {
+1321: 		/* Allocate +1 as terminator. */
+1322: 		new_xattrs = kcalloc(blob_sizes.lbs_xattr_count + 1,
+1323: 				     sizeof(*new_xattrs), GFP_NOFS);
+1324: 		if (!new_xattrs)
+1325: 			return -ENOMEM;
+1326: 	}
+1327: 
+1328: 	lsm_for_each_hook(scall, inode_init_security) {
+1329: 		ret = scall->hl->hook.inode_init_security(inode, dir, qstr, new_xattrs,
+1330: 						  &xattr_count);
+1331: 		if (ret && ret != -EOPNOTSUPP)
+1332: 			goto out;
+1333: 		/*
+1334: 		 * As documented in lsm_hooks.h, -EOPNOTSUPP in this context
+1335: 		 * means that the LSM is not willing to provide an xattr, not
+1336: 		 * that it wants to signal an error. Thus, continue to invoke
+1337: 		 * the remaining LSMs.
+1338: 		 */
+1339: 	}
+1340: 
+
+--- lines 1341-1341 ---
+1341: 	/* If initxattrs() is NULL, xattr_count is zero, skip the call. */
+
+===== FILE: security/selinux/hooks.c =====
+
+--- lines 348-368 ---
+348: 
+349: 	/* check below is racy, but revalidate will recheck with lock held */
+350: 	if (data_race(likely(isec->initialized == LABEL_INITIALIZED)))
+351: 		return isec;
+352: 	__inode_security_revalidate(inode, dentry, true);
+353: 	return isec;
+354: }
+355: 
+356: static void inode_free_security(struct inode *inode)
+357: {
+358: 	struct inode_security_struct *isec = selinux_inode(inode);
+359: 	struct superblock_security_struct *sbsec;
+360: 
+361: 	if (!isec)
+362: 		return;
+363: 	sbsec = selinux_superblock(inode->i_sb);
+364: 	/*
+365: 	 * As not all inode security structures are in a list, we check for
+366: 	 * empty list outside of the lock to make sure that we won't waste
+367: 	 * time taking a lock doing nothing.
+368: 	 *
+
+--- lines 2885-2905 ---
+2885: 	isec->task_sid = sid;
+2886: 	isec->initialized = LABEL_INVALID;
+2887: 
+2888: 	return 0;
+2889: }
+2890: 
+2891: static void selinux_inode_free_security(struct inode *inode)
+2892: {
+2893: 	inode_free_security(inode);
+2894: }
+2895: 
+2896: static int selinux_dentry_init_security(struct dentry *dentry, int mode,
+2897: 					const struct qstr *name,
+2898: 					const char **xattr_name,
+2899: 					struct lsm_context *cp)
+2900: {
+2901: 	u32 newsid;
+2902: 	int rc;
+2903: 
+2904: 	rc = selinux_determine_inode_label(selinux_cred(current_cred()),
+2905: 					   d_inode(dentry->d_parent), name,
+
+--- lines 3000-3020 ---
+3000: 			return 0;
+3001: 		is_memfd = true;
+3002: 	}
+3003: 
+3004: 	isec = selinux_inode(inode);
+3005: 
+3006: 	/*
+3007: 	 * We only get here once per ephemeral inode.  The inode has
+3008: 	 * been initialized via inode_alloc_security but is otherwise
+3009: 	 * untouched.
+3010: 	 */
+3011: 
+3012: 	if (context_inode) {
+3013: 		struct inode_security_struct *context_isec =
+3014: 			selinux_inode(context_inode);
+3015: 		if (context_isec->initialized != LABEL_INITIALIZED) {
+3016: 			pr_err("SELinux:  context_inode is not initialized\n");
+3017: 			return -EACCES;
+3018: 		}
+3019: 
+3020: 		isec->sclass = context_isec->sclass;
+
+--- lines 7454-7474 ---
+7454: 	LSM_HOOK_INIT(sb_set_mnt_opts, selinux_set_mnt_opts),
+7455: 	LSM_HOOK_INIT(sb_clone_mnt_opts, selinux_sb_clone_mnt_opts),
+7456: 
+7457: 	LSM_HOOK_INIT(move_mount, selinux_move_mount),
+7458: 
+7459: 	LSM_HOOK_INIT(dentry_init_security, selinux_dentry_init_security),
+7460: 	LSM_HOOK_INIT(dentry_create_files_as, selinux_dentry_create_files_as),
+7461: 
+7462: 	LSM_HOOK_INIT(inode_free_security, selinux_inode_free_security),
+7463: 	LSM_HOOK_INIT(inode_init_security, selinux_inode_init_security),
+7464: 	LSM_HOOK_INIT(inode_init_security_anon, selinux_inode_init_security_anon),
+7465: 	LSM_HOOK_INIT(inode_create, selinux_inode_create),
+7466: 	LSM_HOOK_INIT(inode_link, selinux_inode_link),
+7467: 	LSM_HOOK_INIT(inode_unlink, selinux_inode_unlink),
+7468: 	LSM_HOOK_INIT(inode_symlink, selinux_inode_symlink),
+7469: 	LSM_HOOK_INIT(inode_mkdir, selinux_inode_mkdir),
+7470: 	LSM_HOOK_INIT(inode_rmdir, selinux_inode_rmdir),
+7471: 	LSM_HOOK_INIT(inode_mknod, selinux_inode_mknod),
+7472: 	LSM_HOOK_INIT(inode_rename, selinux_inode_rename),
+7473: 	LSM_HOOK_INIT(inode_readlink, selinux_inode_readlink),
+7474: 	LSM_HOOK_INIT(inode_follow_link, selinux_inode_follow_link),
+
+--- lines 7475-7475 ---
+7475: 	LSM_HOOK_INIT(inode_permission, selinux_inode_permission),
+
+--- lines 7672-7692 ---
+7672: 	/*
+7673: 	 * PUT "ALLOCATING" HOOKS HERE
+7674: 	 */
+7675: 	LSM_HOOK_INIT(msg_msg_alloc_security, selinux_msg_msg_alloc_security),
+7676: 	LSM_HOOK_INIT(msg_queue_alloc_security,
+7677: 		      selinux_msg_queue_alloc_security),
+7678: 	LSM_HOOK_INIT(shm_alloc_security, selinux_shm_alloc_security),
+7679: 	LSM_HOOK_INIT(sb_alloc_security, selinux_sb_alloc_security),
+7680: 	LSM_HOOK_INIT(inode_alloc_security, selinux_inode_alloc_security),
+7681: 	LSM_HOOK_INIT(sem_alloc_security, selinux_sem_alloc_security),
+7682: 	LSM_HOOK_INIT(secid_to_secctx, selinux_secid_to_secctx),
+7683: 	LSM_HOOK_INIT(lsmprop_to_secctx, selinux_lsmprop_to_secctx),
+7684: 	LSM_HOOK_INIT(inode_getsecctx, selinux_inode_getsecctx),
+7685: 	LSM_HOOK_INIT(sk_alloc_security, selinux_sk_alloc_security),
+7686: 	LSM_HOOK_INIT(tun_dev_alloc_security, selinux_tun_dev_alloc_security),
+7687: #ifdef CONFIG_SECURITY_INFINIBAND
+7688: 	LSM_HOOK_INIT(ib_alloc_security, selinux_ib_alloc_security),
+7689: #endif
+7690: #ifdef CONFIG_SECURITY_NETWORK_XFRM
+7691: 	LSM_HOOK_INIT(xfrm_policy_alloc_security, selinux_xfrm_policy_alloc),
+7692: 	LSM_HOOK_INIT(xfrm_state_alloc, selinux_xfrm_state_alloc),
+
+===== FILE: security/smack/smack_lsm.c =====
+
+--- lines 5140-5160 ---
+5140: 	LSM_HOOK_INIT(sb_alloc_security, smack_sb_alloc_security),
+5141: 	LSM_HOOK_INIT(sb_free_mnt_opts, smack_free_mnt_opts),
+5142: 	LSM_HOOK_INIT(sb_eat_lsm_opts, smack_sb_eat_lsm_opts),
+5143: 	LSM_HOOK_INIT(sb_statfs, smack_sb_statfs),
+5144: 	LSM_HOOK_INIT(sb_set_mnt_opts, smack_set_mnt_opts),
+5145: 
+5146: 	LSM_HOOK_INIT(bprm_creds_for_exec, smack_bprm_creds_for_exec),
+5147: 
+5148: 	LSM_HOOK_INIT(inode_alloc_security, smack_inode_alloc_security),
+5149: 	LSM_HOOK_INIT(inode_init_security, smack_inode_init_security),
+5150: 	LSM_HOOK_INIT(inode_link, smack_inode_link),
+5151: 	LSM_HOOK_INIT(inode_unlink, smack_inode_unlink),
+5152: 	LSM_HOOK_INIT(inode_rmdir, smack_inode_rmdir),
+5153: 	LSM_HOOK_INIT(inode_rename, smack_inode_rename),
+5154: 	LSM_HOOK_INIT(inode_permission, smack_inode_permission),
+5155: 	LSM_HOOK_INIT(inode_setattr, smack_inode_setattr),
+5156: 	LSM_HOOK_INIT(inode_getattr, smack_inode_getattr),
+5157: 	LSM_HOOK_INIT(inode_xattr_skipcap, smack_inode_xattr_skipcap),
+5158: 	LSM_HOOK_INIT(inode_setxattr, smack_inode_setxattr),
+5159: 	LSM_HOOK_INIT(inode_post_setxattr, smack_inode_post_setxattr),
+5160: 	LSM_HOOK_INIT(inode_getxattr, smack_inode_getxattr),
+
+--- lines 5161-5161 ---
+5161: 	LSM_HOOK_INIT(inode_removexattr, smack_inode_removexattr),
+
+===== FILE: tools/include/uapi/linux/bpf.h =====
+
+--- lines 4910-4930 ---
+4910:  *		the initial value of a bpf_local_storage.  If *value* is
+4911:  *		**NULL**, the new bpf_local_storage will be zero initialized.
+4912:  *	Return
+4913:  *		A bpf_local_storage pointer is returned on success.
+4914:  *
+4915:  *		**NULL** if not found or there was an error in adding
+4916:  *		a new bpf_local_storage.
+4917:  *
+4918:  * int bpf_inode_storage_delete(struct bpf_map *map, void *inode)
+4919:  *	Description
+4920:  *		Delete a bpf_local_storage from an *inode*.
+4921:  *	Return
+4922:  *		0 on success.
+4923:  *
+4924:  *		**-ENOENT** if the bpf_local_storage cannot be found.
+4925:  *
+4926:  * long bpf_d_path(const struct path *path, char *buf, u32 sz)
+4927:  *	Description
+4928:  *		Return full path for given **struct path** object, which
+4929:  *		needs to be the kernel BTF *path* object. The path is
+4930:  *		returned in the provided buffer *buf* of size *sz* and
+
+===== FILE: tools/testing/selftests/bpf/progs/local_storage.c =====
+
+--- lines 116-136 ---
+116: 	storage = bpf_inode_storage_get(&inode_storage_map, old_dentry->d_inode,
+117: 					0, 0);
+118: 	if (!storage)
+119: 		return 0;
+120: 
+121: 	if (storage->value != DUMMY_STORAGE_VALUE)
+122: 		inode_storage_result = -1;
+123: 
+124: 	err = bpf_inode_storage_delete(&inode_storage_map, old_dentry->d_inode);
+125: 	if (!err)
+126: 		inode_storage_result = err;
+127: 
+128: 	return 0;
+129: }
+130: 
+131: SEC("lsm.s/socket_bind")
+132: int BPF_PROG(socket_bind, struct socket *sock, struct sockaddr *address,
+133: 	     int addrlen)
+134: {
+135: 	__u32 pid = bpf_get_current_pid_tgid() >> 32;
+136: 	struct local_storage *storage;
