@@ -1,0 +1,422 @@
+===== CONFIG =====
+
+===== X86 ARCH DUP TASK STRUCT =====
+97- * to the memory.
+98- */
+99-DEFINE_PER_CPU(bool, cache_state_incoherent);
+100-
+101-/*
+102- * this gets called so that we can store lazy state into memory and copy the
+103- * current task into the new thread.
+104- */
+105:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+106-{
+107-	/* fpu_clone() will initialize the "dst_fpu" memory */
+108-	memcpy_and_pad(dst, arch_task_struct_size, src, sizeof(*dst), 0);
+109-
+110-#ifdef CONFIG_VM86
+111-	dst->thread.vm86 = NULL;
+112-#endif
+113-
+114-	return 0;
+115-}
+116-
+117-#ifdef CONFIG_X86_64
+118-void arch_release_task_struct(struct task_struct *tsk)
+119-{
+120-	if (fpu_state_size_dynamic() && !(tsk->flags & (PF_KTHREAD | PF_USER_WORKER)))
+121-		fpstate_free(x86_task_fpu(tsk));
+122-}
+123-#endif
+124-
+125-/*
+126- * Free thread data structures etc..
+127- */
+128-void exit_thread(struct task_struct *tsk)
+129-{
+130-	struct thread_struct *t = &tsk->thread;
+131-
+132-	if (test_thread_flag(TIF_IO_BITMAP))
+133-		io_bitmap_exit(tsk);
+134-
+135-	free_vm86(t);
+136-
+137-	shstk_free(tsk);
+138-	fpu__drop(tsk);
+139-}
+140-
+141-static int set_new_tls(struct task_struct *p, unsigned long tls)
+142-{
+143-	struct user_desc __user *utls = (struct user_desc __user *)tls;
+144-
+145-	if (in_ia32_syscall())
+146-		return do_set_thread_area(p, -1, utls, 0);
+147-	else
+148-		return do_set_thread_area_64(p, ARCH_SET_FS, tls);
+149-}
+150-
+
+===== BASELINE DUP TASK STRUCT =====
+904-
+905-	stackend = end_of_stack(tsk);
+906-	*stackend = STACK_END_MAGIC;	/* for overflow detection */
+907-}
+908-
+909:static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+910-{
+911-	struct task_struct *tsk;
+912-	int err;
+913-
+914-	if (node == NUMA_NO_NODE)
+915-		node = tsk_fork_get_node(orig);
+916-	tsk = alloc_task_struct_node(node);
+917-	if (!tsk)
+918-		return NULL;
+919-
+920-	err = arch_dup_task_struct(tsk, orig);
+921-	if (err)
+922-		goto free_tsk;
+923-
+924-	err = alloc_thread_stack_node(tsk, node);
+925-	if (err)
+926-		goto free_tsk;
+927-
+928-#ifdef CONFIG_THREAD_INFO_IN_TASK
+929-	refcount_set(&tsk->stack_refcount, 1);
+930-#endif
+931-	account_kernel_stack(tsk, 1);
+932-
+933-	err = scs_prepare(tsk, node);
+934-	if (err)
+935-		goto free_stack;
+936-
+937-#ifdef CONFIG_SECCOMP
+938-	/*
+939-	 * We must handle setting up seccomp filters once we're under
+940-	 * the sighand lock in case orig has changed between now and
+941-	 * then. Until then, filter must be NULL to avoid messing up
+942-	 * the usage counts on the error path calling free_task.
+943-	 */
+944-	tsk->seccomp.filter = NULL;
+945-#endif
+946-
+947-	setup_thread_stack(tsk, orig);
+948-	clear_user_return_notifier(tsk);
+949-	clear_tsk_need_resched(tsk);
+950-	set_task_stack_end_magic(tsk);
+951-	clear_syscall_work_syscall_user_dispatch(tsk);
+952-
+953-#ifdef CONFIG_STACKPROTECTOR
+954-	tsk->stack_canary = get_random_canary();
+955-#endif
+956-	if (orig->cpus_ptr == &orig->cpus_mask)
+957-		tsk->cpus_ptr = &tsk->cpus_mask;
+958-	dup_user_cpus_ptr(tsk, orig, node);
+959-
+960-	/*
+961-	 * One for the user space visible state that goes away when reaped.
+962-	 * One for the scheduler.
+963-	 */
+964-	refcount_set(&tsk->rcu_users, 2);
+965-	/* One for the rcu users */
+966-	refcount_set(&tsk->usage, 1);
+967-#ifdef CONFIG_BLK_DEV_IO_TRACE
+968-	tsk->btrace_seq = 0;
+969-#endif
+970-	tsk->splice_pipe = NULL;
+971-	tsk->task_frag.page = NULL;
+972-	tsk->wake_q.next = NULL;
+973-	tsk->worker_private = NULL;
+974-
+975-	kcov_task_init(tsk);
+976-	kmsan_task_create(tsk);
+977-	kmap_local_fork(tsk);
+978-
+979-#ifdef CONFIG_FAULT_INJECTION
+980-	tsk->fail_nth = 0;
+981-#endif
+982-
+983-#ifdef CONFIG_BLK_CGROUP
+984-	tsk->throttle_disk = NULL;
+985-	tsk->use_memdelay = 0;
+986-#endif
+987-
+988-#ifdef CONFIG_ARCH_HAS_CPU_PASID
+989-	tsk->pasid_activated = 0;
+990-#endif
+991-
+992-#ifdef CONFIG_MEMCG
+993-	tsk->active_memcg = NULL;
+994-#endif
+
+===== PATCHED DUP TASK STRUCT =====
+910-
+911-	stackend = end_of_stack(tsk);
+912-	*stackend = STACK_END_MAGIC;	/* for overflow detection */
+913-}
+914-
+915:static struct task_struct *dup_task_struct(struct task_struct *orig, int node)
+916-{
+917-	struct task_struct *tsk;
+918-	int err;
+919-
+920-	if (node == NUMA_NO_NODE)
+921-		node = tsk_fork_get_node(orig);
+922-	tsk = alloc_task_struct_node(node);
+923-	if (!tsk)
+924-		return NULL;
+925-
+926-	err = arch_dup_task_struct(tsk, orig);
+927-	if (err)
+928-		goto free_tsk;
+929-
+930-	err = alloc_thread_stack_node(tsk, node);
+931-	if (err)
+932-		goto free_tsk;
+933-
+934-#ifdef CONFIG_THREAD_INFO_IN_TASK
+935-	refcount_set(&tsk->stack_refcount, 1);
+936-#endif
+937-	account_kernel_stack(tsk, 1);
+938-
+939-	err = scs_prepare(tsk, node);
+940-	if (err)
+941-		goto free_stack;
+942-
+943-#ifdef CONFIG_SECCOMP
+944-	/*
+945-	 * We must handle setting up seccomp filters once we're under
+946-	 * the sighand lock in case orig has changed between now and
+947-	 * then. Until then, filter must be NULL to avoid messing up
+948-	 * the usage counts on the error path calling free_task.
+949-	 */
+950-	tsk->seccomp.filter = NULL;
+951-#endif
+952-
+953-	setup_thread_stack(tsk, orig);
+954-	clear_user_return_notifier(tsk);
+955-	clear_tsk_need_resched(tsk);
+956-	set_task_stack_end_magic(tsk);
+957-	clear_syscall_work_syscall_user_dispatch(tsk);
+958-
+959-#ifdef CONFIG_STACKPROTECTOR
+960-	tsk->stack_canary = get_random_canary();
+961-#endif
+962-	if (orig->cpus_ptr == &orig->cpus_mask)
+963-		tsk->cpus_ptr = &tsk->cpus_mask;
+964-	dup_user_cpus_ptr(tsk, orig, node);
+965-
+966-	/*
+967-	 * One for the user space visible state that goes away when reaped.
+968-	 * One for the scheduler.
+969-	 */
+970-	refcount_set(&tsk->rcu_users, 2);
+971-	/* One for the rcu users */
+972-	refcount_set(&tsk->usage, 1);
+973-#ifdef CONFIG_BLK_DEV_IO_TRACE
+974-	tsk->btrace_seq = 0;
+975-#endif
+976-	tsk->splice_pipe = NULL;
+977-	tsk->task_frag.page = NULL;
+978-	tsk->wake_q.next = NULL;
+979-	tsk->worker_private = NULL;
+980-
+981-	kcov_task_init(tsk);
+982-	kmsan_task_create(tsk);
+983-	kmap_local_fork(tsk);
+984-
+985-#ifdef CONFIG_FAULT_INJECTION
+986-	tsk->fail_nth = 0;
+987-#endif
+988-
+989-#ifdef CONFIG_BLK_CGROUP
+990-	tsk->throttle_disk = NULL;
+991-	tsk->use_memdelay = 0;
+992-#endif
+993-
+994-#ifdef CONFIG_ARCH_HAS_CPU_PASID
+995-	tsk->pasid_activated = 0;
+996-#endif
+997-
+998-#ifdef CONFIG_MEMCG
+999-	tsk->active_memcg = NULL;
+1000-#endif
+
+===== FREE TASK FULL BODY =====
+	scs_release(tsk);
+
+#ifndef CONFIG_THREAD_INFO_IN_TASK
+	/*
+	 * The task is finally done with both the stack and thread_info,
+	 * so free both.
+	 */
+	release_task_stack(tsk);
+#else
+	/*
+	 * If the task had a separate stack allocation, it should be gone
+	 * by now.
+	 */
+	WARN_ON_ONCE(refcount_read(&tsk->stack_refcount) != 0);
+#endif
+	rt_mutex_debug_task_free(tsk);
+	ftrace_graph_exit_task(tsk);
+	arch_release_task_struct(tsk);
+	if (tsk->flags & PF_KTHREAD)
+		free_kthread_struct(tsk);
+	bpf_task_storage_free(tsk);
+	free_task_struct(tsk);
+}
+EXPORT_SYMBOL(free_task);
+
+void dup_mm_exe_file(struct mm_struct *mm, struct mm_struct *oldmm)
+{
+	struct file *exe_file;
+
+	exe_file = get_mm_exe_file(oldmm);
+	RCU_INIT_POINTER(mm->exe_file, exe_file);
+	/*
+	 * We depend on the oldmm having properly denied write access to the
+	 * exe_file already.
+	 */
+	if (exe_file && exe_file_deny_write_access(exe_file))
+		pr_warn_once("exe_file_deny_write_access() failed in %s\n", __func__);
+}
+
+#ifdef CONFIG_MMU
+static inline int mm_alloc_pgd(struct mm_struct *mm)
+{
+	mm->pgd = pgd_alloc(mm);
+	if (unlikely(!mm->pgd))
+		return -ENOMEM;
+	return 0;
+}
+
+static inline void mm_free_pgd(struct mm_struct *mm)
+{
+	pgd_free(mm, mm->pgd);
+}
+#else
+#define mm_alloc_pgd(mm)	(0)
+#define mm_free_pgd(mm)
+#endif /* CONFIG_MMU */
+
+#ifdef CONFIG_MM_ID
+static DEFINE_IDA(mm_ida);
+
+static inline int mm_alloc_id(struct mm_struct *mm)
+{
+	int ret;
+
+	ret = ida_alloc_range(&mm_ida, MM_ID_MIN, MM_ID_MAX, GFP_KERNEL);
+	if (ret < 0)
+		return ret;
+	mm->mm_id = ret;
+	return 0;
+}
+
+static inline void mm_free_id(struct mm_struct *mm)
+{
+	const mm_id_t id = mm->mm_id;
+
+	mm->mm_id = MM_ID_DUMMY;
+
+===== BPF TASK STORAGE FREE =====
+41-
+42-	smap = (struct bpf_local_storage_map *)map;
+43-	return bpf_local_storage_lookup(task_storage, smap, cacheit_lockit);
+44-}
+45-
+46:void bpf_task_storage_free(struct task_struct *task)
+47-{
+48-	struct bpf_local_storage *local_storage;
+49-
+50-	rcu_read_lock();
+51-
+52-	local_storage = rcu_dereference(task->bpf_storage);
+53-	if (!local_storage)
+54-		goto out;
+55-
+56-	bpf_local_storage_destroy(local_storage);
+57-out:
+58-	rcu_read_unlock();
+59-}
+60-
+61-static void *bpf_pid_task_storage_lookup_elem(struct bpf_map *map, void *key)
+62-{
+63-	struct bpf_local_storage_data *sdata;
+64-	struct task_struct *task;
+65-	unsigned int f_flags;
+66-	struct pid *pid;
+
+===== COPY PROCESS FAILURE CHECKPOINTS =====
+2084:	retval = copy_creds(p, clone_flags);
+2086:		goto bad_fork_free;
+2089:	if (is_rlimit_overlimit(task_ucounts(p), UCOUNT_RLIMIT_NPROC, rlimit(RLIMIT_NPROC))) {
+2092:			goto bad_fork_cleanup_count;
+2103:		goto bad_fork_cleanup_count;
+2130:	retval = io_uring_fork(p);
+2132:		goto bad_fork_cleanup_delayacct;
+2152:		if (!set_kthread_struct(p))
+2153:			goto bad_fork_cleanup_delayacct;
+2156:	p->mempolicy = mpol_dup(p->mempolicy);
+2160:		goto bad_fork_cleanup_delayacct;
+2195:		goto bad_fork_cleanup_policy;
+2202:		goto bad_fork_cleanup_perf;
+2207:		goto bad_fork_cleanup_audit;
+2210:		goto bad_fork_cleanup_security;
+2213:		goto bad_fork_cleanup_semundo;
+2216:		goto bad_fork_cleanup_files;
+2219:		goto bad_fork_cleanup_fs;
+2222:		goto bad_fork_cleanup_sighand;
+2225:		goto bad_fork_cleanup_signal;
+2228:		goto bad_fork_cleanup_mm;
+2231:		goto bad_fork_cleanup_namespaces;
+2234:		goto bad_fork_cleanup_io;
+2243:			goto bad_fork_cleanup_thread;
+2261:			goto bad_fork_free_pid;
+2489:bad_fork_free_pid:
+2492:bad_fork_cleanup_thread:
+2494:bad_fork_cleanup_io:
+2497:bad_fork_cleanup_namespaces:
+2499:bad_fork_cleanup_mm:
+2504:bad_fork_cleanup_signal:
+2507:bad_fork_cleanup_sighand:
+2509:bad_fork_cleanup_fs:
+2511:bad_fork_cleanup_files:
+2513:bad_fork_cleanup_semundo:
+2515:bad_fork_cleanup_security:
+2517:bad_fork_cleanup_audit:
+2519:bad_fork_cleanup_perf:
+2523:bad_fork_cleanup_policy:
+2528:bad_fork_cleanup_delayacct:
+2531:bad_fork_cleanup_count:
+2535:bad_fork_free:
+
+===== BPF STORAGE INITIALIZATION LOCATIONS =====
+1010-#endif
+1011-
+1012-#ifdef CONFIG_BPF_SYSCALL
+1013:	RCU_INIT_POINTER(tsk->bpf_storage, NULL);
+1014:	tsk->bpf_ctx = NULL;
+1015-#endif
+1016-	return tsk;
+1017-
+
+===== ARCH IMPLEMENTATION INVENTORY =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/sh/kernel/process.c:24:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/kernel/process.c:216:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/include/asm/thread_info.h:102:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/include/asm/processor.h:190:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/um/kernel/process.c:193:int arch_dup_task_struct(struct task_struct *dst,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/sparc/kernel/process_64.c:651:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/powerpc/kernel/process.c:1684:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/powerpc/include/asm/thread_info.h:87:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/loongarch/kernel/process.c:111:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/s390/kernel/process.c:85:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/s390/kernel/process.c:162:	 * copy. The CB pointer was already cleared in arch_dup_task_struct().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/kernel/fpsimd.c:1697:	 * arch_dup_task_struct() regardless of whether FP/SIMD is detected.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/kernel/process.c:347:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/x86/kernel/process.c:105:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/xtensa/kernel/process.c:217:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/mips/kernel/process.c:81:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/mips/include/asm/processor.h:32:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
