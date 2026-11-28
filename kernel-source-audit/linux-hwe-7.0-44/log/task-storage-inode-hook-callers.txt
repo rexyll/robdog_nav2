@@ -1,0 +1,1085 @@
+SOURCE_ROOT=kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source
+NOTE=Static caller inventory; no runtime instrumentation.
+
+============================
+HOOK: security_inode_permission
+============================
+
+--- security/security.c:1217 (context 1207-1231) ---
+1207: /**
+1208:  * security_inode_free() - Free an inode's LSM blob
+1209:  * @inode: the inode
+1210:  *
+1211:  * Release any LSM resources associated with @inode, although due to the
+1212:  * inode's RCU protections it is possible that the resources will not be
+1213:  * fully released until after the current RCU grace period has elapsed.
+1214:  *
+1215:  * It is important for LSMs to note that despite being present in a call to
+1216:  * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217:  * and calls to security_inode_permission() may be made during, or after,
+1218:  * a call to security_inode_free().  For this reason the inode->i_security
+1219:  * field is released via a call_rcu() callback and any LSMs which need to
+1220:  * retain inode state for use in security_inode_permission() should only
+1221:  * release that state in the inode_free_security_rcu() LSM hook callback.
+1222:  */
+1223: void security_inode_free(struct inode *inode)
+1224: {
+1225: 	call_void_hook(inode_free_security, inode);
+1226: 	if (!inode->i_security)
+1227: 		return;
+1228: 	call_rcu((struct rcu_head *)inode->i_security, inode_free_by_rcu);
+1229: }
+1230: 
+1231: /**
+
+--- security/security.c:1220 (context 1210-1234) ---
+1210:  *
+1211:  * Release any LSM resources associated with @inode, although due to the
+1212:  * inode's RCU protections it is possible that the resources will not be
+1213:  * fully released until after the current RCU grace period has elapsed.
+1214:  *
+1215:  * It is important for LSMs to note that despite being present in a call to
+1216:  * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217:  * and calls to security_inode_permission() may be made during, or after,
+1218:  * a call to security_inode_free().  For this reason the inode->i_security
+1219:  * field is released via a call_rcu() callback and any LSMs which need to
+1220:  * retain inode state for use in security_inode_permission() should only
+1221:  * release that state in the inode_free_security_rcu() LSM hook callback.
+1222:  */
+1223: void security_inode_free(struct inode *inode)
+1224: {
+1225: 	call_void_hook(inode_free_security, inode);
+1226: 	if (!inode->i_security)
+1227: 		return;
+1228: 	call_rcu((struct rcu_head *)inode->i_security, inode_free_by_rcu);
+1229: }
+1230: 
+1231: /**
+1232:  * security_dentry_init_security() - Perform dentry initialization
+1233:  * @dentry: the dentry to initialize
+1234:  * @mode: mode used to determine resource type
+
+--- security/security.c:1800 (context 1790-1814) ---
+1790:  */
+1791: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+1792: 			       bool rcu)
+1793: {
+1794: 	if (unlikely(IS_PRIVATE(inode)))
+1795: 		return 0;
+1796: 	return call_int_hook(inode_follow_link, dentry, inode, rcu);
+1797: }
+1798: 
+1799: /**
+1800:  * security_inode_permission() - Check if accessing an inode is allowed
+1801:  * @inode: inode
+1802:  * @mask: access mask
+1803:  *
+1804:  * Check permission before accessing an inode.  This hook is called by the
+1805:  * existing Linux permission function, so a security module can use it to
+1806:  * provide additional checking for existing Linux permission checks.  Notice
+1807:  * that this hook is called when a file is opened (as well as many other
+1808:  * operations), whereas the file_security_ops permission hook is called when
+1809:  * the actual read/write operations are performed.
+1810:  *
+1811:  * Return: Returns 0 if permission is granted.
+1812:  */
+1813: int security_inode_permission(struct inode *inode, int mask)
+1814: {
+
+--- security/security.c:1813 (context 1803-1827) ---
+1803:  *
+1804:  * Check permission before accessing an inode.  This hook is called by the
+1805:  * existing Linux permission function, so a security module can use it to
+1806:  * provide additional checking for existing Linux permission checks.  Notice
+1807:  * that this hook is called when a file is opened (as well as many other
+1808:  * operations), whereas the file_security_ops permission hook is called when
+1809:  * the actual read/write operations are performed.
+1810:  *
+1811:  * Return: Returns 0 if permission is granted.
+1812:  */
+1813: int security_inode_permission(struct inode *inode, int mask)
+1814: {
+1815: 	if (unlikely(IS_PRIVATE(inode)))
+1816: 		return 0;
+1817: 	return call_int_hook(inode_permission, inode, mask);
+1818: }
+1819: 
+1820: /**
+1821:  * security_inode_setattr() - Check if setting file attributes is allowed
+1822:  * @idmap: idmap of the mount
+1823:  * @dentry: file
+1824:  * @attr: new attributes
+1825:  *
+1826:  * Check permission before setting file attributes.  Note that the kernel call
+1827:  * to notify_change is performed from several locations, whenever file
+
+--- fs/namei.c:656 (context 646-670) ---
+646: 	}
+647: 
+648: 	retval = do_inode_permission(idmap, inode, mask);
+649: 	if (unlikely(retval))
+650: 		return retval;
+651: 
+652: 	retval = devcgroup_inode_permission(inode, mask);
+653: 	if (unlikely(retval))
+654: 		return retval;
+655: 
+656: 	return security_inode_permission(inode, mask);
+657: }
+658: EXPORT_SYMBOL(inode_permission);
+659: 
+660: /*
+661:  * lookup_inode_permission_may_exec - Check traversal right for given inode
+662:  *
+663:  * This is a special case routine for may_lookup() making assumptions specific
+664:  * to path traversal. Use inode_permission() if you are doing something else.
+665:  *
+666:  * Work is shaved off compared to inode_permission() as follows:
+667:  * - we know for a fact there is no MAY_WRITE to worry about
+668:  * - it is an invariant the inode is a directory
+669:  *
+670:  * Since majority of real-world traversal happens on inodes which grant it for
+
+--- fs/namei.c:693 (context 683-707) ---
+683: 	VFS_BUG_ON((mask & ~MAY_NOT_BLOCK) != 0);
+684: 
+685: 	mask |= MAY_EXEC;
+686: 
+687: 	if (unlikely(!(inode->i_opflags & (IOP_FASTPERM | IOP_FASTPERM_MAY_EXEC))))
+688: 		return inode_permission(idmap, inode, mask);
+689: 
+690: 	if (unlikely(((inode->i_mode & 0111) != 0111) || !no_acl_inode(inode)))
+691: 		return inode_permission(idmap, inode, mask);
+692: 
+693: 	return security_inode_permission(inode, mask);
+694: }
+695: 
+696: /**
+697:  * path_get - get a reference to a path
+698:  * @path: path to get the reference to
+699:  *
+700:  * Given a path increment the reference count to the dentry and the vfsmount.
+701:  */
+702: void path_get(const struct path *path)
+703: {
+704: 	mntget(path->mnt);
+705: 	dget(path->dentry);
+706: }
+707: EXPORT_SYMBOL(path_get);
+
+--- include/linux/security.h:424 (context 414-438) ---
+414: 			   const char *old_name);
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+416: int security_inode_rmdir(struct inode *dir, struct dentry *dentry);
+417: int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev);
+418: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+427: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 				 int ia_valid);
+429: int security_inode_getattr(const struct path *path);
+430: int security_inode_setxattr(struct mnt_idmap *idmap,
+431: 			    struct dentry *dentry, const char *name,
+432: 			    const void *value, size_t size, int flags);
+433: int security_inode_set_acl(struct mnt_idmap *idmap,
+434: 			   struct dentry *dentry, const char *acl_name,
+435: 			   struct posix_acl *kacl);
+436: void security_inode_post_set_acl(struct dentry *dentry, const char *acl_name,
+437: 				 struct posix_acl *kacl);
+438: int security_inode_get_acl(struct mnt_idmap *idmap,
+
+--- include/linux/security.h:971 (context 961-985) ---
+961: 	return 0;
+962: }
+963: 
+964: static inline int security_inode_follow_link(struct dentry *dentry,
+965: 					     struct inode *inode,
+966: 					     bool rcu)
+967: {
+968: 	return 0;
+969: }
+970: 
+971: static inline int security_inode_permission(struct inode *inode, int mask)
+972: {
+973: 	return 0;
+974: }
+975: 
+976: static inline int security_inode_setattr(struct mnt_idmap *idmap,
+977: 					 struct dentry *dentry,
+978: 					 struct iattr *attr)
+979: {
+980: 	return 0;
+981: }
+982: 
+983: static inline void
+984: security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+985: 			    int ia_valid)
+TOTAL_MATCHES=8
+
+============================
+HOOK: security_inode_create
+============================
+
+--- security/security.c:1591 (context 1581-1605) ---
+1581:  *
+1582:  * Return: Returns 0 if permission is granted.
+1583:  */
+1584: int security_path_chroot(const struct path *path)
+1585: {
+1586: 	return call_int_hook(path_chroot, path);
+1587: }
+1588: #endif /* CONFIG_SECURITY_PATH */
+1589: 
+1590: /**
+1591:  * security_inode_create() - Check if creating a file is allowed
+1592:  * @dir: the parent directory
+1593:  * @dentry: the file being created
+1594:  * @mode: requested file mode
+1595:  *
+1596:  * Check permission to create a regular file.
+1597:  *
+1598:  * Return: Returns 0 if permission is granted.
+1599:  */
+1600: int security_inode_create(struct inode *dir, struct dentry *dentry,
+1601: 			  umode_t mode)
+1602: {
+1603: 	if (unlikely(IS_PRIVATE(dir)))
+1604: 		return 0;
+1605: 	return call_int_hook(inode_create, dir, dentry, mode);
+
+--- security/security.c:1600 (context 1590-1614) ---
+1590: /**
+1591:  * security_inode_create() - Check if creating a file is allowed
+1592:  * @dir: the parent directory
+1593:  * @dentry: the file being created
+1594:  * @mode: requested file mode
+1595:  *
+1596:  * Check permission to create a regular file.
+1597:  *
+1598:  * Return: Returns 0 if permission is granted.
+1599:  */
+1600: int security_inode_create(struct inode *dir, struct dentry *dentry,
+1601: 			  umode_t mode)
+1602: {
+1603: 	if (unlikely(IS_PRIVATE(dir)))
+1604: 		return 0;
+1605: 	return call_int_hook(inode_create, dir, dentry, mode);
+1606: }
+1607: EXPORT_SYMBOL_GPL(security_inode_create);
+1608: 
+1609: /**
+1610:  * security_inode_post_create_tmpfile() - Update inode security of new tmpfile
+1611:  * @idmap: idmap of the mount
+1612:  * @inode: inode of the new tmpfile
+1613:  *
+1614:  * Update inode security data after a tmpfile has been created.
+
+--- fs/namei.c:4176 (context 4166-4190) ---
+4166: 	int error;
+4167: 
+4168: 	error = may_create_dentry(idmap, dir, dentry);
+4169: 	if (error)
+4170: 		return error;
+4171: 
+4172: 	if (!dir->i_op->create)
+4173: 		return -EACCES;	/* shouldn't it be ENOSYS? */
+4174: 
+4175: 	mode = vfs_prepare_mode(idmap, dir, mode, S_IALLUGO, S_IFREG);
+4176: 	error = security_inode_create(dir, dentry, mode);
+4177: 	if (error)
+4178: 		return error;
+4179: 	error = try_break_deleg(dir, di);
+4180: 	if (error)
+4181: 		return error;
+4182: 	error = dir->i_op->create(idmap, dir, dentry, mode, true);
+4183: 	if (!error)
+4184: 		fsnotify_create(dir, dentry);
+4185: 	return error;
+4186: }
+4187: EXPORT_SYMBOL(vfs_create);
+4188: 
+4189: int vfs_mkobj(struct dentry *dentry, umode_t mode,
+4190: 		int (*f)(struct dentry *, umode_t, void *),
+
+--- fs/namei.c:4200 (context 4190-4214) ---
+4190: 		int (*f)(struct dentry *, umode_t, void *),
+4191: 		void *arg)
+4192: {
+4193: 	struct inode *dir = dentry->d_parent->d_inode;
+4194: 	int error = may_create_dentry(&nop_mnt_idmap, dir, dentry);
+4195: 	if (error)
+4196: 		return error;
+4197: 
+4198: 	mode &= S_IALLUGO;
+4199: 	mode |= S_IFREG;
+4200: 	error = security_inode_create(dir, dentry, mode);
+4201: 	if (error)
+4202: 		return error;
+4203: 	error = f(dentry, mode, arg);
+4204: 	if (!error)
+4205: 		fsnotify_create(dir, dentry);
+4206: 	return error;
+4207: }
+4208: EXPORT_SYMBOL(vfs_mkobj);
+4209: 
+4210: bool may_open_dev(const struct path *path)
+4211: {
+4212: 	return !(path->mnt->mnt_flags & MNT_NODEV) &&
+4213: 		!(path->mnt->mnt_sb->s_iflags & SB_I_NODEV);
+4214: }
+
+--- fs/namei.c:4316 (context 4306-4330) ---
+4306: 		return error;
+4307: 
+4308: 	if (!fsuidgid_has_mapping(dir->dentry->d_sb, idmap))
+4309: 		return -EOVERFLOW;
+4310: 
+4311: 	error = inode_permission(idmap, dir->dentry->d_inode,
+4312: 				 MAY_WRITE | MAY_EXEC);
+4313: 	if (error)
+4314: 		return error;
+4315: 
+4316: 	return security_inode_create(dir->dentry->d_inode, dentry, mode);
+4317: }
+4318: 
+4319: /*
+4320:  * Attempt to atomically look up, create and open a file from a negative
+4321:  * dentry.
+4322:  *
+4323:  * Returns 0 if successful.  The file will have been created and attached to
+4324:  * @file by the filesystem calling finish_open().
+4325:  *
+4326:  * If the file was looked up only or didn't need creating, FMODE_OPENED won't
+4327:  * be set.  The caller will need to perform the open themselves.  @path will
+4328:  * have been updated to point to the new dentry.  This may be negative.
+4329:  *
+4330:  * Returns an error code otherwise.
+
+--- include/linux/security.h:407 (context 397-421) ---
+397: int security_path_notify(const struct path *path, u64 mask,
+398: 					unsigned int obj_type);
+399: int security_inode_alloc(struct inode *inode, gfp_t gfp);
+400: void security_inode_free(struct inode *inode);
+401: int security_inode_init_security(struct inode *inode, struct inode *dir,
+402: 				 const struct qstr *qstr,
+403: 				 initxattrs initxattrs, void *fs_data);
+404: int security_inode_init_security_anon(struct inode *inode,
+405: 				      const struct qstr *name,
+406: 				      const struct inode *context_inode);
+407: int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+408: void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409: 					struct inode *inode);
+410: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411: 			 struct dentry *new_dentry);
+412: int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+413: int security_inode_symlink(struct inode *dir, struct dentry *dentry,
+414: 			   const char *old_name);
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+416: int security_inode_rmdir(struct inode *dir, struct dentry *dentry);
+417: int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev);
+418: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+
+--- include/linux/security.h:899 (context 889-913) ---
+889: 	return 0;
+890: }
+891: 
+892: static inline int security_inode_init_security_anon(struct inode *inode,
+893: 						    const struct qstr *name,
+894: 						    const struct inode *context_inode)
+895: {
+896: 	return 0;
+897: }
+898: 
+899: static inline int security_inode_create(struct inode *dir,
+900: 					 struct dentry *dentry,
+901: 					 umode_t mode)
+902: {
+903: 	return 0;
+904: }
+905: 
+906: static inline void
+907: security_inode_post_create_tmpfile(struct mnt_idmap *idmap, struct inode *inode)
+908: { }
+909: 
+910: static inline int security_inode_link(struct dentry *old_dentry,
+911: 				       struct inode *dir,
+912: 				       struct dentry *new_dentry)
+913: {
+
+--- fs/cachefiles/security.c:61 (context 51-75) ---
+51: {
+52: 	int ret;
+53: 
+54: 	ret = security_inode_mkdir(d_backing_inode(root), root, 0);
+55: 	if (ret < 0) {
+56: 		pr_err("Security denies permission to make dirs: error %d",
+57: 		       ret);
+58: 		return ret;
+59: 	}
+60: 
+61: 	ret = security_inode_create(d_backing_inode(root), root, 0);
+62: 	if (ret < 0)
+63: 		pr_err("Security denies permission to create files: error %d",
+64: 		       ret);
+65: 
+66: 	return ret;
+67: }
+68: 
+69: /*
+70:  * check the security details of the on-disk cache
+71:  * - must be called with security override in force
+72:  * - must return with a security override in force - even in the case of an
+73:  *   error
+74:  */
+75: int cachefiles_determine_cache_security(struct cachefiles_cache *cache,
+TOTAL_MATCHES=8
+
+============================
+HOOK: security_inode_unlink
+============================
+
+--- security/security.c:1643 (context 1633-1657) ---
+1633:  */
+1634: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+1635: 			struct dentry *new_dentry)
+1636: {
+1637: 	if (unlikely(IS_PRIVATE(d_backing_inode(old_dentry))))
+1638: 		return 0;
+1639: 	return call_int_hook(inode_link, old_dentry, dir, new_dentry);
+1640: }
+1641: 
+1642: /**
+1643:  * security_inode_unlink() - Check if removing a hard link is allowed
+1644:  * @dir: parent directory
+1645:  * @dentry: file
+1646:  *
+1647:  * Check the permission to remove a hard link to a file.
+1648:  *
+1649:  * Return: Returns 0 if permission is granted.
+1650:  */
+1651: int security_inode_unlink(struct inode *dir, struct dentry *dentry)
+1652: {
+1653: 	if (unlikely(IS_PRIVATE(d_backing_inode(dentry))))
+1654: 		return 0;
+1655: 	return call_int_hook(inode_unlink, dir, dentry);
+1656: }
+1657: 
+
+--- security/security.c:1651 (context 1641-1665) ---
+1641: 
+1642: /**
+1643:  * security_inode_unlink() - Check if removing a hard link is allowed
+1644:  * @dir: parent directory
+1645:  * @dentry: file
+1646:  *
+1647:  * Check the permission to remove a hard link to a file.
+1648:  *
+1649:  * Return: Returns 0 if permission is granted.
+1650:  */
+1651: int security_inode_unlink(struct inode *dir, struct dentry *dentry)
+1652: {
+1653: 	if (unlikely(IS_PRIVATE(d_backing_inode(dentry))))
+1654: 		return 0;
+1655: 	return call_int_hook(inode_unlink, dir, dentry);
+1656: }
+1657: 
+1658: /**
+1659:  * security_inode_symlink() - Check if creating a symbolic link is allowed
+1660:  * @dir: parent directory
+1661:  * @dentry: symbolic link
+1662:  * @old_name: existing filename
+1663:  *
+1664:  * Check the permission to create a symbolic link to a file.
+1665:  *
+
+--- fs/namei.c:5468 (context 5458-5482) ---
+5458: 
+5459: 	if (!dir->i_op->unlink)
+5460: 		return -EPERM;
+5461: 
+5462: 	inode_lock(target);
+5463: 	if (IS_SWAPFILE(target))
+5464: 		error = -EPERM;
+5465: 	else if (is_local_mountpoint(dentry))
+5466: 		error = -EBUSY;
+5467: 	else {
+5468: 		error = security_inode_unlink(dir, dentry);
+5469: 		if (!error) {
+5470: 			error = try_break_deleg(dir, delegated_inode);
+5471: 			if (error)
+5472: 				goto out;
+5473: 			error = try_break_deleg(target, delegated_inode);
+5474: 			if (error)
+5475: 				goto out;
+5476: 			error = dir->i_op->unlink(dir, dentry);
+5477: 			if (!error) {
+5478: 				dont_mount(dentry);
+5479: 				detach_mounts(dentry);
+5480: 			}
+5481: 		}
+5482: 	}
+
+--- include/linux/security.h:412 (context 402-426) ---
+402: 				 const struct qstr *qstr,
+403: 				 initxattrs initxattrs, void *fs_data);
+404: int security_inode_init_security_anon(struct inode *inode,
+405: 				      const struct qstr *name,
+406: 				      const struct inode *context_inode);
+407: int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+408: void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409: 					struct inode *inode);
+410: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411: 			 struct dentry *new_dentry);
+412: int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+413: int security_inode_symlink(struct inode *dir, struct dentry *dentry,
+414: 			   const char *old_name);
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+416: int security_inode_rmdir(struct inode *dir, struct dentry *dentry);
+417: int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev);
+418: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+
+--- include/linux/security.h:917 (context 907-931) ---
+907: security_inode_post_create_tmpfile(struct mnt_idmap *idmap, struct inode *inode)
+908: { }
+909: 
+910: static inline int security_inode_link(struct dentry *old_dentry,
+911: 				       struct inode *dir,
+912: 				       struct dentry *new_dentry)
+913: {
+914: 	return 0;
+915: }
+916: 
+917: static inline int security_inode_unlink(struct inode *dir,
+918: 					 struct dentry *dentry)
+919: {
+920: 	return 0;
+921: }
+922: 
+923: static inline int security_inode_symlink(struct inode *dir,
+924: 					  struct dentry *dentry,
+925: 					  const char *old_name)
+926: {
+927: 	return 0;
+928: }
+929: 
+930: static inline int security_inode_mkdir(struct inode *dir,
+931: 					struct dentry *dentry,
+TOTAL_MATCHES=5
+
+============================
+HOOK: security_inode_rename
+============================
+
+--- security/security.c:1734 (context 1724-1748) ---
+1724:  */
+1725: int security_inode_mknod(struct inode *dir, struct dentry *dentry,
+1726: 			 umode_t mode, dev_t dev)
+1727: {
+1728: 	if (unlikely(IS_PRIVATE(dir)))
+1729: 		return 0;
+1730: 	return call_int_hook(inode_mknod, dir, dentry, mode, dev);
+1731: }
+1732: 
+1733: /**
+1734:  * security_inode_rename() - Check if renaming a file is allowed
+1735:  * @old_dir: parent directory of the old file
+1736:  * @old_dentry: the old file
+1737:  * @new_dir: parent directory of the new file
+1738:  * @new_dentry: the new file
+1739:  * @flags: flags
+1740:  *
+1741:  * Check for permission to rename a file or directory.
+1742:  *
+1743:  * Return: Returns 0 if permission is granted.
+1744:  */
+1745: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+1746: 			  struct inode *new_dir, struct dentry *new_dentry,
+1747: 			  unsigned int flags)
+1748: {
+
+--- security/security.c:1745 (context 1735-1759) ---
+1735:  * @old_dir: parent directory of the old file
+1736:  * @old_dentry: the old file
+1737:  * @new_dir: parent directory of the new file
+1738:  * @new_dentry: the new file
+1739:  * @flags: flags
+1740:  *
+1741:  * Check for permission to rename a file or directory.
+1742:  *
+1743:  * Return: Returns 0 if permission is granted.
+1744:  */
+1745: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+1746: 			  struct inode *new_dir, struct dentry *new_dentry,
+1747: 			  unsigned int flags)
+1748: {
+1749: 	if (unlikely(IS_PRIVATE(d_backing_inode(old_dentry)) ||
+1750: 		     (d_is_positive(new_dentry) &&
+1751: 		      IS_PRIVATE(d_backing_inode(new_dentry)))))
+1752: 		return 0;
+1753: 
+1754: 	if (flags & RENAME_EXCHANGE) {
+1755: 		int err = call_int_hook(inode_rename, new_dir, new_dentry,
+1756: 					old_dir, old_dentry);
+1757: 		if (err)
+1758: 			return err;
+1759: 	}
+
+--- fs/namei.c:5963 (context 5953-5977) ---
+5953: 				return error;
+5954: 		}
+5955: 		if ((flags & RENAME_EXCHANGE) && new_is_dir) {
+5956: 			error = inode_permission(rd->mnt_idmap, target,
+5957: 						 MAY_WRITE);
+5958: 			if (error)
+5959: 				return error;
+5960: 		}
+5961: 	}
+5962: 
+5963: 	error = security_inode_rename(old_dir, old_dentry, new_dir, new_dentry,
+5964: 				      flags);
+5965: 	if (error)
+5966: 		return error;
+5967: 
+5968: 	take_dentry_name_snapshot(&old_name, old_dentry);
+5969: 	dget(new_dentry);
+5970: 	/*
+5971: 	 * Lock children.
+5972: 	 * The source subdirectory needs to be locked on cross-directory
+5973: 	 * rename or cross-directory exchange since its parent changes.
+5974: 	 * The target subdirectory needs to be locked on cross-directory
+5975: 	 * exchange due to parent change and on any rename due to becoming
+5976: 	 * a victim.
+5977: 	 * Non-directories need locking in all cases (for NFS reasons);
+
+--- include/linux/security.h:418 (context 408-432) ---
+408: void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409: 					struct inode *inode);
+410: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411: 			 struct dentry *new_dentry);
+412: int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+413: int security_inode_symlink(struct inode *dir, struct dentry *dentry,
+414: 			   const char *old_name);
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+416: int security_inode_rmdir(struct inode *dir, struct dentry *dentry);
+417: int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev);
+418: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+427: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 				 int ia_valid);
+429: int security_inode_getattr(const struct path *path);
+430: int security_inode_setxattr(struct mnt_idmap *idmap,
+431: 			    struct dentry *dentry, const char *name,
+432: 			    const void *value, size_t size, int flags);
+
+--- include/linux/security.h:950 (context 940-964) ---
+940: 	return 0;
+941: }
+942: 
+943: static inline int security_inode_mknod(struct inode *dir,
+944: 					struct dentry *dentry,
+945: 					int mode, dev_t dev)
+946: {
+947: 	return 0;
+948: }
+949: 
+950: static inline int security_inode_rename(struct inode *old_dir,
+951: 					 struct dentry *old_dentry,
+952: 					 struct inode *new_dir,
+953: 					 struct dentry *new_dentry,
+954: 					 unsigned int flags)
+955: {
+956: 	return 0;
+957: }
+958: 
+959: static inline int security_inode_readlink(struct dentry *dentry)
+960: {
+961: 	return 0;
+962: }
+963: 
+964: static inline int security_inode_follow_link(struct dentry *dentry,
+TOTAL_MATCHES=5
+
+============================
+HOOK: security_inode_setattr
+============================
+
+--- security/security.c:1821 (context 1811-1835) ---
+1811:  * Return: Returns 0 if permission is granted.
+1812:  */
+1813: int security_inode_permission(struct inode *inode, int mask)
+1814: {
+1815: 	if (unlikely(IS_PRIVATE(inode)))
+1816: 		return 0;
+1817: 	return call_int_hook(inode_permission, inode, mask);
+1818: }
+1819: 
+1820: /**
+1821:  * security_inode_setattr() - Check if setting file attributes is allowed
+1822:  * @idmap: idmap of the mount
+1823:  * @dentry: file
+1824:  * @attr: new attributes
+1825:  *
+1826:  * Check permission before setting file attributes.  Note that the kernel call
+1827:  * to notify_change is performed from several locations, whenever file
+1828:  * attributes change (such as when a file is truncated, chown/chmod operations,
+1829:  * transferring disk quotas, etc).
+1830:  *
+1831:  * Return: Returns 0 if permission is granted.
+1832:  */
+1833: int security_inode_setattr(struct mnt_idmap *idmap,
+1834: 			   struct dentry *dentry, struct iattr *attr)
+1835: {
+
+--- security/security.c:1833 (context 1823-1847) ---
+1823:  * @dentry: file
+1824:  * @attr: new attributes
+1825:  *
+1826:  * Check permission before setting file attributes.  Note that the kernel call
+1827:  * to notify_change is performed from several locations, whenever file
+1828:  * attributes change (such as when a file is truncated, chown/chmod operations,
+1829:  * transferring disk quotas, etc).
+1830:  *
+1831:  * Return: Returns 0 if permission is granted.
+1832:  */
+1833: int security_inode_setattr(struct mnt_idmap *idmap,
+1834: 			   struct dentry *dentry, struct iattr *attr)
+1835: {
+1836: 	if (unlikely(IS_PRIVATE(d_backing_inode(dentry))))
+1837: 		return 0;
+1838: 	return call_int_hook(inode_setattr, idmap, dentry, attr);
+1839: }
+1840: EXPORT_SYMBOL_GPL(security_inode_setattr);
+1841: 
+1842: /**
+1843:  * security_inode_post_setattr() - Update the inode after a setattr operation
+1844:  * @idmap: idmap of the mount
+1845:  * @dentry: file
+1846:  * @ia_valid: file attributes set
+1847:  *
+
+--- fs/attr.c:540 (context 530-554) ---
+530: 	/* Don't allow modifications of files with invalid uids or
+531: 	 * gids unless those uids & gids are being made valid.
+532: 	 */
+533: 	if (!(ia_valid & ATTR_UID) &&
+534: 	    !vfsuid_valid(i_uid_into_vfsuid(idmap, inode)))
+535: 		return -EOVERFLOW;
+536: 	if (!(ia_valid & ATTR_GID) &&
+537: 	    !vfsgid_valid(i_gid_into_vfsgid(idmap, inode)))
+538: 		return -EOVERFLOW;
+539: 
+540: 	error = security_inode_setattr(idmap, dentry, attr);
+541: 	if (error)
+542: 		return error;
+543: 
+544: 	/*
+545: 	 * If ATTR_DELEG is set, then these attributes are being set on
+546: 	 * behalf of the holder of a write delegation. We want to avoid
+547: 	 * breaking the delegation in this case.
+548: 	 */
+549: 	if (!(ia_valid & ATTR_DELEG)) {
+550: 		error = try_break_deleg(inode, delegated_inode);
+551: 		if (error)
+552: 			return error;
+553: 	}
+554: 
+
+--- include/linux/security.h:425 (context 415-439) ---
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+416: int security_inode_rmdir(struct inode *dir, struct dentry *dentry);
+417: int security_inode_mknod(struct inode *dir, struct dentry *dentry, umode_t mode, dev_t dev);
+418: int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+427: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 				 int ia_valid);
+429: int security_inode_getattr(const struct path *path);
+430: int security_inode_setxattr(struct mnt_idmap *idmap,
+431: 			    struct dentry *dentry, const char *name,
+432: 			    const void *value, size_t size, int flags);
+433: int security_inode_set_acl(struct mnt_idmap *idmap,
+434: 			   struct dentry *dentry, const char *acl_name,
+435: 			   struct posix_acl *kacl);
+436: void security_inode_post_set_acl(struct dentry *dentry, const char *acl_name,
+437: 				 struct posix_acl *kacl);
+438: int security_inode_get_acl(struct mnt_idmap *idmap,
+439: 			   struct dentry *dentry, const char *acl_name);
+
+--- include/linux/security.h:976 (context 966-990) ---
+966: 					     bool rcu)
+967: {
+968: 	return 0;
+969: }
+970: 
+971: static inline int security_inode_permission(struct inode *inode, int mask)
+972: {
+973: 	return 0;
+974: }
+975: 
+976: static inline int security_inode_setattr(struct mnt_idmap *idmap,
+977: 					 struct dentry *dentry,
+978: 					 struct iattr *attr)
+979: {
+980: 	return 0;
+981: }
+982: 
+983: static inline void
+984: security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+985: 			    int ia_valid)
+986: { }
+987: 
+988: static inline int security_inode_getattr(const struct path *path)
+989: {
+990: 	return 0;
+
+--- fs/exfat/file.c:431 (context 421-445) ---
+421: 	    !capable(CAP_LINUX_IMMUTABLE)) {
+422: 		err = -EPERM;
+423: 		goto out_unlock_inode;
+424: 	}
+425: 
+426: 	/*
+427: 	 * The security check is questionable...  We single
+428: 	 * out the RO attribute for checking by the security
+429: 	 * module, just because it maps to a file mode.
+430: 	 */
+431: 	err = security_inode_setattr(file_mnt_idmap(file),
+432: 				     file->f_path.dentry, &ia);
+433: 	if (err)
+434: 		goto out_unlock_inode;
+435: 
+436: 	/* This MUST be done before doing anything irreversible... */
+437: 	err = exfat_setattr(file_mnt_idmap(file), file->f_path.dentry, &ia);
+438: 	if (err)
+439: 		goto out_unlock_inode;
+440: 
+441: 	fsnotify_change(file->f_path.dentry, ia.ia_valid);
+442: 
+443: 	exfat_save_attr(inode, attr);
+444: 	mark_inode_dirty(inode);
+445: out_unlock_inode:
+
+--- fs/fat/file.c:94 (context 84-108) ---
+84: 	    !capable(CAP_LINUX_IMMUTABLE)) {
+85: 		err = -EPERM;
+86: 		goto out_unlock_inode;
+87: 	}
+88: 
+89: 	/*
+90: 	 * The security check is questionable...  We single
+91: 	 * out the RO attribute for checking by the security
+92: 	 * module, just because it maps to a file mode.
+93: 	 */
+94: 	err = security_inode_setattr(file_mnt_idmap(file),
+95: 				     file->f_path.dentry, &ia);
+96: 	if (err)
+97: 		goto out_unlock_inode;
+98: 
+99: 	/* This MUST be done before doing anything irreversible... */
+100: 	err = fat_setattr(file_mnt_idmap(file), file->f_path.dentry, &ia);
+101: 	if (err)
+102: 		goto out_unlock_inode;
+103: 
+104: 	fsnotify_change(file->f_path.dentry, ia.ia_valid);
+105: 	if (sbi->options.sys_immutable) {
+106: 		if (attr & ATTR_SYS)
+107: 			inode->i_flags |= S_IMMUTABLE;
+108: 		else
+TOTAL_MATCHES=7
+
+============================
+HOOK: security_inode_getattr
+============================
+
+--- security/security.c:1859 (context 1849-1873) ---
+1849:  */
+1850: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+1851: 				 int ia_valid)
+1852: {
+1853: 	if (unlikely(IS_PRIVATE(d_backing_inode(dentry))))
+1854: 		return;
+1855: 	call_void_hook(inode_post_setattr, idmap, dentry, ia_valid);
+1856: }
+1857: 
+1858: /**
+1859:  * security_inode_getattr() - Check if getting file attributes is allowed
+1860:  * @path: file
+1861:  *
+1862:  * Check permission before obtaining file attributes.
+1863:  *
+1864:  * Return: Returns 0 if permission is granted.
+1865:  */
+1866: int security_inode_getattr(const struct path *path)
+1867: {
+1868: 	if (unlikely(IS_PRIVATE(d_backing_inode(path->dentry))))
+1869: 		return 0;
+1870: 	return call_int_hook(inode_getattr, path);
+1871: }
+1872: 
+1873: /**
+
+--- security/security.c:1866 (context 1856-1880) ---
+1856: }
+1857: 
+1858: /**
+1859:  * security_inode_getattr() - Check if getting file attributes is allowed
+1860:  * @path: file
+1861:  *
+1862:  * Check permission before obtaining file attributes.
+1863:  *
+1864:  * Return: Returns 0 if permission is granted.
+1865:  */
+1866: int security_inode_getattr(const struct path *path)
+1867: {
+1868: 	if (unlikely(IS_PRIVATE(d_backing_inode(path->dentry))))
+1869: 		return 0;
+1870: 	return call_int_hook(inode_getattr, path);
+1871: }
+1872: 
+1873: /**
+1874:  * security_inode_setxattr() - Check if setting file xattrs is allowed
+1875:  * @idmap: idmap of the mount
+1876:  * @dentry: file
+1877:  * @name: xattr name
+1878:  * @value: xattr value
+1879:  * @size: size of xattr value
+1880:  * @flags: flags
+
+--- fs/stat.c:259 (context 249-273) ---
+249:  * anyway, but the value may be approximate, and, if remote, may not have been
+250:  * synchronised with the server.
+251:  *
+252:  * 0 will be returned on success, and a -ve error code if unsuccessful.
+253:  */
+254: int vfs_getattr(const struct path *path, struct kstat *stat,
+255: 		u32 request_mask, unsigned int query_flags)
+256: {
+257: 	int retval;
+258: 
+259: 	retval = security_inode_getattr(path);
+260: 	if (unlikely(retval))
+261: 		return retval;
+262: 	return vfs_getattr_nosec(path, stat, request_mask, query_flags);
+263: }
+264: EXPORT_SYMBOL(vfs_getattr);
+265: 
+266: /**
+267:  * vfs_fstat - Get the basic attributes by file descriptor
+268:  * @fd: The file descriptor referring to the file of interest
+269:  * @stat: The result structure to fill in.
+270:  *
+271:  * This function is a wrapper around vfs_getattr().  The main difference is
+272:  * that it uses a file descriptor to determine the file location.
+273:  *
+
+--- security/tomoyo/tomoyo.c:115 (context 105-129) ---
+105: 		return err;
+106: 	}
+107: 	/*
+108: 	 * Read permission is checked against interpreters using next domain.
+109: 	 */
+110: 	return tomoyo_check_open_permission(s->domain_info,
+111: 					    &bprm->file->f_path, O_RDONLY);
+112: }
+113: 
+114: /**
+115:  * tomoyo_inode_getattr - Target for security_inode_getattr().
+116:  *
+117:  * @path: Pointer to "struct path".
+118:  *
+119:  * Returns 0 on success, negative value otherwise.
+120:  */
+121: static int tomoyo_inode_getattr(const struct path *path)
+122: {
+123: 	return tomoyo_path_perm(TOMOYO_TYPE_GETATTR, path, NULL);
+124: }
+125: 
+126: /**
+127:  * tomoyo_path_truncate - Target for security_path_truncate().
+128:  *
+129:  * @path: Pointer to "struct path".
+
+--- include/linux/security.h:429 (context 419-443) ---
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+427: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 				 int ia_valid);
+429: int security_inode_getattr(const struct path *path);
+430: int security_inode_setxattr(struct mnt_idmap *idmap,
+431: 			    struct dentry *dentry, const char *name,
+432: 			    const void *value, size_t size, int flags);
+433: int security_inode_set_acl(struct mnt_idmap *idmap,
+434: 			   struct dentry *dentry, const char *acl_name,
+435: 			   struct posix_acl *kacl);
+436: void security_inode_post_set_acl(struct dentry *dentry, const char *acl_name,
+437: 				 struct posix_acl *kacl);
+438: int security_inode_get_acl(struct mnt_idmap *idmap,
+439: 			   struct dentry *dentry, const char *acl_name);
+440: int security_inode_remove_acl(struct mnt_idmap *idmap,
+441: 			      struct dentry *dentry, const char *acl_name);
+442: void security_inode_post_remove_acl(struct mnt_idmap *idmap,
+443: 				    struct dentry *dentry,
+
+--- include/linux/security.h:988 (context 978-1002) ---
+978: 					 struct iattr *attr)
+979: {
+980: 	return 0;
+981: }
+982: 
+983: static inline void
+984: security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+985: 			    int ia_valid)
+986: { }
+987: 
+988: static inline int security_inode_getattr(const struct path *path)
+989: {
+990: 	return 0;
+991: }
+992: 
+993: static inline int security_inode_setxattr(struct mnt_idmap *idmap,
+994: 		struct dentry *dentry, const char *name, const void *value,
+995: 		size_t size, int flags)
+996: {
+997: 	return cap_inode_setxattr(dentry, name, value, size, flags);
+998: }
+999: 
+1000: static inline int security_inode_set_acl(struct mnt_idmap *idmap,
+1001: 					 struct dentry *dentry,
+1002: 					 const char *acl_name,
+TOTAL_MATCHES=6
