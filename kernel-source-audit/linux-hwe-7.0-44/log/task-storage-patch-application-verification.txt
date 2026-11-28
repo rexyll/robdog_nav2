@@ -1,0 +1,424 @@
+===== SOURCE BASELINE =====
+b393692a3f342f9a197da17a3f94754faafc4a44ef06b35e9867d5dc6dc8baa0  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c
+b76cee0df63eca5fd64bfa5ff82db64241415b37366a707ba41986fc1122cf3a  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/exit.c
+bd95df254dcaac6127b06c056fc20d866e4b333d41ce9cdf5203b8d56db59669  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c
+
+===== EXTRACT ORIGINAL PATCH SECTIONS =====
+kernel/bpf/bpf_local_storage.c lines= 12
+kernel/exit.c lines= 97
+kernel/fork.c lines= 217
+patch_file= /tmp/task-storage-patch-check.9a9Y0V/patch/selected.patch
+
+===== COPY BASELINE FILES =====
+
+===== APPLY PATCH TO ISOLATED COPY =====
+patching file kernel/bpf/bpf_local_storage.c
+patching file kernel/exit.c
+patching file kernel/fork.c
+patch_exit_status=0
+
+===== PATCHED FILE HASHES =====
+138826f43b9c0361c76f26bf70ddc0f4df09ef1ec3ab2090ed29a202117eb9de  /tmp/task-storage-patch-check.9a9Y0V/src/kernel/fork.c
+3c7f2b8c89cc09bf847fcf5b13c5c2fa81d7fb0a7cd7a8dc972034094ccee19c  /tmp/task-storage-patch-check.9a9Y0V/src/kernel/exit.c
+60a855cd9596ea0eb155dd85eea0bf56f575df4e6eba0fba8231de511494634b  /tmp/task-storage-patch-check.9a9Y0V/src/kernel/bpf/bpf_local_storage.c
+
+===== FORK INITIALIZATION LOCATIONS =====
+1008-	tsk->mm_cid.active = 0;
+1009-	INIT_HLIST_NODE(&tsk->mm_cid.node);
+1010-#endif
+1011-
+1012-#ifdef CONFIG_BPF_SYSCALL
+1013:	RCU_INIT_POINTER(tsk->bpf_storage, NULL);
+1014:	tsk->bpf_ctx = NULL;
+1015-#endif
+1016-	return tsk;
+1017-
+1018-free_stack:
+1019-	exit_task_stack_account(tsk);
+
+===== FREE TASK STORAGE CLEANUP =====
+530-	if (refcount_dec_and_test(&tsk->stack_refcount))
+531-		release_task_stack(tsk);
+532-}
+533-#endif
+534-
+535:void free_task(struct task_struct *tsk)
+536-{
+537-#ifdef CONFIG_SECCOMP
+538-	WARN_ON_ONCE(tsk->seccomp.filter);
+539-#endif
+540-	release_user_cpus_ptr(tsk);
+541-	scs_release(tsk);
+542-
+543-#ifndef CONFIG_THREAD_INFO_IN_TASK
+544-	/*
+545-	 * The task is finally done with both the stack and thread_info,
+546-	 * so free both.
+547-	 */
+
+===== NMI GUARD =====
+391-	bool free_local_storage = false;
+392-	HLIST_HEAD(selem_free_list);
+393-	unsigned long flags;
+394-	int err;
+395-
+396:	if (in_nmi())
+397-		return -EOPNOTSUPP;
+398-
+399-	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+400-		/* selem has already been unlinked from sk */
+401-		return 0;
+402-
+403-	local_storage = rcu_dereference_check(selem->local_storage,
+404-					      bpf_rcu_lock_held());
+
+===== DIFF AGAINST BASELINE =====
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c	2026-04-13 04:48:06.000000000 +0800
++++ /tmp/task-storage-patch-check.9a9Y0V/src/kernel/fork.c	2026-11-28 18:00:25.081592171 +0800
+@@ -95,6 +95,7 @@
+ #include <linux/thread_info.h>
+ #include <linux/kstack_erase.h>
+ #include <linux/kasan.h>
++#include <linux/randomize_kstack.h>
+ #include <linux/scs.h>
+ #include <linux/io_uring.h>
+ #include <linux/io_uring_types.h>
+@@ -121,6 +122,11 @@
+ 
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/task.h>
++#ifdef CONFIG_USER_NS
++extern int unprivileged_userns_clone;
++#else
++#define unprivileged_userns_clone 0
++#endif
+ 
+ #include <kunit/visibility.h>
+ 
+@@ -1002,6 +1008,11 @@
+ 	tsk->mm_cid.active = 0;
+ 	INIT_HLIST_NODE(&tsk->mm_cid.node);
+ #endif
++
++#ifdef CONFIG_BPF_SYSCALL
++	RCU_INIT_POINTER(tsk->bpf_storage, NULL);
++	tsk->bpf_ctx = NULL;
++#endif
+ 	return tsk;
+ 
+ free_stack:
+@@ -1056,7 +1067,6 @@
+ {
+ #ifdef CONFIG_UPROBES
+ 	mm->uprobes_state.xol_area = NULL;
+-	arch_uprobe_init_state(mm);
+ #endif
+ }
+ 
+@@ -1630,6 +1640,7 @@
+ 
+ 	if (clone_flags & CLONE_FILES) {
+ 		atomic_inc(&oldf->count);
++		tsk->files = oldf;
+ 		return 0;
+ 	}
+ 
+@@ -1948,9 +1959,11 @@
+ 
+ static bool need_futex_hash_allocate_default(u64 clone_flags)
+ {
+-	if ((clone_flags & (CLONE_THREAD | CLONE_VM)) != (CLONE_THREAD | CLONE_VM))
+-		return false;
+-	return true;
++	/*
++	 * Allocate a default futex hash for any sibling that will
++	 * share the parent's mm.
++	 */
++	return clone_flags & CLONE_VM;
+ }
+ 
+ /*
+@@ -1984,6 +1997,10 @@
+ 	if ((clone_flags & (CLONE_NEWUSER|CLONE_FS)) == (CLONE_NEWUSER|CLONE_FS))
+ 		return ERR_PTR(-EINVAL);
+ 
++	if ((clone_flags & CLONE_NEWUSER) && !unprivileged_userns_clone)
++		if (!capable(CAP_SYS_ADMIN))
++			return ERR_PTR(-EPERM);
++
+ 	/*
+ 	 * Thread groups must share signals as well, and detached threads
+ 	 * can only be started up within the thread group.
+@@ -2109,6 +2126,8 @@
+ 	INIT_LIST_HEAD(&p->sibling);
+ 	rcu_copy_process(p);
+ 	p->vfork_done = NULL;
++	/* Set by copy_files(), exit_files() on the error path skips NULL. */
++	p->files = NULL;
+ 	spin_lock_init(&p->alloc_lock);
+ 
+ 	init_sigpending(&p->pending);
+@@ -2182,10 +2201,6 @@
+ 	p->sequential_io	= 0;
+ 	p->sequential_io_avg	= 0;
+ #endif
+-#ifdef CONFIG_BPF_SYSCALL
+-	RCU_INIT_POINTER(p->bpf_storage, NULL);
+-	p->bpf_ctx = NULL;
+-#endif
+ 
+ 	unwind_task_init(p);
+ 
+@@ -2213,7 +2228,7 @@
+ 		goto bad_fork_cleanup_semundo;
+ 	retval = copy_fs(clone_flags, p);
+ 	if (retval)
+-		goto bad_fork_cleanup_files;
++		goto bad_fork_cleanup_semundo;
+ 	retval = copy_sighand(clone_flags, p);
+ 	if (retval)
+ 		goto bad_fork_cleanup_fs;
+@@ -2233,6 +2248,7 @@
+ 	if (retval)
+ 		goto bad_fork_cleanup_io;
+ 
++	random_kstack_task_init(p);
+ 	stackleak_task_init(p);
+ 
+ 	if (pid != &init_struct_pid) {
+@@ -2268,6 +2284,7 @@
+ 
+ #ifdef CONFIG_BLOCK
+ 	p->plug = NULL;
++	p->flags &= ~PF_BLOCK_TS;
+ #endif
+ 	futex_init_task(p);
+ 
+@@ -2336,10 +2353,6 @@
+ 	if (retval)
+ 		goto bad_fork_cancel_cgroup;
+ 
+-	/*
+-	 * Allocate a default futex hash for the user process once the first
+-	 * thread spawns.
+-	 */
+ 	if (need_futex_hash_allocate_default(clone_flags)) {
+ 		retval = futex_hash_allocate_default();
+ 		if (retval)
+@@ -2508,8 +2521,6 @@
+ 	__cleanup_sighand(p->sighand);
+ bad_fork_cleanup_fs:
+ 	exit_fs(p); /* blocking */
+-bad_fork_cleanup_files:
+-	exit_files(p); /* blocking */
+ bad_fork_cleanup_semundo:
+ 	exit_sem(p);
+ bad_fork_cleanup_security:
+@@ -2520,6 +2531,8 @@
+ 	perf_event_free_task(p);
+ bad_fork_sched_cancel_fork:
+ 	sched_cancel_fork(p);
++	/* ->release() of a file may need scx_fork_rwsem for write. */
++	exit_files(p); /* blocking */
+ bad_fork_cleanup_policy:
+ 	lockdep_free_task(p);
+ #ifdef CONFIG_NUMA
+@@ -2598,6 +2611,10 @@
+ 		.user_worker	= 1,
+ 	};
+ 
++	/* A creator past its fatal signal or its coredump point gets no thread. */
++	if (current->flags & (PF_SIGNALED | PF_POSTCOREDUMP))
++		return ERR_PTR(-EINTR);
++
+ 	return copy_process(NULL, 0, node, &args);
+ }
+ 
+@@ -3151,6 +3168,12 @@
+ 	if (unshare_flags & CLONE_NEWNS)
+ 		unshare_flags |= CLONE_FS;
+ 
++	if ((unshare_flags & CLONE_NEWUSER) && !unprivileged_userns_clone) {
++		err = -EPERM;
++		if (!capable(CAP_SYS_ADMIN))
++			goto bad_unshare_out;
++	}
++
+ 	err = check_unshare_flags(unshare_flags);
+ 	if (err)
+ 		goto bad_unshare_out;
+@@ -3174,11 +3197,10 @@
+ 					 new_cred, new_fs);
+ 	if (err)
+ 		goto bad_unshare_cleanup_cred;
+-
+ 	if (new_cred) {
+ 		err = set_cred_ucounts(new_cred);
+ 		if (err)
+-			goto bad_unshare_cleanup_cred;
++			goto bad_unshare_cleanup_nsproxy;
+ 	}
+ 
+ 	if (new_fs || new_fd || do_sysvsem || new_cred || new_nsproxy) {
+@@ -3194,8 +3216,10 @@
+ 			shm_init_task(current);
+ 		}
+ 
+-		if (new_nsproxy)
++		if (new_nsproxy) {
+ 			switch_task_namespaces(current, new_nsproxy);
++			new_nsproxy = NULL;
++		}
+ 
+ 		task_lock(current);
+ 
+@@ -3224,13 +3248,16 @@
+ 
+ 	perf_event_namespaces(current);
+ 
++bad_unshare_cleanup_nsproxy:
++	/* never installed, so no active references to drop */
++	if (new_nsproxy)
++		nsproxy_free(new_nsproxy);
+ bad_unshare_cleanup_cred:
+ 	if (new_cred)
+ 		put_cred(new_cred);
+ bad_unshare_cleanup_fd:
+ 	if (new_fd)
+ 		put_files_struct(new_fd);
+-
+ bad_unshare_cleanup_fs:
+ 	if (new_fs)
+ 		free_fs_struct(new_fs);
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/exit.c	2026-04-13 04:48:06.000000000 +0800
++++ /tmp/task-storage-patch-check.9a9Y0V/src/kernel/exit.c	2026-11-28 18:00:25.081375240 +0800
+@@ -212,7 +212,12 @@
+ 	__unhash_process(post, tsk, group_dead);
+ 	write_sequnlock(&sig->stats_lock);
+ 
+-	tsk->sighand = NULL;
++	/*
++	 * Ensure that all preceeding state is visible. Pairs with
++	 * the smp_acquire__after_ctrl_dep() in the sighand == NULL
++	 * path of lock_task_sighand().
++	 */
++	smp_store_release(&tsk->sighand, NULL);
+ 	spin_unlock(&sighand->siglock);
+ 
+ 	__cleanup_sighand(sighand);
+@@ -257,8 +262,11 @@
+ 	pidfs_exit(p);
+ 	cgroup_task_release(p);
+ 
+-	/* Retrieve @thread_pid before __unhash_process() may set it to NULL. */
+-	thread_pid = task_pid(p);
++	/*
++	 * Pin @thread_pid before __unhash_process() clears it. The last
++	 * PIDTYPE detach can otherwise free it before proc_flush_pid().
++	 */
++	thread_pid = get_pid(task_pid(p));
+ 
+ 	write_lock_irq(&tasklist_lock);
+ 	ptrace_release_task(p);
+@@ -287,20 +295,21 @@
+ 	}
+ 
+ 	write_unlock_irq(&tasklist_lock);
+-	/* @thread_pid can't go away until free_pids() below */
+ 	proc_flush_pid(thread_pid);
++	put_pid(thread_pid);
+ 	exit_cred_namespaces(p);
+ 	add_device_randomness(&p->se.sum_exec_runtime,
+ 			      sizeof(p->se.sum_exec_runtime));
+ 	free_pids(post.pids);
+ 	release_thread(p);
+ 	/*
+-	 * This task was already removed from the process/thread/pid lists
+-	 * and lock_task_sighand(p) can't succeed. Nobody else can touch
+-	 * ->pending or, if group dead, signal->shared_pending. We can call
+-	 * flush_sigqueue() lockless.
++	 * This task was already removed from the process/thread/pid lists and
++	 * lock_task_sighand(p) can't succeed. If it's the group leader then
++	 * flush tsk->signal->shared_pending. tsk->pending has been flushed
++	 * already in exit_signals(). Nothing else can touch
++	 * signal->shared_pending anymore, so flush_sigqueue() can be invoked
++	 * lockless.
+ 	 */
+-	flush_sigqueue(&p->pending);
+ 	if (thread_group_leader(p))
+ 		flush_sigqueue(&p->signal->shared_pending);
+ 
+@@ -571,6 +580,7 @@
+ 	 */
+ 	smp_mb__after_spinlock();
+ 	local_irq_disable();
++	current->user_dumpable = (get_dumpable(mm) == SUID_DUMP_USER);
+ 	current->mm = NULL;
+ 	membarrier_update_current_mm(NULL);
+ 	enter_lazy_tlb(mm, current);
+@@ -968,10 +978,11 @@
+ 
+ 	exit_sem(tsk);
+ 	exit_shm(tsk);
+-	exit_files(tsk);
+-	exit_fs(tsk);
++	/* Hang the tty up before the last close of it can clear the session. */
+ 	if (group_dead)
+ 		disassociate_ctty(1);
++	exit_files(tsk);
++	exit_fs(tsk);
+ 	exit_nsproxy_namespaces(tsk);
+ 	exit_task_work(tsk);
+ 	exit_thread(tsk);
+@@ -1074,6 +1085,7 @@
+ 		futex_exit_recursive(tsk);
+ 		tsk->exit_state = EXIT_DEAD;
+ 		refcount_inc(&tsk->rcu_users);
++		preempt_disable();
+ 		do_task_dead();
+ 	}
+ 
+@@ -1718,7 +1730,7 @@
+ 	add_wait_queue(&current->signal->wait_chldexit, &wo->child_wait);
+ 
+ 	do {
+-		set_current_state(TASK_INTERRUPTIBLE);
++		set_current_state(TASK_INTERRUPTIBLE | TASK_FREEZABLE);
+ 		retval = __do_wait(wo);
+ 		if (retval != -ERESTARTSYS)
+ 			break;
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c	2026-04-13 04:48:06.000000000 +0800
++++ /tmp/task-storage-patch-check.9a9Y0V/src/kernel/bpf/bpf_local_storage.c	2026-11-28 18:00:25.081186112 +0800
+@@ -393,6 +393,9 @@
+ 	unsigned long flags;
+ 	int err;
+ 
++	if (in_nmi())
++		return -EOPNOTSUPP;
++
+ 	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+ 		/* selem has already been unlinked from sk */
+ 		return 0;
+
+===== ARCH DUP TASK STRUCT IMPLEMENTATIONS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/sh/kernel/process.c:24:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/kernel/process.c:216:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/include/asm/thread_info.h:102:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/riscv/include/asm/processor.h:190:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/um/kernel/process.c:193:int arch_dup_task_struct(struct task_struct *dst,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/sparc/kernel/process_64.c:651:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/powerpc/kernel/process.c:1684:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/powerpc/include/asm/thread_info.h:87:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/loongarch/kernel/process.c:111:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/s390/kernel/process.c:85:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/s390/kernel/process.c:162:	 * copy. The CB pointer was already cleared in arch_dup_task_struct().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/kernel/fpsimd.c:1697:	 * arch_dup_task_struct() regardless of whether FP/SIMD is detected.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/kernel/process.c:347:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/x86/kernel/process.c:105:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/xtensa/kernel/process.c:217:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/mips/kernel/process.c:81:int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/mips/include/asm/processor.h:32:extern int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/thread_info.h:233:int arch_dup_task_struct(struct task_struct *dst,
+
+===== TEMP DIRECTORY =====
+/tmp/task-storage-patch-check.9a9Y0V
