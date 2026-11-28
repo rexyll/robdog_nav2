@@ -1,0 +1,270 @@
+===== TASK STORAGE FREE CALLERS =====
+
+===== TASK STORAGE IMPLEMENTATION =====
+    35		struct bpf_local_storage_map *smap;
+    36	
+    37		task_storage =
+    38			rcu_dereference_check(task->bpf_storage, bpf_rcu_lock_held());
+    39		if (!task_storage)
+    40			return NULL;
+    41	
+    42		smap = (struct bpf_local_storage_map *)map;
+    43		return bpf_local_storage_lookup(task_storage, smap, cacheit_lockit);
+    44	}
+    45	
+    46	void bpf_task_storage_free(struct task_struct *task)
+    47	{
+    48		struct bpf_local_storage *local_storage;
+    49	
+    50		rcu_read_lock();
+    51	
+    52		local_storage = rcu_dereference(task->bpf_storage);
+    53		if (!local_storage)
+    54			goto out;
+    55	
+    56		bpf_local_storage_destroy(local_storage);
+    57	out:
+    58		rcu_read_unlock();
+    59	}
+    60	
+    61	static void *bpf_pid_task_storage_lookup_elem(struct bpf_map *map, void *key)
+    62	{
+    63		struct bpf_local_storage_data *sdata;
+    64		struct task_struct *task;
+    65		unsigned int f_flags;
+    80			err = -ENOENT;
+    81			goto out;
+    82		}
+    83	
+    84		sdata = task_storage_lookup(task, map, true);
+    85		put_pid(pid);
+    86		return sdata ? sdata->data : NULL;
+    87	out:
+    88		put_pid(pid);
+    89		return ERR_PTR(err);
+    90	}
+    91	
+    92	static long bpf_pid_task_storage_update_elem(struct bpf_map *map, void *key,
+    93						     void *value, u64 map_flags)
+    94	{
+    95		struct bpf_local_storage_data *sdata;
+    96		struct task_struct *task;
+    97		unsigned int f_flags;
+    98		struct pid *pid;
+    99		int fd, err;
+   100	
+   101		if ((map_flags & BPF_F_LOCK) && btf_record_has_field(map->record, BPF_UPTR))
+   102			return -EOPNOTSUPP;
+   103	
+   104		fd = *(int *)key;
+   105		pid = pidfd_get_pid(fd, &f_flags);
+   106		if (IS_ERR(pid))
+   107			return PTR_ERR(pid);
+   108	
+   109		/* We should be in an RCU read side critical section, it should be safe
+   110		 * to call pid_task.
+   111		 */
+   112		WARN_ON_ONCE(!rcu_read_lock_held());
+   113		task = pid_task(pid, PIDTYPE_PID);
+   114		if (!task) {
+   115			err = -ENOENT;
+   116			goto out;
+   117		}
+   118	
+   119		sdata = bpf_local_storage_update(
+   120			task, (struct bpf_local_storage_map *)map, value, map_flags,
+   121			true, GFP_ATOMIC);
+   122	
+   123		err = PTR_ERR_OR_ZERO(sdata);
+   124	out:
+   125		put_pid(pid);
+   126		return err;
+   127	}
+   128	
+   129	static int task_storage_delete(struct task_struct *task, struct bpf_map *map)
+   130	{
+   131		struct bpf_local_storage_data *sdata;
+   132	
+   133		sdata = task_storage_lookup(task, map, false);
+   134		if (!sdata)
+   135			return -ENOENT;
+   136	
+   137		return bpf_selem_unlink(SELEM(sdata));
+   138	}
+   139	
+   140	static long bpf_pid_task_storage_delete_elem(struct bpf_map *map, void *key)
+   141	{
+   142		struct task_struct *task;
+   143		unsigned int f_flags;
+   144		struct pid *pid;
+   145		int fd, err;
+   146	
+   147		fd = *(int *)key;
+   148		pid = pidfd_get_pid(fd, &f_flags);
+   149		if (IS_ERR(pid))
+   150			return PTR_ERR(pid);
+   151	
+   152		/* We should be in an RCU read side critical section, it should be safe
+   153		 * to call pid_task.
+   154		 */
+   155		WARN_ON_ONCE(!rcu_read_lock_held());
+   156		task = pid_task(pid, PIDTYPE_PID);
+   157		if (!task) {
+   158			err = -ENOENT;
+   159			goto out;
+   160		}
+   161	
+   162		err = task_storage_delete(task, map);
+   163	out:
+   164		put_pid(pid);
+   165		return err;
+   166	}
+   167	
+   168	/* *gfp_flags* is a hidden argument provided by the verifier */
+   169	BPF_CALL_5(bpf_task_storage_get, struct bpf_map *, map, struct task_struct *,
+   170		   task, void *, value, u64, flags, gfp_t, gfp_flags)
+   171	{
+   172		struct bpf_local_storage_data *sdata;
+   173	
+   174		WARN_ON_ONCE(!bpf_rcu_lock_held());
+   175		if (flags & ~BPF_LOCAL_STORAGE_GET_F_CREATE || !task)
+   176			return (unsigned long)NULL;
+   177	
+   178		sdata = task_storage_lookup(task, map, true);
+   179		if (sdata)
+   180			return (unsigned long)sdata->data;
+   181	
+   182		/* only allocate new storage, when the task is refcounted */
+   183		if (refcount_read(&task->usage) &&
+   184		    (flags & BPF_LOCAL_STORAGE_GET_F_CREATE)) {
+   185			sdata = bpf_local_storage_update(
+   186				task, (struct bpf_local_storage_map *)map, value,
+   187				BPF_NOEXIST, false, gfp_flags);
+   188			return IS_ERR(sdata) ? (unsigned long)NULL : (unsigned long)sdata->data;
+   189		}
+   190	
+   191		return (unsigned long)NULL;
+   192	}
+   193	
+   194	BPF_CALL_2(bpf_task_storage_delete, struct bpf_map *, map, struct task_struct *,
+   195		   task)
+   196	{
+   197		WARN_ON_ONCE(!bpf_rcu_lock_held());
+   198		if (!task)
+   199			return -EINVAL;
+   200	
+   201		/* This helper must only be called from places where the lifetime of the task
+   202		 * is guaranteed. Either by being refcounted or by being protected
+   203		 * by an RCU read-side critical section.
+   204		 */
+   205		return task_storage_delete(task, map);
+   206	}
+   207	
+   208	static int notsupp_get_next_key(struct bpf_map *map, void *key, void *next_key)
+   209	{
+   210		return -ENOTSUPP;
+
+===== LOCAL STORAGE MEMORY ACCOUNTING =====
+27:static int mem_charge(struct bpf_local_storage_map *smap, void *owner, u32 size)
+37:static void mem_uncharge(struct bpf_local_storage_map *smap, void *owner,
+75:	if (mem_charge(smap, owner, smap->elem_size))
+100:	mem_uncharge(smap, owner, smap->elem_size);
+263:static void bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
+279:	mem_uncharge(smap, local_storage->owner, uncharge);
+280:	local_storage->mem_charge -= uncharge;
+309:	bpf_selem_unlink_storage_nolock_misc(selem, smap, local_storage,
+325:	local_storage->mem_charge += smap->elem_size;
+433: * bpf_local_storage_destroy() or bpf_local_storage_map_free().
+489:					bpf_selem_unlink_storage_nolock_misc(
+564:	err = mem_charge(smap, owner, sizeof(*storage));
+582:	storage->mem_charge = sizeof(*storage);
+620:	mem_uncharge(smap, owner, sizeof(*storage));
+666:			mem_uncharge(smap, owner, smap->elem_size);
+750:		mem_uncharge(smap, owner, smap->elem_size);
+819:u32 bpf_local_storage_destroy(struct bpf_local_storage *local_storage)
+840:		 * to make sure destroy() sees the correct local_storage->mem_charge.
+845:	return local_storage->mem_charge;
+   263	static void bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
+   264							 struct bpf_local_storage_map *smap,
+   265							 struct bpf_local_storage *local_storage,
+   266							 bool free_local_storage, bool pin_owner)
+   267	{
+   268		void *owner = local_storage->owner;
+   269		u32 uncharge = smap->elem_size;
+   270	
+   271		if (rcu_access_pointer(local_storage->cache[smap->cache_idx]) ==
+   272		    SDATA(selem))
+   273			RCU_INIT_POINTER(local_storage->cache[smap->cache_idx], NULL);
+   274	
+   275		if (pin_owner && !refcount_inc_not_zero(&local_storage->owner_refcnt))
+   276			return;
+   277	
+   278		uncharge += free_local_storage ? sizeof(*local_storage) : 0;
+   279		mem_uncharge(smap, local_storage->owner, uncharge);
+   280		local_storage->mem_charge -= uncharge;
+   281	
+   282		if (free_local_storage) {
+   283			local_storage->owner = NULL;
+   284	
+   285			/* After this RCU_INIT, owner may be freed and cannot be used */
+   286			RCU_INIT_POINTER(*owner_storage(smap, owner), NULL);
+   287		}
+   288	
+   289		if (pin_owner)
+   290			refcount_dec(&local_storage->owner_refcnt);
+   291	}
+   292	
+   815	/*
+   816	 * Destroy local storage when the owner is going away. Caller must uncharge memory
+   817	 * if memory charging is used.
+   818	 */
+   819	u32 bpf_local_storage_destroy(struct bpf_local_storage *local_storage)
+   820	{
+   821		struct bpf_local_storage_elem *selem;
+   822	
+   823		/* Neither the bpf_prog nor the bpf_map's syscall
+   824		 * could be modifying the local_storage->list now.
+   825		 * Thus, no elem can be added to or deleted from the
+   826		 * local_storage->list by the bpf_prog or by the bpf_map's syscall.
+   827		 *
+   828		 * It is racing with bpf_local_storage_map_free() alone
+   829		 * when unlinking elem from the local_storage->list and
+   830		 * the map's bucket->list.
+   831		 */
+   832		hlist_for_each_entry_rcu(selem, &local_storage->list, snode)
+   833			bpf_selem_unlink_nofail(selem, NULL);
+   834	
+   835		if (!refcount_dec_and_test(&local_storage->owner_refcnt)) {
+   836			while (refcount_read(&local_storage->owner_refcnt))
+   837				cpu_relax();
+   838			/*
+   839			 * Paired with refcount_dec() in bpf_selem_unlink_nofail()
+   840			 * to make sure destroy() sees the correct local_storage->mem_charge.
+   841			 */
+   842			smp_mb();
+   843		}
+   844	
+   845		return local_storage->mem_charge;
+   846	}
+   847	
+   848	u64 bpf_local_storage_map_mem_usage(const struct bpf_map *map)
+
+===== ARCH RELEASE SYMBOL DEFINITIONS =====
+
+===== GENERIC ARCH RELEASE DECLARATIONS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/thread_info.h:232:void arch_release_task_struct(struct task_struct *tsk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c:177:void __weak arch_release_task_struct(struct task_struct *tsk)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c:552:	arch_release_task_struct(tsk);
+
+===== TARGET ARCH CONFIG =====
+CONFIG_BPF_SYSCALL=y
+CONFIG_X86=y
+
+===== SOURCE PACKAGE METADATA CANDIDATES =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian/control
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian/changelog
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian.hwe-7.0/changelog
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian.master/changelog
+kernel-source-audit/linux-hwe-7.0-44/linux-hwe-7.0_7.0.0-44.44~24.04.1.dsc
+
+===== REPORT SHA256 =====
