@@ -1,0 +1,283 @@
+59881-+    - netfs: Fix subreq ref leak
+59882-+    - netfs: break unbuffered write when netfs_alloc_subrequest() fails
+59883-+    - cachefiles: Fix potential UAF/KASAN warning
+59884-+    - ALSA: pcm: Serialize PCM mmap with buffer reallocation to fix page UAF
+59885-+    - ksmbd: propagate DACL parsing errors
+59886-+    - ksmbd: rate limit unmapped SID errors
+59887-+    - s390/time: Use jiffies instead of jiffies_64
+59888-+    - s390/ipl: Fix NULL deref in kdump without re-IPL parm block
+59889-+    - s390/ipl: Fix NULL deref in dump_reipl without re-IPL parm block
+59890-+    - s390/diag324: Preserve -EBUSY return code
+59891-+    - sched_ext: Fix timer pinning and return value in scx_central
+59892-+    - sched_ext: Update demo schedulers and selftests to use
+59893:+      scx_bpf_task_set_dsq_vtime()
+59894-+    - sched_ext: Fix vtime delta loss in scx_flatcg cgroup migration
+59895-+    - Bluetooth: btintel_pcie: Clear automask on spurious interrupts
+59896-+    - workqueue: reject watchdog thresholds that overflow jiffies
+59897-+    - Bluetooth: btintel: validate version TLV value lengths
+59898-+    - Bluetooth: btintel: bound firmware ID by TLV length
+59899-+    - Bluetooth: hci_core: Fix race condition during device registration
+59900-+    - Bluetooth: L2CAP: fix chan mode for LE_CONN_REQ + EXT_FLOWCTL pchan
+59901-+    - Bluetooth: L2CAP: fix out-of-bounds write in l2cap_ecred_connect
+--
+81399-+    - netfs: Fix subreq ref leak
+81400-+    - netfs: break unbuffered write when netfs_alloc_subrequest() fails
+81401-+    - cachefiles: Fix potential UAF/KASAN warning
+81402-+    - ALSA: pcm: Serialize PCM mmap with buffer reallocation to fix page UAF
+81403-+    - ksmbd: propagate DACL parsing errors
+81404-+    - ksmbd: rate limit unmapped SID errors
+81405-+    - s390/time: Use jiffies instead of jiffies_64
+81406-+    - s390/ipl: Fix NULL deref in kdump without re-IPL parm block
+81407-+    - s390/ipl: Fix NULL deref in dump_reipl without re-IPL parm block
+81408-+    - s390/diag324: Preserve -EBUSY return code
+81409-+    - sched_ext: Fix timer pinning and return value in scx_central
+81410-+    - sched_ext: Update demo schedulers and selftests to use
+81411:+      scx_bpf_task_set_dsq_vtime()
+81412-+    - sched_ext: Fix vtime delta loss in scx_flatcg cgroup migration
+81413-+    - Bluetooth: btintel_pcie: Clear automask on spurious interrupts
+81414-+    - workqueue: reject watchdog thresholds that overflow jiffies
+81415-+    - Bluetooth: btintel: validate version TLV value lengths
+81416-+    - Bluetooth: btintel: bound firmware ID by TLV length
+81417-+    - Bluetooth: hci_core: Fix race condition during device registration
+81418-+    - Bluetooth: L2CAP: fix chan mode for LE_CONN_REQ + EXT_FLOWCTL pchan
+81419-+    - Bluetooth: L2CAP: fix out-of-bounds write in l2cap_ecred_connect
+--
+130329-+    - netfs: Fix subreq ref leak
+130330-+    - netfs: break unbuffered write when netfs_alloc_subrequest() fails
+130331-+    - cachefiles: Fix potential UAF/KASAN warning
+130332-+    - ALSA: pcm: Serialize PCM mmap with buffer reallocation to fix page UAF
+130333-+    - ksmbd: propagate DACL parsing errors
+130334-+    - ksmbd: rate limit unmapped SID errors
+130335-+    - s390/time: Use jiffies instead of jiffies_64
+130336-+    - s390/ipl: Fix NULL deref in kdump without re-IPL parm block
+130337-+    - s390/ipl: Fix NULL deref in dump_reipl without re-IPL parm block
+130338-+    - s390/diag324: Preserve -EBUSY return code
+130339-+    - sched_ext: Fix timer pinning and return value in scx_central
+130340-+    - sched_ext: Update demo schedulers and selftests to use
+130341:+      scx_bpf_task_set_dsq_vtime()
+130342-+    - sched_ext: Fix vtime delta loss in scx_flatcg cgroup migration
+130343-+    - Bluetooth: btintel_pcie: Clear automask on spurious interrupts
+130344-+    - workqueue: reject watchdog thresholds that overflow jiffies
+130345-+    - Bluetooth: btintel: validate version TLV value lengths
+130346-+    - Bluetooth: btintel: bound firmware ID by TLV length
+130347-+    - Bluetooth: hci_core: Fix race condition during device registration
+130348-+    - Bluetooth: L2CAP: fix chan mode for LE_CONN_REQ + EXT_FLOWCTL pchan
+130349-+    - Bluetooth: L2CAP: fix out-of-bounds write in l2cap_ecred_connect
+--
+500857- 
+500858-@@ -3012,7 +3040,7 @@
+500859- bool btf_struct_ids_match(struct bpf_verifier_log *log,
+500860- 			  const struct btf *btf, u32 id, int off,
+500861- 			  const struct btf *need_btf, u32 need_type_id,
+500862--			  bool strict);
+500863-+			  bool strict, bool walk_flex_arrays);
+500864- 
+500865- int btf_distill_func_proto(struct bpf_verifier_log *log,
+500866- 			   struct btf *btf,
+500867-@@ -3036,7 +3064,6 @@
+500868- 						 const struct bpf_prog *prog);
+500869: void bpf_task_storage_free(struct task_struct *task);
+500870- void bpf_cgrp_storage_free(struct cgroup *cgroup);
+500871--bool bpf_prog_has_kfunc_call(const struct bpf_prog *prog);
+500872- const struct btf_func_model *
+500873- bpf_jit_find_kfunc_model(const struct bpf_prog *prog,
+500874- 			 const struct bpf_insn *insn);
+500875-@@ -3319,11 +3346,6 @@
+500876- {
+500877- }
+--
+520556- 		bitset_mask = nr_bits - 1;
+520557- 	}
+520558- 
+520559--	bitset_bytes = roundup(bitset_bytes, sizeof(unsigned long));
+520560-+	bitset_bytes = BITS_TO_LONGS((u64)bitset_mask + 1) * sizeof(unsigned long);
+520561- 	bloom = bpf_map_area_alloc(sizeof(*bloom) + bitset_bytes, numa_node);
+520562- 
+520563- 	if (!bloom)
+520564---- linux-hwe-7.0-7.0.0.orig/kernel/bpf/bpf_inode_storage.c
+520565-+++ linux-hwe-7.0-7.0.0/kernel/bpf/bpf_inode_storage.c
+520566-@@ -179,6 +179,15 @@
+520567- 
+520568: static struct bpf_map *inode_storage_map_alloc(union bpf_attr *attr)
+520569- {
+520570-+	/*
+520571-+	 * Do not allow allocation of BPF_MAP_TYPE_INODE_STORAGE if the BPF LSM
+520572-+	 * was not initialized by the LSM framework at boot. Without proper
+520573-+	 * initialization, the BPF inode security blob offset remains unprepared,
+520574-+	 * causing bpf_inode() to calculate an invalid memory offset and corrupt
+520575-+	 * inode->i_security.
+520576-+	 */
+--
+572134-+				continue;
+572135-+
+572136-+			*parent_type_id = b->type;
+572137- 			parent_loc->cl_type_name = type_cn->cn_name;
+572138- 			parent_loc->cl_name = cn->cn_name;
+572139- 			return b->id;
+572140---- linux-hwe-7.0-7.0.0.orig/net/core/bpf_sk_storage.c
+572141-+++ linux-hwe-7.0-7.0.0/net/core/bpf_sk_storage.c
+572142-@@ -158,8 +158,6 @@
+572143- 	struct bpf_local_storage_elem *selem;
+572144- 	int ret = 0;
+572145- 
+572146:-	RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
+572147--
+572148- 	rcu_read_lock_dont_migrate();
+572149- 	sk_storage = rcu_dereference(sk->sk_bpf_storage);
+572150- 
+572151-@@ -172,7 +170,7 @@
+572152- 		struct bpf_map *map;
+572153- 
+572154- 		smap = rcu_dereference(SDATA(selem)->smap);
+572155--		if (!(smap->map.map_flags & BPF_F_CLONE))
+572156-+		if (!smap || !(smap->map.map_flags & BPF_F_CLONE))
+572157- 			continue;
+572158- 
+572159- 		/* Note that for lockless listeners adding new element
+572160-@@ -534,10 +532,10 @@
+572161- }
+572162- EXPORT_SYMBOL_GPL(bpf_sk_storage_diag_alloc);
+572163- 
+572164:-static int diag_get(struct bpf_local_storage_data *sdata, struct sk_buff *skb)
+572165:+static int diag_get(struct bpf_local_storage_map *smap,
+572166-+		    struct bpf_local_storage_data *sdata, struct sk_buff *skb)
+572167- {
+572168- 	struct nlattr *nla_stg, *nla_value;
+572169--	struct bpf_local_storage_map *smap;
+572170- 
+572171- 	/* It cannot exceed max nlattr's payload */
+572172- 	BUILD_BUG_ON(U16_MAX - NLA_HDRLEN < BPF_LOCAL_STORAGE_MAX_VALUE_SIZE);
+572173-@@ -546,7 +544,6 @@
+--
+575653- 		int delta;
+575654- 
+575655--		if (val < 0) {
+575656-+		if (val < 0 || val > SZ_1G) {
+575657- 			ret = -EINVAL;
+575658- 			break;
+575659- 		}
+575660-@@ -2485,6 +2482,12 @@
+575661- 	sock_copy(newsk, sk);
+575662- 
+575663- 	newsk->sk_prot_creator = prot;
+575664-+#ifdef CONFIG_BPF_SYSCALL
+575665:+	RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
+575666-+#endif
+575667-+#if IS_ENABLED(CONFIG_INET_PSP)
+575668-+	RCU_INIT_POINTER(newsk->psp_assoc, NULL);
+575669-+#endif
+575670- 
+575671- 	/* SANITY */
+575672- 	if (likely(newsk->sk_net_refcnt)) {
+575673-@@ -2537,6 +2540,11 @@
+--
+700835- 
+700836- 	/*
+700837-@@ -551,9 +551,11 @@
+700838- 	 * too much, determine the execution time by taking explicit timestamps
+700839- 	 * instead of depending on @p->scx.slice.
+700840- 	 */
+700841--	if (!fifo_sched)
+700842--		p->scx.dsq_vtime +=
+700843--			(SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
+700844-+	if (!fifo_sched) {
+700845-+		u64 delta = scale_by_task_weight_inverse(p, SCX_SLICE_DFL - p->scx.slice);
+700846-+
+700847:+		scx_bpf_task_set_dsq_vtime(p, p->scx.dsq_vtime + delta);
+700848-+	}
+700849- 
+700850- 	taskc = bpf_task_storage_get(&task_ctx, p, 0, 0);
+700851- 	if (!taskc) {
+700852-@@ -568,7 +570,8 @@
+700853- 	cgc = find_cgrp_ctx(cgrp);
+700854- 	if (cgc) {
+700855- 		__sync_fetch_and_add(&cgc->cvtime_delta,
+--
+700877-+		else
+700878-+			__sync_fetch_and_sub(&cgc->cvtime_delta,
+700879-+					     (u64)-delta * FCG_HWEIGHT_ONE /
+700880-+					     (cgc->hweight ?: 1));
+700881- 		bpf_spin_unlock(&cgv_tree_lock);
+700882- 	} else {
+700883- 		stat_inc(FCG_STAT_CNS_GONE);
+700884-@@ -822,7 +833,7 @@
+700885- 	if (!(cgc = find_cgrp_ctx(args->cgroup)))
+700886- 		return -ENOENT;
+700887- 
+700888--	p->scx.dsq_vtime = cgc->tvtime_now;
+700889:+	scx_bpf_task_set_dsq_vtime(p, cgc->tvtime_now);
+700890- 
+700891- 	return 0;
+700892- }
+700893-@@ -923,8 +934,8 @@
+700894- 	if (!(from_cgc = find_cgrp_ctx(from)) || !(to_cgc = find_cgrp_ctx(to)))
+700895- 		return;
+700896- 
+700897--	delta = time_delta(p->scx.dsq_vtime, from_cgc->tvtime_now);
+700898--	p->scx.dsq_vtime = to_cgc->tvtime_now + delta;
+700899-+	delta = (s64)(p->scx.dsq_vtime - from_cgc->tvtime_now);
+700900:+	scx_bpf_task_set_dsq_vtime(p, to_cgc->tvtime_now + delta);
+700901- }
+700902- 
+700903- s32 BPF_STRUCT_OPS_SLEEPABLE(fcg_init)
+700904---- linux-hwe-7.0-7.0.0.orig/tools/sched_ext/scx_flatcg.c
+700905-+++ linux-hwe-7.0-7.0.0/tools/sched_ext/scx_flatcg.c
+700906-@@ -105,12 +105,12 @@
+700907- 	__u64 *cnts;
+700908- 	__u32 idx;
+--
+700989- 			data->payload[i] = 0;
+700990- 		}
+700991- 	}
+700992---- linux-hwe-7.0-7.0.0.orig/tools/sched_ext/scx_simple.bpf.c
+700993-+++ linux-hwe-7.0-7.0.0/tools/sched_ext/scx_simple.bpf.c
+700994-@@ -121,12 +121,14 @@
+700995- 	 * too much, determine the execution time by taking explicit timestamps
+700996- 	 * instead of depending on @p->scx.slice.
+700997- 	 */
+700998--	p->scx.dsq_vtime += (SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
+700999-+	u64 delta = scale_by_task_weight_inverse(p, SCX_SLICE_DFL - p->scx.slice);
+701000-+
+701001:+	scx_bpf_task_set_dsq_vtime(p, p->scx.dsq_vtime + delta);
+701002- }
+701003- 
+701004- void BPF_STRUCT_OPS(simple_enable, struct task_struct *p)
+701005- {
+701006--	p->scx.dsq_vtime = vtime_now;
+701007:+	scx_bpf_task_set_dsq_vtime(p, vtime_now);
+701008- }
+701009- 
+701010- s32 BPF_STRUCT_OPS_SLEEPABLE(simple_init)
+701011---- linux-hwe-7.0-7.0.0.orig/tools/scripts/Makefile.include
+701012-+++ linux-hwe-7.0-7.0.0/tools/scripts/Makefile.include
+701013-@@ -59,10 +59,18 @@
+701014- endif
+701015- 
+--
+712979- }
+712980- 
+712981- static void cleanup(void *ctx)
+712982---- linux-hwe-7.0-7.0.0.orig/tools/testing/selftests/sched_ext/select_cpu_vtime.bpf.c
+712983-+++ linux-hwe-7.0-7.0.0/tools/testing/selftests/sched_ext/select_cpu_vtime.bpf.c
+712984-@@ -66,12 +66,14 @@
+712985- void BPF_STRUCT_OPS(select_cpu_vtime_stopping, struct task_struct *p,
+712986- 		    bool runnable)
+712987- {
+712988--	p->scx.dsq_vtime += (SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
+712989-+	u64 delta = scale_by_task_weight_inverse(p, SCX_SLICE_DFL - p->scx.slice);
+712990-+
+712991:+	scx_bpf_task_set_dsq_vtime(p, p->scx.dsq_vtime + delta);
+712992- }
+712993- 
+712994- void BPF_STRUCT_OPS(select_cpu_vtime_enable, struct task_struct *p)
+712995- {
+712996--	p->scx.dsq_vtime = vtime_now;
+712997:+	scx_bpf_task_set_dsq_vtime(p, vtime_now);
+712998- }
+712999- 
+713000- s32 BPF_STRUCT_OPS_SLEEPABLE(select_cpu_vtime_init)
+713001---- linux-hwe-7.0-7.0.0.orig/tools/testing/selftests/seccomp/seccomp_bpf.c
+713002-+++ linux-hwe-7.0-7.0.0/tools/testing/selftests/seccomp/seccomp_bpf.c
+713003-@@ -5172,7 +5172,8 @@
+713004- 		ASSERT_GE(bit, 0);
+713005- 	}
