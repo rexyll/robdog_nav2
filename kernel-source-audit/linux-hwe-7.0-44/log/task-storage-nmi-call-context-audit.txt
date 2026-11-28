@@ -1,0 +1,850 @@
+
+===== kernel/bpf/bpf_task_storage.c =====
+125-	put_pid(pid);
+126-	return err;
+127-}
+128-
+129-static int task_storage_delete(struct task_struct *task, struct bpf_map *map)
+130-{
+131-	struct bpf_local_storage_data *sdata;
+132-
+133-	sdata = task_storage_lookup(task, map, false);
+134-	if (!sdata)
+135-		return -ENOENT;
+136-
+137:	return bpf_selem_unlink(SELEM(sdata));
+138-}
+139-
+140-static long bpf_pid_task_storage_delete_elem(struct bpf_map *map, void *key)
+141-{
+142-	struct task_struct *task;
+143-	unsigned int f_flags;
+144-	struct pid *pid;
+145-	int fd, err;
+146-
+147-	fd = *(int *)key;
+148-	pid = pidfd_get_pid(fd, &f_flags);
+149-	if (IS_ERR(pid))
+150-		return PTR_ERR(pid);
+151-
+152-	/* We should be in an RCU read side critical section, it should be safe
+153-	 * to call pid_task.
+154-	 */
+155-	WARN_ON_ONCE(!rcu_read_lock_held());
+156-	task = pid_task(pid, PIDTYPE_PID);
+157-	if (!task) {
+158-		err = -ENOENT;
+159-		goto out;
+160-	}
+161-
+162-	err = task_storage_delete(task, map);
+163-out:
+164-	put_pid(pid);
+165-	return err;
+166-}
+167-
+168-/* *gfp_flags* is a hidden argument provided by the verifier */
+169-BPF_CALL_5(bpf_task_storage_get, struct bpf_map *, map, struct task_struct *,
+170-	   task, void *, value, u64, flags, gfp_t, gfp_flags)
+171-{
+172-	struct bpf_local_storage_data *sdata;
+
+===== kernel/bpf/bpf_inode_storage.c =====
+101-					 value, map_flags, false, GFP_ATOMIC);
+102-	return PTR_ERR_OR_ZERO(sdata);
+103-}
+104-
+105-static int inode_storage_delete(struct inode *inode, struct bpf_map *map)
+106-{
+107-	struct bpf_local_storage_data *sdata;
+108-
+109-	sdata = inode_storage_lookup(inode, map, false);
+110-	if (!sdata)
+111-		return -ENOENT;
+112-
+113:	return bpf_selem_unlink(SELEM(sdata));
+114-}
+115-
+116-static long bpf_fd_inode_storage_delete_elem(struct bpf_map *map, void *key)
+117-{
+118-	CLASS(fd_raw, f)(*(int *)key);
+119-
+120-	if (fd_empty(f))
+121-		return -EBADF;
+122-	return inode_storage_delete(file_inode(fd_file(f)), map);
+123-}
+124-
+125-/* *gfp_flags* is a hidden argument provided by the verifier */
+126-BPF_CALL_5(bpf_inode_storage_get, struct bpf_map *, map, struct inode *, inode,
+127-	   void *, value, u64, flags, gfp_t, gfp_flags)
+128-{
+129-	struct bpf_local_storage_data *sdata;
+130-
+131-	WARN_ON_ONCE(!bpf_rcu_lock_held());
+132-	if (flags & ~(BPF_LOCAL_STORAGE_GET_F_CREATE))
+133-		return (unsigned long)NULL;
+134-
+135-	/* explicitly check that the inode_storage_ptr is not
+136-	 * NULL as inode_storage_lookup returns NULL in this case and
+137-	 * bpf_local_storage_update expects the owner to have a
+138-	 * valid storage pointer.
+139-	 */
+140-	if (!inode || !inode_storage_ptr(inode))
+141-		return (unsigned long)NULL;
+142-
+143-	sdata = inode_storage_lookup(inode, map, true);
+144-	if (sdata)
+145-		return (unsigned long)sdata->data;
+146-
+147-	/* This helper must only called from where the inode is guaranteed
+148-	 * to have a refcount and cannot be freed.
+
+===== kernel/bpf/bpf_cgrp_storage.c =====
+80-	cgroup_put(cgroup);
+81-	return PTR_ERR_OR_ZERO(sdata);
+82-}
+83-
+84-static int cgroup_storage_delete(struct cgroup *cgroup, struct bpf_map *map)
+85-{
+86-	struct bpf_local_storage_data *sdata;
+87-
+88-	sdata = cgroup_storage_lookup(cgroup, map, false);
+89-	if (!sdata)
+90-		return -ENOENT;
+91-
+92:	return bpf_selem_unlink(SELEM(sdata));
+93-}
+94-
+95-static long bpf_cgrp_storage_delete_elem(struct bpf_map *map, void *key)
+96-{
+97-	struct cgroup *cgroup;
+98-	int err, fd;
+99-
+100-	fd = *(int *)key;
+101-	cgroup = cgroup_v1v2_get_from_fd(fd);
+102-	if (IS_ERR(cgroup))
+103-		return PTR_ERR(cgroup);
+104-
+105-	err = cgroup_storage_delete(cgroup, map);
+106-	cgroup_put(cgroup);
+107-	return err;
+108-}
+109-
+110-static int notsupp_get_next_key(struct bpf_map *map, void *key, void *next_key)
+111-{
+112-	return -ENOTSUPP;
+113-}
+114-
+115-static struct bpf_map *cgroup_storage_map_alloc(union bpf_attr *attr)
+116-{
+117-	return bpf_local_storage_map_alloc(attr, &cgroup_cache, true);
+118-}
+119-
+120-static void cgroup_storage_map_free(struct bpf_map *map)
+121-{
+122-	bpf_local_storage_map_free(map, &cgroup_cache);
+123-}
+124-
+125-/* *gfp_flags* is a hidden argument provided by the verifier */
+126-BPF_CALL_5(bpf_cgrp_storage_get, struct bpf_map *, map, struct cgroup *, cgroup,
+127-	   void *, value, u64, flags, gfp_t, gfp_flags)
+
+===== net/core/bpf_sk_storage.c =====
+31-	smap = (struct bpf_local_storage_map *)map;
+32-	return bpf_local_storage_lookup(sk_storage, smap, cacheit_lockit);
+33-}
+34-
+35-static int bpf_sk_storage_del(struct sock *sk, struct bpf_map *map)
+36-{
+37-	struct bpf_local_storage_data *sdata;
+38-
+39-	sdata = bpf_sk_storage_lookup(sk, map, false);
+40-	if (!sdata)
+41-		return -ENOENT;
+42-
+43:	return bpf_selem_unlink(SELEM(sdata));
+44-}
+45-
+46-/* Called by __sk_destruct() & bpf_sk_storage_clone() */
+47-void bpf_sk_storage_free(struct sock *sk)
+48-{
+49-	struct bpf_local_storage *sk_storage;
+50-	u32 uncharge;
+51-
+52-	rcu_read_lock_dont_migrate();
+53-	sk_storage = rcu_dereference(sk->sk_bpf_storage);
+54-	if (!sk_storage)
+55-		goto out;
+56-
+57-	uncharge = bpf_local_storage_destroy(sk_storage);
+58-	if (uncharge)
+59-		atomic_sub(uncharge, &sk->sk_omem_alloc);
+60-out:
+61-	rcu_read_unlock_migrate();
+62-}
+63-
+64-static void bpf_sk_storage_map_free(struct bpf_map *map)
+65-{
+66-	bpf_local_storage_map_free(map, &sk_cache);
+67-}
+68-
+69-static struct bpf_map *bpf_sk_storage_map_alloc(union bpf_attr *attr)
+70-{
+71-	return bpf_local_storage_map_alloc(attr, &sk_cache, false);
+72-}
+73-
+74-static int notsupp_get_next_key(struct bpf_map *map, void *key,
+75-				void *next_key)
+76-{
+77-	return -ENOTSUPP;
+78-}
+
+===== COMMON UNLINK FUNCTION =====
+{
+	hlist_add_head_rcu(&selem->map_node, &b->list);
+}
+
+/*
+ * Unlink an selem from map and local storage with lock held.
+ * This is the common path used by local storages to delete an selem.
+ */
+int bpf_selem_unlink(struct bpf_local_storage_elem *selem)
+{
+	struct bpf_local_storage *local_storage;
+	bool free_local_storage = false;
+	HLIST_HEAD(selem_free_list);
+	unsigned long flags;
+	int err;
+
+	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+		/* selem has already been unlinked from sk */
+		return 0;
+
+	local_storage = rcu_dereference_check(selem->local_storage,
+					      bpf_rcu_lock_held());
+
+	err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+	if (err)
+		return err;
+
+	if (likely(selem_linked_to_storage(selem))) {
+		/* Always unlink from map before unlinking from local_storage
+		 * because selem will be freed after successfully unlinked from
+		 * the local_storage.
+		 */
+		err = bpf_selem_unlink_map(selem);
+		if (err)
+			goto out;
+
+		free_local_storage = bpf_selem_unlink_storage_nolock(
+			local_storage, selem, &selem_free_list);
+	}
+out:
+	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+
+	bpf_selem_free_list(&selem_free_list, false);
+
+	if (free_local_storage)
+		bpf_local_storage_free(local_storage, false);
+
+	return err;
+}
+
+/*
+ * Unlink an selem from map and local storage with lockless fallback if callers
+ * are racing or rqspinlock returns error. It should only be called by
+ * bpf_local_storage_destroy() or bpf_local_storage_map_free().
+ */
+static void bpf_selem_unlink_nofail(struct bpf_local_storage_elem *selem,
+
+===== NMI CONTEXT MARKERS IN STORAGE IMPLEMENTATIONS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/trampoline.c:8:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/trampoline.c:164:	perf_event_ksymbol(PERF_RECORD_KSYMBOL_TYPE_BPF, ksym->start,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/trampoline.c:171:	perf_event_ksymbol(PERF_RECORD_KSYMBOL_TYPE_BPF, ksym->start,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/hashtab.c:62: * handling, scheduling, low level interrupt handling, NMIs etc. None of
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/hashtab.c:72: * arbitrary contexts (perf, kprobes, tracepoints) which are required to be
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:30:#include <linux/irq_work.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:180:	/* NMI safe access to clock monotonic */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:192:	/* NMI safe access to clock boottime */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:215:	/* NMI safe access to clock tai */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1122:	struct irq_work worker;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1279:static void worker_for_call_rcu(struct irq_work *work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1293:		irq_work_queue(&cb->worker);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1300:static void bpf_async_irq_worker(struct irq_work *work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1349:	cb->worker = IRQ_WORK_INIT(bpf_async_irq_worker);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1448:	 * Do not schedule another operation on this cpu if it's in irq_work
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1451:	 * bpf_timer_start() -> bpf_async_schedule_op() -> irq_work_queue().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1452:	 * irqrestore -> bpf_async_irq_worker() -> tracepoint -> bpf_timer_start().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1470:		irq_work_queue(&cb->worker);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1647:static void bpf_async_irq_worker(struct irq_work *work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:1682:	 * refcnt. Either synchronously or asynchronously in irq_work.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2044:const struct bpf_func_proto bpf_perf_event_read_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2211:	case BPF_FUNC_perf_event_read_value:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2212:		return bpf_get_perf_event_read_value_proto();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2213:	case BPF_FUNC_perf_event_read:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2214:		return &bpf_perf_event_read_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4133:	struct irq_work irq_work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4226:static void bpf_task_work_irq(struct irq_work *irq_work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4228:	struct bpf_task_work_ctx *ctx = container_of(irq_work, struct bpf_task_work_ctx, irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4361:	init_irq_work(&ctx->irq_work, bpf_task_work_irq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4363:	irq_work_queue(&ctx->irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4485:	 * irq_work is not, since irq callback may execute after RCU GP and
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4506:static void bpf_task_work_cancel_scheduled(struct irq_work *irq_work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4508:	struct bpf_task_work_ctx *ctx = container_of(irq_work, struct bpf_task_work_ctx, irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4526:		/* run in irq_work to avoid locks in NMI */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4527:		init_irq_work(&ctx->irq_work, bpf_task_work_cancel_scheduled);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:4528:		irq_work_queue(&ctx->irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:1823:	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:2380:	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:2533:	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/rqspinlock.c:443:	 * the same CPU. In case of NMIs, this prevents long timeouts where we
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/rqspinlock.c:464:	 * not be nested NMIs taking spinlocks. That may not be true in
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/rqspinlock.c:473:	if (unlikely(idx >= _Q_MAX_NODES || (in_nmi() && idx > 0))) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:754:	struct mmap_unlock_irq_work *work = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:756:	bool irq_work_busy = false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:770:	irq_work_busy = bpf_mmap_unlock_get_irq_work(&work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:772:	if (irq_work_busy || !mmap_read_trylock(mm))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:800:	struct mmap_unlock_irq_work *work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:822:	bool irq_work_busy = false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:843:	/* kit->data->work == NULL is valid after bpf_mmap_unlock_get_irq_work */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:844:	irq_work_busy = bpf_mmap_unlock_get_irq_work(&kit->data->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:845:	if (irq_work_busy || !mmap_read_trylock(kit->data->mm)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1032:DEFINE_PER_CPU(struct mmap_unlock_irq_work, mmap_unlock_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1034:static void do_mmap_read_unlock(struct irq_work *entry)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1036:	struct mmap_unlock_irq_work *work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1041:	work = container_of(entry, struct mmap_unlock_irq_work, irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1047:	struct mmap_unlock_irq_work *work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/task_iter.c:1052:		init_irq_work(&work->irq_work, do_mmap_read_unlock);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:5:#include <linux/irq_work.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:30:	struct irq_work work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:154:static void bpf_ringbuf_notify(struct irq_work *work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:183:	init_irq_work(&rb->work, bpf_ringbuf_notify);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:230:	irq_work_sync(&rb->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:582:		irq_work_queue(&rb->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:584:		irq_work_queue(&rb->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:867:		irq_work_queue(&rb->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/ringbuf.c:869:		irq_work_queue(&rb->work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:7:#include <linux/irq_work.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:9:/* irq_work to run mmap_read_unlock() in irq_work */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:10:struct mmap_unlock_irq_work {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:11:	struct irq_work irq_work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:15:DECLARE_PER_CPU(struct mmap_unlock_irq_work, mmap_unlock_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:20: * disabled, we need to run mmap_read_unlock() in irq_work. We use a
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:21: * percpu variable to do the irq_work. If the irq_work is already used
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:24:static inline bool bpf_mmap_unlock_get_irq_work(struct mmap_unlock_irq_work **work_ptr)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:26:	struct mmap_unlock_irq_work *work = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:27:	bool irq_work_busy = false;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:32:			if (irq_work_is_busy(&work->irq_work)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:34:				irq_work_busy = true;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:41:			irq_work_busy = true;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:46:	return irq_work_busy;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:49:static inline void bpf_mmap_unlock_mm(struct mmap_unlock_irq_work *work, struct mm_struct *mm)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/mmap_unlock_work.h:61:		irq_work_queue(&work->irq_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:21:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:4731: * call bpf_perf_event_output#25
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:6701:	 * while kprobe/tp/perf_event/raw_tp don't use trampoline hence checked
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:6988:	err = __check_buffer_access(env, "tracepoint", reg, regno, off, size);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10188:		if (func_id != BPF_FUNC_perf_event_read &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10189:		    func_id != BPF_FUNC_perf_event_output &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10191:		    func_id != BPF_FUNC_perf_event_read_value &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10319:	case BPF_FUNC_perf_event_read:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10320:	case BPF_FUNC_perf_event_output:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:10321:	case BPF_FUNC_perf_event_read_value:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:12129:		err = get_callchain_buffers(sysctl_perf_event_max_stack);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:25127:		btp = bpf_get_raw_tracepoint(tname);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:25132:		bpf_put_raw_tracepoint(btp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/verifier.c:25138:			bpf_log(log, "Cannot find btf of tracepoint template, fall back to %s%s.\n",
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/btf.c:6:#include <uapi/linux/bpf_perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/btf.c:25:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/btf.c:6217:			    strcmp(tname, "bpf_raw_tracepoint_args") == 0)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/btf.c:6971:		/* If we don't know NULL-ness specification and the tracepoint
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:11:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1264:static void *perf_event_fd_array_get_ptr(struct bpf_map *map,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1268:	struct perf_event *event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1272:	perf_file = perf_event_get(fd);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1278:	if (perf_event_read_local(event, &value, NULL, NULL) == -EOPNOTSUPP)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1290:static void perf_event_fd_array_put_ptr(struct bpf_map *map, void *ptr, bool need_defer)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1292:	/* bpf_perf_event is freed after one RCU grace period */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1296:static void perf_event_fd_array_release(struct bpf_map *map,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1315:static void perf_event_fd_array_map_free(struct bpf_map *map)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1322:const struct bpf_map_ops perf_event_array_map_ops = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1326:	.map_free = perf_event_fd_array_map_free,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1330:	.map_fd_get_ptr = perf_event_fd_array_get_ptr,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1331:	.map_fd_put_ptr = perf_event_fd_array_put_ptr,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arraymap.c:1332:	.map_release = perf_event_fd_array_release,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:9:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:57:	u32 curr_sysctl_max_stack = READ_ONCE(sysctl_perf_event_max_stack);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:111:		    > sysctl_perf_event_max_stack)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:113:	} else if (value_size / 8 > sysctl_perf_event_max_stack)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:132:	err = get_callchain_buffers(sysctl_perf_event_max_stack);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:169:	struct mmap_unlock_irq_work *work = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:170:	bool irq_work_busy = bpf_mmap_unlock_get_irq_work(&work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:174:	/* If the irq_work is in use, fall back to report ips. Same
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:178:	if (!user || !current || !current->mm || irq_work_busy ||
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:368:BPF_CALL_3(bpf_get_stackid_pe, struct bpf_perf_event_data_kern *, ctx,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:371:	struct perf_event *event = ctx->event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:597:BPF_CALL_4(bpf_get_stack_pe, struct bpf_perf_event_data_kern *, ctx,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/stackmap.c:601:	struct perf_event *event = ctx->event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/devmap.c:68:	struct net_device *dev; /* must be first member, due to tracepoint */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/devmap.c:1191:	/* Assure tracepoint shadow struct _bpf_dtab_netdev is in sync */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:6:#include <linux/irq_work.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:11:/* Any context (including NMI) BPF specific memory allocator.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:17: * Refill this cache asynchronously from irq_work.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:29: * irq_work trims extra free elements from buckets with kfree
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:96:	struct irq_work refill_work;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:174:		/* In RT irq_work runs in per-cpu kthread, so disable
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:180:	/* alloc_bulk runs from irq_work which will not preempt a bpf
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:183:	 * counter. It protects free_llist from corruption in case NMI
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:206:/* Mostly runs from irq_work except __init phase. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:244:		 * GFP_ATOMIC would do. irq_work runs on this cpu and kmalloc
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:302:	/* bpf_mem_cache is a per-cpu object. Freeing happens in irq_work.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:431:static void bpf_mem_refill(struct irq_work *work)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:439:		/* irq_work runs on this cpu and kmalloc will allocate
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:449:static void notrace irq_work_raise(struct bpf_mem_cache *c)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:451:	irq_work_queue(&c->refill_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:473:	init_irq_work(&c->refill_work, bpf_mem_refill);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:760:			irq_work_sync(&c->refill_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:775:				irq_work_sync(&c->refill_work);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:801:	 * but prog_B could be a perf_event NMI prog.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:818:		irq_work_raise(c);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:830: * Let kfree() logic deal with it when it's later called from irq_work.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:863:		irq_work_raise(c);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:864:	/* Enable IRQ after irq_work_raise() completes, otherwise when current
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/memalloc.c:889:		irq_work_raise(c);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cpumap.c:386:		/* Feedback loop via tracepoint.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cpumap.c:752:	/* Feedback loop via tracepoints */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:7:#include <linux/irq_work.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:62:	struct irq_work     free_irq;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:68:static void arena_free_irq(struct irq_work *iw);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:221:	init_irq_work(&arena->free_irq, arena_free_irq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:279:	irq_work_sync(&arena->free_irq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:743:	irq_work_queue(&arena->free_irq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/arena.c:848:static void arena_free_irq(struct irq_work *iw)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:40:#include <linux/tracepoint.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:2405:	perf_event_bpf_event(prog, PERF_BPF_EVENT_PROG_UNLOAD, 0);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3120:	perf_event_bpf_event(prog, PERF_BPF_EVENT_PROG_LOAD, 0);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3264:static bool bpf_link_is_tracepoint(struct bpf_link *link)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3267:	 * Only these combinations support a tracepoint bpf_link.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3303:		 * For tracepoint BPF links, we need to go through SRCU grace
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3304:		 * period wait instead when non-faultable tracepoint is used. We
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3310:		/* We need to do a SRCU grace period wait for non-faultable tracepoint BPF links. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3311:		else if (bpf_link_is_tracepoint(link))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3312:			call_tracepoint_unregister_atomic(&link->rcu, bpf_link_defer_dealloc_rcu_gp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3693:	 *   raw_tracepoint_open API, and we need a target from prog->aux
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3806:	bpf_put_raw_tracepoint(raw_tp->btp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3854:	char __user *ubuf = u64_to_user_ptr(info->raw_tracepoint.tp_name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3856:	u32 ulen = info->raw_tracepoint.tp_name_len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3862:	info->raw_tracepoint.tp_name_len = tp_len + 1;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3863:	info->raw_tracepoint.cookie = raw_tp_link->cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3887:	struct perf_event *event = perf_link->perf_file->private_data;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3889:	perf_event_free_bpf_prog(event);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3900:static int bpf_perf_link_fill_common(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3914:	err = bpf_get_perf_event_info(event, &prog_id, fd_type, &buf,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3942:static int bpf_perf_link_fill_kprobe(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3951:	uname = u64_to_user_ptr(info->perf_event.kprobe.func_name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3952:	ulen = info->perf_event.kprobe.name_len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3958:		info->perf_event.type = BPF_PERF_EVENT_KRETPROBE;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3960:		info->perf_event.type = BPF_PERF_EVENT_KPROBE;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3961:	info->perf_event.kprobe.name_len = ulen;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3962:	info->perf_event.kprobe.offset = offset;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3963:	info->perf_event.kprobe.missed = missed;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3966:	info->perf_event.kprobe.addr = addr;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3967:	info->perf_event.kprobe.cookie = event->bpf_cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3971:static void bpf_perf_link_fdinfo_kprobe(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3980:	err = bpf_get_perf_event_info(event, &prog_id, &type, &name,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:3999:static int bpf_perf_link_fill_uprobe(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4007:	uname = u64_to_user_ptr(info->perf_event.uprobe.file_name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4008:	ulen = info->perf_event.uprobe.name_len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4015:		info->perf_event.type = BPF_PERF_EVENT_URETPROBE;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4017:		info->perf_event.type = BPF_PERF_EVENT_UPROBE;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4018:	info->perf_event.uprobe.name_len = ulen;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4019:	info->perf_event.uprobe.offset = offset;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4020:	info->perf_event.uprobe.cookie = event->bpf_cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4021:	info->perf_event.uprobe.ref_ctr_offset = ref_ctr_offset;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4025:static void bpf_perf_link_fdinfo_uprobe(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4034:	err = bpf_get_perf_event_info(event, &prog_id, &type, &name,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4051:static int bpf_perf_link_fill_probe(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4065:static int bpf_perf_link_fill_tracepoint(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4072:	uname = u64_to_user_ptr(info->perf_event.tracepoint.tp_name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4073:	ulen = info->perf_event.tracepoint.name_len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4078:	info->perf_event.type = BPF_PERF_EVENT_TRACEPOINT;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4079:	info->perf_event.tracepoint.name_len = ulen;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4080:	info->perf_event.tracepoint.cookie = event->bpf_cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4084:static int bpf_perf_link_fill_perf_event(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4087:	info->perf_event.event.type = event->attr.type;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4088:	info->perf_event.event.config = event->attr.config;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4089:	info->perf_event.event.cookie = event->bpf_cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4090:	info->perf_event.type = BPF_PERF_EVENT_EVENT;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4098:	const struct perf_event *event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4107:		return bpf_perf_link_fill_perf_event(event, info);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4109:		return bpf_perf_link_fill_tracepoint(event, info);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4117:static void bpf_perf_event_link_show_fdinfo(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4129:static void bpf_tracepoint_link_show_fdinfo(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4136:	err = bpf_get_perf_event_info(event, &prog_id, NULL, &name, NULL,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4145:		   name, "tracepoint", event->bpf_cookie);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4148:static void bpf_probe_link_show_fdinfo(const struct perf_event *event,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4166:	const struct perf_event *event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4175:		return bpf_perf_event_link_show_fdinfo(event, seq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4177:		return bpf_tracepoint_link_show_fdinfo(event, seq);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4196:	struct perf_event *event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4203:	perf_file = perf_event_get(attr->link_create.target_fd);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4223:	err = perf_event_set_bpf_prog(event, prog, attr->link_create.perf_event.bpf_cookie);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4228:	/* perf_event_set_bpf_prog() doesn't take its own refcnt on prog */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4281:	btp = bpf_get_raw_tracepoint(tp_name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4292:				tracepoint_is_faultable(btp->tp));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4311:	bpf_put_raw_tracepoint(btp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4315:#define BPF_RAW_TRACEPOINT_OPEN_LAST_FIELD raw_tracepoint.cookie
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4317:static int bpf_raw_tracepoint_open(const union bpf_attr *attr)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4327:	prog = bpf_prog_get(attr->raw_tracepoint.prog_fd);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4331:	tp_name = u64_to_user_ptr(attr->raw_tracepoint.name);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:4332:	cookie = attr->raw_tracepoint.cookie;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:5578:	const struct perf_event *event;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:5627:		err = bpf_get_perf_event_info(event, &prog_id, &fd_type,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/syscall.c:6291:		err = bpf_raw_tracepoint_open(&attr);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/core.c:34:#include <linux/perf_event.h>
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/core.c:3057:const struct bpf_func_proto * __weak bpf_get_perf_event_read_value_proto(void)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/core.c:3308:/* All definitions of tracepoints related to BPF. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:391:	if (in_hardirq() || in_nmi())
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:402:	if (in_hardirq() || in_nmi())
+
+===== PUBLIC STORAGE DELETE CALL REFERENCES =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/trace/bpf_trace.c:1722:		return &bpf_sk_storage_delete_tracing_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2157:		return &bpf_cgrp_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/helpers.c:2172:		return &bpf_task_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/cgroup.c:2519:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:92:	return bpf_selem_unlink(SELEM(sdata));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:95:static long bpf_cgrp_storage_delete_elem(struct bpf_map *map, void *key)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:152:BPF_CALL_2(bpf_cgrp_storage_delete, struct bpf_map *, map, struct cgroup *, cgroup)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:169:	.map_delete_elem = bpf_cgrp_storage_delete_elem,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:187:const struct bpf_func_proto bpf_cgrp_storage_delete_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_cgrp_storage.c:188:	.func		= bpf_cgrp_storage_delete,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c:137:	return bpf_selem_unlink(SELEM(sdata));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c:194:BPF_CALL_2(bpf_task_storage_delete, struct bpf_map *, map, struct task_struct *,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c:250:const struct bpf_func_proto bpf_task_storage_delete_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c:251:	.func = bpf_task_storage_delete,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:173:	/* bpf_selem_unlink_nofail may have already cleared smap and freed fields. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:263:static void bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:297:static bool bpf_selem_unlink_storage_nolock(struct bpf_local_storage *local_storage,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:309:	bpf_selem_unlink_storage_nolock_misc(selem, smap, local_storage,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:331:static int bpf_selem_unlink_map(struct bpf_local_storage_elem *selem)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:353:static void bpf_selem_unlink_map_nolock(struct bpf_local_storage_elem *selem)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:388:int bpf_selem_unlink(struct bpf_local_storage_elem *selem)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:412:		err = bpf_selem_unlink_map(selem);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:416:		free_local_storage = bpf_selem_unlink_storage_nolock(
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:435:static void bpf_selem_unlink_nofail(struct bpf_local_storage_elem *selem,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:489:					bpf_selem_unlink_storage_nolock_misc(
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:609:		bpf_selem_unlink_map_nolock(first_selem);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:739:		bpf_selem_unlink_map_nolock(SELEM(old_sdata));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:740:		bpf_selem_unlink_storage_nolock(local_storage, SELEM(old_sdata),
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:833:		bpf_selem_unlink_nofail(selem, NULL);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:839:		 * Paired with refcount_dec() in bpf_selem_unlink_nofail()
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:941:			bpf_selem_unlink_nofail(selem, b);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c:959:	 * bpf_selem_unlink_storage_nolock().
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_lsm.c:239:		return &bpf_inode_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_lsm.c:244:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_inode_storage.c:113:	return bpf_selem_unlink(SELEM(sdata));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_inode_storage.c:161:BPF_CALL_2(bpf_inode_storage_delete,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_inode_storage.c:218:const struct bpf_func_proto bpf_inode_storage_delete_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_inode_storage.c:219:	.func		= bpf_inode_storage_delete,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/bpf_tcp_ca.c:161:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:43:	return bpf_selem_unlink(SELEM(sdata));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:265:BPF_CALL_2(bpf_sk_storage_delete, struct bpf_map *, map, struct sock *, sk)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:352:const struct bpf_func_proto bpf_sk_storage_delete_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:353:	.func		= bpf_sk_storage_delete,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:398:BPF_CALL_2(bpf_sk_storage_delete_tracing, struct bpf_map *, map,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:405:	return ____bpf_sk_storage_delete(map, sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:420:const struct bpf_func_proto bpf_sk_storage_delete_tracing_proto = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/bpf_sk_storage.c:421:	.func		= bpf_sk_storage_delete_tracing,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8218:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8292:const struct bpf_func_proto bpf_sk_storage_delete_proto __weak;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8309:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8426:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8582:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/filter.c:8626:		return &bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/net/bpf_sk_storage.h:22:extern const struct bpf_func_proto bpf_sk_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/net/bpf_sk_storage.h:24:extern const struct bpf_func_proto bpf_sk_storage_delete_tracing_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/uapi/linux/bpf.h:4194: * long bpf_sk_storage_delete(struct bpf_map *map, void *sk)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/uapi/linux/bpf.h:4918: * int bpf_inode_storage_delete(struct bpf_map *map, void *inode)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/uapi/linux/bpf.h:5095: * long bpf_task_storage_delete(struct bpf_map *map, struct task_struct *task)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/uapi/linux/bpf.h:5894: * long bpf_cgrp_storage_delete(struct bpf_map *map, struct cgroup *cgroup)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf_local_storage.h:187:int bpf_selem_unlink(struct bpf_local_storage_elem *selem);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf_lsm.h:44:extern const struct bpf_func_proto bpf_inode_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h:3725:extern const struct bpf_func_proto bpf_task_storage_delete_recur_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h:3726:extern const struct bpf_func_proto bpf_task_storage_delete_proto;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h:3740:extern const struct bpf_func_proto bpf_cgrp_storage_delete_proto;
+
+===== BPF LOCAL STORAGE LOCKING DOCUMENTATION =====
+333-	struct bpf_local_storage *local_storage;
+334-	struct bpf_local_storage_map *smap;
+335-	struct bpf_local_storage_map_bucket *b;
+336-	unsigned long flags;
+337-	int err;
+338-
+339-	local_storage = rcu_dereference_check(selem->local_storage,
+340-					      bpf_rcu_lock_held());
+341-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+342-	b = select_bucket(smap, local_storage);
+343:	err = raw_res_spin_lock_irqsave(&b->lock, flags);
+344-	if (err)
+345-		return err;
+346-
+347-	hlist_del_init_rcu(&selem->map_node);
+348-	raw_res_spin_unlock_irqrestore(&b->lock, flags);
+349-
+350-	return 0;
+351-}
+352-
+353-static void bpf_selem_unlink_map_nolock(struct bpf_local_storage_elem *selem)
+354-{
+355-	hlist_del_init_rcu(&selem->map_node);
+356-}
+357-
+358-int bpf_selem_link_map(struct bpf_local_storage_map *smap,
+359-		       struct bpf_local_storage *local_storage,
+360-		       struct bpf_local_storage_elem *selem)
+361-{
+362-	struct bpf_local_storage_map_bucket *b;
+363-	unsigned long flags;
+364-	int err;
+365-
+366-	b = select_bucket(smap, local_storage);
+367-
+368:	err = raw_res_spin_lock_irqsave(&b->lock, flags);
+369-	if (err)
+370-		return err;
+371-
+372-	hlist_add_head_rcu(&selem->map_node, &b->list);
+373-	raw_res_spin_unlock_irqrestore(&b->lock, flags);
+374-
+375-	return 0;
+376-}
+377-
+378-static void bpf_selem_link_map_nolock(struct bpf_local_storage_map_bucket *b,
+379-				      struct bpf_local_storage_elem *selem)
+380-{
+381-	hlist_add_head_rcu(&selem->map_node, &b->list);
+382-}
+383-
+384-/*
+385- * Unlink an selem from map and local storage with lock held.
+386- * This is the common path used by local storages to delete an selem.
+387- */
+388-int bpf_selem_unlink(struct bpf_local_storage_elem *selem)
+--
+393-	unsigned long flags;
+394-	int err;
+395-
+396-	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+397-		/* selem has already been unlinked from sk */
+398-		return 0;
+399-
+400-	local_storage = rcu_dereference_check(selem->local_storage,
+401-					      bpf_rcu_lock_held());
+402-
+403:	err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+404-	if (err)
+405-		return err;
+406-
+407-	if (likely(selem_linked_to_storage(selem))) {
+408-		/* Always unlink from map before unlinking from local_storage
+409-		 * because selem will be freed after successfully unlinked from
+410-		 * the local_storage.
+411-		 */
+412-		err = bpf_selem_unlink_map(selem);
+413-		if (err)
+414-			goto out;
+415-
+416-		free_local_storage = bpf_selem_unlink_storage_nolock(
+417-			local_storage, selem, &selem_free_list);
+418-	}
+419-out:
+420-	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+421-
+422-	bpf_selem_free_list(&selem_free_list, false);
+423-
+--
+439-	struct bpf_local_storage *local_storage;
+440-	struct bpf_local_storage_map *smap;
+441-	unsigned long flags;
+442-	int err, unlink = 0;
+443-
+444-	local_storage = rcu_dereference_check(selem->local_storage, bpf_rcu_lock_held());
+445-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+446-
+447-	if (smap) {
+448-		b = b ? : select_bucket(smap, local_storage);
+449:		err = raw_res_spin_lock_irqsave(&b->lock, flags);
+450-		if (!err) {
+451-			/*
+452-			 * Call bpf_obj_free_fields() under b->lock to make sure it is done
+453-			 * exactly once for an selem. Safe to free special fields immediately
+454-			 * as no BPF program should be referencing the selem.
+455-			 */
+456-			if (likely(selem_linked_to_map(selem))) {
+457-				hlist_del_init_rcu(&selem->map_node);
+458-				bpf_obj_free_fields(smap->map.record, SDATA(selem)->data);
+459-				unlink++;
+460-			}
+461-			raw_res_spin_unlock_irqrestore(&b->lock, flags);
+462-		}
+463-		/*
+464-		 * Highly unlikely scenario: resource leak
+465-		 *
+466-		 * When map_free(selem1), destroy(selem1) and destroy(selem2) are racing
+467-		 * and both selem belong to the same bucket, if destroy(selem2) acquired
+468-		 * b->lock and block for too long, neither map_free(selem1) and
+469-		 * destroy(selem1) will be able to free the special field associated
+470:		 * with selem1 as raw_res_spin_lock_irqsave() returns -ETIMEDOUT.
+471-		 */
+472-		WARN_ON_ONCE(err && in_map_free);
+473-		if (!err || in_map_free)
+474-			RCU_INIT_POINTER(SDATA(selem)->smap, NULL);
+475-	}
+476-
+477-	if (local_storage) {
+478:		err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+479-		if (!err) {
+480-			if (likely(selem_linked_to_storage(selem))) {
+481-				free_storage = hlist_is_singular_node(&selem->snode,
+482-								      &local_storage->list);
+483-				 /*
+484-				  * Okay to skip clearing owner_storage and storage->owner in
+485-				  * destroy() since the owner is going away. No user or bpf
+486-				  * programs should be able to reference it.
+487-				  */
+488-				if (smap && in_map_free)
+489-					bpf_selem_unlink_storage_nolock_misc(
+490-						selem, smap, local_storage,
+491-						free_storage, true);
+492-				hlist_del_init_rcu(&selem->snode);
+493-				unlink++;
+494-			}
+495-			raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+496-		}
+497-		if (!err || !in_map_free)
+498-			RCU_INIT_POINTER(selem->local_storage, NULL);
+--
+520-				      struct bpf_local_storage_elem *selem)
+521-{
+522-	unsigned long flags;
+523-	int err;
+524-
+525-	/* spinlock is needed to avoid racing with the
+526-	 * parallel delete.  Otherwise, publishing an already
+527-	 * deleted sdata to the cache will become a use-after-free
+528-	 * problem in the next bpf_local_storage_lookup().
+529-	 */
+530:	err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+531-	if (err)
+532-		return;
+533-
+534-	if (selem_linked_to_storage(selem))
+535-		rcu_assign_pointer(local_storage->cache[smap->cache_idx], SDATA(selem));
+536-	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+537-}
+538-
+539-static int check_flags(const struct bpf_local_storage_data *old_sdata,
+540-		       u64 map_flags)
+541-{
+542-	if (old_sdata && (map_flags & ~BPF_F_LOCK) == BPF_NOEXIST)
+543-		/* elem already exists */
+544-		return -EEXIST;
+545-
+546-	if (!old_sdata && (map_flags & ~BPF_F_LOCK) == BPF_EXIST)
+547-		/* elem doesn't exist, cannot update it */
+548-		return -ENOENT;
+549-
+550-	return 0;
+--
+579-	INIT_HLIST_HEAD(&storage->list);
+580-	raw_res_spin_lock_init(&storage->lock);
+581-	storage->owner = owner;
+582-	storage->mem_charge = sizeof(*storage);
+583-	storage->use_kmalloc_nolock = smap->use_kmalloc_nolock;
+584-	refcount_set(&storage->owner_refcnt, 1);
+585-
+586-	bpf_selem_link_storage_nolock(storage, first_selem);
+587-
+588-	b = select_bucket(smap, storage);
+589:	err = raw_res_spin_lock_irqsave(&b->lock, flags);
+590-	if (err)
+591-		goto uncharge;
+592-
+593-	bpf_selem_link_map_nolock(b, first_selem);
+594-
+595-	owner_storage_ptr =
+596-		(struct bpf_local_storage **)owner_storage(smap, owner);
+597-	/* Publish storage to the owner.
+598-	 * Instead of using any lock of the kernel object (i.e. owner),
+599-	 * cmpxchg will work with any kernel object regardless what
+600-	 * the running context is, bh, irq...etc.
+601-	 *
+602-	 * From now on, the owner->storage pointer (e.g. sk->sk_bpf_storage)
+603-	 * is protected by the storage->lock.  Hence, when freeing
+604-	 * the owner->storage, the storage->lock must be held before
+605-	 * setting owner->storage ptr to NULL.
+606-	 */
+607-	prev_storage = cmpxchg(owner_storage_ptr, NULL, storage);
+608-	if (unlikely(prev_storage)) {
+609-		bpf_selem_unlink_map_nolock(first_selem);
+--
+687-		}
+688-	}
+689-
+690-	/* A lookup has just been done before and concluded a new selem is
+691-	 * needed. The chance of an unnecessary alloc is unlikely.
+692-	 */
+693-	alloc_selem = selem = bpf_selem_alloc(smap, owner, value, swap_uptrs, gfp_flags);
+694-	if (!alloc_selem)
+695-		return ERR_PTR(-ENOMEM);
+696-
+697:	err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+698-	if (err)
+699-		goto free_selem;
+700-
+701-	/* Recheck local_storage->list under local_storage->lock */
+702-	if (unlikely(hlist_empty(&local_storage->list))) {
+703-		/* A parallel del is happening and local_storage is going
+704-		 * away.  It has just been checked before, so very
+705-		 * unlikely.  Return instead of retry to keep things
+706-		 * simple.
+707-		 */
+708-		err = -EAGAIN;
+709-		goto unlock;
+710-	}
+711-
+712-	old_sdata = bpf_local_storage_lookup(local_storage, smap, false);
+713-	err = check_flags(old_sdata, map_flags);
+714-	if (err)
+715-		goto unlock;
+716-
+717-	if (old_sdata && (map_flags & BPF_F_LOCK)) {
+718-		copy_map_value_locked(&smap->map, old_sdata->data, value,
+719-				      false);
+720-		selem = SELEM(old_sdata);
+721-		goto unlock;
+722-	}
+723-
+724-	b = select_bucket(smap, local_storage);
+725-
+726:	err = raw_res_spin_lock_irqsave(&b->lock, b_flags);
+727-	if (err)
+728-		goto unlock;
+729-
+730-	alloc_selem = NULL;
+731-	/* First, link the new selem to the map */
+732-	bpf_selem_link_map_nolock(b, selem);
+733-
+734-	/* Second, link (and publish) the new selem to local_storage */
+735-	bpf_selem_link_storage_nolock(local_storage, selem);
+736-
+737-	/* Third, remove old selem, SELEM(old_sdata) */
+738-	if (old_sdata) {
+739-		bpf_selem_unlink_map_nolock(SELEM(old_sdata));
+740-		bpf_selem_unlink_storage_nolock(local_storage, SELEM(old_sdata),
+741-						&old_selem_free_list);
+742-	}
+743-
+744-	raw_res_spin_unlock_irqrestore(&b->lock, b_flags);
+745-unlock:
+746-	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
