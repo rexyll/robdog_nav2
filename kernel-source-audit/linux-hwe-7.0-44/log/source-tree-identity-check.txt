@@ -1,0 +1,146 @@
+===== SOURCE DIRECTORY METADATA =====
+drwxrwxr-x 26 earl earl 4096 Apr 13  2026 kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source
+drwxrwxr-x 30 earl earl 4096 Nov 27 17:52 kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01
+
+===== CRITICAL FILE SHA256 =====
+--- Makefile
+1d96ad64640b8c57af88de577b7be0c822efff6a3eb9bacb3fcb6ccf0ee0dc17  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/Makefile
+88ffb52b67ffbfaf17d47f93f4c246a437e7f833f7dcf67a94157e408e60b955  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/Makefile
+--- include/linux/bpf.h
+a711ee8921d0126f770307ada0a25c98b93adb9060a5fca1f865874408258e5f  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf.h
+10047666f8503b5ba8ae88e19fd73f5561c100a3aa4b1483041f18d16e084712  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/include/linux/bpf.h
+--- include/linux/bpf_local_storage.h
+14b4f205ca0ff36aa44621b3cfe0177d9bdbfbfa7c0ea37455701e838ab6541a  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/bpf_local_storage.h
+14b4f205ca0ff36aa44621b3cfe0177d9bdbfbfa7c0ea37455701e838ab6541a  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/include/linux/bpf_local_storage.h
+--- kernel/bpf/bpf_local_storage.c
+bd95df254dcaac6127b06c056fc20d866e4b333d41ce9cdf5203b8d56db59669  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c
+60a855cd9596ea0eb155dd85eea0bf56f575df4e6eba0fba8231de511494634b  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/bpf/bpf_local_storage.c
+--- kernel/bpf/bpf_task_storage.c
+d3fbe7fbd0dad8c7e4f5bfa9080f8f1d5bfd27cffc24c81f70c9549e19b177ab  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_task_storage.c
+d3fbe7fbd0dad8c7e4f5bfa9080f8f1d5bfd27cffc24c81f70c9549e19b177ab  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/bpf/bpf_task_storage.c
+--- kernel/fork.c
+b393692a3f342f9a197da17a3f94754faafc4a44ef06b35e9867d5dc6dc8baa0  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/fork.c
+138826f43b9c0361c76f26bf70ddc0f4df09ef1ec3ab2090ed29a202117eb9de  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/fork.c
+--- kernel/exit.c
+b76cee0df63eca5fd64bfa5ff82db64241415b37366a707ba41986fc1122cf3a  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/exit.c
+3c7f2b8c89cc09bf847fcf5b13c5c2fa81d7fb0a7cd7a8dc972034094ccee19c  kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/kernel/exit.c
+
+===== FULL SOURCE TREE COMPARISON =====
+diff_exit_status=1
+difference_count=9315
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/include/asm/Kbuild and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/include/asm/Kbuild differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/include/uapi/asm/fpu.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/include/uapi/asm/fpu.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/kernel/pci-sysfs.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/kernel/pci-sysfs.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/kernel/sys_marvel.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/kernel/sys_marvel.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/kernel/traps.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/kernel/traps.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/alpha/math-emu/math.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/alpha/math-emu/math.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/include/asm/atomic64-arcv2.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/include/asm/atomic64-arcv2.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/include/asm/cmpxchg.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/include/asm/cmpxchg.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/include/asm/Kbuild and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/include/asm/Kbuild differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/include/asm/uaccess.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/include/asm/uaccess.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/net/bpf_jit_arcv2.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/net/bpf_jit_arcv2.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arc/net/bpf_jit_core.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arc/net/bpf_jit_core.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/allwinner/sun4i-a10.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/allwinner/sun4i-a10.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/broadcom/bcm2711-rpi-4-b.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/broadcom/bcm2711-rpi-4-b.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/broadcom/bcm2711-rpi-cm4-io.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/broadcom/bcm2711-rpi-cm4-io.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/broadcom/bcm-ns.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/broadcom/bcm-ns.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/gemini/gemini-sl93512r.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/gemini/gemini-sl93512r.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/gemini/gemini-sq201.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/gemini/gemini-sq201.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/marvell/armada-388-helios4.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/marvell/armada-388-helios4.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/mediatek/mt7623.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/mediatek/mt7623.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/microchip/sam9x7.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/microchip/sam9x7.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nvidia/tegra124-nyan.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nvidia/tegra124-nyan.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nvidia/tegra124-venice2.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nvidia/tegra124-venice2.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nvidia/tegra30-asus-tf600t.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nvidia/tegra30-asus-tf600t.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nvidia/tegra30-lg-p880.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nvidia/tegra30-lg-p880.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nxp/imx/imx27-eukrea-cpuimx27.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nxp/imx/imx27-eukrea-cpuimx27.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nxp/imx/imx27-eukrea-mbimxsd27-baseboard.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nxp/imx/imx27-eukrea-mbimxsd27-baseboard.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/nxp/imx/imx6ul-var-som.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/nxp/imx/imx6ul-var-som.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/renesas/r7s72100-genmai.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/renesas/r7s72100-genmai.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/renesas/r7s72100-rskrza1.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/renesas/r7s72100-rskrza1.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/rockchip/rk3288-veyron.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/rockchip/rk3288-veyron.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/st/stm32mp151c-mecio1r0.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/st/stm32mp151c-mecio1r0.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/st/stm32mp153c-mecio1r1.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/st/stm32mp153c-mecio1r1.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/st/stm32mp15x-mecio1-io.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/st/stm32mp15x-mecio1-io.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/ti/omap/am335x-sl50.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/ti/omap/am335x-sl50.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/boot/dts/ti/omap/dra7xx-clocks.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/boot/dts/ti/omap/dra7xx-clocks.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/axm55xx_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/axm55xx_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/dove_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/dove_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/ep93xx_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/ep93xx_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/mmp2_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/mmp2_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/multi_v7_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/multi_v7_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/mv78xx0_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/mv78xx0_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/sama5_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/sama5_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/configs/sunxi_defconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/configs/sunxi_defconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/include/asm/io.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/include/asm/io.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/include/asm/Kbuild and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/include/asm/Kbuild differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/include/asm/uaccess.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/include/asm/uaccess.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/Kconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/Kconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/kernel/entry-armv.S and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/kernel/entry-armv.S differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/kernel/hw_breakpoint.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/kernel/hw_breakpoint.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-imx/avic.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-imx/avic.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-imx/cpu-imx31.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-imx/cpu-imx31.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-imx/Kconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-imx/Kconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-imx/mm-imx3.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-imx/mm-imx3.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-imx/src.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-imx/src.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-lpc32xx/common.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-lpc32xx/common.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-lpc32xx/common.h and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-lpc32xx/common.h differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-lpc32xx/phy3250.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-lpc32xx/phy3250.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-lpc32xx/pm.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-lpc32xx/pm.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-npcm/platsmp.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-npcm/platsmp.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-omap1/clock_data.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-omap1/clock_data.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-omap2/omap_hwmod.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-omap2/omap_hwmod.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-socfpga/Kconfig and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-socfpga/Kconfig differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-socfpga/platsmp.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-socfpga/platsmp.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-tegra/irq.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-tegra/irq.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-ux500/cpu-db8500.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-ux500/cpu-db8500.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mach-versatile/integrator_cp.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mach-versatile/integrator_cp.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mm/fault.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mm/fault.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/mm/flush.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/mm/flush.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm/net/bpf_jit_32.c and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm/net/bpf_jit_32.c differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/allwinner/sun50i-a64-pinephone.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/allwinner/sun55i-a523.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/allwinner/sun55i-a523.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/amlogic/meson-axg.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/amlogic/meson-axg.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/amlogic/meson-axg-s400.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/amlogic/meson-axg-s400.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/amlogic/meson-gxl-s905d-p230.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/broadcom/bcm2712-d-rpi-5-b.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/broadcom/bcm2712-d-rpi-5-b.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/broadcom/bcm2712.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/broadcom/bcm2712.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-ls1028a-tqmls1028a-mbls1028a.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-ls1028a-tqmls1028a-mbls1028a.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-lx2160a-cex7.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-lx2160a-cex7.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-lx2160a-clearfog-itx.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-lx2160a-clearfog-itx.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-lx2160a.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-lx2162a-clearfog.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-lx2162a-clearfog.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/fsl-lx2162a-sr-som.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/fsl-lx2162a-sr-som.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8-apalis-ixora-v1.1.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8-apalis-ixora-v1.1.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8-apalis-ixora-v1.2.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8-apalis-ixora-v1.2.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8dxl-evk.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8dxl-evk.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mm-emtop-som.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mm-emtop-som.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mm-kontron-bl.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mm-kontron-bl.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mm-kontron-osm-s.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mm-kontron-osm-s.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mm-tqma8mqml.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mm-tqma8mqml.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mn-tqma8mqnl.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mn-tqma8mqnl.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mn-vhip4-evalboard-v1.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mn-vhip4-evalboard-v1.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mn-vhip4-evalboard-v2.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mn-vhip4-evalboard-v2.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-aristainetos3a-som-v1.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-aristainetos3a-som-v1.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-cubox-m.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-cubox-m.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-data-modul-edm-sbc.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-data-modul-edm-sbc.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-debix-model-a.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-debix-model-a.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-debix-som-a-bmb-08.dts and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-debix-som-a-bmb-08.dts differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-debix-som-a.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-debix-som-a.dtsi differ
+Files kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/arch/arm64/boot/dts/freescale/imx8mp-dhcom-som.dtsi and kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/arch/arm64/boot/dts/freescale/imx8mp-dhcom-som.dtsi differ
+
+===== TARGET PACKAGE CHANGELOG =====
+linux-hwe-7.0 (7.0.0-44.44~24.04.1) noble; urgency=medium
+
+  * noble/linux-hwe-7.0: 7.0.0-44.44~24.04.1 -proposed tracker (LP: #2173377)
+
+  [ Ubuntu: 7.0.0-44.44 ]
+
+  * resolute/linux: 7.0.0-44.44 -proposed tracker (LP: #2173378)
+  * INVALID or PRIVATE BUG (LP: #2171603)
+    - s390/ism: Zerorize dmb at allocation
+  * linux-image-7.0.0-38-generic randomly freezes Lenovo Legion 5
+    (LP: #2170572)
+    - apparmor: fix NULL ctx->peer derefs in unix socket ctx updates
+
+===== REPORT SHA256 =====
