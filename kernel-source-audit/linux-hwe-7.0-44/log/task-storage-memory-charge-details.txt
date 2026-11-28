@@ -1,0 +1,531 @@
+===== MEMORY CHARGE IMPLEMENTATION =====
+     1	// SPDX-License-Identifier: GPL-2.0
+     2	/* Copyright (c) 2019 Facebook  */
+     3	#include <linux/rculist.h>
+     4	#include <linux/list.h>
+     5	#include <linux/hash.h>
+     6	#include <linux/types.h>
+     7	#include <linux/spinlock.h>
+     8	#include <linux/bpf.h>
+     9	#include <linux/btf_ids.h>
+    10	#include <linux/bpf_local_storage.h>
+    11	#include <net/sock.h>
+    12	#include <uapi/linux/sock_diag.h>
+    13	#include <uapi/linux/btf.h>
+    14	#include <linux/rcupdate.h>
+    15	#include <linux/rcupdate_trace.h>
+    16	#include <linux/rcupdate_wait.h>
+    17	
+    18	#define BPF_LOCAL_STORAGE_CREATE_FLAG_MASK (BPF_F_NO_PREALLOC | BPF_F_CLONE)
+    19	
+    20	static struct bpf_local_storage_map_bucket *
+    21	select_bucket(struct bpf_local_storage_map *smap,
+    22		      struct bpf_local_storage *local_storage)
+    23	{
+    24		return &smap->buckets[hash_ptr(local_storage, smap->bucket_log)];
+    25	}
+    26	
+    27	static int mem_charge(struct bpf_local_storage_map *smap, void *owner, u32 size)
+    28	{
+    29		struct bpf_map *map = &smap->map;
+    30	
+    31		if (!map->ops->map_local_storage_charge)
+    32			return 0;
+    33	
+    34		return map->ops->map_local_storage_charge(smap, owner, size);
+    35	}
+    36	
+    37	static void mem_uncharge(struct bpf_local_storage_map *smap, void *owner,
+    38				 u32 size)
+    39	{
+    40		struct bpf_map *map = &smap->map;
+    41	
+    42		if (map->ops->map_local_storage_uncharge)
+    43			map->ops->map_local_storage_uncharge(smap, owner, size);
+    44	}
+    45	
+    46	static struct bpf_local_storage __rcu **
+    47	owner_storage(struct bpf_local_storage_map *smap, void *owner)
+    48	{
+    49		struct bpf_map *map = &smap->map;
+    50	
+    51		return map->ops->map_owner_storage_ptr(owner);
+    52	}
+    53	
+    54	static bool selem_linked_to_storage_lockless(const struct bpf_local_storage_elem *selem)
+    55	{
+    56		return !hlist_unhashed_lockless(&selem->snode);
+    57	}
+    58	
+    59	static bool selem_linked_to_storage(const struct bpf_local_storage_elem *selem)
+    60	{
+    61		return !hlist_unhashed(&selem->snode);
+    62	}
+    63	
+    64	static bool selem_linked_to_map(const struct bpf_local_storage_elem *selem)
+    65	{
+    66		return !hlist_unhashed(&selem->map_node);
+    67	}
+    68	
+    69	struct bpf_local_storage_elem *
+    70	bpf_selem_alloc(struct bpf_local_storage_map *smap, void *owner,
+    71			void *value, bool swap_uptrs, gfp_t gfp_flags)
+    72	{
+    73		struct bpf_local_storage_elem *selem;
+    74	
+    75		if (mem_charge(smap, owner, smap->elem_size))
+    76			return NULL;
+    77	
+    78		if (smap->use_kmalloc_nolock) {
+    79			selem = bpf_map_kmalloc_nolock(&smap->map, smap->elem_size,
+    80						       __GFP_ZERO, NUMA_NO_NODE);
+    81		} else {
+    82			selem = bpf_map_kzalloc(&smap->map, smap->elem_size,
+    83						gfp_flags | __GFP_NOWARN);
+    84		}
+    85	
+    86		if (selem) {
+    87			RCU_INIT_POINTER(SDATA(selem)->smap, smap);
+    88			atomic_set(&selem->state, 0);
+    89			selem->use_kmalloc_nolock = smap->use_kmalloc_nolock;
+    90	
+    91			if (value) {
+    92				/* No need to call check_and_init_map_value as memory is zero init */
+    93				copy_map_value(&smap->map, SDATA(selem)->data, value);
+    94				if (swap_uptrs)
+    95					bpf_obj_swap_uptrs(smap->map.record, SDATA(selem)->data, value);
+    96			}
+    97			return selem;
+    98		}
+    99	
+   100		mem_uncharge(smap, owner, smap->elem_size);
+   101	
+   102		return NULL;
+   103	}
+   104	
+   105	/* rcu tasks trace callback for use_kmalloc_nolock == false */
+   106	static void __bpf_local_storage_free_trace_rcu(struct rcu_head *rcu)
+   107	{
+   108		struct bpf_local_storage *local_storage;
+   109	
+   110		/*
+   111		 * RCU Tasks Trace grace period implies RCU grace period, do
+   112		 * kfree() directly.
+   113		 */
+   114		local_storage = container_of(rcu, struct bpf_local_storage, rcu);
+   115		kfree(local_storage);
+
+===== STORAGE ALLOCATION AND FAILURE CLEANUP =====
+   545	
+   546		if (!old_sdata && (map_flags & ~BPF_F_LOCK) == BPF_EXIST)
+   547			/* elem doesn't exist, cannot update it */
+   548			return -ENOENT;
+   549	
+   550		return 0;
+   551	}
+   552	
+   553	int bpf_local_storage_alloc(void *owner,
+   554				    struct bpf_local_storage_map *smap,
+   555				    struct bpf_local_storage_elem *first_selem,
+   556				    gfp_t gfp_flags)
+   557	{
+   558		struct bpf_local_storage *prev_storage, *storage;
+   559		struct bpf_local_storage **owner_storage_ptr;
+   560		struct bpf_local_storage_map_bucket *b;
+   561		unsigned long flags;
+   562		int err;
+   563	
+   564		err = mem_charge(smap, owner, sizeof(*storage));
+   565		if (err)
+   566			return err;
+   567	
+   568		if (smap->use_kmalloc_nolock)
+   569			storage = bpf_map_kmalloc_nolock(&smap->map, sizeof(*storage),
+   570							 __GFP_ZERO, NUMA_NO_NODE);
+   571		else
+   572			storage = bpf_map_kzalloc(&smap->map, sizeof(*storage),
+   573						  gfp_flags | __GFP_NOWARN);
+   574		if (!storage) {
+   575			err = -ENOMEM;
+   576			goto uncharge;
+   577		}
+   578	
+   579		INIT_HLIST_HEAD(&storage->list);
+   580		raw_res_spin_lock_init(&storage->lock);
+   581		storage->owner = owner;
+   582		storage->mem_charge = sizeof(*storage);
+   583		storage->use_kmalloc_nolock = smap->use_kmalloc_nolock;
+   584		refcount_set(&storage->owner_refcnt, 1);
+   585	
+   586		bpf_selem_link_storage_nolock(storage, first_selem);
+   587	
+   588		b = select_bucket(smap, storage);
+   589		err = raw_res_spin_lock_irqsave(&b->lock, flags);
+   590		if (err)
+   591			goto uncharge;
+   592	
+   593		bpf_selem_link_map_nolock(b, first_selem);
+   594	
+   595		owner_storage_ptr =
+   596			(struct bpf_local_storage **)owner_storage(smap, owner);
+   597		/* Publish storage to the owner.
+   598		 * Instead of using any lock of the kernel object (i.e. owner),
+   599		 * cmpxchg will work with any kernel object regardless what
+   600		 * the running context is, bh, irq...etc.
+   601		 *
+   602		 * From now on, the owner->storage pointer (e.g. sk->sk_bpf_storage)
+   603		 * is protected by the storage->lock.  Hence, when freeing
+   604		 * the owner->storage, the storage->lock must be held before
+   605		 * setting owner->storage ptr to NULL.
+   606		 */
+   607		prev_storage = cmpxchg(owner_storage_ptr, NULL, storage);
+   608		if (unlikely(prev_storage)) {
+   609			bpf_selem_unlink_map_nolock(first_selem);
+   610			raw_res_spin_unlock_irqrestore(&b->lock, flags);
+   611			err = -EAGAIN;
+   612			goto uncharge;
+   613		}
+   614		raw_res_spin_unlock_irqrestore(&b->lock, flags);
+   615	
+   616		return 0;
+   617	
+   618	uncharge:
+   619		bpf_local_storage_free(storage, true);
+   620		mem_uncharge(smap, owner, sizeof(*storage));
+   621		return err;
+   622	}
+   623	
+   624	/* sk cannot be going away because it is linking new elem
+   625	 * to sk->sk_bpf_storage. (i.e. sk->sk_refcnt cannot be 0).
+   626	 * Otherwise, it will become a leak (and other memory issues
+   627	 * during map destruction).
+   628	 */
+   629	struct bpf_local_storage_data *
+   630	bpf_local_storage_update(void *owner, struct bpf_local_storage_map *smap,
+   631				 void *value, u64 map_flags, bool swap_uptrs, gfp_t gfp_flags)
+   632	{
+   633		struct bpf_local_storage_data *old_sdata = NULL;
+   634		struct bpf_local_storage_elem *alloc_selem, *selem = NULL;
+   635		struct bpf_local_storage *local_storage;
+   635		struct bpf_local_storage *local_storage;
+   636		struct bpf_local_storage_map_bucket *b;
+   637		HLIST_HEAD(old_selem_free_list);
+   638		unsigned long flags, b_flags;
+   639		int err;
+   640	
+   641		/* BPF_EXIST and BPF_NOEXIST cannot be both set */
+   642		if (unlikely((map_flags & ~BPF_F_LOCK) > BPF_EXIST) ||
+   643		    /* BPF_F_LOCK can only be used in a value with spin_lock */
+   644		    unlikely((map_flags & BPF_F_LOCK) &&
+   645			     !btf_record_has_field(smap->map.record, BPF_SPIN_LOCK)))
+   646			return ERR_PTR(-EINVAL);
+   647	
+   648		if (gfp_flags == GFP_KERNEL && (map_flags & ~BPF_F_LOCK) != BPF_NOEXIST)
+   649			return ERR_PTR(-EINVAL);
+   650	
+   651		local_storage = rcu_dereference_check(*owner_storage(smap, owner),
+   652						      bpf_rcu_lock_held());
+   653		if (!local_storage || hlist_empty(&local_storage->list)) {
+   654			/* Very first elem for the owner */
+   655			err = check_flags(NULL, map_flags);
+   656			if (err)
+   657				return ERR_PTR(err);
+   658	
+   659			selem = bpf_selem_alloc(smap, owner, value, swap_uptrs, gfp_flags);
+   660			if (!selem)
+   661				return ERR_PTR(-ENOMEM);
+   662	
+   663			err = bpf_local_storage_alloc(owner, smap, selem, gfp_flags);
+   664			if (err) {
+   665				bpf_selem_free(selem, true);
+   666				mem_uncharge(smap, owner, smap->elem_size);
+   667				return ERR_PTR(err);
+   668			}
+   669	
+   670			return SDATA(selem);
+   671		}
+   672	
+   673		if ((map_flags & BPF_F_LOCK) && !(map_flags & BPF_NOEXIST)) {
+   674			/* Hoping to find an old_sdata to do inline update
+   675			 * such that it can avoid taking the local_storage->lock
+   676			 * and changing the lists.
+   677			 */
+   678			old_sdata =
+   679				bpf_local_storage_lookup(local_storage, smap, false);
+   680			err = check_flags(old_sdata, map_flags);
+   681			if (err)
+   682				return ERR_PTR(err);
+   683			if (old_sdata && selem_linked_to_storage_lockless(SELEM(old_sdata))) {
+   684				copy_map_value_locked(&smap->map, old_sdata->data,
+   685						      value, false);
+   686				return old_sdata;
+   687			}
+   688		}
+   689	
+   690		/* A lookup has just been done before and concluded a new selem is
+   691		 * needed. The chance of an unnecessary alloc is unlikely.
+   692		 */
+   693		alloc_selem = selem = bpf_selem_alloc(smap, owner, value, swap_uptrs, gfp_flags);
+   694		if (!alloc_selem)
+   695			return ERR_PTR(-ENOMEM);
+   696	
+   697		err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+   698		if (err)
+   699			goto free_selem;
+   700	
+   701		/* Recheck local_storage->list under local_storage->lock */
+   702		if (unlikely(hlist_empty(&local_storage->list))) {
+   703			/* A parallel del is happening and local_storage is going
+   704			 * away.  It has just been checked before, so very
+   705			 * unlikely.  Return instead of retry to keep things
+   706			 * simple.
+   707			 */
+   708			err = -EAGAIN;
+   709			goto unlock;
+   710		}
+   711	
+   712		old_sdata = bpf_local_storage_lookup(local_storage, smap, false);
+   713		err = check_flags(old_sdata, map_flags);
+   714		if (err)
+   715			goto unlock;
+   716	
+   717		if (old_sdata && (map_flags & BPF_F_LOCK)) {
+   718			copy_map_value_locked(&smap->map, old_sdata->data, value,
+   719					      false);
+   720			selem = SELEM(old_sdata);
+   721			goto unlock;
+   722		}
+   723	
+   724		b = select_bucket(smap, local_storage);
+   725	
+   726		err = raw_res_spin_lock_irqsave(&b->lock, b_flags);
+   727		if (err)
+   728			goto unlock;
+   729	
+   730		alloc_selem = NULL;
+   731		/* First, link the new selem to the map */
+   732		bpf_selem_link_map_nolock(b, selem);
+   733	
+   734		/* Second, link (and publish) the new selem to local_storage */
+   735		bpf_selem_link_storage_nolock(local_storage, selem);
+   736	
+   737		/* Third, remove old selem, SELEM(old_sdata) */
+   738		if (old_sdata) {
+   739			bpf_selem_unlink_map_nolock(SELEM(old_sdata));
+   740			bpf_selem_unlink_storage_nolock(local_storage, SELEM(old_sdata),
+   741							&old_selem_free_list);
+   742		}
+   743	
+   744		raw_res_spin_unlock_irqrestore(&b->lock, b_flags);
+   745	unlock:
+   746		raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+   747	free_selem:
+   748		bpf_selem_free_list(&old_selem_free_list, false);
+   749		if (alloc_selem) {
+   750			mem_uncharge(smap, owner, smap->elem_size);
+   751			bpf_selem_free(alloc_selem, true);
+   752		}
+   753		return err ? ERR_PTR(err) : SDATA(selem);
+   754	}
+   755	
+   756	static u16 bpf_local_storage_cache_idx_get(struct bpf_local_storage_cache *cache)
+   757	{
+   758		u64 min_usage = U64_MAX;
+   759		u16 i, res = 0;
+   760	
+   761		spin_lock(&cache->idx_lock);
+   762	
+   763		for (i = 0; i < BPF_LOCAL_STORAGE_CACHE_SIZE; i++) {
+   764			if (cache->idx_usage_counts[i] < min_usage) {
+   765				min_usage = cache->idx_usage_counts[i];
+
+===== STORAGE FREE IMPLEMENTATION =====
+   130	{
+   131		struct bpf_local_storage *local_storage;
+   132	
+   133		local_storage = container_of(rcu, struct bpf_local_storage, rcu);
+   134		kfree_nolock(local_storage);
+   135	}
+   136	
+   137	static void bpf_local_storage_free_trace_rcu(struct rcu_head *rcu)
+   138	{
+   139		/*
+   140		 * RCU Tasks Trace grace period implies RCU grace period, do
+   141		 * kfree() directly.
+   142		 */
+   143		bpf_local_storage_free_rcu(rcu);
+   144	}
+   145	
+   146	static void bpf_local_storage_free(struct bpf_local_storage *local_storage,
+   147					   bool reuse_now)
+   148	{
+   149		if (!local_storage)
+   150			return;
+   151	
+   152		if (!local_storage->use_kmalloc_nolock) {
+   153			__bpf_local_storage_free(local_storage, reuse_now);
+   154			return;
+   155		}
+   156	
+   157		if (reuse_now) {
+   158			call_rcu(&local_storage->rcu, bpf_local_storage_free_rcu);
+   159			return;
+   160		}
+   161	
+   162		call_rcu_tasks_trace(&local_storage->rcu,
+   163				     bpf_local_storage_free_trace_rcu);
+   164	}
+   165	
+   166	/* rcu callback for use_kmalloc_nolock == false */
+   167	static void __bpf_selem_free_rcu(struct rcu_head *rcu)
+   168	{
+   169		struct bpf_local_storage_elem *selem;
+   170		struct bpf_local_storage_map *smap;
+   171	
+   172		selem = container_of(rcu, struct bpf_local_storage_elem, rcu);
+   173		/* bpf_selem_unlink_nofail may have already cleared smap and freed fields. */
+   174		smap = rcu_dereference_check(SDATA(selem)->smap, 1);
+   175	
+   176		if (smap)
+   177			bpf_obj_free_fields(smap->map.record, SDATA(selem)->data);
+   178		kfree(selem);
+   179	}
+   180	
+   181	/* rcu tasks trace callback for use_kmalloc_nolock == false */
+   182	static void __bpf_selem_free_trace_rcu(struct rcu_head *rcu)
+   183	{
+   184		/*
+   185		 * RCU Tasks Trace grace period implies RCU grace period, do
+   186		 * kfree() directly.
+   187		 */
+   188		__bpf_selem_free_rcu(rcu);
+   189	}
+   190	
+   191	/* Handle use_kmalloc_nolock == false */
+   192	static void __bpf_selem_free(struct bpf_local_storage_elem *selem,
+   193				     bool vanilla_rcu)
+   194	{
+   195		if (vanilla_rcu)
+   196			call_rcu(&selem->rcu, __bpf_selem_free_rcu);
+   197		else
+   198			call_rcu_tasks_trace(&selem->rcu, __bpf_selem_free_trace_rcu);
+   199	}
+   200	
+   201	static void bpf_selem_free_rcu(struct rcu_head *rcu)
+   202	{
+   203		struct bpf_local_storage_elem *selem;
+   204		struct bpf_local_storage_map *smap;
+   205	
+   206		selem = container_of(rcu, struct bpf_local_storage_elem, rcu);
+   207		/* The bpf_local_storage_map_free will wait for rcu_barrier */
+   208		smap = rcu_dereference_check(SDATA(selem)->smap, 1);
+   209	
+   210		if (smap)
+   211			bpf_obj_free_fields(smap->map.record, SDATA(selem)->data);
+   212		kfree_nolock(selem);
+   213	}
+   214	
+   215	static void bpf_selem_free_trace_rcu(struct rcu_head *rcu)
+   216	{
+   217		/*
+   218		 * RCU Tasks Trace grace period implies RCU grace period, do
+   219		 * kfree() directly.
+   220		 */
+   221		bpf_selem_free_rcu(rcu);
+   222	}
+   223	
+   224	void bpf_selem_free(struct bpf_local_storage_elem *selem,
+   225			    bool reuse_now)
+   226	{
+   227		if (!selem->use_kmalloc_nolock) {
+   228			/*
+   229			 * No uptr will be unpin even when reuse_now == false since uptr
+   230			 * is only supported in task local storage, where
+   231			 * smap->use_kmalloc_nolock == true.
+   232			 */
+   233			__bpf_selem_free(selem, reuse_now);
+   234			return;
+   235		}
+   236	
+   237		if (reuse_now) {
+   238			/*
+   239			 * While it is okay to call bpf_obj_free_fields() that unpins uptr when
+   240			 * reuse_now == true, keep it in bpf_selem_free_rcu() for simplicity.
+   241			 */
+   242			call_rcu(&selem->rcu, bpf_selem_free_rcu);
+   243			return;
+   244		}
+   245	
+
+===== GENERIC ARCH RELEASE IMPLEMENTATION =====
+   165	
+   166	int nr_processes(void)
+   167	{
+   168		int cpu;
+   169		int total = 0;
+   170	
+   171		for_each_possible_cpu(cpu)
+   172			total += per_cpu(process_counts, cpu);
+   173	
+   174		return total;
+   175	}
+   176	
+   177	void __weak arch_release_task_struct(struct task_struct *tsk)
+   178	{
+   179	}
+   180	
+   181	static struct kmem_cache *task_struct_cachep;
+   182	
+   183	static inline struct task_struct *alloc_task_struct_node(int node)
+   184	{
+   185		return kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node);
+   186	}
+   187	
+   188	static inline void free_task_struct(struct task_struct *tsk)
+   189	{
+   190		kmem_cache_free(task_struct_cachep, tsk);
+
+===== MEMORY CHARGE CONFIGURATION AND CALLERS =====
+
+===== SOURCE PACKAGE REVISION MARKERS =====
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian/changelog
+linux-hwe-7.0 (7.0.0-44.44~24.04.1) noble; urgency=medium
+
+  * noble/linux-hwe-7.0: 7.0.0-44.44~24.04.1 -proposed tracker (LP: #2173377)
+
+  [ Ubuntu: 7.0.0-44.44 ]
+
+  * resolute/linux: 7.0.0-44.44 -proposed tracker (LP: #2173378)
+  * INVALID or PRIVATE BUG (LP: #2171603)
+    - s390/ism: Zerorize dmb at allocation
+  * linux-image-7.0.0-38-generic randomly freezes Lenovo Legion 5
+    (LP: #2170572)
+    - apparmor: fix NULL ctx->peer derefs in unix socket ctx updates
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian.hwe-7.0/changelog
+linux-hwe-7.0 (7.0.0-44.44~24.04.1) noble; urgency=medium
+
+  * noble/linux-hwe-7.0: 7.0.0-44.44~24.04.1 -proposed tracker (LP: #2173377)
+
+  [ Ubuntu: 7.0.0-44.44 ]
+
+  * resolute/linux: 7.0.0-44.44 -proposed tracker (LP: #2173378)
+  * INVALID or PRIVATE BUG (LP: #2171603)
+    - s390/ism: Zerorize dmb at allocation
+  * linux-image-7.0.0-38-generic randomly freezes Lenovo Legion 5
+    (LP: #2170572)
+    - apparmor: fix NULL ctx->peer derefs in unix socket ctx updates
+--- kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source-retry-01/debian.master/changelog
+linux (7.0.0-44.44) resolute; urgency=medium
+
+  * resolute/linux: 7.0.0-44.44 -proposed tracker (LP: #2173378)
+
+  * INVALID or PRIVATE BUG (LP: #2171603)
+    - s390/ism: Zerorize dmb at allocation
+
+  * linux-image-7.0.0-38-generic randomly freezes Lenovo Legion 5
+    (LP: #2170572)
+    - apparmor: fix NULL ctx->peer derefs in unix socket ctx updates
+
+  * Resolute update: upstream stable patchset 2026-11-04 (LP: #2173012)
+
+===== REPORT SHA256 =====
