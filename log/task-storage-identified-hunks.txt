@@ -1,0 +1,80 @@
+OLD: linux-hwe-7.0-7.0.0.orig/include/linux/bpf.h
+NEW: linux-hwe-7.0-7.0.0/include/linux/bpf.h
+@@ -3036,7 +3064,6 @@
+@@ -3036,7 +3064,6 @@
+ 						 const struct bpf_prog *prog);
+ void bpf_task_storage_free(struct task_struct *task);
+ void bpf_cgrp_storage_free(struct cgroup *cgroup);
+-bool bpf_prog_has_kfunc_call(const struct bpf_prog *prog);
+ const struct btf_func_model *
+ bpf_jit_find_kfunc_model(const struct bpf_prog *prog,
+ 			 const struct bpf_insn *insn);
+
+OLD: linux-hwe-7.0-7.0.0.orig/kernel/bpf/bpf_inode_storage.c
+NEW: linux-hwe-7.0-7.0.0/kernel/bpf/bpf_inode_storage.c
+@@ -179,6 +179,15 @@
+@@ -179,6 +179,15 @@
+ 
+ static struct bpf_map *inode_storage_map_alloc(union bpf_attr *attr)
+ {
++	/*
++	 * Do not allow allocation of BPF_MAP_TYPE_INODE_STORAGE if the BPF LSM
++	 * was not initialized by the LSM framework at boot. Without proper
++	 * initialization, the BPF inode security blob offset remains unprepared,
++	 * causing bpf_inode() to calculate an invalid memory offset and corrupt
++	 * inode->i_security.
++	 */
++	if (!bpf_lsm_initialized)
++		return ERR_PTR(-EOPNOTSUPP);
+ 	return bpf_local_storage_map_alloc(attr, &inode_cache, false);
+ }
+ 
+
+OLD: linux-hwe-7.0-7.0.0.orig/net/core/bpf_sk_storage.c
+NEW: linux-hwe-7.0-7.0.0/net/core/bpf_sk_storage.c
+@@ -158,8 +158,6 @@
+@@ -158,8 +158,6 @@
+ 	struct bpf_local_storage_elem *selem;
+ 	int ret = 0;
+ 
+-	RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
+-
+ 	rcu_read_lock_dont_migrate();
+ 	sk_storage = rcu_dereference(sk->sk_bpf_storage);
+ 
+
+OLD: linux-hwe-7.0-7.0.0.orig/net/core/sock.c
+NEW: linux-hwe-7.0-7.0.0/net/core/sock.c
+@@ -2485,6 +2482,12 @@
+@@ -2485,6 +2482,12 @@
+ 	sock_copy(newsk, sk);
+ 
+ 	newsk->sk_prot_creator = prot;
++#ifdef CONFIG_BPF_SYSCALL
++	RCU_INIT_POINTER(newsk->sk_bpf_storage, NULL);
++#endif
++#if IS_ENABLED(CONFIG_INET_PSP)
++	RCU_INIT_POINTER(newsk->psp_assoc, NULL);
++#endif
+ 
+ 	/* SANITY */
+ 	if (likely(newsk->sk_net_refcnt)) {
+
+OLD: linux-hwe-7.0-7.0.0.orig/tools/sched_ext/scx_flatcg.bpf.c
+NEW: linux-hwe-7.0-7.0.0/tools/sched_ext/scx_flatcg.bpf.c
+@@ -551,9 +551,11 @@
+@@ -551,9 +551,11 @@
+ 	 * too much, determine the execution time by taking explicit timestamps
+ 	 * instead of depending on @p->scx.slice.
+ 	 */
+-	if (!fifo_sched)
+-		p->scx.dsq_vtime +=
+-			(SCX_SLICE_DFL - p->scx.slice) * 100 / p->scx.weight;
++	if (!fifo_sched) {
++		u64 delta = scale_by_task_weight_inverse(p, SCX_SLICE_DFL - p->scx.slice);
++
++		scx_bpf_task_set_dsq_vtime(p, p->scx.dsq_vtime + delta);
++	}
+ 
+ 	taskc = bpf_task_storage_get(&task_ctx, p, 0, 0);
+ 	if (!taskc) {
