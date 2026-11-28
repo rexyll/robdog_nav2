@@ -1,0 +1,1469 @@
+===== INODE LSM DIRECT CALLERS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/open.c:312:	ret = security_file_permission(file, MAY_WRITE);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/exfat/file.c:431:	err = security_inode_setattr(file_mnt_idmap(file),
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/fat/file.c:94:	err = security_inode_setattr(file_mnt_idmap(file),
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/readdir.c:93:	res = security_file_permission(file, MAY_READ);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/read_write.c:475:	ret = security_file_permission(file, mask);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:656:	return security_inode_permission(inode, mask);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:693:	return security_inode_permission(inode, mask);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:4176:	error = security_inode_create(dir, dentry, mode);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:4200:	error = security_inode_create(dir, dentry, mode);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:4316:	return security_inode_create(dir->dentry->d_inode, dentry, mode);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:5227:	error = security_inode_mkdir(dir, dentry, mode);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:5336:	error = security_inode_rmdir(dir, dentry);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:5468:		error = security_inode_unlink(dir, dentry);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:5737:	error = security_inode_link(old_dentry, dir, new_dentry);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/namei.c:5963:	error = security_inode_rename(old_dir, old_dentry, new_dir, new_dentry,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/cachefiles/security.c:54:	ret = security_inode_mkdir(d_backing_inode(root), root, 0);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/cachefiles/security.c:61:	ret = security_inode_create(d_backing_inode(root), root, 0);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/attr.c:540:	error = security_inode_setattr(idmap, dentry, attr);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/remap_range.c:114:	ret = security_file_permission(file, mask);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1217: * and calls to security_inode_permission() may be made during, or after,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1220: * retain inode state for use in security_inode_permission() should only
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1591: * security_inode_create() - Check if creating a file is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1600:int security_inode_create(struct inode *dir, struct dentry *dentry,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1625: * security_inode_link() - Check if creating a hard link is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1634:int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1643: * security_inode_unlink() - Check if removing a hard link is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1651:int security_inode_unlink(struct inode *dir, struct dentry *dentry)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1677: * security_inode_mkdir() - Check if creating a new directory is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1687:int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1696: * security_inode_rmdir() - Check if removing a directory is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1704:int security_inode_rmdir(struct inode *dir, struct dentry *dentry)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1734: * security_inode_rename() - Check if renaming a file is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1745:int security_inode_rename(struct inode *old_dir, struct dentry *old_dentry,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1800: * security_inode_permission() - Check if accessing an inode is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1813:int security_inode_permission(struct inode *inode, int mask)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1821: * security_inode_setattr() - Check if setting file attributes is allowed
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:1833:int security_inode_setattr(struct mnt_idmap *idmap,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:2347: * security_file_permission() - Check file permissions
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c:2365:int security_file_permission(struct file *file, int mask)
+
+===== INODE LSM HOOK DEFINITIONS =====
+123:LSM_HOOK(int, 0, inode_create, struct inode *dir, struct dentry *dentry,
+127:LSM_HOOK(int, 0, inode_link, struct dentry *old_dentry, struct inode *dir,
+129:LSM_HOOK(int, 0, inode_unlink, struct inode *dir, struct dentry *dentry)
+132:LSM_HOOK(int, 0, inode_mkdir, struct inode *dir, struct dentry *dentry,
+134:LSM_HOOK(int, 0, inode_rmdir, struct inode *dir, struct dentry *dentry)
+137:LSM_HOOK(int, 0, inode_rename, struct inode *old_dir, struct dentry *old_dentry,
+142:LSM_HOOK(int, 0, inode_permission, struct inode *inode, int mask)
+143:LSM_HOOK(int, 0, inode_setattr, struct mnt_idmap *idmap, struct dentry *dentry,
+190:LSM_HOOK(int, 0, file_permission, struct file *file, int mask)
+
+===== BPF LSM DISPATCH IMPLEMENTATION =====
+1-// SPDX-License-Identifier: GPL-2.0
+2-
+3-/*
+4- * Copyright (C) 2020 Google LLC.
+5- */
+6-
+7-#include <linux/filter.h>
+8-#include <linux/bpf.h>
+9-#include <linux/btf.h>
+10-#include <linux/binfmts.h>
+11-#include <linux/lsm_hooks.h>
+12:#include <linux/bpf_lsm.h>
+13-#include <linux/kallsyms.h>
+14-#include <net/bpf_sk_storage.h>
+15-#include <linux/bpf_local_storage.h>
+16-#include <linux/btf_ids.h>
+17-#include <linux/ima.h>
+18-#include <linux/bpf-cgroup.h>
+19-
+20-/* For every LSM hook that allows attachment of BPF programs, declare a nop
+21- * function where a BPF program can be attached. Notably, we qualify each with
+22- * weak linkage such that strong overrides can be implemented if need be.
+23- */
+24-#define LSM_HOOK(RET, DEFAULT, NAME, ...)	\
+25:__weak noinline RET bpf_lsm_##NAME(__VA_ARGS__)	\
+26-{						\
+27-	return DEFAULT;				\
+28-}
+29-
+30-#include <linux/lsm_hook_defs.h>
+31-#undef LSM_HOOK
+32-
+33:#define LSM_HOOK(RET, DEFAULT, NAME, ...) BTF_ID(func, bpf_lsm_##NAME)
+34:BTF_SET_START(bpf_lsm_hooks)
+35-#include <linux/lsm_hook_defs.h>
+36-#undef LSM_HOOK
+37:BTF_SET_END(bpf_lsm_hooks)
+38-
+39:BTF_SET_START(bpf_lsm_disabled_hooks)
+40:BTF_ID(func, bpf_lsm_vm_enough_memory)
+41:BTF_ID(func, bpf_lsm_inode_need_killpriv)
+42:BTF_ID(func, bpf_lsm_inode_getsecurity)
+43:BTF_ID(func, bpf_lsm_inode_listsecurity)
+44:BTF_ID(func, bpf_lsm_inode_copy_up_xattr)
+45:BTF_ID(func, bpf_lsm_getselfattr)
+46:BTF_ID(func, bpf_lsm_getprocattr)
+47:BTF_ID(func, bpf_lsm_setprocattr)
+48-#ifdef CONFIG_KEYS
+49:BTF_ID(func, bpf_lsm_key_getsecurity)
+50-#endif
+51-#ifdef CONFIG_AUDIT
+52:BTF_ID(func, bpf_lsm_audit_rule_match)
+53-#endif
+54:BTF_ID(func, bpf_lsm_ismaclabel)
+55:BTF_ID(func, bpf_lsm_file_alloc_security)
+56:BTF_SET_END(bpf_lsm_disabled_hooks)
+57-
+58-/* List of LSM hooks that should operate on 'current' cgroup regardless
+59- * of function signature.
+60- */
+61:BTF_SET_START(bpf_lsm_current_hooks)
+62-/* operate on freshly allocated sk without any cgroup association */
+63-#ifdef CONFIG_SECURITY_NETWORK
+64:BTF_ID(func, bpf_lsm_sk_alloc_security)
+65:BTF_ID(func, bpf_lsm_sk_free_security)
+66-#endif
+67:BTF_SET_END(bpf_lsm_current_hooks)
+68-
+69-/* List of LSM hooks that trigger while the socket is properly locked.
+70- */
+71:BTF_SET_START(bpf_lsm_locked_sockopt_hooks)
+72-#ifdef CONFIG_SECURITY_NETWORK
+73:BTF_ID(func, bpf_lsm_sock_graft)
+74:BTF_ID(func, bpf_lsm_inet_csk_clone)
+75:BTF_ID(func, bpf_lsm_inet_conn_established)
+76-#endif
+77:BTF_SET_END(bpf_lsm_locked_sockopt_hooks)
+78-
+79-/* List of LSM hooks that trigger while the socket is _not_ locked,
+80- * but it's ok to call bpf_{g,s}etsockopt because the socket is still
+81- * in the early init phase.
+82- */
+83:BTF_SET_START(bpf_lsm_unlocked_sockopt_hooks)
+84-#ifdef CONFIG_SECURITY_NETWORK
+85:BTF_ID(func, bpf_lsm_socket_post_create)
+86:BTF_ID(func, bpf_lsm_socket_socketpair)
+87-#endif
+88:BTF_SET_END(bpf_lsm_unlocked_sockopt_hooks)
+89-
+90-#ifdef CONFIG_CGROUP_BPF
+91:void bpf_lsm_find_cgroup_shim(const struct bpf_prog *prog,
+92-			     bpf_func_t *bpf_func)
+93-{
+94-	const struct btf_param *args __maybe_unused;
+95-
+96-	if (btf_type_vlen(prog->aux->attach_func_proto) < 1 ||
+97:	    btf_id_set_contains(&bpf_lsm_current_hooks,
+98-				prog->aux->attach_btf_id)) {
+99-		*bpf_func = __cgroup_bpf_run_lsm_current;
+100-		return;
+101-	}
+102-
+103-#ifdef CONFIG_NET
+104-	args = btf_params(prog->aux->attach_func_proto);
+105-
+106-	if (args[0].type == btf_sock_ids[BTF_SOCK_TYPE_SOCKET])
+107-		*bpf_func = __cgroup_bpf_run_lsm_socket;
+108-	else if (args[0].type == btf_sock_ids[BTF_SOCK_TYPE_SOCK])
+109-		*bpf_func = __cgroup_bpf_run_lsm_sock;
+110-	else
+111-#endif
+112-		*bpf_func = __cgroup_bpf_run_lsm_current;
+113-}
+114-#endif
+115-
+116:int bpf_lsm_verify_prog(struct bpf_verifier_log *vlog,
+117-			const struct bpf_prog *prog)
+118-{
+119-	u32 btf_id = prog->aux->attach_btf_id;
+120-	const char *func_name = prog->aux->attach_func_name;
+121-
+122-	if (!prog->gpl_compatible) {
+123-		bpf_log(vlog,
+124-			"LSM programs must have a GPL compatible license\n");
+125-		return -EINVAL;
+126-	}
+127-
+128:	if (btf_id_set_contains(&bpf_lsm_disabled_hooks, btf_id)) {
+129-		bpf_log(vlog, "attach_btf_id %u points to disabled hook %s\n",
+130-			btf_id, func_name);
+131-		return -EINVAL;
+132-	}
+133-
+134:	if (!btf_id_set_contains(&bpf_lsm_hooks, btf_id)) {
+135-		bpf_log(vlog, "attach_btf_id %u points to wrong type name %s\n",
+136-			btf_id, func_name);
+137-		return -EINVAL;
+138-	}
+139-
+140-	return 0;
+141-}
+142-
+143-/* Mask for all the currently supported BPRM option flags */
+144-#define BPF_F_BRPM_OPTS_MASK	BPF_F_BPRM_SECUREEXEC
+145-
+146-BPF_CALL_2(bpf_bprm_opts_set, struct linux_binprm *, bprm, u64, flags)
+147-{
+148-	if (flags & ~BPF_F_BRPM_OPTS_MASK)
+149-		return -EINVAL;
+150-
+151-	bprm->secureexec = (flags & BPF_F_BPRM_SECUREEXEC);
+152-	return 0;
+153-}
+154-
+155-BTF_ID_LIST_SINGLE(bpf_bprm_opts_set_btf_ids, struct, linux_binprm)
+156-
+157-static const struct bpf_func_proto bpf_bprm_opts_set_proto = {
+158-	.func		= bpf_bprm_opts_set,
+159-	.gpl_only	= false,
+160-	.ret_type	= RET_INTEGER,
+161-	.arg1_type	= ARG_PTR_TO_BTF_ID,
+162-	.arg1_btf_id	= &bpf_bprm_opts_set_btf_ids[0],
+163-	.arg2_type	= ARG_ANYTHING,
+164-};
+165-
+166-BPF_CALL_3(bpf_ima_inode_hash, struct inode *, inode, void *, dst, u32, size)
+167-{
+168-	return ima_inode_hash(inode, dst, size);
+169-}
+170-
+171-static bool bpf_ima_inode_hash_allowed(const struct bpf_prog *prog)
+172-{
+173:	return bpf_lsm_is_sleepable_hook(prog->aux->attach_btf_id);
+174-}
+175-
+176-BTF_ID_LIST_SINGLE(bpf_ima_inode_hash_btf_ids, struct, inode)
+177-
+178-static const struct bpf_func_proto bpf_ima_inode_hash_proto = {
+179-	.func		= bpf_ima_inode_hash,
+180-	.gpl_only	= false,
+181-	.might_sleep	= true,
+182-	.ret_type	= RET_INTEGER,
+183-	.arg1_type	= ARG_PTR_TO_BTF_ID,
+184-	.arg1_btf_id	= &bpf_ima_inode_hash_btf_ids[0],
+185-	.arg2_type	= ARG_PTR_TO_UNINIT_MEM,
+186-	.arg3_type	= ARG_CONST_SIZE,
+187-	.allowed	= bpf_ima_inode_hash_allowed,
+188-};
+189-
+190-BPF_CALL_3(bpf_ima_file_hash, struct file *, file, void *, dst, u32, size)
+191-{
+192-	return ima_file_hash(file, dst, size);
+193-}
+194-
+195-BTF_ID_LIST_SINGLE(bpf_ima_file_hash_btf_ids, struct, file)
+196-
+197-static const struct bpf_func_proto bpf_ima_file_hash_proto = {
+198-	.func		= bpf_ima_file_hash,
+199-	.gpl_only	= false,
+200-	.might_sleep	= true,
+201-	.ret_type	= RET_INTEGER,
+202-	.arg1_type	= ARG_PTR_TO_BTF_ID,
+203-	.arg1_btf_id	= &bpf_ima_file_hash_btf_ids[0],
+204-	.arg2_type	= ARG_PTR_TO_UNINIT_MEM,
+205-	.arg3_type	= ARG_CONST_SIZE,
+206-	.allowed	= bpf_ima_inode_hash_allowed,
+207-};
+208-
+--
+213-	run_ctx = container_of(current->bpf_ctx, struct bpf_trace_run_ctx, run_ctx);
+214-	return run_ctx->bpf_cookie;
+215-}
+216-
+217-static const struct bpf_func_proto bpf_get_attach_cookie_proto = {
+218-	.func		= bpf_get_attach_cookie,
+219-	.gpl_only	= false,
+220-	.ret_type	= RET_INTEGER,
+221-	.arg1_type	= ARG_PTR_TO_CTX,
+222-};
+223-
+224-static const struct bpf_func_proto *
+225:bpf_lsm_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog)
+226-{
+227-	const struct bpf_func_proto *func_proto;
+228-
+229:	if (prog->expected_attach_type == BPF_LSM_CGROUP) {
+230-		func_proto = cgroup_common_func_proto(func_id, prog);
+231-		if (func_proto)
+232-			return func_proto;
+233-	}
+234-
+235-	switch (func_id) {
+236-	case BPF_FUNC_inode_storage_get:
+237-		return &bpf_inode_storage_get_proto;
+238-	case BPF_FUNC_inode_storage_delete:
+239-		return &bpf_inode_storage_delete_proto;
+240-#ifdef CONFIG_NET
+241-	case BPF_FUNC_sk_storage_get:
+242-		return &bpf_sk_storage_get_proto;
+243-	case BPF_FUNC_sk_storage_delete:
+244-		return &bpf_sk_storage_delete_proto;
+245-#endif /* CONFIG_NET */
+246-	case BPF_FUNC_spin_lock:
+247-		return &bpf_spin_lock_proto;
+248-	case BPF_FUNC_spin_unlock:
+249-		return &bpf_spin_unlock_proto;
+250-	case BPF_FUNC_bprm_opts_set:
+251-		return &bpf_bprm_opts_set_proto;
+252-	case BPF_FUNC_ima_inode_hash:
+253-		return &bpf_ima_inode_hash_proto;
+254-	case BPF_FUNC_ima_file_hash:
+255-		return &bpf_ima_file_hash_proto;
+256-	case BPF_FUNC_get_attach_cookie:
+257-		return bpf_prog_has_trampoline(prog) ? &bpf_get_attach_cookie_proto : NULL;
+258-#ifdef CONFIG_NET
+259-	case BPF_FUNC_setsockopt:
+260:		if (prog->expected_attach_type != BPF_LSM_CGROUP)
+261-			return NULL;
+262:		if (btf_id_set_contains(&bpf_lsm_locked_sockopt_hooks,
+263-					prog->aux->attach_btf_id))
+264-			return &bpf_sk_setsockopt_proto;
+265:		if (btf_id_set_contains(&bpf_lsm_unlocked_sockopt_hooks,
+266-					prog->aux->attach_btf_id))
+267-			return &bpf_unlocked_sk_setsockopt_proto;
+268-		return NULL;
+269-	case BPF_FUNC_getsockopt:
+270:		if (prog->expected_attach_type != BPF_LSM_CGROUP)
+271-			return NULL;
+272:		if (btf_id_set_contains(&bpf_lsm_locked_sockopt_hooks,
+273-					prog->aux->attach_btf_id))
+274-			return &bpf_sk_getsockopt_proto;
+275:		if (btf_id_set_contains(&bpf_lsm_unlocked_sockopt_hooks,
+276-					prog->aux->attach_btf_id))
+277-			return &bpf_unlocked_sk_getsockopt_proto;
+278-		return NULL;
+279-#endif
+280-	default:
+281-		return tracing_prog_func_proto(func_id, prog);
+282-	}
+283-}
+284-
+285-/* The set of hooks which are called without pagefaults disabled and are allowed
+286- * to "sleep" and thus can be used for sleepable BPF programs.
+287- */
+288-BTF_SET_START(sleepable_lsm_hooks)
+289:BTF_ID(func, bpf_lsm_bpf)
+290:BTF_ID(func, bpf_lsm_bpf_map)
+291:BTF_ID(func, bpf_lsm_bpf_map_create)
+292:BTF_ID(func, bpf_lsm_bpf_map_free)
+293:BTF_ID(func, bpf_lsm_bpf_prog)
+294:BTF_ID(func, bpf_lsm_bpf_prog_load)
+295:BTF_ID(func, bpf_lsm_bpf_prog_free)
+296:BTF_ID(func, bpf_lsm_bpf_token_create)
+297:BTF_ID(func, bpf_lsm_bpf_token_free)
+298:BTF_ID(func, bpf_lsm_bpf_token_cmd)
+299:BTF_ID(func, bpf_lsm_bpf_token_capable)
+300:BTF_ID(func, bpf_lsm_bprm_check_security)
+301:BTF_ID(func, bpf_lsm_bprm_committed_creds)
+302:BTF_ID(func, bpf_lsm_bprm_committing_creds)
+303:BTF_ID(func, bpf_lsm_bprm_creds_for_exec)
+304:BTF_ID(func, bpf_lsm_bprm_creds_from_file)
+305:BTF_ID(func, bpf_lsm_capget)
+306:BTF_ID(func, bpf_lsm_capset)
+307:BTF_ID(func, bpf_lsm_cred_prepare)
+308:BTF_ID(func, bpf_lsm_file_ioctl)
+309:BTF_ID(func, bpf_lsm_file_lock)
+310:BTF_ID(func, bpf_lsm_file_open)
+311:BTF_ID(func, bpf_lsm_file_post_open)
+312:BTF_ID(func, bpf_lsm_file_receive)
+313-
+314:BTF_ID(func, bpf_lsm_inode_create)
+315:BTF_ID(func, bpf_lsm_inode_free_security)
+316:BTF_ID(func, bpf_lsm_inode_getattr)
+317:BTF_ID(func, bpf_lsm_inode_getxattr)
+318:BTF_ID(func, bpf_lsm_inode_mknod)
+319:BTF_ID(func, bpf_lsm_inode_need_killpriv)
+320:BTF_ID(func, bpf_lsm_inode_post_setxattr)
+321:BTF_ID(func, bpf_lsm_inode_post_removexattr)
+322:BTF_ID(func, bpf_lsm_inode_readlink)
+323:BTF_ID(func, bpf_lsm_inode_removexattr)
+324:BTF_ID(func, bpf_lsm_inode_rename)
+325:BTF_ID(func, bpf_lsm_inode_rmdir)
+326:BTF_ID(func, bpf_lsm_inode_setattr)
+327:BTF_ID(func, bpf_lsm_inode_setxattr)
+328:BTF_ID(func, bpf_lsm_inode_symlink)
+329:BTF_ID(func, bpf_lsm_inode_unlink)
+330:BTF_ID(func, bpf_lsm_kernel_module_request)
+331:BTF_ID(func, bpf_lsm_kernel_read_file)
+332:BTF_ID(func, bpf_lsm_kernfs_init_security)
+333-
+334-#ifdef CONFIG_SECURITY_PATH
+335:BTF_ID(func, bpf_lsm_path_unlink)
+336:BTF_ID(func, bpf_lsm_path_mkdir)
+337:BTF_ID(func, bpf_lsm_path_rmdir)
+338:BTF_ID(func, bpf_lsm_path_truncate)
+339:BTF_ID(func, bpf_lsm_path_symlink)
+340:BTF_ID(func, bpf_lsm_path_link)
+341:BTF_ID(func, bpf_lsm_path_rename)
+342:BTF_ID(func, bpf_lsm_path_chmod)
+343:BTF_ID(func, bpf_lsm_path_chown)
+344-#endif /* CONFIG_SECURITY_PATH */
+345-
+346:BTF_ID(func, bpf_lsm_mmap_file)
+347:BTF_ID(func, bpf_lsm_netlink_send)
+348:BTF_ID(func, bpf_lsm_path_notify)
+349:BTF_ID(func, bpf_lsm_release_secctx)
+350:BTF_ID(func, bpf_lsm_sb_alloc_security)
+351:BTF_ID(func, bpf_lsm_sb_eat_lsm_opts)
+352:BTF_ID(func, bpf_lsm_sb_kern_mount)
+353:BTF_ID(func, bpf_lsm_sb_mount)
+354:BTF_ID(func, bpf_lsm_sb_remount)
+355:BTF_ID(func, bpf_lsm_sb_set_mnt_opts)
+356:BTF_ID(func, bpf_lsm_sb_show_options)
+357:BTF_ID(func, bpf_lsm_sb_statfs)
+358:BTF_ID(func, bpf_lsm_sb_umount)
+359:BTF_ID(func, bpf_lsm_settime)
+360-
+361-#ifdef CONFIG_SECURITY_NETWORK
+362:BTF_ID(func, bpf_lsm_inet_conn_established)
+363-
+364:BTF_ID(func, bpf_lsm_socket_accept)
+365:BTF_ID(func, bpf_lsm_socket_bind)
+366:BTF_ID(func, bpf_lsm_socket_connect)
+367:BTF_ID(func, bpf_lsm_socket_create)
+368:BTF_ID(func, bpf_lsm_socket_getpeername)
+369:BTF_ID(func, bpf_lsm_socket_getpeersec_dgram)
+370:BTF_ID(func, bpf_lsm_socket_getsockname)
+371:BTF_ID(func, bpf_lsm_socket_getsockopt)
+372:BTF_ID(func, bpf_lsm_socket_listen)
+373:BTF_ID(func, bpf_lsm_socket_post_create)
+374:BTF_ID(func, bpf_lsm_socket_recvmsg)
+375:BTF_ID(func, bpf_lsm_socket_sendmsg)
+376:BTF_ID(func, bpf_lsm_socket_shutdown)
+377:BTF_ID(func, bpf_lsm_socket_socketpair)
+378-#endif /* CONFIG_SECURITY_NETWORK */
+379-
+380:BTF_ID(func, bpf_lsm_syslog)
+381:BTF_ID(func, bpf_lsm_task_alloc)
+382:BTF_ID(func, bpf_lsm_task_prctl)
+383:BTF_ID(func, bpf_lsm_task_setscheduler)
+384:BTF_ID(func, bpf_lsm_task_to_inode)
+385:BTF_ID(func, bpf_lsm_userns_create)
+386-BTF_SET_END(sleepable_lsm_hooks)
+387-
+388-BTF_SET_START(untrusted_lsm_hooks)
+389:BTF_ID(func, bpf_lsm_bpf_map_free)
+390:BTF_ID(func, bpf_lsm_bpf_prog_free)
+391:BTF_ID(func, bpf_lsm_file_alloc_security)
+392:BTF_ID(func, bpf_lsm_file_free_security)
+393-#ifdef CONFIG_SECURITY_NETWORK
+394:BTF_ID(func, bpf_lsm_sk_alloc_security)
+395:BTF_ID(func, bpf_lsm_sk_free_security)
+396-#endif /* CONFIG_SECURITY_NETWORK */
+397:BTF_ID(func, bpf_lsm_task_free)
+398-BTF_SET_END(untrusted_lsm_hooks)
+399-
+400:bool bpf_lsm_is_sleepable_hook(u32 btf_id)
+401-{
+402-	return btf_id_set_contains(&sleepable_lsm_hooks, btf_id);
+403-}
+404-
+405:bool bpf_lsm_is_trusted(const struct bpf_prog *prog)
+406-{
+407-	return !btf_id_set_contains(&untrusted_lsm_hooks, prog->aux->attach_btf_id);
+408-}
+409-
+410-const struct bpf_prog_ops lsm_prog_ops = {
+411-};
+412-
+413-const struct bpf_verifier_ops lsm_verifier_ops = {
+414:	.get_func_proto = bpf_lsm_func_proto,
+415-	.is_valid_access = btf_ctx_access,
+416-};
+417-
+418-/* hooks return 0 or 1 */
+419-BTF_SET_START(bool_lsm_hooks)
+420-#ifdef CONFIG_SECURITY_NETWORK_XFRM
+421:BTF_ID(func, bpf_lsm_xfrm_state_pol_flow_match)
+422-#endif
+423-#ifdef CONFIG_AUDIT
+424:BTF_ID(func, bpf_lsm_audit_rule_known)
+425-#endif
+426:BTF_ID(func, bpf_lsm_inode_xattr_skipcap)
+427-BTF_SET_END(bool_lsm_hooks)
+428-
+429:int bpf_lsm_get_retval_range(const struct bpf_prog *prog,
+430-			     struct bpf_retval_range *retval_range)
+431-{
+432-	/* no return value range for void hooks */
+433-	if (!prog->aux->attach_func_proto->type)
+434-		return -EINVAL;
+435-
+436-	if (btf_id_set_contains(&bool_lsm_hooks, prog->aux->attach_btf_id)) {
+437-		retval_range->minval = 0;
+438-		retval_range->maxval = 1;
+439-	} else {
+440-		/* All other available LSM hooks, except task_prctl, return 0
+441-		 * on success and negative error code on failure.
+442-		 * To keep things simple, we only allow bpf progs to return 0
+443-		 * or negative errno for task_prctl too.
+444-		 */
+445-		retval_range->minval = -MAX_ERRNO;
+446-		retval_range->maxval = 0;
+447-	}
+448-	return 0;
+449-}
+
+===== NETWORK RECEIVE ENTRY CONTEXT =====
+4959-				goto use_local_napi;
+4960-
+4961-			set_bit(NAPI_STATE_SCHED_THREADED, &napi->state);
+4962-			wake_up_process(thread);
+4963-			return;
+4964-		}
+4965-	}
+4966-
+4967-use_local_napi:
+4968-	DEBUG_NET_WARN_ON_ONCE(!list_empty(&napi->poll_list));
+4969-	list_add_tail(&napi->poll_list, &sd->poll_list);
+4970-	WRITE_ONCE(napi->list_owner, smp_processor_id());
+4971:	/* If not called from net_rx_action()
+4972-	 * we have to raise NET_RX_SOFTIRQ.
+4973-	 */
+4974-	if (!sd->in_net_rx_action)
+4975-		raise_softirq_irqoff(NET_RX_SOFTIRQ);
+4976-}
+4977-
+4978-#ifdef CONFIG_RPS
+4979-
+4980-struct static_key_false rps_needed __read_mostly;
+4981-EXPORT_SYMBOL(rps_needed);
+4982-struct static_key_false rfs_needed __read_mostly;
+4983-EXPORT_SYMBOL(rfs_needed);
+4984-
+4985-static u32 rfs_slot(u32 hash, const struct rps_dev_flow_table *flow_table)
+4986-{
+4987-	return hash_32(hash, flow_table->log);
+4988-}
+4989-
+4990-#ifdef CONFIG_RFS_ACCEL
+4991-/**
+4992- * rps_flow_is_active - check whether the flow is recently active.
+4993- * @rflow: Specific flow to check activity.
+4994- * @flow_table: per-queue flowtable that @rflow belongs to.
+4995- * @cpu: CPU saved in @rflow.
+4996- *
+--
+5239-{
+5240-	struct softnet_data *sd = data;
+5241-
+5242-	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+5243-	smp_store_release(&sd->defer_ipi_scheduled, 0);
+5244-}
+5245-
+5246-/*
+5247- * After we queued a packet into sd->input_pkt_queue,
+5248- * we need to make sure this queue is serviced soon.
+5249- *
+5250- * - If this is another cpu queue, link it to our rps_ipi_list,
+5251: *   and make sure we will process rps_ipi_list from net_rx_action().
+5252- *
+5253- * - If this is our own queue, NAPI schedule our backlog.
+5254- *   Note that this also raises NET_RX_SOFTIRQ.
+5255- */
+5256-static void napi_schedule_rps(struct softnet_data *sd)
+5257-{
+5258-	struct softnet_data *mysd = this_cpu_ptr(&softnet_data);
+5259-
+5260-#ifdef CONFIG_RPS
+5261-	if (sd != mysd) {
+5262-		if (use_backlog_threads()) {
+5263-			__napi_schedule_irqoff(&sd->backlog);
+5264-			return;
+5265-		}
+5266-
+5267-		sd->rps_ipi_next = mysd->rps_ipi_list;
+5268-		mysd->rps_ipi_list = sd;
+5269-
+5270:		/* If not called from net_rx_action() or napi_threaded_poll()
+5271-		 * we have to raise NET_RX_SOFTIRQ.
+5272-		 */
+5273-		if (!mysd->in_net_rx_action && !mysd->in_napi_threaded_poll)
+5274-			__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+5275-		return;
+5276-	}
+5277-#endif /* CONFIG_RPS */
+5278-	__napi_schedule_irqoff(&mysd->backlog);
+5279-}
+5280-
+5281-void kick_defer_list_purge(unsigned int cpu)
+5282-{
+5283-	struct softnet_data *sd = &per_cpu(softnet_data, cpu);
+5284-	unsigned long flags;
+5285-
+5286-	if (use_backlog_threads()) {
+5287-		backlog_lock_irq_save(sd, &flags);
+5288-
+5289-		if (!__test_and_set_bit(NAPI_STATE_SCHED, &sd->backlog.state))
+5290-			__napi_schedule_irqoff(&sd->backlog);
+5291-
+5292-		backlog_unlock_irq_restore(sd, flags);
+5293-
+5294-	} else if (!cmpxchg(&sd->defer_ipi_scheduled, 0, 1)) {
+5295-		smp_call_function_single_async(cpu, &sd->defer_csd);
+--
+5939-			*ret = deliver_skb(skb, *pt_prev, orig_dev);
+5940-			*pt_prev = NULL;
+5941-		}
+5942-
+5943-		rcu_read_lock();
+5944-		ingress_retval = nf_hook_ingress(skb);
+5945-		rcu_read_unlock();
+5946-		return ingress_retval;
+5947-	}
+5948-	return 0;
+5949-}
+5950-
+5951:static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
+5952-				    struct packet_type **ppt_prev)
+5953-{
+5954-	enum skb_drop_reason drop_reason = SKB_DROP_REASON_UNHANDLED_PROTO;
+5955-	struct packet_type *ptype, *pt_prev;
+5956-	rx_handler_func_t *rx_handler;
+5957-	struct sk_buff *skb = *pskb;
+5958-	struct net_device *orig_dev;
+5959-	bool deliver_exact = false;
+5960-	int ret = NET_RX_DROP;
+5961-	__be16 type;
+5962-
+5963-	net_timestamp_check(!READ_ONCE(net_hotdata.tstamp_prequeue), skb);
+5964-
+5965-	trace_netif_receive_skb(skb);
+5966-
+5967-	orig_dev = skb->dev;
+5968-
+5969-	skb_reset_network_header(skb);
+5970-#if !defined(CONFIG_DEBUG_NET)
+5971-	/* We plan to no longer reset the transport header here.
+5972-	 * Give some time to fuzzers and dev build to catch bugs
+5973-	 * in network stacks.
+5974-	 */
+5975-	if (!skb_transport_header_was_set(skb))
+5976-		skb_reset_transport_header(skb);
+--
+6167-	 * skb dereferencing near it.
+6168-	 */
+6169-	*pskb = skb;
+6170-	return ret;
+6171-}
+6172-
+6173-static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
+6174-{
+6175-	struct net_device *orig_dev = skb->dev;
+6176-	struct packet_type *pt_prev = NULL;
+6177-	int ret;
+6178-
+6179:	ret = __netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+6180-	if (pt_prev)
+6181-		ret = INDIRECT_CALL_INET(pt_prev->func, ipv6_rcv, ip_rcv, skb,
+6182-					 skb->dev, pt_prev, orig_dev);
+6183-	return ret;
+6184-}
+6185-
+6186-/**
+6187- *	netif_receive_skb_core - special purpose version of netif_receive_skb
+6188- *	@skb: buffer to process
+6189- *
+6190- *	More direct receive version of netif_receive_skb().  It should
+6191- *	only be used by callers that have a need to skip RPS and Generic XDP.
+6192- *	Caller must also take care of handling if ``(page_is_)pfmemalloc``.
+6193- *
+6194- *	This function may only be called from softirq context and interrupts
+6195- *	should be enabled.
+6196- *
+6197- *	Return values (usually ignored):
+6198- *	NET_RX_SUCCESS: no congestion
+6199- *	NET_RX_DROP: packet was dropped
+6200- */
+6201-int netif_receive_skb_core(struct sk_buff *skb)
+6202-{
+6203-	int ret;
+6204-
+--
+6244-	/* Current (common) ptype of sublist */
+6245-	struct packet_type *pt_curr = NULL;
+6246-	/* Current (common) orig_dev of sublist */
+6247-	struct net_device *od_curr = NULL;
+6248-	struct sk_buff *skb, *next;
+6249-	LIST_HEAD(sublist);
+6250-
+6251-	list_for_each_entry_safe(skb, next, head, list) {
+6252-		struct net_device *orig_dev = skb->dev;
+6253-		struct packet_type *pt_prev = NULL;
+6254-
+6255-		skb_list_del_init(skb);
+6256:		__netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+6257-		if (!pt_prev)
+6258-			continue;
+6259-		if (pt_curr != pt_prev || od_curr != orig_dev) {
+6260-			/* dispatch old sublist */
+6261-			__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
+6262-			/* start new sublist */
+6263-			INIT_LIST_HEAD(&sublist);
+6264-			pt_curr = pt_prev;
+6265-			od_curr = orig_dev;
+6266-		}
+6267-		list_add_tail(&skb->list, &sublist);
+6268-	}
+6269-
+6270-	/* dispatch final sublist */
+6271-	__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
+6272-}
+6273-
+6274-static int __netif_receive_skb(struct sk_buff *skb)
+6275-{
+6276-	int ret;
+6277-
+6278-	if (sk_memalloc_socks() && skb_pfmemalloc(skb)) {
+6279-		unsigned int noreclaim_flag;
+6280-
+6281-		/*
+--
+6346-			dev_disable_gro_hw(dev);
+6347-		}
+6348-		break;
+6349-
+6350-	default:
+6351-		ret = -EINVAL;
+6352-		break;
+6353-	}
+6354-
+6355-	return ret;
+6356-}
+6357-
+6358:static int netif_receive_skb_internal(struct sk_buff *skb)
+6359-{
+6360-	int ret;
+6361-
+6362-	net_timestamp_check(READ_ONCE(net_hotdata.tstamp_prequeue), skb);
+6363-
+6364-	if (skb_defer_rx_timestamp(skb))
+6365-		return NET_RX_SUCCESS;
+6366-
+6367-	rcu_read_lock();
+6368-#ifdef CONFIG_RPS
+6369-	if (static_branch_unlikely(&rps_needed)) {
+6370-		struct rps_dev_flow voidflow, *rflow = &voidflow;
+6371-		int cpu = get_rps_cpu(skb->dev, skb, &rflow);
+6372-
+6373-		if (cpu >= 0) {
+6374-			ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
+6375-			rcu_read_unlock();
+6376-			return ret;
+6377-		}
+6378-	}
+6379-#endif
+6380-	ret = __netif_receive_skb(skb);
+6381-	rcu_read_unlock();
+6382-	return ret;
+6383-}
+--
+6427- *	should be enabled.
+6428- *
+6429- *	Return values (usually ignored):
+6430- *	NET_RX_SUCCESS: no congestion
+6431- *	NET_RX_DROP: packet was dropped
+6432- */
+6433-int netif_receive_skb(struct sk_buff *skb)
+6434-{
+6435-	int ret;
+6436-
+6437-	trace_netif_receive_skb_entry(skb);
+6438-
+6439:	ret = netif_receive_skb_internal(skb);
+6440-	trace_netif_receive_skb_exit(ret);
+6441-
+6442-	return ret;
+6443-}
+6444-EXPORT_SYMBOL(netif_receive_skb);
+6445-
+6446-/**
+6447- *	netif_receive_skb_list - process many receive buffers from network
+6448- *	@head: list of skbs to process.
+6449- *
+6450- *	Since return value of netif_receive_skb() is normally ignored, and
+6451- *	wouldn't be meaningful for a list, this function returns void.
+6452- *
+6453- *	This function may only be called from softirq context and interrupts
+6454- *	should be enabled.
+6455- */
+6456-void netif_receive_skb_list(struct list_head *head)
+6457-{
+6458-	struct sk_buff *skb;
+6459-
+6460-	if (list_empty(head))
+6461-		return;
+6462-	if (trace_netif_receive_skb_list_entry_enabled()) {
+6463-		list_for_each_entry(skb, head, list)
+6464-			trace_netif_receive_skb_list_entry(skb);
+--
+6611-		local_irq_enable();
+6612-}
+6613-
+6614-static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
+6615-{
+6616-#ifdef CONFIG_RPS
+6617-	return !use_backlog_threads() && sd->rps_ipi_list;
+6618-#else
+6619-	return false;
+6620-#endif
+6621-}
+6622-
+6623:static int process_backlog(struct napi_struct *napi, int quota)
+6624-{
+6625-	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
+6626-	bool again = true;
+6627-	int work = 0;
+6628-
+6629-	/* Check if we have pending ipi, its better to send them now,
+6630:	 * not waiting net_rx_action() end.
+6631-	 */
+6632-	if (sd_has_rps_ipi_waiting(sd)) {
+6633-		local_irq_disable();
+6634-		net_rps_action_and_irq_enable(sd);
+6635-	}
+6636-
+6637-	napi->weight = READ_ONCE(net_hotdata.dev_rx_weight);
+6638-	while (again) {
+6639-		struct sk_buff *skb;
+6640-
+6641-		local_lock_nested_bh(&softnet_data.process_queue_bh_lock);
+6642-		while ((skb = __skb_dequeue(&sd->process_queue))) {
+6643-			local_unlock_nested_bh(&softnet_data.process_queue_bh_lock);
+6644-			rcu_read_lock();
+6645-			__netif_receive_skb(skb);
+6646-			rcu_read_unlock();
+6647-			if (++work >= quota) {
+6648-				rps_input_queue_head_add(sd, work);
+6649-				return work;
+6650-			}
+6651-
+6652-			local_lock_nested_bh(&softnet_data.process_queue_bh_lock);
+6653-		}
+6654-		local_unlock_nested_bh(&softnet_data.process_queue_bh_lock);
+6655-
+--
+7683-	list_del_rcu(&napi->dev_list);
+7684-	napi_free_frags(napi);
+7685-
+7686-	gro_cleanup(&napi->gro);
+7687-
+7688-	if (napi->thread) {
+7689-		kthread_stop(napi->thread);
+7690-		napi->thread = NULL;
+7691-	}
+7692-}
+7693-EXPORT_SYMBOL(__netif_napi_del_locked);
+7694-
+7695:static int __napi_poll(struct napi_struct *n, bool *repoll)
+7696-{
+7697-	int work, weight;
+7698-
+7699-	weight = n->weight;
+7700-
+7701-	/* This NAPI_STATE_SCHED test is for avoiding a race
+7702-	 * with netpoll's poll_napi().  Only the entity which
+7703-	 * obtains the lock and sees NAPI_STATE_SCHED set will
+7704-	 * actually make the ->poll() call.  Therefore we avoid
+7705-	 * accidentally calling ->poll() when NAPI is not scheduled.
+7706-	 */
+7707-	work = 0;
+7708-	if (napi_is_scheduled(n)) {
+7709-		work = n->poll(n, weight);
+7710-		trace_napi_poll(n, work, weight);
+7711-
+7712-		xdp_do_check_flushed(n);
+7713-	}
+7714-
+7715-	if (unlikely(work > weight))
+7716-		netdev_err_once(n->dev, "NAPI poll function %pS returned %d, exceeding its budget of %d.\n",
+7717-				n->poll, work, weight);
+7718-
+7719-	if (likely(work < weight))
+7720-		return work;
+--
+7760-}
+7761-
+7762-static int napi_poll(struct napi_struct *n, struct list_head *repoll)
+7763-{
+7764-	bool do_repoll = false;
+7765-	void *have;
+7766-	int work;
+7767-
+7768-	list_del_init(&n->poll_list);
+7769-
+7770-	have = netpoll_poll_lock(n);
+7771-
+7772:	work = __napi_poll(n, &do_repoll);
+7773-
+7774-	if (do_repoll) {
+7775-#if defined(CONFIG_DEBUG_NET)
+7776-		if (unlikely(!napi_is_scheduled(n)))
+7777-			pr_crit("repoll requested for device %s %ps but napi is not scheduled.\n",
+7778-				n->dev->name, n->poll);
+7779-#endif
+7780-		list_add_tail(&n->poll_list, repoll);
+7781-	}
+7782-	netpoll_poll_unlock(have);
+7783-
+7784-	return work;
+7785-}
+7786-
+7787-static int napi_thread_wait(struct napi_struct *napi)
+7788-{
+7789-	set_current_state(TASK_INTERRUPTIBLE);
+7790-
+7791-	while (!kthread_should_stop()) {
+7792-		/* Testing SCHED_THREADED bit here to make sure the current
+7793-		 * kthread owns this napi and could poll on this napi.
+7794-		 * Testing SCHED bit is not enough because SCHED bit might be
+7795-		 * set by some other busy poll thread or by napi_disable().
+7796-		 */
+7797-		if (test_bit(NAPI_STATE_SCHED_THREADED, &napi->state)) {
+--
+7817-
+7818-	for (;;) {
+7819-		bool repoll = false;
+7820-		void *have;
+7821-
+7822-		local_bh_disable();
+7823-		bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
+7824-
+7825-		sd = this_cpu_ptr(&softnet_data);
+7826-		sd->in_napi_threaded_poll = true;
+7827-
+7828-		have = netpoll_poll_lock(napi);
+7829:		__napi_poll(napi, &repoll);
+7830-		netpoll_poll_unlock(have);
+7831-
+7832-		sd->in_napi_threaded_poll = false;
+7833-		barrier();
+7834-
+7835-		if (sd_has_rps_ipi_waiting(sd)) {
+7836-			local_irq_disable();
+7837-			net_rps_action_and_irq_enable(sd);
+7838-		}
+7839-		skb_defer_free_flush();
+7840-		bpf_net_ctx_clear(bpf_net_ctx);
+7841-
+7842-		/* When busy poll is enabled, the old packets are not flushed in
+7843-		 * napi_complete_done. So flush them here.
+7844-		 */
+7845-		if (busy_poll_last_qs)
+7846-			gro_flush_normal(&napi->gro, HZ >= 1000);
+7847-		local_bh_enable();
+7848-
+7849-		/* Call cond_resched here to avoid watchdog warnings. */
+7850-		if (repoll || busy_poll_last_qs) {
+7851-			rcu_softirq_qs_periodic(last_qs);
+7852-			cond_resched();
+7853-		}
+7854-
+--
+7878-			want_busy_poll = false;
+7879-
+7880-		if (want_busy_poll != in_busy_poll)
+7881-			assign_bit(NAPI_STATE_IN_BUSY_POLL, &napi->state,
+7882-				   want_busy_poll);
+7883-
+7884-		napi_threaded_poll_loop(napi, want_busy_poll ? &last_qs : NULL);
+7885-	}
+7886-
+7887-	return 0;
+7888-}
+7889-
+7890:static __latent_entropy void net_rx_action(void)
+7891-{
+7892-	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
+7893-	unsigned long time_limit = jiffies +
+7894-		usecs_to_jiffies(READ_ONCE(net_hotdata.netdev_budget_usecs));
+7895-	struct bpf_net_context __bpf_net_ctx, *bpf_net_ctx;
+7896-	int budget = READ_ONCE(net_hotdata.netdev_budget);
+7897-	LIST_HEAD(list);
+7898-	LIST_HEAD(repoll);
+7899-
+7900-	bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
+7901-start:
+7902-	sd->in_net_rx_action = true;
+7903-	local_irq_disable();
+7904-	list_splice_init(&sd->poll_list, &list);
+7905-	local_irq_enable();
+7906-
+7907-	for (;;) {
+7908-		struct napi_struct *n;
+7909-
+7910-		skb_defer_free_flush();
+7911-
+7912-		if (list_empty(&list)) {
+7913-			if (list_empty(&repoll)) {
+7914-				sd->in_net_rx_action = false;
+7915-				barrier();
+--
+12716-	/* Append completion queue from offline CPU. */
+12717-	*list_skb = oldsd->completion_queue;
+12718-	oldsd->completion_queue = NULL;
+12719-
+12720-	/* Append output queue from offline CPU. */
+12721-	if (oldsd->output_queue) {
+12722-		*sd->output_queue_tailp = oldsd->output_queue;
+12723-		sd->output_queue_tailp = oldsd->output_queue_tailp;
+12724-		oldsd->output_queue = NULL;
+12725-		oldsd->output_queue_tailp = &oldsd->output_queue;
+12726-	}
+12727-	/* Append NAPI poll list from offline CPU, with one exception :
+12728:	 * process_backlog() must be called by cpu owning percpu backlog.
+12729-	 * We properly handle process_queue & input_pkt_queue later.
+12730-	 */
+12731-	while (!list_empty(&oldsd->poll_list)) {
+12732-		struct napi_struct *napi = list_first_entry(&oldsd->poll_list,
+12733-							    struct napi_struct,
+12734-							    poll_list);
+12735-
+12736-		list_del_init(&napi->poll_list);
+12737-		if (napi->poll == process_backlog)
+12738-			napi->state &= NAPIF_STATE_THREADED;
+12739-		else
+12740-			____napi_schedule(sd, napi);
+12741-	}
+12742-
+12743-	raise_softirq_irqoff(NET_TX_SOFTIRQ);
+12744-	local_irq_enable();
+12745-
+12746-	if (!use_backlog_threads()) {
+12747-#ifdef CONFIG_RPS
+12748-		remsd = oldsd->rps_ipi_list;
+12749-		oldsd->rps_ipi_list = NULL;
+12750-#endif
+12751-		/* send out pending IPI's on offline CPU */
+12752-		net_rps_send_ipi(remsd);
+12753-	}
+
+===== TCP INPUT CALLBACK CONTEXT =====
+148-{
+149-	bool unknown_opt = tcp_sk(sk)->rx_opt.saw_unknown &&
+150-		BPF_SOCK_OPS_TEST_FLAG(tcp_sk(sk),
+151-				       BPF_SOCK_OPS_PARSE_UNKNOWN_HDR_OPT_CB_FLAG);
+152-	bool parse_all_opt = BPF_SOCK_OPS_TEST_FLAG(tcp_sk(sk),
+153-						    BPF_SOCK_OPS_PARSE_ALL_HDR_OPT_CB_FLAG);
+154-	struct bpf_sock_ops_kern sock_ops;
+155-
+156-	if (likely(!unknown_opt && !parse_all_opt))
+157-		return;
+158-
+159-	/* The skb will be handled in the
+160:	 * bpf_skops_established() or
+161-	 * bpf_skops_write_hdr_opt().
+162-	 */
+163-	switch (sk->sk_state) {
+164-	case TCP_SYN_RECV:
+165-	case TCP_SYN_SENT:
+166-	case TCP_LISTEN:
+167-		return;
+168-	}
+169-
+170-	sock_owned_by_me(sk);
+171-
+172-	memset(&sock_ops, 0, offsetof(struct bpf_sock_ops_kern, temp));
+173-	sock_ops.op = BPF_SOCK_OPS_PARSE_HDR_OPT_CB;
+174-	sock_ops.is_fullsock = 1;
+175-	sock_ops.is_locked_tcp_sock = 1;
+176-	sock_ops.sk = sk;
+177-	bpf_skops_init_skb(&sock_ops, skb, tcp_hdrlen(skb));
+178-
+179:	BPF_CGROUP_RUN_PROG_SOCK_OPS(&sock_ops);
+180-}
+181-
+182:static void bpf_skops_established(struct sock *sk, int bpf_op,
+183-				  struct sk_buff *skb)
+184-{
+185-	struct bpf_sock_ops_kern sock_ops;
+186-
+187-	sock_owned_by_me(sk);
+188-
+189-	memset(&sock_ops, 0, offsetof(struct bpf_sock_ops_kern, temp));
+190-	sock_ops.op = bpf_op;
+191-	sock_ops.is_fullsock = 1;
+192-	sock_ops.is_locked_tcp_sock = 1;
+193-	sock_ops.sk = sk;
+194-	/* sk with TCP_REPAIR_ON does not have skb in tcp_finish_connect */
+195-	if (skb)
+196-		bpf_skops_init_skb(&sock_ops, skb, tcp_hdrlen(skb));
+197-
+198:	BPF_CGROUP_RUN_PROG_SOCK_OPS(&sock_ops);
+199-}
+200-#else
+201-static void bpf_skops_parse_hdr(struct sock *sk, struct sk_buff *skb)
+202-{
+203-}
+204-
+205:static void bpf_skops_established(struct sock *sk, int bpf_op,
+206-				  struct sk_buff *skb)
+207-{
+208-}
+209-#endif
+210-
+211-static __cold void tcp_gro_dev_warn(const struct sock *sk, const struct sk_buff *skb,
+212-				    unsigned int len)
+213-{
+214-	struct net_device *dev;
+215-
+216-	rcu_read_lock();
+217-	dev = dev_get_by_index_rcu(sock_net(sk), skb->skb_iif);
+218-	if (!dev || len >= READ_ONCE(dev->mtu))
+219-		pr_warn("%s: Driver has suspect GRO implementation, TCP performance may be compromised.\n",
+220-			dev ? dev->name : "Unknown driver");
+221-	rcu_read_unlock();
+222-}
+223-
+224-/* Adapt the MSS value used to make delayed ack decision to the
+225- * real world.
+226- */
+227-static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
+--
+6734-	/* Initialize the congestion window to start the transfer.
+6735-	 * Cut cwnd down to 1 per RFC5681 if SYN or SYN-ACK has been
+6736-	 * retransmitted. In light of RFC6298 more aggressive 1sec
+6737-	 * initRTO, we only reset cwnd when more than 1 SYN/SYN-ACK
+6738-	 * retransmission has occurred.
+6739-	 */
+6740-	if (tp->total_retrans > 1 && tp->undo_marker)
+6741-		tcp_snd_cwnd_set(tp, 1);
+6742-	else
+6743-		tcp_snd_cwnd_set(tp, tcp_init_cwnd(tp, __sk_dst_get(sk)));
+6744-	tp->snd_cwnd_stamp = tcp_jiffies32;
+6745-
+6746:	bpf_skops_established(sk, bpf_op, skb);
+6747-	/* Initialize congestion control unless BPF initialized it already: */
+6748-	if (!icsk->icsk_ca_initialized)
+6749-		tcp_init_congestion_control(sk);
+6750-	tcp_init_buffer_space(sk);
+6751-}
+6752-
+6753-void tcp_finish_connect(struct sock *sk, struct sk_buff *skb)
+6754-{
+6755-	struct tcp_sock *tp = tcp_sk(sk);
+6756-	struct inet_connection_sock *icsk = inet_csk(sk);
+6757-
+6758-	tcp_ao_finish_connect(sk, skb);
+6759-	tcp_set_state(sk, TCP_ESTABLISHED);
+6760-	icsk->icsk_ack.lrcvtime = tcp_jiffies32;
+6761-
+6762-	if (skb) {
+6763-		icsk->icsk_af_ops->sk_rx_dst_set(sk, skb);
+6764-		security_inet_conn_established(sk, skb);
+6765-		sk_mark_napi_id(sk, skb);
+6766-	}
+6767-
+6768-	tcp_init_transfer(sk, BPF_SOCK_OPS_ACTIVE_ESTABLISHED_CB, skb);
+
+===== SK_PSOCK CALLBACK REGISTRATION AND INVOCATION =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-907-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-908-	switch (verdict) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-909-	case SK_PASS:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-910-		return redir ? __SK_REDIRECT : __SK_PASS;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-911-	case SK_DROP:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-912-	default:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-913-		break;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-914-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-915-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-916-	return __SK_DROP;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-917-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-918-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:919:int sk_psock_msg_verdict(struct sock *sk, struct sk_psock *psock,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-920-			 struct sk_msg *msg)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-921-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-922-	struct bpf_prog *prog;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-923-	int ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-924-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-925-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-926-	prog = READ_ONCE(psock->progs.msg_parser);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-927-	if (unlikely(!prog)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-928-		ret = __SK_PASS;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-929-		goto out;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-930-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-931-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-932-	sk_msg_compute_data_pointers(msg);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-933-	msg->sk = sk;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-934-	ret = bpf_prog_run_pin_on_cpu(prog, msg);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-935-	msg->sk = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-936-	ret = sk_psock_map_verd(ret, msg->sk_redir);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-937-	psock->apply_bytes = msg->apply_bytes;
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-943-		if (!msg->sk_redir) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-944-			ret = __SK_DROP;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-945-			goto out;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-946-		}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-947-		psock->redir_ingress = sk_msg_to_ingress(msg);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-948-		psock->sk_redir = msg->sk_redir;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-949-		sock_hold(psock->sk_redir);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-950-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-951-out:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-952-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-953-	return ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-954-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:955:EXPORT_SYMBOL_GPL(sk_psock_msg_verdict);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-956-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-957-static int sk_psock_skb_redirect(struct sk_psock *from, struct sk_buff *skb)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-958-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-959-	struct sk_psock *psock_other;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-960-	struct sock *sk_other;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-961-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-962-	sk_other = skb_bpf_redirect_fetch(skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-963-	/* This error is a buggy BPF program, it returned a redirect
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-964-	 * return code, but then didn't set a redirect interface.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-965-	 */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-966-	if (unlikely(!sk_other)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-967-		skb_bpf_redirect_clear(skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-968-		sock_drop(from->sk, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-969-		return -EIO;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-970-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-971-	psock_other = sk_psock(sk_other);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-972-	/* This error indicates the socket is being torn down or had another
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-973-	 * error that caused the pipe to break. We can't send a packet on
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1097-	psock = sk_psock(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1098-	if (likely(psock)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1099-		if (sk_psock_test_state(psock, SK_PSOCK_TX_ENABLED))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1100-			schedule_delayed_work(&psock->work, 0);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1101-		write_space = psock->saved_write_space;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1102-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1103-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1104-	if (write_space)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1105-		write_space(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1106-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1107-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1108-#if IS_ENABLED(CONFIG_BPF_STREAM_PARSER)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1109:static void sk_psock_strp_read(struct strparser *strp, struct sk_buff *skb)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1110-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1111-	struct sk_psock *psock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1112-	struct bpf_prog *prog;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1113-	int ret = __SK_DROP;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1114-	struct sock *sk;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1115-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1116-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1117-	sk = strp->sk;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1118-	psock = sk_psock(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1119-	if (unlikely(!psock)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1120-		sock_drop(sk, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1121-		goto out;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1122-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1123-	prog = READ_ONCE(psock->progs.stream_verdict);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1124-	if (likely(prog)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1125-		skb->sk = sk;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1126-		skb_dst_drop(skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1127-		skb_bpf_redirect_clear(skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1128-		ret = bpf_prog_run_pin_on_cpu(prog, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1129-		skb_bpf_set_strparser(skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1130-		ret = sk_psock_map_verd(ret, skb_bpf_redirect_fetch(skb));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1131-		skb->sk = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1132-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1133-	sk_psock_verdict_apply(psock, skb, ret);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1134-out:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1135-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1136-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1137-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1138:static int sk_psock_strp_read_done(struct strparser *strp, int err)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1139-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1140-	return err;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1141-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1142-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1143-static int sk_psock_strp_parse(struct strparser *strp, struct sk_buff *skb)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1144-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1145-	struct sk_psock *psock = container_of(strp, struct sk_psock, strp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1146-	struct bpf_prog *prog;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1147-	int ret = skb->len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1148-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1149-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1150-	prog = READ_ONCE(psock->progs.stream_parser);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1151-	if (likely(prog)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1152-		skb->sk = psock->sk;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1153-		ret = bpf_prog_run_pin_on_cpu(prog, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1154-		skb->sk = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1155-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1156-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1157-	return ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1158-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1159-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1160-/* Called with socket lock held. */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1161:static void sk_psock_strp_data_ready(struct sock *sk)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1162-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1163-	struct sk_psock *psock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1164-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1165:	trace_sk_data_ready(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1166-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1167-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1168-	psock = sk_psock(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1169-	if (likely(psock)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1170-		if (tls_sw_has_ctx_rx(sk)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1171-			psock->saved_data_ready(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1172-		} else {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1173-			read_lock_bh(&sk->sk_callback_lock);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1174:			strp_data_ready(&psock->strp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1175-			read_unlock_bh(&sk->sk_callback_lock);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1176-		}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1177-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1178-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1179-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1180-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1181-int sk_psock_init_strp(struct sock *sk, struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1182-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1183-	int ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1184-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1185-	static const struct strp_callbacks cb = {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1186:		.rcv_msg	= sk_psock_strp_read,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1187:		.read_sock_done	= sk_psock_strp_read_done,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1188-		.parse_msg	= sk_psock_strp_parse,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1189-	};
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1190-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1191-	ret = strp_init(&psock->strp, sk, &cb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1192-	if (!ret)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1193-		sk_psock_set_state(psock, SK_PSOCK_RX_STRP_ENABLED);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1194-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1195-	if (sk_is_tcp(sk)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1196-		psock->strp.cb.read_sock = tcp_bpf_strp_read_sock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1197-		psock->copied_seq = tcp_sk(sk)->copied_seq;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1198-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1199-	return ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1200-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1201-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1202:void sk_psock_start_strp(struct sock *sk, struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1203-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1204-	if (psock->saved_data_ready)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1205-		return;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1206-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1207:	psock->saved_data_ready = sk->sk_data_ready;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1208:	WRITE_ONCE(sk->sk_data_ready, sk_psock_strp_data_ready);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1209-	WRITE_ONCE(sk->sk_write_space, sk_psock_write_space);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1210-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1211-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1212-void sk_psock_stop_strp(struct sock *sk, struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1213-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1214-	psock_set_prog(&psock->progs.stream_parser, NULL);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1215-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1216-	if (!psock->saved_data_ready)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1217-		return;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1218-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1219:	WRITE_ONCE(sk->sk_data_ready, psock->saved_data_ready);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1220-	WRITE_ONCE(psock->saved_data_ready, NULL);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1221-	strp_stop(&psock->strp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1222-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1223-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1224-static void sk_psock_done_strp(struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1225-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1226-	/* Parser has been stopped */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1227-	if (sk_psock_test_state(psock, SK_PSOCK_RX_STRP_ENABLED))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1228-		strp_done(&psock->strp);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1229-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1230-#else
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1231-static void sk_psock_done_strp(struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1232-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1233-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1234-#endif /* CONFIG_BPF_STREAM_PARSER */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1235-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1236:static int sk_psock_verdict_recv(struct sock *sk, struct sk_buff *skb)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1237-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1238-	struct sk_psock *psock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1239-	struct bpf_prog *prog;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1240-	int ret = __SK_DROP;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1241-	int len = skb->len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1242-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1243-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1244-	psock = sk_psock(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1245-	if (unlikely(!psock)) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1246-		len = 0;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1247-		tcp_eat_skb(sk, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1248-		sock_drop(sk, skb);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1249-		goto out;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1250-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1251-	prog = READ_ONCE(psock->progs.stream_verdict);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1252-	if (!prog)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1253-		prog = READ_ONCE(psock->progs.skb_verdict);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1254-	if (likely(prog)) {
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1262-		len = ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1263-out:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1264-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1265-	return len;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1266-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1267-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1268-static void sk_psock_verdict_data_ready(struct sock *sk)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1269-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1270-	const struct proto_ops *ops = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1271-	struct socket *sock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1272-	int copied;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1273-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1274:	trace_sk_data_ready(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1275-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1276-	rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1277-	sock = READ_ONCE(sk->sk_socket);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1278-	if (likely(sock))
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1279-		ops = READ_ONCE(sock->ops);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1280-	rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1281-	if (!ops || !ops->read_skb)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1282-		return;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1283-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1284:	copied = ops->read_skb(sk, sk_psock_verdict_recv);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1285-	if (copied >= 0) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1286-		struct sk_psock *psock;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1287-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1288-		rcu_read_lock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1289-		psock = sk_psock(sk);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1290-		if (psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1291-			sk_psock_data_ready(sk, psock);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1292-		rcu_read_unlock();
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1293-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1294-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1295-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1296:void sk_psock_start_verdict(struct sock *sk, struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1297-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1298-	if (psock->saved_data_ready)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1299-		return;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1300-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1301:	psock->saved_data_ready = sk->sk_data_ready;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1302:	WRITE_ONCE(sk->sk_data_ready, sk_psock_verdict_data_ready);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1303-	WRITE_ONCE(sk->sk_write_space, sk_psock_write_space);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1304-}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1305-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1306-void sk_psock_stop_verdict(struct sock *sk, struct sk_psock *psock)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1307-{
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1308-	psock_set_prog(&psock->progs.stream_verdict, NULL);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1309-	psock_set_prog(&psock->progs.skb_verdict, NULL);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1310-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1311-	if (!psock->saved_data_ready)
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1312-		return;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1313-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c:1314:	WRITE_ONCE(sk->sk_data_ready, psock->saved_data_ready);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1315-	psock->saved_data_ready = NULL;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/skmsg.c-1316-}
+--
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-409-	u32 tosend, origsize, sent, delta = 0;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-410-	u32 eval;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-411-	int ret;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-412-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-413-more_data:
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-414-	if (psock->eval == __SK_NONE) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-415-		/* Track delta in msg size to add/subtract it on SK_DROP from
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-416-		 * returned to user copied size. This ensures user doesn't
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-417-		 * get a positive return code with msg_cut_data and SK_DROP
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-418-		 * verdict.
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-419-		 */
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-420-		delta = msg->sg.size;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c:421:		psock->eval = sk_psock_msg_verdict(sk, psock, msg);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-422-		delta -= msg->sg.size;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-423-	}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-424-
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-425-	if (msg->cork_bytes &&
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-426-	    msg->cork_bytes > msg->sg.size && !enospc) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-427-		psock->cork_bytes = msg->cork_bytes - msg->sg.size;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-428-		if (!psock->cork) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-429-			psock->cork = kzalloc_obj(*psock->cork,
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-430-						  GFP_ATOMIC | __GFP_NOWARN);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-431-			if (!psock->cork) {
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-432-				sk_msg_free(sk, msg);
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-433-				*copied = 0;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-434-				return -ENOMEM;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-435-			}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-436-		}
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-437-		memcpy(psock->cork, msg, sizeof(*msg));
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-438-		return 0;
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/ipv4/tcp_bpf.c-439-	}
+
+===== NMI CONTEXT MARKERS IN RELEVANT CALLERS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/dev.c:3466:	if (in_hardirq() || irqs_disabled())
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/dev.c:6194: *	This function may only be called from softirq context and interrupts
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/dev.c:6426: *	This function may only be called from softirq context and interrupts
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/net/core/dev.c:6453: *	This function may only be called from softirq context and interrupts
