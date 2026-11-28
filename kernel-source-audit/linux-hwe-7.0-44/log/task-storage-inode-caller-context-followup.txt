@@ -1,0 +1,6414 @@
+
+===== FILE: arch/alpha/kernel/irq.c =====
+
+--- lines 116-124 ---
+116: 		printk(KERN_CRIT "device_interrupt: invalid interrupt %d\n",
+117: 		       irq);
+118: 		return;
+119: 	}
+120: 
+121: 	irq_enter();
+122: 	generic_handle_irq_desc(desc);
+123: 	irq_exit();
+124: }
+
+===== FILE: arch/alpha/kernel/process.c =====
+
+--- lines 133-146 ---
+133: 	/* If booted from SRM, reset some of the original environment. */
+134: 	if (alpha_using_srm) {
+135: #ifdef CONFIG_DUMMY_CONSOLE
+136: 		/* If we've gotten here after SysRq-b, leave interrupt
+137: 		   context before taking over the console. */
+138: 		if (in_hardirq())
+139: 			irq_exit();
+140: 		/* This has the effect of resetting the VGA video origin.  */
+141: 		console_lock();
+142: 		do_take_over_console(&dummy_con, 0, MAX_NR_CONSOLES-1, 1);
+143: 		console_unlock();
+144: #endif
+145: 		pci_restore_srm_config();
+146: 		set_hae(srm_hae);
+
+===== FILE: arch/arc/kernel/irq.c =====
+
+--- lines 41-51 ---
+41:  */
+42: void arch_do_IRQ(unsigned int hwirq, struct pt_regs *regs)
+43: {
+44: 	struct pt_regs *old_regs;
+45: 
+46: 	irq_enter();
+47: 	old_regs = set_irq_regs(regs);
+48: 	generic_handle_domain_irq(NULL, hwirq);
+49: 	set_irq_regs(old_regs);
+50: 	irq_exit();
+51: }
+
+===== FILE: arch/arm/include/asm/simd.h =====
+
+--- lines 9-22 ---
+9: 
+10: #include <asm/neon.h>
+11: 
+12: static __must_check inline bool may_use_simd(void)
+13: {
+14: 	return IS_ENABLED(CONFIG_KERNEL_MODE_NEON) && !in_hardirq()
+15: 	       && !irqs_disabled();
+16: }
+17: 
+18: DEFINE_LOCK_GUARD_0(ksimd, kernel_neon_begin(), kernel_neon_end())
+19: 
+20: #define scoped_ksimd()	scoped_guard(ksimd)
+21: 
+22: #endif	/* _ASM_SIMD_H */
+
+===== FILE: arch/arm/kernel/smp.c =====
+
+--- lines 689-702 ---
+689: /* Legacy version, should go away once all irqchips have been converted */
+690: void handle_IPI(int ipinr, struct pt_regs *regs)
+691: {
+692: 	struct pt_regs *old_regs = set_irq_regs(regs);
+693: 
+694: 	irq_enter();
+695: 	do_handle_IPI(ipinr);
+696: 	irq_exit();
+697: 
+698: 	set_irq_regs(old_regs);
+699: }
+700: 
+701: static irqreturn_t ipi_handler(int irq, void *data)
+702: {
+
+===== FILE: arch/arm/kernel/traps.c =====
+
+--- lines 509-522 ---
+509:  */
+510: asmlinkage void __exception_irq_entry handle_fiq_as_nmi(struct pt_regs *regs)
+511: {
+512: 	struct pt_regs *old_regs = set_irq_regs(regs);
+513: 
+514: 	nmi_enter();
+515: 
+516: 	/* nop. FIQ handlers for special arch/arm features can be added here. */
+517: 
+518: 	nmi_exit();
+519: 
+520: 	set_irq_regs(old_regs);
+521: }
+522: 
+
+===== FILE: arch/arm/vfp/vfpmodule.c =====
+
+--- lines 874-887 ---
+874: 	/*
+875: 	 * Kernel mode NEON is only allowed outside of hardirq context with
+876: 	 * preemption and softirq processing disabled. This will make sure that
+877: 	 * the kernel mode NEON register contents never need to be preserved.
+878: 	 */
+879: 	BUG_ON(in_hardirq());
+880: 	BUG_ON(irqs_disabled());
+881: 	cpu = __smp_processor_id();
+882: 
+883: 	fpexc = fmrx(FPEXC) | FPEXC_EN;
+884: 	fmxr(FPEXC, fpexc);
+885: 
+886: 	/*
+887: 	 * Save the userland NEON/VFP state. Under UP,
+
+===== FILE: arch/arm64/include/asm/simd.h =====
+
+--- lines 30-43 ---
+30: 	 * We must make sure that the SVE has been initialized properly
+31: 	 * before using the SIMD in kernel.
+32: 	 */
+33: 	return !WARN_ON(!system_capabilities_finalized()) &&
+34: 	       system_supports_fpsimd() &&
+35: 	       !in_hardirq() && !in_nmi();
+36: }
+37: 
+38: #else /* ! CONFIG_KERNEL_MODE_NEON */
+39: 
+40: static __must_check inline bool may_use_simd(void) {
+41: 	return false;
+42: }
+43: 
+
+===== FILE: arch/arm64/kernel/acpi.c =====
+
+--- lines 406-419 ---
+406: 	/*
+407: 	 * SEA can interrupt SError, mask it and describe this as an NMI so
+408: 	 * that APEI defers the handling.
+409: 	 */
+410: 	local_daif_restore(DAIF_ERRCTX);
+411: 	nmi_enter();
+412: 	err = ghes_notify_sea();
+413: 	nmi_exit();
+414: 
+415: 	/*
+416: 	 * APEI NMI-like notifications are deferred to irq_work. Unless
+417: 	 * we interrupted irqs-masked code, we can do that now.
+418: 	 */
+419: 	if (!err) {
+
+===== FILE: arch/arm64/kernel/fpsimd.c =====
+
+--- lines 1949-1962 ---
+1949: 		 * ended up here for a different reason inadvertently, kill the
+1950: 		 * task and preserve/restore the base FP/SIMD state, which
+1951: 		 * might belong to kernel mode FP/SIMD.
+1952: 		 */
+1953: 		pr_warn_ratelimited("Calling EFI runtime from %s context\n",
+1954: 				    in_nmi() ? "NMI" : "hardirq");
+1955: 		force_signal_inject(SIGKILL, SI_KERNEL, 0, 0);
+1956: 		fpsimd_save_state(&efi_fpsimd_state);
+1957: 	}
+1958: }
+1959: 
+1960: /*
+1961:  * __efi_fpsimd_end(): clean up FPSIMD after an EFI runtime services call
+1962:  */
+
+===== FILE: arch/arm64/kernel/stacktrace.c =====
+
+--- lines 315-328 ---
+315:  * SDEI stacks are only accessible when unwinding the current task in an NMI
+316:  * context.
+317:  */
+318: #define STACKINFO_SDEI(name)					\
+319: 	({							\
+320: 		((task == current) && in_nmi())			\
+321: 			? stackinfo_get_sdei_##name()		\
+322: 			: stackinfo_get_unknown();		\
+323: 	})
+324: 
+325: #define STACKINFO_EFI						\
+326: 	({							\
+327: 		((task == current) && current_in_efi())		\
+328: 			? stackinfo_get_efi()			\
+
+===== FILE: arch/arm64/kvm/pmu-emul.c =====
+
+--- lines 563-576 ---
+563: 					  ARMV8_PMUV3_PERFCTR_CHAIN);
+564: 
+565: 	if (kvm_pmu_overflow_status(vcpu)) {
+566: 		kvm_make_request(KVM_REQ_IRQ_PENDING, vcpu);
+567: 
+568: 		if (!in_nmi())
+569: 			kvm_vcpu_kick(vcpu);
+570: 		else
+571: 			irq_work_queue(&vcpu->arch.pmu.overflow_work);
+572: 	}
+573: 
+574: 	cpu_pmu->pmu.start(perf_event, PERF_EF_RELOAD);
+575: }
+576: 
+
+===== FILE: arch/hexagon/kernel/vm_events.c =====
+
+--- lines 76-85 ---
+76: void arch_do_IRQ(struct pt_regs *regs)
+77: {
+78: 	int irq = pt_cause(regs);
+79: 	struct pt_regs *old_regs = set_irq_regs(regs);
+80: 
+81: 	irq_enter();
+82: 	generic_handle_irq(irq);
+83: 	irq_exit();
+84: 	set_irq_regs(old_regs);
+85: }
+
+===== FILE: arch/m68k/kernel/irq.c =====
+
+--- lines 19-32 ---
+19: 
+20: asmlinkage void do_IRQ(int irq, struct pt_regs *regs)
+21: {
+22: 	struct pt_regs *oldregs = set_irq_regs(regs);
+23: 
+24: 	irq_enter();
+25: 	generic_handle_irq(irq);
+26: 	irq_exit();
+27: 
+28: 	set_irq_regs(oldregs);
+29: }
+30: 
+31: 
+32: /* The number of spurious interrupts */
+
+===== FILE: arch/microblaze/kernel/irq.c =====
+
+--- lines 23-36 ---
+23: void __irq_entry do_IRQ(struct pt_regs *regs)
+24: {
+25: 	struct pt_regs *old_regs = set_irq_regs(regs);
+26: 	trace_hardirqs_off();
+27: 
+28: 	irq_enter();
+29: 	handle_arch_irq(regs);
+30: 	irq_exit();
+31: 	set_irq_regs(old_regs);
+32: 	trace_hardirqs_on();
+33: }
+34: 
+35: void __init init_IRQ(void)
+36: {
+
+===== FILE: arch/mips/cavium-octeon/octeon-irq.c =====
+
+--- lines 2616-2629 ---
+2616: 		if (ciu3_info->intsn2hw[block])
+2617: 			hw = ciu3_info->intsn2hw[block](domain, intsn);
+2618: 		else
+2619: 			hw = intsn;
+2620: 
+2621: 		irq_enter();
+2622: 		ret = generic_handle_domain_irq(domain, hw);
+2623: 		irq_exit();
+2624: 
+2625: 		if (ret < 0) {
+2626: 			union cvmx_ciu3_iscx_w1c isc_w1c;
+2627: 			u64 isc_w1c_addr = ciu3_addr + CIU3_ISC_W1C(intsn);
+2628: 
+2629: 			isc_w1c.u64 = 0;
+
+===== FILE: arch/mips/kernel/irq.c =====
+
+--- lines 100-113 ---
+100:  * SMP cross-CPU interrupts have their own specific
+101:  * handlers).
+102:  */
+103: void __irq_entry do_IRQ(unsigned int irq)
+104: {
+105: 	irq_enter();
+106: 	check_stack_overflow();
+107: 	generic_handle_irq(irq);
+108: 	irq_exit();
+109: }
+110: 
+111: #ifdef CONFIG_IRQ_DOMAIN
+112: void __irq_entry do_domain_IRQ(struct irq_domain *domain, unsigned int hwirq)
+113: {
+
+===== FILE: arch/mips/kernel/traps.c =====
+
+--- lines 1990-2003 ---
+1990: 
+1991: void __noreturn nmi_exception_handler(struct pt_regs *regs)
+1992: {
+1993: 	char str[100];
+1994: 
+1995: 	nmi_enter();
+1996: 	raw_notifier_call_chain(&nmi_chain, 0, regs);
+1997: 	bust_spinlocks(1);
+1998: 	snprintf(str, 100, "CPU%d NMI taken, CP0_EPC=%lx\n",
+1999: 		 smp_processor_id(), regs->cp0_epc);
+2000: 	regs->cp0_epc = read_c0_errorepc();
+2001: 	die(str, regs);
+2002: 	nmi_exit();
+2003: }
+
+===== FILE: arch/mips/loongson64/smp.c =====
+
+--- lines 390-403 ---
+390: 
+391: 	if (action & SMP_RESCHEDULE_YOURSELF)
+392: 		scheduler_ipi();
+393: 
+394: 	if (action & SMP_CALL_FUNCTION) {
+395: 		irq_enter();
+396: 		generic_smp_call_function_interrupt();
+397: 		irq_exit();
+398: 	}
+399: 
+400: 	return IRQ_HANDLED;
+401: }
+402: 
+403: /*
+
+===== FILE: arch/mips/sgi-ip22/ip22-int.c =====
+
+--- lines 151-164 ---
+151: 
+152: static void __irq_entry indy_buserror_irq(void)
+153: {
+154: 	int irq = SGI_BUSERR_IRQ;
+155: 
+156: 	irq_enter();
+157: 	kstat_incr_irq_this_cpu(irq);
+158: 	ip22_be_interrupt(irq);
+159: 	irq_exit();
+160: }
+161: 
+162: #ifdef USE_LIO3_IRQ
+163: #define SGI_INTERRUPTS	SGINT_END
+164: #else
+
+===== FILE: arch/mips/sgi-ip22/ip22-time.c =====
+
+--- lines 120-131 ---
+120: {
+121: 	int irq = SGI_8254_0_IRQ;
+122: 	ULONG cnt;
+123: 	char c;
+124: 
+125: 	irq_enter();
+126: 	kstat_incr_irq_this_cpu(irq);
+127: 	printk(KERN_ALERT "Oops, got 8254 interrupt.\n");
+128: 	ArcRead(0, &c, 1, &cnt);
+129: 	ArcEnterInteractiveMode();
+130: 	irq_exit();
+131: }
+
+===== FILE: arch/mips/sibyte/bcm1480/smp.c =====
+
+--- lines 170-179 ---
+170: 
+171: 	if (action & SMP_RESCHEDULE_YOURSELF)
+172: 		scheduler_ipi();
+173: 
+174: 	if (action & SMP_CALL_FUNCTION) {
+175: 		irq_enter();
+176: 		generic_smp_call_function_interrupt();
+177: 		irq_exit();
+178: 	}
+179: }
+
+===== FILE: arch/mips/sibyte/sb1250/smp.c =====
+
+--- lines 159-168 ---
+159: 
+160: 	if (action & SMP_RESCHEDULE_YOURSELF)
+161: 		scheduler_ipi();
+162: 
+163: 	if (action & SMP_CALL_FUNCTION) {
+164: 		irq_enter();
+165: 		generic_smp_call_function_interrupt();
+166: 		irq_exit();
+167: 	}
+168: }
+
+===== FILE: arch/nios2/kernel/irq.c =====
+
+--- lines 18-31 ---
+18: 
+19: asmlinkage void do_IRQ(int hwirq, struct pt_regs *regs)
+20: {
+21: 	struct pt_regs *oldregs = set_irq_regs(regs);
+22: 
+23: 	irq_enter();
+24: 	generic_handle_domain_irq(NULL, hwirq);
+25: 	irq_exit();
+26: 
+27: 	set_irq_regs(oldregs);
+28: }
+29: 
+30: static void chip_unmask(struct irq_data *d)
+31: {
+
+===== FILE: arch/openrisc/kernel/time.c =====
+
+--- lines 118-131 ---
+118: 		&per_cpu(clockevent_openrisc_timer, cpu);
+119: 
+120: 	timer_ack();
+121: 
+122: 	/*
+123: 	 * update_process_times() expects us to have called irq_enter().
+124: 	 */
+125: 	irq_enter();
+126: 	evt->event_handler(evt);
+127: 	irq_exit();
+128: 
+129: 	set_irq_regs(old_regs);
+130: 
+131: 	return IRQ_HANDLED;
+
+===== FILE: arch/parisc/kernel/toc.c =====
+
+--- lines 78-91 ---
+78: 			panic("Failed to get PIM data");
+79: 		toc11_to_pt_regs(regs, &pim_data11);
+80: 	}
+81: 
+82: #ifdef CONFIG_KGDB
+83: 	nmi_enter();
+84: 
+85: 	if (atomic_read(&kgdb_active) != -1)
+86: 		kgdb_nmicallback(raw_smp_processor_id(), regs);
+87: 	kgdb_handle_exception(9, SIGTRAP, 0, regs);
+88: #endif
+89: 
+90: 	/* serialize output, otherwise all CPUs write backtrace at once */
+91: 	while (__ldcw(&toc_lock) == 0)
+
+===== FILE: arch/powerpc/include/asm/interrupt.h =====
+
+--- lines 233-246 ---
+233: 	 */
+234: 	if (cpu_has_feature(CPU_FTR_CTRL) &&
+235: 	    !test_thread_local_flags(_TLF_RUNLATCH))
+236: 		__ppc64_runlatch_on();
+237: #endif
+238: 	irq_enter();
+239: }
+240: 
+241: static inline void interrupt_async_exit_prepare(struct pt_regs *regs)
+242: {
+243: 	/*
+244: 	 * Adjust at exit so the main handler sees the true NIA. This must
+245: 	 * come before irq_exit() because irq_exit can enable interrupts, and
+246: 	 * if another interrupt is taken before nap_adjust_return has run
+
+--- lines 312-325 ---
+312: 		state->ftrace_enabled = this_cpu_get_ftrace_enabled();
+313: 		this_cpu_set_ftrace_enabled(0);
+314: 	}
+315: #endif
+316: 
+317: 	/* If data relocations are enabled, it's safe to use nmi_enter() */
+318: 	if (mfmsr() & MSR_DR) {
+319: 		nmi_enter();
+320: 		return;
+321: 	}
+322: 
+323: 	/*
+324: 	 * But do not use nmi_enter() for pseries hash guest taking a real-mode
+325: 	 * NMI because not everything it touches is within the RMA limit.
+
+--- lines 343-356 ---
+343: 	 */
+344: 	if (percpu_first_chunk_is_paged)
+345: 		return;
+346: 
+347: 	/* Otherwise, it should be safe to call it */
+348: 	nmi_enter();
+349: }
+350: 
+351: static inline void interrupt_nmi_exit_prepare(struct pt_regs *regs, struct interrupt_nmi_state *state)
+352: {
+353: 	if (mfmsr() & MSR_DR) {
+354: 		// nmi_exit if relocations are on
+355: 		nmi_exit();
+356: 	} else if (IS_ENABLED(CONFIG_PPC_BOOK3S_64) &&
+
+--- lines 360-373 ---
+360: 	} else if (IS_ENABLED(CONFIG_KASAN)) {
+361: 		// no nmi_exit for KASAN in real mode
+362: 	} else if (percpu_first_chunk_is_paged) {
+363: 		// no nmi_exit if percpu first chunk is not embedded
+364: 	} else {
+365: 		nmi_exit();
+366: 	}
+367: 
+368: 	/*
+369: 	 * nmi does not call nap_adjust_return because nmi should not create
+370: 	 * new work to do (must use irq_work for that).
+371: 	 */
+372: 
+373: #ifdef CONFIG_PPC64
+
+===== FILE: arch/powerpc/kernel/irq_64.c =====
+
+--- lines 171-184 ---
+171: 	local_paca->irq_happened &= ~PACA_IRQ_REPLAYING;
+172: }
+173: 
+174: __no_kcsan void replay_soft_interrupts(void)
+175: {
+176: 	irq_enter(); /* See comment in arch_local_irq_restore */
+177: 	__replay_soft_interrupts();
+178: 	irq_exit();
+179: }
+180: 
+181: #if defined(CONFIG_PPC_BOOK3S_64) && defined(CONFIG_PPC_KUAP)
+182: static inline __no_kcsan void replay_soft_interrupts_irqrestore(void)
+183: {
+184: 	unsigned long kuap_state = get_kuap();
+
+--- lines 212-225 ---
+212: 		irq_soft_mask_set(mask);
+213: 		return;
+214: 	}
+215: 
+216: 	if (IS_ENABLED(CONFIG_PPC_IRQ_SOFT_MASK_DEBUG)) {
+217: 		WARN_ON_ONCE(in_nmi());
+218: 		WARN_ON_ONCE(in_hardirq());
+219: 		WARN_ON_ONCE(local_paca->irq_happened & PACA_IRQ_REPLAYING);
+220: 	}
+221: 
+222: again:
+223: 	/*
+224: 	 * After the stb, interrupts are unmasked and there are no interrupts
+225: 	 * pending replay. The restart sequence makes this atomic with
+
+--- lines 302-315 ---
+302: 	trace_hardirqs_off();
+303: 
+304: 	/*
+305: 	 * Now enter interrupt context. The interrupt handlers themselves
+306: 	 * also call irq_enter/exit (which is okay, they can nest). But call
+307: 	 * it here now to hold off softirqs until the below irq_exit(). If
+308: 	 * we allowed replayed handlers to run softirqs, that enables irqs,
+309: 	 * which must replay interrupts, which recurses in here and makes
+310: 	 * things more complicated. The recursion is limited to 2, and it can
+311: 	 * be made to work, but it's complicated.
+312: 	 *
+313: 	 * local_bh_disable can not be used here because interrupts taken in
+314: 	 * idle are not in the right context (RCU, tick, etc) to run softirqs
+315: 	 * so irq_enter must be called.
+
+--- lines 316-329 ---
+316: 	 */
+317: 	irq_enter();
+318: 
+319: 	replay_soft_interrupts_irqrestore();
+320: 
+321: 	irq_exit();
+322: 
+323: 	if (unlikely(local_paca->irq_happened != PACA_IRQ_HARD_DIS)) {
+324: 		/*
+325: 		 * The softirq processing in irq_exit() may enable interrupts
+326: 		 * temporarily, which can result in MSR[EE] being enabled and
+327: 		 * more irqs becoming pending. Go around again if that happens.
+328: 		 */
+329: 		trace_hardirqs_on();
+
+===== FILE: arch/powerpc/kernel/traps.c =====
+
+--- lines 505-518 ---
+505: 		die("Unrecoverable nested System Reset", regs, SIGABRT);
+506: #endif
+507: 	/* Must die if the interrupt is not recoverable */
+508: 	if (regs_is_unrecoverable(regs)) {
+509: 		/* For the reason explained in die_mce, nmi_exit before die */
+510: 		nmi_exit();
+511: 		die("Unrecoverable System Reset", regs, SIGABRT);
+512: 	}
+513: 
+514: 	if (saved_hsrrs) {
+515: 		mtspr(SPRN_HSRR0, hsrr0);
+516: 		mtspr(SPRN_HSRR1, hsrr1);
+517: 	}
+518: 
+
+--- lines 796-809 ---
+796: 	/*
+797: 	 * The machine check wants to kill the interrupted context,
+798: 	 * but make_task_dead() checks for in_interrupt() and panics
+799: 	 * in that case, so exit the irq/nmi before calling die.
+800: 	 */
+801: 	if (in_nmi())
+802: 		nmi_exit();
+803: 	else
+804: 		irq_exit();
+805: 	die(str, regs, err);
+806: }
+807: 
+808: /*
+809:  * BOOK3S_64 does not usually call this handler as a non-maskable interrupt
+
+===== FILE: arch/powerpc/platforms/powernv/opal-irqchip.c =====
+
+--- lines 50-63 ---
+50: 
+51: 		hwirq = fls64(e) - 1;
+52: 		e &= ~BIT_ULL(hwirq);
+53: 
+54: 		local_irq_disable();
+55: 		irq_enter();
+56: 		generic_handle_domain_irq(opal_event_irqchip.domain, hwirq);
+57: 		irq_exit();
+58: 		local_irq_enable();
+59: 
+60: 		cond_resched();
+61: 	}
+62: 	WRITE_ONCE(last_outstanding_events, 0);
+63: 	if (opal_poll_events(&events) != OPAL_SUCCESS)
+
+===== FILE: arch/riscv/include/asm/simd.h =====
+
+--- lines 28-41 ---
+28: {
+29: 	/*
+30: 	 * RISCV_KERNEL_MODE_V is only set while preemption is disabled,
+31: 	 * and is clear whenever preemption is enabled.
+32: 	 */
+33: 	if (in_hardirq() || in_nmi())
+34: 		return false;
+35: 
+36: 	/*
+37: 	 * Nesting is achieved in preempt_v by spreading the control for
+38: 	 * preemptible and non-preemptible kernel-mode Vector into two fields.
+39: 	 * Always try to match with preempt_v if kernel V-context exists. Then,
+40: 	 * fallback to check non preempt_v if nesting happens, or if the config
+41: 	 * is not set.
+
+===== FILE: arch/sh/kernel/irq.c =====
+
+--- lines 187-200 ---
+187: 
+188: asmlinkage __irq_entry int do_IRQ(unsigned int irq, struct pt_regs *regs)
+189: {
+190: 	struct pt_regs *old_regs = set_irq_regs(regs);
+191: 
+192: 	irq_enter();
+193: 
+194: 	irq = irq_demux(irq_lookup(irq));
+195: 
+196: 	if (irq != NO_IRQ_IGNORE) {
+197: 		handle_one_irq(irq);
+198: 		irq_finish(irq);
+199: 	}
+200: 
+
+===== FILE: arch/sh/kernel/smp.c =====
+
+--- lines 290-303 ---
+290: 		mp_ops->send_ipi(cpu, SMP_MSG_TIMER);
+291: }
+292: 
+293: static void ipi_timer(void)
+294: {
+295: 	irq_enter();
+296: 	tick_receive_broadcast();
+297: 	irq_exit();
+298: }
+299: #endif
+300: 
+301: void smp_message_recv(unsigned int msg)
+302: {
+303: 	switch (msg) {
+
+===== FILE: arch/sh/kernel/traps.c =====
+
+--- lines 176-189 ---
+176: {
+177: 	TRAP_HANDLER_DECL;
+178: 
+179: 	arch_ftrace_nmi_enter();
+180: 
+181: 	nmi_enter();
+182: 	this_cpu_inc(irq_stat.__nmi_count);
+183: 
+184: 	switch (notify_die(DIE_NMI, "NMI", regs, 0, vec & 0xff, SIGINT)) {
+185: 	case NOTIFY_OK:
+186: 	case NOTIFY_STOP:
+187: 		break;
+188: 	case NOTIFY_BAD:
+189: 		die("Fatal Non-Maskable Interrupt", regs, SIGINT);
+
+--- lines 190-198 ---
+190: 	default:
+191: 		printk(KERN_ALERT "Got NMI, but nobody cared. Ignoring...\n");
+192: 		break;
+193: 	}
+194: 
+195: 	nmi_exit();
+196: 
+197: 	arch_ftrace_nmi_exit();
+198: }
+
+===== FILE: arch/sparc/kernel/irq_32.c =====
+
+--- lines 220-233 ---
+220: 	struct pt_regs *old_regs;
+221: 	struct irq_bucket *p;
+222: 
+223: 	BUG_ON(pil > 15);
+224: 	old_regs = set_irq_regs(regs);
+225: 	irq_enter();
+226: 
+227: 	p = irq_map[pil];
+228: 	while (p) {
+229: 		struct irq_bucket *next = p->next;
+230: 
+231: 		generic_handle_irq(p->irq);
+232: 		p = next;
+233: 	}
+
+--- lines 319-332 ---
+319: void sparc_floppy_irq(int irq, void *dev_id, struct pt_regs *regs)
+320: {
+321: 	struct pt_regs *old_regs;
+322: 
+323: 	old_regs = set_irq_regs(regs);
+324: 	irq_enter();
+325: 	generic_handle_irq(floppy_irq);
+326: 	irq_exit();
+327: 	set_irq_regs(old_regs);
+328: }
+329: #endif
+330: 
+331: /* djhr
+332:  * This could probably be made indirect too and assigned in the CPU
+
+===== FILE: arch/sparc/kernel/irq_64.c =====
+
+--- lines 814-827 ---
+814: 	void *orig_sp;
+815: 
+816: 	clear_softint(1 << pil);
+817: 
+818: 	old_regs = set_irq_regs(regs);
+819: 	irq_enter();
+820: 
+821: 	/* Grab an atomic snapshot of the pending IVECs.  */
+822: 	__asm__ __volatile__("rdpr	%%pstate, %0\n\t"
+823: 			     "wrpr	%0, %3, %%pstate\n\t"
+824: 			     "ldx	[%2], %1\n\t"
+825: 			     "stx	%%g0, [%2]\n\t"
+826: 			     "wrpr	%0, 0x0, %%pstate\n\t"
+827: 			     : "=&r" (pstate), "=&r" (bucket_pa)
+
+--- lines 844-857 ---
+844: 		bucket_pa = next_pa;
+845: 	}
+846: 
+847: 	restore_hardirq_stack(orig_sp);
+848: 
+849: 	irq_exit();
+850: 	set_irq_regs(old_regs);
+851: }
+852: 
+853: #ifdef CONFIG_SOFTIRQ_ON_OWN_STACK
+854: void do_softirq_own_stack(void)
+855: {
+856: 	void *orig_sp, *sp = softirq_stack[smp_processor_id()];
+857: 
+
+===== FILE: arch/sparc/kernel/leon_kernel.c =====
+
+--- lines 287-300 ---
+287: 	if (cpu == boot_cpu_id)
+288: 		timer_interrupt(irq, NULL);
+289: 
+290: 	ce = &per_cpu(sparc32_clockevent, cpu);
+291: 
+292: 	irq_enter();
+293: 	if (ce->event_handler)
+294: 		ce->event_handler(ce);
+295: 	irq_exit();
+296: 
+297: 	return IRQ_HANDLED;
+298: }
+299: 
+300: #endif /* CONFIG_SMP */
+
+===== FILE: arch/sparc/kernel/nmi.c =====
+
+--- lines 91-104 ---
+91: 
+92: 	clear_softint(1 << irq);
+93: 
+94: 	local_cpu_data().__nmi_count++;
+95: 
+96: 	nmi_enter();
+97: 
+98: 	orig_sp = set_hardirq_stack();
+99: 
+100: 	if (notify_die(DIE_NMI, "nmi", regs, 0,
+101: 		       pt_regs_trap_type(regs), SIGINT) == NOTIFY_STOP)
+102: 		touched = 1;
+103: 	else
+104: 		pcr_ops->write_pcr(0, pcr_ops->pcr_nmi_disable);
+
+--- lines 122-135 ---
+122: 		pcr_ops->write_pcr(0, pcr_ops->pcr_nmi_enable);
+123: 	}
+124: 
+125: 	restore_hardirq_stack(orig_sp);
+126: 
+127: 	nmi_exit();
+128: }
+129: 
+130: static inline unsigned int get_nmi_count(int cpu)
+131: {
+132: 	return cpu_data(cpu).__nmi_count;
+133: }
+134: 
+135: static __init void nmi_cpu_busy(void *data)
+
+===== FILE: arch/sparc/kernel/pcr.c =====
+
+--- lines 34-47 ---
+34: 	struct pt_regs *old_regs;
+35: 
+36: 	clear_softint(1 << PIL_DEFERRED_PCR_WORK);
+37: 
+38: 	old_regs = set_irq_regs(regs);
+39: 	irq_enter();
+40: #ifdef CONFIG_IRQ_WORK
+41: 	irq_work_run();
+42: #endif
+43: 	irq_exit();
+44: 	set_irq_regs(old_regs);
+45: }
+46: 
+47: void arch_irq_work_raise(void)
+
+===== FILE: arch/sparc/kernel/smp_32.c =====
+
+--- lines 149-162 ---
+149: 		sparc32_ipi_ops->mask_one(cpu);
+150: }
+151: 
+152: void smp_resched_interrupt(void)
+153: {
+154: 	irq_enter();
+155: 	scheduler_ipi();
+156: 	local_cpu_data().irq_resched_count++;
+157: 	irq_exit();
+158: 	/* re-schedule routine called by interrupt return code. */
+159: }
+160: 
+161: void smp_call_function_single_interrupt(void)
+162: {
+
+--- lines 166-179 ---
+166: 	irq_exit();
+167: }
+168: 
+169: void smp_call_function_interrupt(void)
+170: {
+171: 	irq_enter();
+172: 	generic_smp_call_function_interrupt();
+173: 	local_cpu_data().irq_call_count++;
+174: 	irq_exit();
+175: }
+176: 
+177: void __init smp_prepare_cpus(unsigned int max_cpus)
+178: {
+179: 	int i, cpuid, extra;
+
+===== FILE: arch/sparc/kernel/smp_64.c =====
+
+--- lines 866-879 ---
+866: }
+867: 
+868: void __irq_entry smp_call_function_client(int irq, struct pt_regs *regs)
+869: {
+870: 	clear_softint(1 << irq);
+871: 	irq_enter();
+872: 	generic_smp_call_function_interrupt();
+873: 	irq_exit();
+874: }
+875: 
+876: void __irq_entry smp_call_function_single_client(int irq, struct pt_regs *regs)
+877: {
+878: 	clear_softint(1 << irq);
+879: 	irq_enter();
+
+===== FILE: arch/sparc/kernel/sun4d_irq.c =====
+
+--- lines 163-176 ---
+163: 	if (pil == SUN4D_IPI_IRQ)
+164: 		sun4d_ipi_interrupt();
+165: #endif
+166: 
+167: 	old_regs = set_irq_regs(regs);
+168: 	irq_enter();
+169: 	if (sbusl == 0) {
+170: 		/* cpu interrupt */
+171: 		struct irq_bucket *p;
+172: 
+173: 		p = irq_map[pil];
+174: 		while (p) {
+175: 			struct irq_bucket *next;
+176: 
+
+--- lines 180-193 ---
+180: 		}
+181: 	} else {
+182: 		/* SBUS interrupt */
+183: 		sun4d_sbus_handler_irq(sbusl);
+184: 	}
+185: 	irq_exit();
+186: 	set_irq_regs(old_regs);
+187: }
+188: 
+189: 
+190: static void sun4d_mask_irq(struct irq_data *data)
+191: {
+192: 	struct sun4d_handler_data *handler_data = irq_data_get_irq_handler_data(data);
+193: 	unsigned int real_irq;
+
+===== FILE: arch/sparc/kernel/sun4d_smp.c =====
+
+--- lines 383-396 ---
+383: 		show_leds(cpu);
+384: 	}
+385: 
+386: 	ce = &per_cpu(sparc32_clockevent, cpu);
+387: 
+388: 	irq_enter();
+389: 	ce->event_handler(ce);
+390: 	irq_exit();
+391: 
+392: 	set_irq_regs(old_regs);
+393: }
+394: 
+395: static const struct sparc32_ipi_ops sun4d_ipi_ops = {
+396: 	.cross_call = sun4d_cross_call,
+
+===== FILE: arch/sparc/kernel/sun4m_smp.c =====
+
+--- lines 253-266 ---
+253: 	if (clockevent_state_periodic(ce))
+254: 		sun4m_clear_profile_irq(cpu);
+255: 	else
+256: 		sparc_config.load_profile_irq(cpu, 0); /* Is this needless? */
+257: 
+258: 	irq_enter();
+259: 	ce->event_handler(ce);
+260: 	irq_exit();
+261: 
+262: 	set_irq_regs(old_regs);
+263: }
+264: 
+265: static const struct sparc32_ipi_ops sun4m_ipi_ops = {
+266: 	.cross_call = sun4m_cross_call,
+
+===== FILE: arch/sparc/kernel/time_64.c =====
+
+--- lines 722-735 ---
+722: 	int cpu = smp_processor_id();
+723: 	struct clock_event_device *evt = &per_cpu(sparc64_events, cpu);
+724: 
+725: 	clear_softint(tick_mask);
+726: 
+727: 	irq_enter();
+728: 
+729: 	local_cpu_data().irq0_irqs++;
+730: 	kstat_incr_irq_this_cpu(0);
+731: 
+732: 	if (unlikely(!evt->event_handler)) {
+733: 		printk(KERN_WARNING
+734: 		       "Spurious SPARC64 timer interrupt on cpu %d\n", cpu);
+735: 	} else
+
+===== FILE: arch/um/kernel/irq.c =====
+
+--- lines 140-153 ---
+140: 			/*
+141: 			 * Any timetravel_handler was invoked already, just
+142: 			 * directly run the IRQ.
+143: 			 */
+144: 			if (reg->pending_event) {
+145: 				irq_enter();
+146: 				generic_handle_irq(reg->irq);
+147: 				irq_exit();
+148: 				reg->pending_event = false;
+149: 			}
+150: 		}
+151: 	}
+152: }
+153: #else
+
+--- lines 470-483 ---
+470:  * handlers).
+471:  */
+472: unsigned int do_IRQ(int irq, struct uml_pt_regs *regs)
+473: {
+474: 	struct pt_regs *old_regs = set_irq_regs((struct pt_regs *)regs);
+475: 	irq_enter();
+476: 	generic_handle_irq(irq);
+477: 	irq_exit();
+478: 	set_irq_regs(old_regs);
+479: 	return 1;
+480: }
+481: 
+482: void um_free_irq(int irq, void *dev)
+483: {
+
+===== FILE: arch/um/kernel/smp.c =====
+
+--- lines 61-74 ---
+61: static void ipi_handler(int vector, struct uml_pt_regs *regs)
+62: {
+63: 	struct pt_regs *old_regs = set_irq_regs((struct pt_regs *)regs);
+64: 	int cpu = raw_smp_processor_id();
+65: 
+66: 	irq_enter();
+67: 
+68: 	if (current->mm)
+69: 		os_alarm_process(current->mm->context.id.pid);
+70: 
+71: 	switch (vector) {
+72: 	case UML_IPI_RES:
+73: 		inc_irq_stat(irq_resched_count);
+74: 		scheduler_ipi();
+
+--- lines 93-106 ---
+93: 	default:
+94: 		pr_err("CPU#%d received unknown IPI (vector=%d)!\n", cpu, vector);
+95: 		break;
+96: 	}
+97: 
+98: 	irq_exit();
+99: 	set_irq_regs(old_regs);
+100: }
+101: 
+102: void uml_ipi_handler(int vector)
+103: {
+104: 	struct uml_pt_regs r = { .is_user = 0 };
+105: 
+106: 	preempt_disable();
+
+===== FILE: arch/um/kernel/time.c =====
+
+--- lines 474-487 ---
+474: 	 */
+475: 	if (likely(list_empty(&time_travel_irqs)))
+476: 		return;
+477: 
+478: 	local_irq_save(flags);
+479: 	irq_enter();
+480: 	while ((e = list_first_entry_or_null(&time_travel_irqs,
+481: 					     struct time_travel_event,
+482: 					     list))) {
+483: 		list_del(&e->list);
+484: 		e->pending = false;
+485: 		e->fn(e);
+486: 	}
+487: 	irq_exit();
+
+--- lines 506-519 ---
+506: 		e->pending = true;
+507: 	} else {
+508: 		unsigned long flags;
+509: 
+510: 		local_irq_save(flags);
+511: 		irq_enter();
+512: 		e->fn(e);
+513: 		irq_exit();
+514: 		local_irq_restore(flags);
+515: 	}
+516: }
+517: 
+518: bool time_travel_del_event(struct time_travel_event *e)
+519: {
+
+===== FILE: arch/x86/events/amd/core.c =====
+
+--- lines 728-741 ---
+728: 	/*
+729: 	 * This shouldn't be called from NMI context, but add a safeguard here
+730: 	 * to return, since if we're in NMI context we can't wait for an NMI
+731: 	 * to reset an overflowed counter value.
+732: 	 */
+733: 	if (in_nmi())
+734: 		return;
+735: 
+736: 	/*
+737: 	 * Check each counter for overflow and wait for it to be reset by the
+738: 	 * NMI if it has overflowed. This relies on the fact that all active
+739: 	 * counters are always enabled when this function is called and
+740: 	 * ARCH_PERFMON_EVENTSEL_INT is always set.
+741: 	 */
+
+--- lines 808-821 ---
+808: 	 * may have overflowed, but either way, we'll never see it get reset
+809: 	 * by the NMI if we're already in the NMI. And the NMI latency support
+810: 	 * below will take care of any pending NMI that might have been
+811: 	 * generated by the overflow.
+812: 	 */
+813: 	if (in_nmi())
+814: 		return;
+815: 
+816: 	amd_pmu_wait_on_overflow(event->hw.idx);
+817: }
+818: 
+819: static void amd_pmu_disable_all(void)
+820: {
+821: 	amd_brs_disable_all();
+
+===== FILE: arch/x86/hyperv/hv_spinlock.c =====
+
+--- lines 25-38 ---
+25: 
+26: static void hv_qlock_wait(u8 *byte, u8 val)
+27: {
+28: 	unsigned long flags;
+29: 
+30: 	if (in_nmi())
+31: 		return;
+32: 
+33: 	/*
+34: 	 * Reading HV_X64_MSR_GUEST_IDLE MSR tells the hypervisor that the
+35: 	 * vCPU can be put into 'idle' state. This 'idle' state is
+36: 	 * terminated by an IPI, usually from hv_qlock_kick(), even if
+37: 	 * interrupts are disabled on the vCPU.
+38: 	 *
+
+===== FILE: arch/x86/hyperv/ivm.c =====
+
+--- lines 77-90 ---
+77: 	u64 status;
+78: 
+79: 	if (!hv_ghcb_pg)
+80: 		return -EFAULT;
+81: 
+82: 	WARN_ON(in_nmi());
+83: 
+84: 	local_irq_save(flags);
+85: 	ghcb_base = (void **)this_cpu_ptr(hv_ghcb_pg);
+86: 	hv_ghcb = (union hv_ghcb *)*ghcb_base;
+87: 	if (!hv_ghcb) {
+88: 		local_irq_restore(flags);
+89: 		return -EFAULT;
+90: 	}
+
+--- lines 193-206 ---
+193: 	unsigned long flags;
+194: 
+195: 	if (!hv_ghcb_pg)
+196: 		return;
+197: 
+198: 	WARN_ON(in_nmi());
+199: 
+200: 	local_irq_save(flags);
+201: 	ghcb_base = (void **)this_cpu_ptr(hv_ghcb_pg);
+202: 	hv_ghcb = (union hv_ghcb *)*ghcb_base;
+203: 	if (!hv_ghcb) {
+204: 		local_irq_restore(flags);
+205: 		return;
+206: 	}
+
+--- lines 225-238 ---
+225: 	BUILD_BUG_ON(sizeof(union hv_ghcb) != HV_HYP_PAGE_SIZE);
+226: 
+227: 	if (!hv_ghcb_pg)
+228: 		return;
+229: 
+230: 	WARN_ON(in_nmi());
+231: 
+232: 	local_irq_save(flags);
+233: 	ghcb_base = (void **)this_cpu_ptr(hv_ghcb_pg);
+234: 	hv_ghcb = (union hv_ghcb *)*ghcb_base;
+235: 	if (!hv_ghcb) {
+236: 		local_irq_restore(flags);
+237: 		return;
+238: 	}
+
+===== FILE: arch/x86/include/asm/kvm_host.h =====
+
+--- lines 2059-2072 ---
+2059: };
+2060: 
+2061: /* Enable perf NMI and timer modes to work, and minimise false positives. */
+2062: #define kvm_arch_pmi_in_guest(vcpu) \
+2063: 	((vcpu) && (vcpu)->arch.handling_intr_from_guest && \
+2064: 	 (!!in_nmi() == ((vcpu)->arch.handling_intr_from_guest == KVM_HANDLING_NMI)))
+2065: 
+2066: void __init kvm_mmu_x86_module_init(void);
+2067: int kvm_mmu_vendor_module_init(void);
+2068: void kvm_mmu_vendor_module_exit(void);
+2069: 
+2070: void kvm_mmu_destroy(struct kvm_vcpu *vcpu);
+2071: int kvm_mmu_create(struct kvm_vcpu *vcpu);
+2072: int kvm_mmu_init_vm(struct kvm *kvm);
+
+===== FILE: arch/x86/kernel/fpu/core.c =====
+
+--- lines 71-84 ---
+71:  * Can we use the FPU in kernel mode with the
+72:  * whole "kernel_fpu_begin/end()" sequence?
+73:  */
+74: bool irq_fpu_usable(void)
+75: {
+76: 	if (WARN_ON_ONCE(in_nmi()))
+77: 		return false;
+78: 
+79: 	/*
+80: 	 * Return false in the following cases:
+81: 	 *
+82: 	 * - FPU is not yet initialized. This can happen only when the call is
+83: 	 *   coming from CPU onlining, for example for microcode checksumming.
+84: 	 * - The kernel is already using the FPU, either because of explicit
+
+--- lines 97-110 ---
+97: 	 *   regions.
+98: 	 *
+99: 	 * - Soft interrupt processing context which cannot happen
+100: 	 *   while in a fpregs_lock()'ed critical region.
+101: 	 */
+102: 	if (!in_hardirq())
+103: 		return true;
+104: 
+105: 	/*
+106: 	 * In hard interrupt context it's safe when soft interrupts
+107: 	 * are enabled, which means the interrupt did not hit in
+108: 	 * a fpregs_lock()'ed critical region.
+109: 	 */
+110: 	return !softirq_count();
+
+===== FILE: arch/x86/kernel/hpet.c =====
+
+--- lines 793-806 ---
+793: 	BUILD_BUG_ON(sizeof(union hpet_lock) != 8);
+794: 
+795: 	/*
+796: 	 * Read HPET directly if in NMI.
+797: 	 */
+798: 	if (in_nmi())
+799: 		return (u64)hpet_readl(HPET_COUNTER);
+800: 
+801: 	/*
+802: 	 * Read the current state of the lock and HPET value atomically.
+803: 	 */
+804: 	old.lockval = READ_ONCE(hpet.lockval);
+805: 
+806: 	if (arch_spin_is_locked(&old.lock))
+
+===== FILE: arch/x86/kernel/irq.c =====
+
+--- lines 481-494 ---
+481: 	struct pt_regs *old_regs = set_irq_regs(regs);
+482: 
+483: 	/* Mark the handler active for intel_ack_posted_msi_irq() */
+484: 	__this_cpu_write(posted_msi_handler_active, true);
+485: 	inc_irq_stat(posted_msi_notification_count);
+486: 	irq_enter();
+487: 
+488: 	/*
+489: 	 * Loop only MAX_POSTED_MSI_COALESCING_LOOP - 1 times here to take
+490: 	 * the final handle_pending_pir() invocation after clearing the
+491: 	 * outstanding notification bit into account.
+492: 	 */
+493: 	for (int i = 1; i < MAX_POSTED_MSI_COALESCING_LOOP; i++) {
+494: 		if (!handle_pending_pir(pid->pir, regs))
+
+--- lines 507-520 ---
+507: 	 * not delayed until the next notification happens.
+508: 	 */
+509: 	handle_pending_pir(pid->pir, regs);
+510: 
+511: 	apic_eoi();
+512: 	irq_exit();
+513: 	__this_cpu_write(posted_msi_handler_active, false);
+514: 	set_irq_regs(old_regs);
+515: }
+516: #endif /* X86_POSTED_MSI */
+517: 
+518: #ifdef CONFIG_HOTPLUG_CPU
+519: /* A cpu has been removed from cpu_online_mask.  Reset irq affinities. */
+520: void fixup_irqs(void)
+
+===== FILE: arch/x86/kernel/kvm.c =====
+
+--- lines 1080-1093 ---
+1080: 
+1081: #include <asm/qspinlock.h>
+1082: 
+1083: static void kvm_wait(u8 *ptr, u8 val)
+1084: {
+1085: 	if (in_nmi())
+1086: 		return;
+1087: 
+1088: 	/*
+1089: 	 * halt until it's our turn and kicked. Note that we do safe halt
+1090: 	 * for irq enabled case to avoid hang when lock info is overwritten
+1091: 	 * in irq spinlock slowpath and no spurious interrupt occur to save us.
+1092: 	 */
+1093: 	if (irqs_disabled()) {
+
+===== FILE: arch/x86/kernel/nmi.c =====
+
+--- lines 218-231 ---
+218: 		/*
+219: 		 * the name passed in to describe the nmi handler
+220: 		 * is used as the lookup key
+221: 		 */
+222: 		if (!strcmp(n->name, name)) {
+223: 			WARN(in_nmi(),
+224: 				"Trying to free NMI (%s) from NMI context!\n", n->name);
+225: 			list_del_rcu(&n->list);
+226: 			found = n;
+227: 			break;
+228: 		}
+229: 	}
+230: 
+231: 	raw_spin_unlock_irqrestore(&desc->lock, flags);
+
+===== FILE: arch/x86/kernel/perf_regs.c =====
+
+--- lines 134-147 ---
+134: 			struct pt_regs *regs)
+135: {
+136: 	struct pt_regs *regs_user_copy = this_cpu_ptr(&nmi_user_regs);
+137: 	struct pt_regs *user_regs = task_pt_regs(current);
+138: 
+139: 	if (!in_nmi()) {
+140: 		regs_user->regs = user_regs;
+141: 		regs_user->abi = perf_reg_abi(current);
+142: 		return;
+143: 	}
+144: 
+145: 	/*
+146: 	 * If we're in an NMI that interrupted task_pt_regs setup, then
+147: 	 * we can't sample user regs at all.  This check isn't really
+
+===== FILE: arch/x86/kernel/traps.c =====
+
+--- lines 616-629 ---
+616: 	 * set up according to its expectations.
+617: 	 *
+618: 	 * The net result is that our #GP handler will think that we
+619: 	 * entered from usermode with the bad user context.
+620: 	 *
+621: 	 * No need for nmi_enter() here because we don't use RCU.
+622: 	 */
+623: 	if (((long)regs->sp >> P4D_SHIFT) == ESPFIX_PGD_ENTRY &&
+624: 		regs->cs == __KERNEL_CS &&
+625: 		regs->ip == (unsigned long)native_irq_return_iret)
+626: 	{
+627: 		struct pt_regs *gpregs = (struct pt_regs *)this_cpu_read(cpu_tss_rw.x86_tss.sp0) - 1;
+628: 		unsigned long *p = (unsigned long *)regs->sp;
+629: 
+
+--- lines 1011-1024 ---
+1011: 
+1012: 	/*
+1013: 	 * irqentry_enter_from_user_mode() uses static_branch_{,un}likely()
+1014: 	 * and therefore can trigger INT3, hence smp_text_poke_int3_handler() must
+1015: 	 * be done before. If the entry came from kernel mode, then use
+1016: 	 * nmi_enter() because the INT3 could have been hit in any context
+1017: 	 * including NMI.
+1018: 	 */
+1019: 	if (user_mode(regs)) {
+1020: 		irqentry_enter_from_user_mode(regs);
+1021: 		instrumentation_begin();
+1022: 		do_int3_user(regs);
+1023: 		instrumentation_end();
+1024: 		irqentry_exit_to_user_mode(regs);
+
+===== FILE: arch/x86/mm/tlb.c =====
+
+--- lines 1576-1589 ---
+1576: 		build_cr3(this_cpu_read(cpu_tlbstate.loaded_mm)->pgd,
+1577: 			  this_cpu_read(cpu_tlbstate.loaded_mm_asid),
+1578: 			  tlbstate_lam_cr3_mask());
+1579: 
+1580: 	/* For now, be very restrictive about when this can be called. */
+1581: 	VM_WARN_ON(in_nmi() || preemptible());
+1582: 
+1583: 	VM_BUG_ON(cr3 != __read_cr3());
+1584: 	return cr3;
+1585: }
+1586: EXPORT_SYMBOL_FOR_KVM(__get_current_cr3_fast);
+1587: 
+1588: /*
+1589:  * Flush one page in the kernel mapping
+
+===== FILE: arch/x86/xen/spinlock.c =====
+
+--- lines 36-49 ---
+36: {
+37: 	int irq = __this_cpu_read(lock_kicker_irq);
+38: 	atomic_t *nest_cnt = this_cpu_ptr(&xen_qlock_wait_nest);
+39: 
+40: 	/* If kicker interrupts not initialized yet, just spin */
+41: 	if (irq == -1 || in_nmi())
+42: 		return;
+43: 
+44: 	/* Detect reentry. */
+45: 	atomic_inc(nest_cnt);
+46: 
+47: 	/* If irq pending already and no nested call clear it. */
+48: 	if (atomic_read(nest_cnt) == 1 && xen_test_irq_pending(irq)) {
+49: 		xen_clear_irq_pending(irq);
+
+===== FILE: arch/xtensa/kernel/traps.c =====
+
+--- lines 260-273 ---
+260: 
+261: static void do_nmi(struct pt_regs *regs)
+262: {
+263: 	struct pt_regs *old_regs = set_irq_regs(regs);
+264: 
+265: 	nmi_enter();
+266: 	++*this_cpu_ptr(&nmi_count);
+267: 	check_valid_nmi();
+268: 	xtensa_pmu_irq_handler(0, NULL);
+269: 	nmi_exit();
+270: 	set_irq_regs(old_regs);
+271: }
+272: #endif
+273: 
+
+--- lines 284-297 ---
+284: 		XCHAL_INTLEVEL7_MASK,
+285: 	};
+286: 	struct pt_regs *old_regs = set_irq_regs(regs);
+287: 	unsigned unhandled = ~0u;
+288: 
+289: 	irq_enter();
+290: 
+291: 	for (;;) {
+292: 		unsigned intread = xtensa_get_sr(interrupt);
+293: 		unsigned intenable = xtensa_get_sr(intenable);
+294: 		unsigned int_at_level = intread & intenable;
+295: 		unsigned level;
+296: 
+297: 		for (level = LOCKLEVEL; level > 0; --level) {
+
+--- lines 311-324 ---
+311: 		/* clear lowest pending irq in the unhandled mask */
+312: 		unhandled ^= (int_at_level & -int_at_level);
+313: 		do_IRQ(__ffs(int_at_level), regs);
+314: 	}
+315: 
+316: 	irq_exit();
+317: 	set_irq_regs(old_regs);
+318: }
+319: 
+320: static bool check_div0(struct pt_regs *regs)
+321: {
+322: 	static const u8 pattern[] = {'D', 'I', 'V', '0'};
+323: 	const u8 *p;
+324: 	u8 buf[5];
+
+===== FILE: block/bio.c =====
+
+--- lines 826-839 ---
+826: 		bio->bi_next = cache->free_list;
+827: 		/* Not necessary but helps not to iopoll already freed bios */
+828: 		bio->bi_bdev = NULL;
+829: 		cache->free_list = bio;
+830: 		cache->nr++;
+831: 	} else if (in_hardirq()) {
+832: 		lockdep_assert_irqs_disabled();
+833: 
+834: 		bio_uninit(bio);
+835: 		bio->bi_next = cache->free_list_irq;
+836: 		cache->free_list_irq = bio;
+837: 		cache->nr_irq++;
+838: 	} else {
+839: 		goto out_free;
+
+===== FILE: crypto/skcipher.c =====
+
+--- lines 263-276 ---
+263: 	return 0;
+264: }
+265: 
+266: static int skcipher_walk_first(struct skcipher_walk *walk)
+267: {
+268: 	if (WARN_ON_ONCE(in_hardirq()))
+269: 		return -EDEADLK;
+270: 
+271: 	walk->buffer = NULL;
+272: 	if (unlikely(((unsigned long)walk->iv & walk->alignmask))) {
+273: 		int err = skcipher_copy_iv(walk);
+274: 		if (err)
+275: 			return err;
+276: 	}
+
+===== FILE: drivers/acpi/apei/erst.c =====
+
+--- lines 191-204 ---
+191: 			   struct acpi_whea_header *entry)
+192: {
+193: 	u64 stall_time;
+194: 
+195: 	if (ctx->value > FIRMWARE_MAX_STALL) {
+196: 		if (!in_nmi())
+197: 			pr_warn(FW_WARN
+198: 			"Too long stall time for stall instruction: 0x%llx.\n",
+199: 				   ctx->value);
+200: 		stall_time = FIRMWARE_MAX_STALL;
+201: 	} else
+202: 		stall_time = ctx->value;
+203: 	udelay(stall_time);
+204: 	return 0;
+
+--- lines 213-226 ---
+213: 	u64 stall_time;
+214: 
+215: 	timeout = erst_get_timeout();
+216: 
+217: 	if (ctx->var1 > FIRMWARE_MAX_STALL) {
+218: 		if (!in_nmi())
+219: 			pr_warn(FW_WARN
+220: 		"Too long stall time for stall while true instruction: 0x%llx.\n",
+221: 				   ctx->var1);
+222: 		stall_time = FIRMWARE_MAX_STALL;
+223: 	} else
+224: 		stall_time = ctx->var1;
+225: 
+226: 	for (;;) {
+
+===== FILE: drivers/base/devtmpfs.c =====
+
+--- lines 237-250 ---
+237: 		newattrs.ia_mode = mode;
+238: 		newattrs.ia_uid = uid;
+239: 		newattrs.ia_gid = gid;
+240: 		newattrs.ia_valid = ATTR_MODE|ATTR_UID|ATTR_GID;
+241: 		inode_lock(d_inode(dentry));
+242: 		notify_change(&nop_mnt_idmap, dentry, &newattrs, NULL);
+243: 		inode_unlock(d_inode(dentry));
+244: 
+245: 		/* mark as kernel-created inode */
+246: 		d_inode(dentry)->i_private = &thread;
+247: 	}
+248: 	end_creating_path(&path, dentry);
+249: 	return err;
+250: }
+
+--- lines 337-350 ---
+337: 		newattrs.ia_gid = GLOBAL_ROOT_GID;
+338: 		newattrs.ia_mode = inode->i_mode & ~0777;
+339: 		newattrs.ia_valid =
+340: 			ATTR_UID|ATTR_GID|ATTR_MODE;
+341: 		inode_lock(d_inode(dentry));
+342: 		notify_change(&nop_mnt_idmap, dentry, &newattrs, NULL);
+343: 		inode_unlock(d_inode(dentry));
+344: 		err = vfs_unlink(&nop_mnt_idmap, d_inode(parent.dentry),
+345: 				 dentry, NULL);
+346: 		if (!err || err == -ENOENT)
+347: 			deleted = 1;
+348: 	}
+349: 	end_removing_path(&parent, dentry);
+350: 
+
+===== FILE: drivers/block/loop.c =====
+
+--- lines 458-471 ---
+458: 	struct kstat st;
+459: 
+460: 	/*
+461: 	 * Use the minimal dio alignment of the file system if provided.
+462: 	 */
+463: 	if (!vfs_getattr(&file->f_path, &st, STATX_DIOALIGN, 0) &&
+464: 	    (st.result_mask & STATX_DIOALIGN))
+465: 		return st.dio_offset_align;
+466: 
+467: 	/*
+468: 	 * In a perfect world this wouldn't be needed, but as of Linux 6.13 only
+469: 	 * a handful of file systems support the STATX_DIOALIGN flag.
+470: 	 */
+471: 	if (sb_bdev)
+
+--- lines 1302-1315 ---
+1302: 
+1303: 	/* Drop lo_mutex while we call into the filesystem. */
+1304: 	path = lo->lo_backing_file->f_path;
+1305: 	path_get(&path);
+1306: 	mutex_unlock(&lo->lo_mutex);
+1307: 	ret = vfs_getattr(&path, &stat, STATX_INO, AT_STATX_SYNC_AS_STAT);
+1308: 	if (!ret) {
+1309: 		info->lo_device = huge_encode_dev(stat.dev);
+1310: 		info->lo_inode = stat.ino;
+1311: 		info->lo_rdevice = huge_encode_dev(stat.rdev);
+1312: 	}
+1313: 	path_put(&path);
+1314: 	return ret;
+1315: }
+
+===== FILE: drivers/block/ublk_drv.c =====
+
+--- lines 5154-5167 ---
+5154: 
+5155: 	err = kern_path(dev_path, LOOKUP_FOLLOW, &path);
+5156: 	if (err)
+5157: 		return err;
+5158: 
+5159: 	err = vfs_getattr(&path, &stat, STATX_TYPE, AT_STATX_SYNC_AS_STAT);
+5160: 	if (err)
+5161: 		goto exit;
+5162: 
+5163: 	err = -EPERM;
+5164: 	if (stat.rdev != ub->cdev_dev.devt || !S_ISCHR(stat.mode))
+5165: 		goto exit;
+5166: 
+5167: 	err = inode_permission(&nop_mnt_idmap,
+
+===== FILE: drivers/block/zloop.c =====
+
+--- lines 161-174 ---
+161: 	unsigned long flags;
+162: 	int ret;
+163: 
+164: 	lockdep_assert_held(&zone->lock);
+165: 
+166: 	ret = vfs_getattr(&zone->file->f_path, &stat, STATX_SIZE, 0);
+167: 	if (ret < 0) {
+168: 		pr_err("Failed to get zone %u file stat (err=%d)\n",
+169: 		       zone_no, ret);
+170: 		set_bit(ZLOOP_ZONE_SEQ_ERROR, &zone->flags);
+171: 		return ret;
+172: 	}
+173: 
+174: 	file_sectors = stat.size >> SECTOR_SHIFT;
+
+--- lines 860-873 ---
+860: 	 * constraint if that is provided, and to the FS underlying device
+861: 	 * physical block size if the direct IO alignment is unknown.
+862: 	 */
+863: 	if (file_inode(zone->file)->i_sb->s_blocksize <= SZ_4K)
+864: 		zlo->block_size = file_inode(zone->file)->i_sb->s_blocksize;
+865: 	else if (!vfs_getattr(&zone->file->f_path, &st, STATX_DIOALIGN, 0) &&
+866: 		 (st.result_mask & STATX_DIOALIGN))
+867: 		zlo->block_size = st.dio_offset_align;
+868: 	else if (sb_bdev)
+869: 		zlo->block_size = bdev_physical_block_size(sb_bdev);
+870: 	else
+871: 		zlo->block_size = SECTOR_SIZE;
+872: 
+873: 	if (zlo->zone_capacity & ((zlo->block_size >> SECTOR_SHIFT) - 1)) {
+
+--- lines 917-930 ---
+917: 			ret = zloop_get_block_size(zlo, zone);
+918: 			if (ret)
+919: 				return ret;
+920: 		}
+921: 
+922: 		ret = vfs_getattr(&zone->file->f_path, &stat, STATX_SIZE, 0);
+923: 		if (ret < 0) {
+924: 			pr_err("Failed to get zone %u file stat\n", zone_no);
+925: 			return ret;
+926: 		}
+927: 		file_sectors = stat.size >> SECTOR_SHIFT;
+928: 
+929: 		if (restore && file_sectors != zlo->zone_size) {
+930: 			pr_err("Invalid conventional zone %u file size (%llu sectors != %llu)\n",
+
+===== FILE: drivers/bus/fsl-mc/mc-sys.c =====
+
+--- lines 246-259 ---
+246: {
+247: 	int error;
+248: 	enum mc_cmd_status status;
+249: 	unsigned long irq_flags = 0;
+250: 
+251: 	if (in_hardirq() && !(mc_io->flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL))
+252: 		return -EINVAL;
+253: 
+254: 	if (mc_io->flags & FSL_MC_IO_ATOMIC_CONTEXT_PORTAL)
+255: 		raw_spin_lock_irqsave(&mc_io->spinlock, irq_flags);
+256: 	else
+257: 		mutex_lock(&mc_io->mutex);
+258: 
+259: 	/*
+
+===== FILE: drivers/char/random.c =====
+
+--- lines 1147-1160 ---
+1147: 
+1148: 	/*
+1149: 	 * If we're in a hard IRQ, add_interrupt_randomness() will be called
+1150: 	 * sometime after, so mix into the fast pool.
+1151: 	 */
+1152: 	if (in_hardirq()) {
+1153: 		fast_mix(this_cpu_ptr(&irq_randomness)->pool, entropy, num);
+1154: 	} else {
+1155: 		spin_lock_irqsave(&input_pool.lock, flags);
+1156: 		_mix_pool_bytes(&entropy, sizeof(entropy));
+1157: 		_mix_pool_bytes(&num, sizeof(num));
+1158: 		spin_unlock_irqrestore(&input_pool.lock, flags);
+1159: 	}
+1160: 
+
+--- lines 1197-1210 ---
+1197: 	 * will run after this, which uses a different crediting scheme of 1 bit
+1198: 	 * per every 64 interrupts. In order to let that function do accounting
+1199: 	 * close to the one in this function, we credit a full 64/64 bit per bit,
+1200: 	 * and then subtract one to account for the extra one added.
+1201: 	 */
+1202: 	if (in_hardirq())
+1203: 		this_cpu_ptr(&irq_randomness)->count += max(1u, bits * 64) - 1;
+1204: 	else
+1205: 		_credit_init_bits(bits);
+1206: }
+1207: 
+1208: void add_input_randomness(unsigned int type, unsigned int code, unsigned int value)
+1209: {
+1210: 	static unsigned char last_value;
+
+===== FILE: drivers/dma/sh/shdmac.c =====
+
+--- lines 494-507 ---
+494: 	 * Only concern ourselves with NMI events.
+495: 	 *
+496: 	 * Normally we would check the die chain value, but as this needs
+497: 	 * to be architecture independent, check for NMI context instead.
+498: 	 */
+499: 	if (!in_nmi())
+500: 		return NOTIFY_DONE;
+501: 
+502: 	rcu_read_lock();
+503: 	list_for_each_entry_rcu(shdev, &sh_dmae_devices, node) {
+504: 		/*
+505: 		 * Only stop if one of the controllers has NMIF asserted,
+506: 		 * we do not want to interfere with regular address error
+507: 		 * handling or NMI events that don't concern the DMACs.
+
+===== FILE: drivers/edac/ghes_edac.c =====
+
+--- lines 282-295 ---
+282: 	/*
+283: 	 * We can do the locking below because GHES defers error processing
+284: 	 * from NMI to IRQ context. Whenever that changes, we'd at least
+285: 	 * know.
+286: 	 */
+287: 	if (WARN_ON_ONCE(in_nmi()))
+288: 		return NOTIFY_OK;
+289: 
+290: 	spin_lock_irqsave(&ghes_lock, flags);
+291: 
+292: 	pvt = ghes_pvt;
+293: 	if (!pvt)
+294: 		goto unlock;
+295: 
+
+===== FILE: drivers/firmware/arm_sdei.c =====
+
+--- lines 487-500 ---
+487: int sdei_event_unregister(u32 event_num)
+488: {
+489: 	int err;
+490: 	struct sdei_event *event;
+491: 
+492: 	WARN_ON(in_nmi());
+493: 
+494: 	mutex_lock(&sdei_events_lock);
+495: 	event = sdei_event_find(event_num);
+496: 	if (!event) {
+497: 		pr_warn("Event %u not registered\n", event_num);
+498: 		err = -ENOENT;
+499: 		goto unlock;
+500: 	}
+
+--- lines 569-582 ---
+569: int sdei_event_register(u32 event_num, sdei_event_callback *cb, void *arg)
+570: {
+571: 	int err;
+572: 	struct sdei_event *event;
+573: 
+574: 	WARN_ON(in_nmi());
+575: 
+576: 	mutex_lock(&sdei_events_lock);
+577: 	if (sdei_event_find(event_num)) {
+578: 		pr_warn("Event %u already registered\n", event_num);
+579: 		err = -EBUSY;
+580: 		goto unlock;
+581: 	}
+582: 
+
+===== FILE: drivers/iommu/intel/irq_remapping.c =====
+
+--- lines 1298-1311 ---
+1298:  * For the example below, 3 MSIs are coalesced into one CPU notification. Only
+1299:  * one apic_eoi() is needed, but each MSI needs to process pending changes to
+1300:  * its CPU affinity.
+1301:  *
+1302:  * __sysvec_posted_msi_notification()
+1303:  *	irq_enter();
+1304:  *		handle_edge_irq()
+1305:  *			irq_chip_ack_parent()
+1306:  *				intel_ack_posted_msi_irq(); // No EOI
+1307:  *			handle_irq_event()
+1308:  *				driver_handler()
+1309:  *		handle_edge_irq()
+1310:  *			irq_chip_ack_parent()
+1311:  *				intel_ack_posted_msi_irq(); // No EOI
+
+--- lines 1315-1328 ---
+1315:  *			irq_chip_ack_parent()
+1316:  *				intel_ack_posted_msi_irq(); // No EOI
+1317:  *			handle_irq_event()
+1318:  *				driver_handler()
+1319:  *	apic_eoi()
+1320:  *	irq_exit()
+1321:  *
+1322:  */
+1323: static struct irq_chip intel_ir_chip_post_msi = {
+1324: 	.name			= "INTEL-IR-POST",
+1325: 	.irq_ack		= intel_ack_posted_msi_irq,
+1326: 	.irq_set_affinity	= intel_ir_set_affinity,
+1327: 	.irq_compose_msi_msg	= intel_ir_compose_msi_msg,
+1328: 	.irq_set_vcpu_affinity	= intel_ir_set_vcpu_affinity,
+
+===== FILE: drivers/irqchip/irq-gic-v3.c =====
+
+--- lines 860-873 ---
+860: 	irqnr = gic_read_iar();
+861: 
+862: 	is_nmi = gic_rpr_is_nmi_prio();
+863: 
+864: 	if (is_nmi) {
+865: 		nmi_enter();
+866: 		__gic_handle_nmi(irqnr, regs);
+867: 		nmi_exit();
+868: 	}
+869: 
+870: 	if (gic_prio_masking_enabled()) {
+871: 		gic_pmr_mask_irqs();
+872: 		gic_arch_enable_irqs();
+873: 	}
+
+===== FILE: drivers/md/dm-crypt.c =====
+
+--- lines 2270-2283 ---
+2270: 	struct crypt_config *cc = io->cc;
+2271: 
+2272: 	if ((bio_data_dir(io->base_bio) == READ && test_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags)) ||
+2273: 	    (bio_data_dir(io->base_bio) == WRITE && test_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags))) {
+2274: 		/*
+2275: 		 * in_hardirq(): Crypto API's skcipher_walk_first() refuses to work in hard IRQ context.
+2276: 		 * irqs_disabled(): the kernel may run some IO completion from the idle thread, but
+2277: 		 * it is being executed with irqs disabled.
+2278: 		 */
+2279: 		if (in_hardirq() || irqs_disabled()) {
+2280: 			INIT_WORK(&io->work, kcryptd_crypt);
+2281: 			queue_work(system_bh_wq, &io->work);
+2282: 			return;
+2283: 		} else {
+
+===== FILE: drivers/md/dm-vdo/logger.c =====
+
+--- lines 29-42 ---
+29: 	return log_level_latch;
+30: }
+31: 
+32: static const char *get_current_interrupt_type(void)
+33: {
+34: 	if (in_nmi())
+35: 		return "NMI";
+36: 
+37: 	if (in_hardirq())
+38: 		return "HI";
+39: 
+40: 	if (in_softirq())
+41: 		return "SI";
+42: 
+
+===== FILE: drivers/md/dm-verity-target.c =====
+
+--- lines 688-701 ---
+688: 		return;
+689: 	}
+690: 
+691: 	if (static_branch_unlikely(&use_bh_wq_enabled) && io->v->use_bh_wq &&
+692: 		verity_use_bh(bytes, ioprio)) {
+693: 		if (in_hardirq() || irqs_disabled()) {
+694: 			INIT_WORK(&io->work, verity_bh_work);
+695: 			queue_work(system_bh_wq, &io->work);
+696: 		} else {
+697: 			verity_bh_work(&io->work);
+698: 		}
+699: 	} else {
+700: 		INIT_WORK(&io->work, verity_work);
+701: 		queue_work(io->v->verify_wq, &io->work);
+
+===== FILE: drivers/mtd/ubi/build.c =====
+
+--- lines 1174-1187 ---
+1174: 	/* Probably this is an MTD character device node path */
+1175: 	err = kern_path(mtd_dev, LOOKUP_FOLLOW, &path);
+1176: 	if (err)
+1177: 		return ERR_PTR(err);
+1178: 
+1179: 	err = vfs_getattr(&path, &stat, STATX_TYPE, AT_STATX_SYNC_AS_STAT);
+1180: 	path_put(&path);
+1181: 	if (err)
+1182: 		return ERR_PTR(err);
+1183: 
+1184: 	/* MTD device number is defined by the major / minor numbers */
+1185: 	if (MAJOR(stat.rdev) != MTD_CHAR_MAJOR || !S_ISCHR(stat.mode))
+1186: 		return ERR_PTR(-EINVAL);
+1187: 
+
+===== FILE: drivers/mtd/ubi/kapi.c =====
+
+--- lines 295-308 ---
+295: 
+296: 	error = kern_path(pathname, LOOKUP_FOLLOW, &path);
+297: 	if (error)
+298: 		return error;
+299: 
+300: 	error = vfs_getattr(&path, &stat, STATX_TYPE, AT_STATX_SYNC_AS_STAT);
+301: 	path_put(&path);
+302: 	if (error)
+303: 		return error;
+304: 
+305: 	if (!S_ISCHR(stat.mode))
+306: 		return -EINVAL;
+307: 
+308: 	*ubi_num = ubi_major2num(MAJOR(stat.rdev));
+
+===== FILE: drivers/s390/cio/cio.c =====
+
+--- lines 595-608 ---
+595: 	memcpy(&sch->schib.scsw, &irb->scsw, sizeof(union scsw));
+596: 	/* Call interrupt handler with updated status. */
+597: 	irq_context = in_interrupt();
+598: 	if (!irq_context) {
+599: 		local_bh_disable();
+600: 		irq_enter();
+601: 	}
+602: 	kstat_incr_irq_this_cpu(IO_INTERRUPT);
+603: 	if (sch->driver && sch->driver->irq)
+604: 		sch->driver->irq(sch);
+605: 	else
+606: 		inc_irq_stat(IRQIO_CIO);
+607: 	if (!irq_context) {
+608: 		irq_exit();
+
+===== FILE: drivers/s390/net/ctcm_fsms.c =====
+
+--- lines 1455-1468 ---
+1455: 		ch->trans_skb->len = 0;
+1456: 		ch->ccw[1].count = ch->max_bufsize;
+1457: 		if (do_debug_ccw)
+1458: 			ctcmpc_dumpit((char *)&ch->ccw[0],
+1459: 				      sizeof(struct ccw1) * 3);
+1460: 		dolock = !in_hardirq();
+1461: 		if (dolock)
+1462: 			spin_lock_irqsave(
+1463: 				get_ccwdev_lock(ch->cdev), saveflags);
+1464: 		rc = ccw_device_start(ch->cdev, &ch->ccw[0], 0, 0xff, 0);
+1465: 		if (dolock) /* see remark about conditional locking */
+1466: 			spin_unlock_irqrestore(
+1467: 				get_ccwdev_lock(ch->cdev), saveflags);
+1468: 		if (rc != 0)
+
+===== FILE: drivers/s390/net/ctcm_mpc.c =====
+
+--- lines 1771-1784 ---
+1771: 	CTCM_CCW_DUMP((char *)&ch->ccw[8], sizeof(struct ccw1) * 7);
+1772: 	CTCM_D3_DUMP((char *)ch->xid_th, TH_HEADER_LENGTH);
+1773: 	CTCM_D3_DUMP((char *)ch->xid, XID2_LENGTH);
+1774: 	CTCM_D3_DUMP((char *)ch->xid_id, 4);
+1775: 
+1776: 	if (!in_hardirq()) {
+1777: 			 /* Such conditional locking is a known problem for
+1778: 			  * sparse because its static undeterministic.
+1779: 			  * Warnings should be ignored here. */
+1780: 		spin_lock_irqsave(get_ccwdev_lock(ch->cdev), saveflags);
+1781: 		gotlock = 1;
+1782: 	}
+1783: 
+1784: 	fsm_addtimer(&ch->timer, 5000 , CTC_EVENT_TIMER, ch);
+
+===== FILE: drivers/tty/sysrq.c =====
+
+--- lines 257-270 ---
+257: 	 * architecture has no support for it:
+258: 	 */
+259: 	if (!trigger_all_cpu_backtrace()) {
+260: 		struct pt_regs *regs = NULL;
+261: 
+262: 		if (in_hardirq())
+263: 			regs = get_irq_regs();
+264: 
+265: 		pr_info("CPU%d:\n", get_cpu());
+266: 		if (regs)
+267: 			show_regs(regs);
+268: 		else
+269: 			show_stack(NULL, NULL, KERN_INFO);
+270: 
+
+--- lines 285-298 ---
+285: 
+286: static void sysrq_handle_showregs(u8 key)
+287: {
+288: 	struct pt_regs *regs = NULL;
+289: 
+290: 	if (in_hardirq())
+291: 		regs = get_irq_regs();
+292: 	if (regs)
+293: 		show_regs(regs);
+294: 	perf_event_print_debug();
+295: }
+296: static const struct sysrq_key_op sysrq_showregs_op = {
+297: 	.handler	= sysrq_handle_showregs,
+298: 	.help_msg	= "show-registers(p)",
+
+===== FILE: drivers/tty/tty_jobctrl.c =====
+
+--- lines 146-159 ---
+146: 		 * binaries, which should not imply full privileges on all ttys.
+147: 		 *
+148: 		 * This could theoretically break old code that performs open()
+149: 		 * on a write-only file descriptor. In that case, it might be
+150: 		 * necessary to also permit this if
+151: 		 * inode_permission(inode, MAY_READ) == 0.
+152: 		 */
+153: 		if (filp->f_mode & FMODE_READ)
+154: 			__proc_set_tty(tty);
+155: 	}
+156: 	spin_unlock_irq(&current->sighand->siglock);
+157: 	read_unlock(&tasklist_lock);
+158: }
+159: 
+
+===== FILE: drivers/usb/early/xhci-dbc.c =====
+
+--- lines 843-856 ---
+843: {
+844: 	int ret, timeout = 0;
+845: 	unsigned long flags;
+846: 
+847: retry:
+848: 	if (in_nmi()) {
+849: 		if (!raw_spin_trylock_irqsave(&xdbc.lock, flags))
+850: 			return -EAGAIN;
+851: 	} else {
+852: 		raw_spin_lock_irqsave(&xdbc.lock, flags);
+853: 	}
+854: 
+855: 	xdbc_handle_events();
+856: 
+
+===== FILE: fs/affs/inode.c =====
+
+--- lines 217-230 ---
+217: 		   struct iattr *attr)
+218: {
+219: 	struct inode *inode = d_inode(dentry);
+220: 	int error;
+221: 
+222: 	pr_debug("notify_change(%lu,0x%x)\n", inode->i_ino, attr->ia_valid);
+223: 
+224: 	error = setattr_prepare(&nop_mnt_idmap, dentry, attr);
+225: 	if (error)
+226: 		goto out;
+227: 
+228: 	if (((attr->ia_valid & ATTR_UID) &&
+229: 	      affs_test_opt(AFFS_SB(inode->i_sb)->s_flags, SF_SETUID)) ||
+230: 	    ((attr->ia_valid & ATTR_GID) &&
+
+===== FILE: fs/attr.c =====
+
+--- lines 386-399 ---
+386: 	if (ia_valid & ATTR_TOUCH) {
+387: 		if (IS_IMMUTABLE(inode))
+388: 			return -EPERM;
+389: 
+390: 		if (!inode_owner_or_capable(idmap, inode)) {
+391: 			error = inode_permission(idmap, inode, MAY_WRITE);
+392: 			if (error)
+393: 				return error;
+394: 		}
+395: 	}
+396: 	return 0;
+397: }
+398: EXPORT_SYMBOL(may_setattr);
+399: 
+
+--- lines 422-435 ---
+422:  * the vfsmount must be passed through @idmap. This function will then
+423:  * take care to map the inode according to @idmap before checking
+424:  * permissions. On non-idmapped mounts or if permission checking is to be
+425:  * performed on the raw inode simply pass @nop_mnt_idmap.
+426:  */
+427: int notify_change(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 		  struct iattr *attr, struct delegated_inode *delegated_inode)
+429: {
+430: 	struct inode *inode = dentry->d_inode;
+431: 	umode_t mode = inode->i_mode;
+432: 	int error;
+433: 	struct timespec64 now;
+434: 	unsigned int ia_valid = attr->ia_valid;
+435: 
+
+--- lines 535-548 ---
+535: 		return -EOVERFLOW;
+536: 	if (!(ia_valid & ATTR_GID) &&
+537: 	    !vfsgid_valid(i_gid_into_vfsgid(idmap, inode)))
+538: 		return -EOVERFLOW;
+539: 
+540: 	error = security_inode_setattr(idmap, dentry, attr);
+541: 	if (error)
+542: 		return error;
+543: 
+544: 	/*
+545: 	 * If ATTR_DELEG is set, then these attributes are being set on
+546: 	 * behalf of the holder of a write delegation. We want to avoid
+547: 	 * breaking the delegation in this case.
+548: 	 */
+
+===== FILE: fs/bpf_fs_kfuncs.c =====
+
+--- lines 106-119 ---
+106: 	/* Allow reading xattr with user. and security.bpf. prefix */
+107: 	if (strncmp(name, XATTR_USER_PREFIX, XATTR_USER_PREFIX_LEN) &&
+108: 	    !match_security_bpf_prefix(name))
+109: 		return -EPERM;
+110: 
+111: 	return inode_permission(&nop_mnt_idmap, inode, MAY_READ);
+112: }
+113: 
+114: /**
+115:  * bpf_get_dentry_xattr - get xattr of a dentry
+116:  * @dentry: dentry to get xattr from
+117:  * @name__str: name of the xattr
+118:  * @value_p: output buffer of the xattr value
+119:  *
+
+--- lines 175-188 ---
+175: 
+176: 	/* Only allow setting and removing security.bpf. xattrs */
+177: 	if (!match_security_bpf_prefix(name))
+178: 		return -EPERM;
+179: 
+180: 	return inode_permission(&nop_mnt_idmap, inode, MAY_WRITE);
+181: }
+182: 
+183: /**
+184:  * bpf_set_dentry_xattr_locked - set a xattr of a dentry
+185:  * @dentry: dentry to get xattr from
+186:  * @name__str: name of the xattr
+187:  * @value_p: xattr value
+188:  * @flags: flags to pass into filesystem operations
+
+===== FILE: fs/btrfs/ioctl.c =====
+
+--- lines 1802-1815 ---
+1802: 			if (IS_ERR(temp_inode)) {
+1803: 				ret = PTR_ERR(temp_inode);
+1804: 				goto out_put;
+1805: 			}
+1806: 			/* Check the read+exec permission of this directory. */
+1807: 			ret = inode_permission(idmap, &temp_inode->vfs_inode,
+1808: 					       MAY_READ | MAY_EXEC);
+1809: 			iput(&temp_inode->vfs_inode);
+1810: 			if (ret)
+1811: 				goto out_put;
+1812: 
+1813: 			if (key.offset == upper_limit)
+1814: 				break;
+1815: 			if (key.objectid == BTRFS_FIRST_FREE_OBJECTID) {
+
+--- lines 1904-1917 ---
+1904: /*
+1905:  * Version of ino_lookup ioctl (unprivileged)
+1906:  *
+1907:  * The main differences from ino_lookup ioctl are:
+1908:  *
+1909:  *   1. Read + Exec permission will be checked using inode_permission() during
+1910:  *      path construction. -EACCES will be returned in case of failure.
+1911:  *   2. Path construction will be stopped at the inode number which corresponds
+1912:  *      to the fd with which this ioctl is called. If constructed path does not
+1913:  *      exist under fd's inode, -EACCES will be returned.
+1914:  *   3. The name of bottom subvolume is also searched and filled.
+1915:  */
+1916: static int btrfs_ioctl_ino_lookup_user(struct file *file, void __user *argp)
+1917: {
+
+--- lines 2339-2352 ---
+2339: 		 */
+2340: 		ret = -EINVAL;
+2341: 		if (root == dest)
+2342: 			goto out_end_removing;
+2343: 
+2344: 		ret = inode_permission(idmap, inode, MAY_WRITE | MAY_EXEC);
+2345: 		if (ret)
+2346: 			goto out_end_removing;
+2347: 	}
+2348: 
+2349: 	/* check if subvolume may be deleted by a user */
+2350: 	ret = may_delete_dentry(idmap, dir, dentry, true);
+2351: 	if (ret)
+2352: 		goto out_end_removing;
+
+--- lines 2406-2419 ---
+2406: 		 * Note that this does not check the file descriptor for write
+2407: 		 * access. This prevents defragmenting executables that are
+2408: 		 * running and allows defrag on files open in read-only mode.
+2409: 		 */
+2410: 		if (!capable(CAP_SYS_ADMIN) &&
+2411: 		    inode_permission(&nop_mnt_idmap, inode, MAY_WRITE)) {
+2412: 			ret = -EPERM;
+2413: 			goto out;
+2414: 		}
+2415: 
+2416: 		/*
+2417: 		 * Don't allow defrag on pre-content watched files, as it could
+2418: 		 * populate the page cache with 0's via readahead.
+2419: 		 */
+
+===== FILE: fs/cachefiles/interface.c =====
+
+--- lines 142-155 ---
+142: 		_debug("discard tail %llx", oi_size);
+143: 		newattrs.ia_valid = ATTR_SIZE;
+144: 		newattrs.ia_size = oi_size & PAGE_MASK;
+145: 		ret = cachefiles_inject_remove_error();
+146: 		if (ret == 0)
+147: 			ret = notify_change(&nop_mnt_idmap, file->f_path.dentry,
+148: 					    &newattrs, NULL);
+149: 		if (ret < 0)
+150: 			goto truncate_failed;
+151: 	}
+152: 
+153: 	newattrs.ia_valid = ATTR_SIZE;
+154: 	newattrs.ia_size = ni_size;
+155: 	ret = cachefiles_inject_write_error();
+
+===== FILE: fs/cachefiles/namei.c =====
+
+--- lines 244-257 ---
+244: 		return ret;
+245: 	}
+246: 
+247: 	ret = cachefiles_inject_remove_error();
+248: 	if (ret == 0) {
+249: 		ret = vfs_unlink(&nop_mnt_idmap, d_backing_inode(dir), dentry, NULL);
+250: 		if (ret == -EIO)
+251: 			cachefiles_io_error(cache, "Unlink failed");
+252: 	}
+253: 	if (ret != 0)
+254: 		trace_cachefiles_vfs_error(object, d_backing_inode(dir), ret,
+255: 					   cachefiles_trace_unlink_error);
+256: 	return ret;
+257: }
+
+--- lines 390-403 ---
+390: 			.new_dentry	= grave,
+391: 		};
+392: 		trace_cachefiles_rename(object, d_inode(rep)->i_ino, why);
+393: 		ret = cachefiles_inject_read_error();
+394: 		if (ret == 0)
+395: 			ret = vfs_rename(&rd);
+396: 		if (ret != 0)
+397: 			trace_cachefiles_vfs_error(object, d_inode(dir), ret,
+398: 						   cachefiles_trace_rename_error);
+399: 		if (ret != 0 && ret != -ENOMEM)
+400: 			cachefiles_io_error(cache,
+401: 					    "Rename failed with error %d", ret);
+402: 	}
+403: 
+
+===== FILE: fs/cachefiles/security.c =====
+
+--- lines 56-69 ---
+56: 		pr_err("Security denies permission to make dirs: error %d",
+57: 		       ret);
+58: 		return ret;
+59: 	}
+60: 
+61: 	ret = security_inode_create(d_backing_inode(root), root, 0);
+62: 	if (ret < 0)
+63: 		pr_err("Security denies permission to create files: error %d",
+64: 		       ret);
+65: 
+66: 	return ret;
+67: }
+68: 
+69: /*
+
+===== FILE: fs/configfs/symlink.c =====
+
+--- lines 188-201 ---
+188: 		goto out_put;
+189: 
+190: 	if (dentry->d_inode || d_unhashed(dentry))
+191: 		ret = -EEXIST;
+192: 	else
+193: 		ret = inode_permission(&nop_mnt_idmap, dir,
+194: 				       MAY_WRITE | MAY_EXEC);
+195: 	if (!ret)
+196: 		ret = type->ct_item_ops->allow_link(parent_item, target_item);
+197: 	if (!ret) {
+198: 		mutex_lock(&configfs_symlink_mutex);
+199: 		ret = create_link(parent_item, target_item, dentry);
+200: 		mutex_unlock(&configfs_symlink_mutex);
+201: 		if (ret && type->ct_item_ops->drop_link)
+
+===== FILE: fs/ecryptfs/inode.c =====
+
+--- lines 152-165 ---
+152: 	lower_dentry = ecryptfs_start_removing_dentry(dentry);
+153: 	if (IS_ERR(lower_dentry))
+154: 		return PTR_ERR(lower_dentry);
+155: 
+156: 	lower_dir = lower_dentry->d_parent->d_inode;
+157: 	rc = vfs_unlink(&nop_mnt_idmap, lower_dir, lower_dentry, NULL);
+158: 	if (rc) {
+159: 		printk(KERN_ERR "Error in vfs_unlink; rc = [%d]\n", rc);
+160: 		goto out_unlock;
+161: 	}
+162: 	fsstack_copy_attr_times(dir, lower_dir);
+163: 	set_nlink(inode, ecryptfs_inode_to_lower(inode)->i_nlink);
+164: 	inode_set_ctime_to_ts(inode, inode_get_ctime(dir));
+165: out_unlock:
+
+--- lines 192-205 ---
+192: 
+193: 	lower_dentry = ecryptfs_start_creating_dentry(ecryptfs_dentry);
+194: 	if (IS_ERR(lower_dentry))
+195: 		return ERR_CAST(lower_dentry);
+196: 	lower_dir = lower_dentry->d_parent->d_inode;
+197: 	rc = vfs_create(&nop_mnt_idmap, lower_dentry, mode, NULL);
+198: 	if (rc) {
+199: 		printk(KERN_ERR "%s: Failure to create dentry in lower fs; "
+200: 		       "rc = [%d]\n", __func__, rc);
+201: 		inode = ERR_PTR(rc);
+202: 		goto out_lock;
+203: 	}
+204: 	inode = __ecryptfs_get_inode(d_inode(lower_dentry),
+205: 				     directory_inode->i_sb);
+
+--- lines 620-633 ---
+620: 	rd.new_parent = lower_new_dir_dentry;
+621: 	rc = start_renaming_two_dentries(&rd, lower_old_dentry, lower_new_dentry);
+622: 	if (rc)
+623: 		return rc;
+624: 
+625: 	rc = vfs_rename(&rd);
+626: 	if (rc)
+627: 		goto out_lock;
+628: 	if (target_inode)
+629: 		fsstack_copy_attr_all(target_inode,
+630: 				      ecryptfs_inode_to_lower(target_inode));
+631: 	fsstack_copy_attr_all(new_dir, d_inode(lower_new_dir_dentry));
+632: 	if (new_dir != old_dir)
+633: 		fsstack_copy_attr_all(old_dir, d_inode(lower_old_dir_dentry));
+
+--- lines 715-728 ---
+715:  * Function to handle truncations modifying the size of the file. Note
+716:  * that the file sizes are interpolated. When expanding, we are simply
+717:  * writing strings of 0's out. When truncating, we truncate the upper
+718:  * inode and update the lower_ia according to the page index
+719:  * interpolations. If ATTR_SIZE is set in lower_ia->ia_valid upon return,
+720:  * the caller must use lower_ia in a call to notify_change() to perform
+721:  * the truncation of the lower inode.
+722:  *
+723:  * Returns zero on success; non-zero otherwise
+724:  */
+725: static int truncate_upper(struct dentry *dentry, struct iattr *ia,
+726: 			  struct iattr *lower_ia)
+727: {
+728: 	int rc = 0;
+
+--- lines 853-866 ---
+853: 	rc = truncate_upper(dentry, &ia, &lower_ia);
+854: 	if (!rc && lower_ia.ia_valid & ATTR_SIZE) {
+855: 		struct dentry *lower_dentry = ecryptfs_dentry_to_lower(dentry);
+856: 
+857: 		inode_lock(d_inode(lower_dentry));
+858: 		rc = notify_change(&nop_mnt_idmap, lower_dentry,
+859: 				   &lower_ia, NULL);
+860: 		inode_unlock(d_inode(lower_dentry));
+861: 	}
+862: 	return rc;
+863: }
+864: 
+865: static int
+866: ecryptfs_permission(struct mnt_idmap *idmap, struct inode *inode,
+
+--- lines 959-972 ---
+959: 	 */
+960: 	if (lower_ia.ia_valid & (ATTR_KILL_SUID | ATTR_KILL_SGID))
+961: 		lower_ia.ia_valid &= ~ATTR_MODE;
+962: 
+963: 	inode_lock(d_inode(lower_dentry));
+964: 	rc = notify_change(&nop_mnt_idmap, lower_dentry, &lower_ia, NULL);
+965: 	inode_unlock(d_inode(lower_dentry));
+966: out:
+967: 	fsstack_copy_attr_all(inode, lower_inode);
+968: 	return rc;
+969: }
+970: 
+971: static int ecryptfs_getattr_link(struct mnt_idmap *idmap,
+972: 				 const struct path *path, struct kstat *stat,
+
+===== FILE: fs/exec.c =====
+
+--- lines 1292-1305 ---
+1292: 
+1293: void would_dump(struct linux_binprm *bprm, struct file *file)
+1294: {
+1295: 	struct inode *inode = file_inode(file);
+1296: 	struct mnt_idmap *idmap = file_mnt_idmap(file);
+1297: 	if (inode_permission(idmap, inode, MAY_READ) < 0) {
+1298: 		struct user_namespace *old, *user_ns;
+1299: 		bprm->interp_flags |= BINPRM_FLAGS_ENFORCE_NONDUMP;
+1300: 
+1301: 		/* Ensure mm->user_ns contains the executable */
+1302: 		user_ns = old = bprm->mm->user_ns;
+1303: 		while ((user_ns != &init_user_ns) &&
+1304: 		       !privileged_wrt_inode_uidgid(user_ns, idmap, inode))
+1305: 			user_ns = user_ns->parent;
+
+--- lines 1552-1565 ---
+1552: 
+1553: 	/* Atomically reload and check mode/uid/gid now that lock held. */
+1554: 	mode = inode->i_mode;
+1555: 	vfsuid = i_uid_into_vfsuid(idmap, inode);
+1556: 	vfsgid = i_gid_into_vfsgid(idmap, inode);
+1557: 	err = inode_permission(idmap, inode, MAY_EXEC);
+1558: 	inode_unlock(inode);
+1559: 
+1560: 	/* Did the exec bit vanish out from under us? Give up. */
+1561: 	if (err)
+1562: 		return;
+1563: 
+1564: 	/* We ignore suid/sgid if there are no mappings for them in the ns */
+1565: 	if (!vfsuid_has_mapping(bprm->cred->user_ns, vfsuid) ||
+
+===== FILE: fs/exfat/file.c =====
+
+--- lines 426-439 ---
+426: 	/*
+427: 	 * The security check is questionable...  We single
+428: 	 * out the RO attribute for checking by the security
+429: 	 * module, just because it maps to a file mode.
+430: 	 */
+431: 	err = security_inode_setattr(file_mnt_idmap(file),
+432: 				     file->f_path.dentry, &ia);
+433: 	if (err)
+434: 		goto out_unlock_inode;
+435: 
+436: 	/* This MUST be done before doing anything irreversible... */
+437: 	err = exfat_setattr(file_mnt_idmap(file), file->f_path.dentry, &ia);
+438: 	if (err)
+439: 		goto out_unlock_inode;
+
+===== FILE: fs/fat/file.c =====
+
+--- lines 89-102 ---
+89: 	/*
+90: 	 * The security check is questionable...  We single
+91: 	 * out the RO attribute for checking by the security
+92: 	 * module, just because it maps to a file mode.
+93: 	 */
+94: 	err = security_inode_setattr(file_mnt_idmap(file),
+95: 				     file->f_path.dentry, &ia);
+96: 	if (err)
+97: 		goto out_unlock_inode;
+98: 
+99: 	/* This MUST be done before doing anything irreversible... */
+100: 	err = fat_setattr(file_mnt_idmap(file), file->f_path.dentry, &ia);
+101: 	if (err)
+102: 		goto out_unlock_inode;
+
+===== FILE: fs/hfs/inode.c =====
+
+--- lines 625-638 ---
+625: /*
+626:  * hfs_notify_change()
+627:  *
+628:  * Based very closely on fs/msdos/inode.c by Werner Almesberger
+629:  *
+630:  * This is the notify_change() field in the super_operations structure
+631:  * for HFS file systems.  The purpose is to take that changes made to
+632:  * an inode and apply then in a filesystem-dependent manner.  In this
+633:  * case the process has a few of tasks to do:
+634:  *  1) prevent changes to the i_uid and i_gid fields.
+635:  *  2) map file permissions to the closest allowable permissions
+636:  *  3) Since multiple Linux files can share the same on-disk inode under
+637:  *     HFS (for instance the data and resource forks of a file) a change
+638:  *     to permissions must be applied to all other in-core inodes which
+
+===== FILE: fs/init.c =====
+
+--- lines 147-160 ---
+147: 	int error;
+148: 
+149: 	error = kern_path(filename, lookup_flags, &path);
+150: 	if (error)
+151: 		return error;
+152: 	error = vfs_getattr(&path, stat, STATX_BASIC_STATS,
+153: 			    flags | AT_NO_AUTOMOUNT);
+154: 	path_put(&path);
+155: 	return error;
+156: }
+157: 
+158: int __init init_mknod(const char *filename, umode_t mode, unsigned int dev)
+159: {
+160: 	CLASS(filename_kernel, name)(filename);
+
+===== FILE: fs/inode.c =====
+
+--- lines 2276-2289 ---
+2276: 	sb_end_write(inode->i_sb);
+2277: }
+2278: EXPORT_SYMBOL(touch_atime);
+2279: 
+2280: /*
+2281:  * Return mask of changes for notify_change() that need to be done as a
+2282:  * response to write or truncate. Return 0 if nothing has to be changed.
+2283:  * Negative value on error (change should be denied).
+2284:  */
+2285: int dentry_needs_remove_privs(struct mnt_idmap *idmap,
+2286: 			      struct dentry *dentry)
+2287: {
+2288: 	struct inode *inode = d_inode(dentry);
+2289: 	int mask = 0;
+
+--- lines 2309-2322 ---
+2309: 	newattrs.ia_valid = ATTR_FORCE | kill;
+2310: 	/*
+2311: 	 * Note we call this on write, so notify_change will not
+2312: 	 * encounter any conflicting delegations:
+2313: 	 */
+2314: 	return notify_change(idmap, dentry, &newattrs, NULL);
+2315: }
+2316: 
+2317: static int file_remove_privs_flags(struct file *file, unsigned int flags)
+2318: {
+2319: 	struct dentry *dentry = file_dentry(file);
+2320: 	struct inode *inode = file_inode(file);
+2321: 	int error = 0;
+2322: 	int kill;
+
+===== FILE: fs/libfs.c =====
+
+--- lines 2298-2311 ---
+2298:  * @name:   the name to be created
+2299:  *
+2300:  * Required lock is taken and a lookup in performed prior to creating an
+2301:  * object in a directory.  No permission checking is performed.
+2302:  *
+2303:  * Returns: a negative dentry on which vfs_create() or similar may
+2304:  *  be attempted, or an error.
+2305:  */
+2306: struct dentry *simple_start_creating(struct dentry *parent, const char *name)
+2307: {
+2308: 	struct qstr qname = QSTR(name);
+2309: 	int err;
+2310: 
+2311: 	err = lookup_noperm_common(&qname, parent);
+
+===== FILE: fs/namei.c =====
+
+--- lines 618-631 ---
+618:  * this, letting us set arbitrary permissions for filesystem access without
+619:  * changing the "normal" UIDs which are used for other things.
+620:  *
+621:  * When checking for MAY_APPEND, MAY_WRITE must also be set in @mask.
+622:  */
+623: int inode_permission(struct mnt_idmap *idmap,
+624: 		     struct inode *inode, int mask)
+625: {
+626: 	int retval;
+627: 
+628: 	retval = sb_permission(inode->i_sb, inode, mask);
+629: 	if (unlikely(retval))
+630: 		return retval;
+631: 
+
+--- lines 651-664 ---
+651: 
+652: 	retval = devcgroup_inode_permission(inode, mask);
+653: 	if (unlikely(retval))
+654: 		return retval;
+655: 
+656: 	return security_inode_permission(inode, mask);
+657: }
+658: EXPORT_SYMBOL(inode_permission);
+659: 
+660: /*
+661:  * lookup_inode_permission_may_exec - Check traversal right for given inode
+662:  *
+663:  * This is a special case routine for may_lookup() making assumptions specific
+664:  * to path traversal. Use inode_permission() if you are doing something else.
+
+--- lines 683-696 ---
+683: 	VFS_BUG_ON((mask & ~MAY_NOT_BLOCK) != 0);
+684: 
+685: 	mask |= MAY_EXEC;
+686: 
+687: 	if (unlikely(!(inode->i_opflags & (IOP_FASTPERM | IOP_FASTPERM_MAY_EXEC))))
+688: 		return inode_permission(idmap, inode, mask);
+689: 
+690: 	if (unlikely(((inode->i_mode & 0111) != 0111) || !no_acl_inode(inode)))
+691: 		return inode_permission(idmap, inode, mask);
+692: 
+693: 	return security_inode_permission(inode, mask);
+694: }
+695: 
+696: /**
+
+--- lines 1325-1338 ---
+1325: 	/* Executable setgid files should not get pinned to the filesystem. */
+1326: 	if ((mode & (S_ISGID | S_IXGRP)) == (S_ISGID | S_IXGRP))
+1327: 		return false;
+1328: 
+1329: 	/* Hardlinking to unreadable or unwritable sources is dangerous. */
+1330: 	if (inode_permission(idmap, inode, MAY_READ | MAY_WRITE))
+1331: 		return false;
+1332: 
+1333: 	return true;
+1334: }
+1335: 
+1336: /**
+1337:  * may_linkat - Check permissions for creating a hardlink
+1338:  * @idmap: idmap of the mount the inode was found from
+
+--- lines 3119-3132 ---
+3119: {
+3120: 	int err;
+3121: 	err = lookup_noperm_common(qname, base);
+3122: 	if (err < 0)
+3123: 		return err;
+3124: 	return inode_permission(idmap, base->d_inode, MAY_EXEC);
+3125: }
+3126: 
+3127: /**
+3128:  * try_lookup_noperm - filesystem helper to lookup single pathname component
+3129:  * @name:	qstr storing pathname component to lookup
+3130:  * @base:	base directory to lookup from
+3131:  *
+3132:  * Look up a dentry by name in the dcache, returning NULL if it does not
+
+--- lines 3669-3682 ---
+3669: 	    !vfsgid_valid(i_gid_into_vfsgid(idmap, inode)))
+3670: 		return -EOVERFLOW;
+3671: 
+3672: 	audit_inode_child(dir, victim, AUDIT_TYPE_CHILD_DELETE);
+3673: 
+3674: 	error = inode_permission(idmap, dir, MAY_WRITE | MAY_EXEC);
+3675: 	if (error)
+3676: 		return error;
+3677: 	if (IS_APPEND(dir))
+3678: 		return -EPERM;
+3679: 
+3680: 	if (check_sticky(idmap, dir, inode) || IS_APPEND(inode) ||
+3681: 	    IS_IMMUTABLE(inode) || IS_SWAPFILE(inode) ||
+3682: 	    HAS_UNMAPPED_ID(idmap, inode))
+
+--- lines 3714-3727 ---
+3714: 	if (IS_DEADDIR(dir))
+3715: 		return -ENOENT;
+3716: 	if (!fsuidgid_has_mapping(dir->i_sb, idmap))
+3717: 		return -EOVERFLOW;
+3718: 
+3719: 	return inode_permission(idmap, dir, MAY_WRITE | MAY_EXEC);
+3720: }
+3721: EXPORT_SYMBOL(may_create_dentry);
+3722: 
+3723: // p1 != p2, both are on the same filesystem, ->s_vfs_rename_mutex is held
+3724: static struct dentry *lock_two_directories(struct dentry *p1, struct dentry *p2)
+3725: {
+3726: 	struct dentry *p = p1, *q = p2, *r;
+3727: 
+
+--- lines 4157-4170 ---
+4157:  * the vfsmount must be passed through @idmap. This function will then take
+4158:  * care to map the inode according to @idmap before checking permissions.
+4159:  * On non-idmapped mounts or if permission checking is to be performed on the
+4160:  * raw inode simply pass @nop_mnt_idmap.
+4161:  */
+4162: int vfs_create(struct mnt_idmap *idmap, struct dentry *dentry, umode_t mode,
+4163: 	       struct delegated_inode *di)
+4164: {
+4165: 	struct inode *dir = d_inode(dentry->d_parent);
+4166: 	int error;
+4167: 
+4168: 	error = may_create_dentry(idmap, dir, dentry);
+4169: 	if (error)
+4170: 		return error;
+
+--- lines 4171-4184 ---
+4171: 
+4172: 	if (!dir->i_op->create)
+4173: 		return -EACCES;	/* shouldn't it be ENOSYS? */
+4174: 
+4175: 	mode = vfs_prepare_mode(idmap, dir, mode, S_IALLUGO, S_IFREG);
+4176: 	error = security_inode_create(dir, dentry, mode);
+4177: 	if (error)
+4178: 		return error;
+4179: 	error = try_break_deleg(dir, di);
+4180: 	if (error)
+4181: 		return error;
+4182: 	error = dir->i_op->create(idmap, dir, dentry, mode, true);
+4183: 	if (!error)
+4184: 		fsnotify_create(dir, dentry);
+
+--- lines 4195-4208 ---
+4195: 	if (error)
+4196: 		return error;
+4197: 
+4198: 	mode &= S_IALLUGO;
+4199: 	mode |= S_IFREG;
+4200: 	error = security_inode_create(dir, dentry, mode);
+4201: 	if (error)
+4202: 		return error;
+4203: 	error = f(dentry, mode, arg);
+4204: 	if (!error)
+4205: 		fsnotify_create(dir, dentry);
+4206: 	return error;
+4207: }
+4208: EXPORT_SYMBOL(vfs_mkobj);
+
+--- lines 4249-4262 ---
+4249: 		break;
+4250: 	default:
+4251: 		VFS_BUG_ON_INODE(!IS_ANON_FILE(inode), inode);
+4252: 	}
+4253: 
+4254: 	error = inode_permission(idmap, inode, MAY_OPEN | acc_mode);
+4255: 	if (error)
+4256: 		return error;
+4257: 
+4258: 	/*
+4259: 	 * An append-only file must be opened in append mode for writing.
+4260: 	 */
+4261: 	if (IS_APPEND(inode)) {
+4262: 		if  ((flag & O_ACCMODE) != O_RDONLY && !(flag & O_APPEND))
+
+--- lines 4306-4319 ---
+4306: 		return error;
+4307: 
+4308: 	if (!fsuidgid_has_mapping(dir->dentry->d_sb, idmap))
+4309: 		return -EOVERFLOW;
+4310: 
+4311: 	error = inode_permission(idmap, dir->dentry->d_inode,
+4312: 				 MAY_WRITE | MAY_EXEC);
+4313: 	if (error)
+4314: 		return error;
+4315: 
+4316: 	return security_inode_create(dir->dentry->d_inode, dentry, mode);
+4317: }
+4318: 
+4319: /*
+
+--- lines 4712-4725 ---
+4712: 	struct inode *inode;
+4713: 	int error;
+4714: 	int open_flag = file->f_flags;
+4715: 
+4716: 	/* we want directory to be writable */
+4717: 	error = inode_permission(idmap, dir, MAY_WRITE | MAY_EXEC);
+4718: 	if (error)
+4719: 		return error;
+4720: 	if (!dir->i_op->tmpfile)
+4721: 		return -EOPNOTSUPP;
+4722: 	child = d_alloc(parentpath->dentry, &slash_name);
+4723: 	if (unlikely(!child))
+4724: 		return -ENOMEM;
+4725: 	file->__f_path.mnt = parentpath->mnt;
+
+--- lines 5035-5048 ---
+5035: 		}
+5036: 
+5037: 		path->dentry = dentry;
+5038: 
+5039: 	} else {
+5040: 		error = vfs_create(mnt_idmap(path->mnt), path->dentry, mode, NULL);
+5041: 		if (!error)
+5042: 			error = vfs_open(path, file);
+5043: 	}
+5044: 	if (unlikely(error))
+5045: 		return ERR_PTR(error);
+5046: 
+5047: 	return no_free_ptr(file);
+5048: }
+
+--- lines 5143-5156 ---
+5143: 		goto out2;
+5144: 
+5145: 	idmap = mnt_idmap(path.mnt);
+5146: 	switch (mode & S_IFMT) {
+5147: 		case 0: case S_IFREG:
+5148: 			error = vfs_create(idmap, dentry, mode, &di);
+5149: 			if (!error)
+5150: 				security_path_post_mknod(idmap, dentry);
+5151: 			break;
+5152: 		case S_IFCHR: case S_IFBLK:
+5153: 			error = vfs_mknod(idmap, path.dentry->d_inode,
+5154: 					  dentry, mode, new_decode_dev(dev), &di);
+5155: 			break;
+5156: 		case S_IFIFO: case S_IFSOCK:
+
+--- lines 5445-5458 ---
+5445:  * the vfsmount must be passed through @idmap. This function will then take
+5446:  * care to map the inode according to @idmap before checking permissions.
+5447:  * On non-idmapped mounts or if permission checking is to be performed on the
+5448:  * raw inode simply pass @nop_mnt_idmap.
+5449:  */
+5450: int vfs_unlink(struct mnt_idmap *idmap, struct inode *dir,
+5451: 	       struct dentry *dentry, struct delegated_inode *delegated_inode)
+5452: {
+5453: 	struct inode *target = dentry->d_inode;
+5454: 	int error = may_delete_dentry(idmap, dir, dentry, false);
+5455: 
+5456: 	if (error)
+5457: 		return error;
+5458: 
+
+--- lines 5463-5476 ---
+5463: 	if (IS_SWAPFILE(target))
+5464: 		error = -EPERM;
+5465: 	else if (is_local_mountpoint(dentry))
+5466: 		error = -EBUSY;
+5467: 	else {
+5468: 		error = security_inode_unlink(dir, dentry);
+5469: 		if (!error) {
+5470: 			error = try_break_deleg(dir, delegated_inode);
+5471: 			if (error)
+5472: 				goto out;
+5473: 			error = try_break_deleg(target, delegated_inode);
+5474: 			if (error)
+5475: 				goto out;
+5476: 			error = dir->i_op->unlink(dir, dentry);
+
+--- lines 5541-5554 ---
+5541: 	inode = dentry->d_inode;
+5542: 	ihold(inode);
+5543: 	error = security_path_unlink(&path, dentry);
+5544: 	if (error)
+5545: 		goto exit_end_dirop;
+5546: 	error = vfs_unlink(mnt_idmap(path.mnt), path.dentry->d_inode,
+5547: 			   dentry, &delegated_inode);
+5548: exit_end_dirop:
+5549: 	end_dirop(dentry);
+5550: 	iput(inode);	/* truncate the inode here */
+5551: 	if (is_delegated(&delegated_inode)) {
+5552: 		error = break_deleg_wait(&delegated_inode);
+5553: 		if (!error)
+5554: 			goto retry_deleg;
+
+--- lines 5897-5910 ---
+5897:  *	   we are removing the target. Solution: we will have to grab ->i_rwsem
+5898:  *	   in the fhandle_to_dentry code. [FIXME - current nfsfh.c relies on
+5899:  *	   ->i_rwsem on parents, which works but leads to some truly excessive
+5900:  *	   locking].
+5901:  */
+5902: int vfs_rename(struct renamedata *rd)
+5903: {
+5904: 	int error;
+5905: 	struct inode *old_dir = d_inode(rd->old_parent);
+5906: 	struct inode *new_dir = d_inode(rd->new_parent);
+5907: 	struct dentry *old_dentry = rd->old_dentry;
+5908: 	struct dentry *new_dentry = rd->new_dentry;
+5909: 	struct delegated_inode *delegated_inode = rd->delegated_inode;
+5910: 	unsigned int flags = rd->flags;
+
+--- lines 5945-5958 ---
+5945: 	 * If we are going to change the parent - check write permissions,
+5946: 	 * we'll need to flip '..'.
+5947: 	 */
+5948: 	if (new_dir != old_dir) {
+5949: 		if (is_dir) {
+5950: 			error = inode_permission(rd->mnt_idmap, source,
+5951: 						 MAY_WRITE);
+5952: 			if (error)
+5953: 				return error;
+5954: 		}
+5955: 		if ((flags & RENAME_EXCHANGE) && new_is_dir) {
+5956: 			error = inode_permission(rd->mnt_idmap, target,
+5957: 						 MAY_WRITE);
+5958: 			if (error)
+
+--- lines 6145-6158 ---
+6145: 	error = security_path_rename(&old_path, rd.old_dentry,
+6146: 				     &new_path, rd.new_dentry, flags);
+6147: 	if (error)
+6148: 		goto exit_unlock;
+6149: 
+6150: 	error = vfs_rename(&rd);
+6151: exit_unlock:
+6152: 	end_renaming(&rd);
+6153: exit_lock_rename:
+6154: 	if (is_delegated(&delegated_inode)) {
+6155: 		error = break_deleg_wait(&delegated_inode);
+6156: 		if (!error)
+6157: 			goto retry_deleg;
+6158: 	}
+
+===== FILE: fs/nfs/localio.c =====
+
+--- lines 752-765 ---
+752: {
+753: 	u32 request_mask = STATX_BASIC_STATS;
+754: 
+755: 	if (version == 4)
+756: 		request_mask |= (STATX_BTIME | STATX_CHANGE_COOKIE);
+757: 	return vfs_getattr(p, stat, request_mask, AT_STATX_SYNC_AS_STAT);
+758: }
+759: 
+760: /* Copied from fs/nfsd/nfsfh.c:nfsd4_change_attribute() */
+761: static u64 __nfsd4_change_attribute(const struct kstat *stat,
+762: 				    const struct inode *inode)
+763: {
+764: 	u64 chattr;
+765: 
+
+===== FILE: fs/nfsd/nfs3proc.c =====
+
+--- lines 339-352 ---
+339: 		iap->ia_mode &= ~current_umask();
+340: 
+341: 	status = fh_fill_pre_attrs(fhp);
+342: 	if (status != nfs_ok)
+343: 		goto out;
+344: 	host_err = vfs_create(&nop_mnt_idmap, child, iap->ia_mode, NULL);
+345: 	if (host_err < 0) {
+346: 		status = nfserrno(host_err);
+347: 		goto out;
+348: 	}
+349: 	fh_fill_post_attrs(fhp);
+350: 
+351: 	/* A newly created file already has a file size of zero. */
+352: 	if ((iap->ia_valid & ATTR_SIZE) && (iap->ia_size == 0))
+
+===== FILE: fs/nfsd/nfs4state.c =====
+
+--- lines 1246-1259 ---
+1246: 	if (dp->dl_setattr)
+1247: 		return;
+1248: 
+1249: 	/* Stamp everything to "now" */
+1250: 	inode_lock(inode);
+1251: 	ret = notify_change(&nop_mnt_idmap, f->f_path.dentry, &ia, NULL);
+1252: 	inode_unlock(inode);
+1253: 	if (ret) {
+1254: 		struct inode *inode = file_inode(f);
+1255: 
+1256: 		pr_notice_ratelimited("nfsd: Unable to update timestamps on inode %02x:%02x:%lu: %d\n",
+1257: 					MAJOR(inode->i_sb->s_dev),
+1258: 					MINOR(inode->i_sb->s_dev),
+1259: 					inode->i_ino, ret);
+
+--- lines 6227-6240 ---
+6227: 		return false;
+6228: 
+6229: 	path.mnt = currentfh->fh_export->ex_path.mnt;
+6230: 	path.dentry = file_dentry(nf->nf_file);
+6231: 
+6232: 	rc = vfs_getattr(&path, stat,
+6233: 			 STATX_MODE | STATX_SIZE | STATX_ATIME |
+6234: 			 STATX_MTIME | STATX_CTIME | STATX_CHANGE_COOKIE,
+6235: 			 AT_STATX_SYNC_AS_STAT);
+6236: 
+6237: 	nfsd_file_put(nf);
+6238: 	return rc == 0;
+6239: }
+6240: 
+
+--- lines 9320-9333 ---
+9320: 	if (!attrs.ia_valid)
+9321: 		return 0;
+9322: 
+9323: 	attrs.ia_valid |= ATTR_DELEG;
+9324: 	inode_lock(inode);
+9325: 	ret = notify_change(&nop_mnt_idmap, dentry, &attrs, NULL);
+9326: 	inode_unlock(inode);
+9327: 	return ret;
+9328: }
+9329: 
+9330: /**
+9331:  * nfsd4_deleg_getattr_conflict - Recall if GETATTR causes conflict
+9332:  * @rqstp: RPC transaction context
+9333:  * @dentry: dentry of inode to be checked for a conflict
+
+===== FILE: fs/nfsd/nfs4xdr.c =====
+
+--- lines 3096-3109 ---
+3096: 	path_get(&path);
+3097: 	while (follow_up(&path)) {
+3098: 		if (path.dentry != path.mnt->mnt_root)
+3099: 			break;
+3100: 	}
+3101: 	err = vfs_getattr(&path, &stat, STATX_INO, AT_STATX_SYNC_AS_STAT);
+3102: 	path_put(&path);
+3103: 	if (!err)
+3104: 		*pino = stat.ino;
+3105: 	return err;
+3106: }
+3107: 
+3108: static __be32
+3109: nfsd4_encode_bitmap4(struct xdr_stream *xdr, u32 bmval0, u32 bmval1, u32 bmval2)
+
+--- lines 3916-3929 ---
+3916: 		status = nfsd4_deleg_getattr_conflict(rqstp, dentry, &dp);
+3917: 		if (status)
+3918: 			goto out;
+3919: 	}
+3920: 
+3921: 	err = vfs_getattr(&path, &args.stat,
+3922: 			  STATX_BASIC_STATS | STATX_BTIME | STATX_CHANGE_COOKIE,
+3923: 			  AT_STATX_SYNC_AS_STAT);
+3924: 	if (dp) {
+3925: 		struct nfs4_cb_fattr *ncf = &dp->dl_cb_fattr;
+3926: 
+3927: 		if (ncf->ncf_file_modified) {
+3928: 			++ncf->ncf_initial_cinfo;
+3929: 			args.stat.size = ncf->ncf_cur_fsize;
+
+===== FILE: fs/nfsd/nfsfh.c =====
+
+--- lines 38-51 ---
+38: 	tdentry = dget(dentry);
+39: 	while (tdentry != exp->ex_path.dentry && !IS_ROOT(tdentry)) {
+40: 		/* make sure parents give x permission to user */
+41: 		int err;
+42: 		parent = dget_parent(tdentry);
+43: 		err = inode_permission(&nop_mnt_idmap,
+44: 				       d_inode(parent), MAY_EXEC);
+45: 		if (err < 0) {
+46: 			dput(parent);
+47: 			break;
+48: 		}
+49: 		dput(tdentry);
+50: 		tdentry = parent;
+51: 	}
+
+--- lines 703-716 ---
+703: 		request_mask |= (STATX_DIOALIGN | STATX_DIO_READ_ALIGN);
+704: 
+705: 	if (fhp->fh_maxsize == NFS4_FHSIZE)
+706: 		request_mask |= (STATX_BTIME | STATX_CHANGE_COOKIE);
+707: 
+708: 	return nfserrno(vfs_getattr(&p, stat, request_mask,
+709: 				    AT_STATX_SYNC_AS_STAT));
+710: }
+711: 
+712: /**
+713:  * fh_fill_pre_attrs - Fill in pre-op attributes
+714:  * @fhp: file handle to be updated
+715:  *
+716:  */
+
+--- lines 854-867 ---
+854: /**
+855:  * nfsd4_change_attribute - Generate an NFSv4 change_attribute value
+856:  * @stat: inode attributes
+857:  *
+858:  * Caller must fill in @stat before calling, typically by invoking
+859:  * vfs_getattr() with STATX_MODE, STATX_CTIME, and STATX_CHANGE_COOKIE.
+860:  * Returns an unsigned 64-bit changeid4 value (RFC 8881 Section 3.2).
+861:  *
+862:  * We could use i_version alone as the change attribute.  However, i_version
+863:  * can go backwards on a regular file after an unclean shutdown.  On its own
+864:  * that doesn't necessarily cause a problem, but if i_version goes backwards
+865:  * and then is incremented again it could reuse a value that was previously
+866:  * used before boot, and a client who queried the two values might incorrectly
+867:  * assume nothing changed.
+
+===== FILE: fs/nfsd/vfs.c =====
+
+--- lines 453-466 ---
+453: 		};
+454: 
+455: 		if (iap->ia_size < 0)
+456: 			return -EFBIG;
+457: 
+458: 		host_err = notify_change(&nop_mnt_idmap, dentry, &size_attr, NULL);
+459: 		if (host_err)
+460: 			return host_err;
+461: 		iap->ia_valid &= ~ATTR_SIZE;
+462: 
+463: 		/*
+464: 		 * Avoid the additional setattr call below if the only other
+465: 		 * attribute that the client sends is the mtime, as we update
+466: 		 * it as part of the size change above.
+
+--- lines 479-492 ---
+479: 	 * too, then ATTR_CTIME should already be set.
+480: 	 */
+481: 	if (!(iap->ia_valid & ATTR_DELEG))
+482: 		iap->ia_valid |= ATTR_CTIME;
+483: 
+484: 	return notify_change(&nop_mnt_idmap, dentry, iap, NULL);
+485: }
+486: 
+487: /**
+488:  * nfsd_setattr - Set various file attributes.
+489:  * @rqstp: controlling RPC transaction
+490:  * @fhp: filehandle of target
+491:  * @attr: attributes to set
+492:  * @guardtime: do not act if ctime.tv_sec does not match this timestamp
+
+--- lines 580-593 ---
+580: 
+581: 	for (retries = 1;;) {
+582: 		struct iattr attrs;
+583: 
+584: 		/*
+585: 		 * notify_change() can alter its iattr argument, making
+586: 		 * @iap unsuitable for submission multiple times. Make a
+587: 		 * copy for every loop iteration.
+588: 		 */
+589: 		attrs = *iap;
+590: 		host_err = __nfsd_setattr(dentry, &attrs);
+591: 		if (host_err != -EAGAIN || !retries--)
+592: 			break;
+593: 		if (!nfsd_wait_for_delegreturn(rqstp, inode))
+
+--- lines 1764-1777 ---
+1764:  * setting size to 0 may fail for some specific file systems by the permission
+1765:  * checking which requires WRITE permission but the mode is 000.
+1766:  * we ignore the resizing(to 0) on the just new created file, since the size is
+1767:  * 0 after file created.
+1768:  *
+1769:  * call this only after vfs_create() is called.
+1770:  * */
+1771: static void
+1772: nfsd_check_ignore_resizing(struct iattr *iap)
+1773: {
+1774: 	if ((iap->ia_valid & ATTR_SIZE) && (iap->ia_size == 0))
+1775: 		iap->ia_valid &= ~ATTR_SIZE;
+1776: }
+1777: 
+
+--- lines 1804-1817 ---
+1804: 		iap->ia_mode &= ~current_umask();
+1805: 
+1806: 	err = 0;
+1807: 	switch (type) {
+1808: 	case S_IFREG:
+1809: 		host_err = vfs_create(&nop_mnt_idmap, dchild, iap->ia_mode, NULL);
+1810: 		if (!host_err)
+1811: 			nfsd_check_ignore_resizing(iap);
+1812: 		break;
+1813: 	case S_IFDIR:
+1814: 		dchild = vfs_mkdir(&nop_mnt_idmap, dirp, dchild, iap->ia_mode, NULL);
+1815: 		if (IS_ERR(dchild)) {
+1816: 			host_err = PTR_ERR(dchild);
+1817: 		} else if (d_is_negative(dchild)) {
+
+--- lines 2203-2216 ---
+2203: 		goto out_unlock;
+2204: 	} else {
+2205: 		int retries;
+2206: 
+2207: 		for (retries = 1;;) {
+2208: 			host_err = vfs_rename(&rd);
+2209: 			if (host_err != -EAGAIN || !retries--)
+2210: 				break;
+2211: 			if (!nfsd_wait_for_delegreturn(rqstp, d_inode(rd.old_dentry)))
+2212: 				break;
+2213: 		}
+2214: 		if (!host_err) {
+2215: 			host_err = commit_metadata(tfhp);
+2216: 			if (!host_err)
+
+--- lines 2314-2327 ---
+2314: 
+2315: 		if (rdentry->d_sb->s_export_op->flags & EXPORT_OP_CLOSE_BEFORE_UNLINK)
+2316: 			nfsd_close_cached_files(rdentry);
+2317: 
+2318: 		for (retries = 1;;) {
+2319: 			host_err = vfs_unlink(&nop_mnt_idmap, dirp, rdentry, NULL);
+2320: 			if (host_err != -EAGAIN || !retries--)
+2321: 				break;
+2322: 			if (!nfsd_wait_for_delegreturn(rqstp, rinode))
+2323: 				break;
+2324: 		}
+2325: 	} else {
+2326: 		host_err = vfs_rmdir(&nop_mnt_idmap, dirp, rdentry, NULL);
+2327: 	}
+
+--- lines 2878-2891 ---
+2878: 	if ((acc & NFSD_MAY_OWNER_OVERRIDE) &&
+2879: 	    uid_eq(inode->i_uid, current_fsuid()))
+2880: 		return 0;
+2881: 
+2882: 	/* This assumes  NFSD_MAY_{READ,WRITE,EXEC} == MAY_{READ,WRITE,EXEC} */
+2883: 	err = inode_permission(&nop_mnt_idmap, inode,
+2884: 			       acc & (MAY_READ | MAY_WRITE | MAY_EXEC));
+2885: 
+2886: 	/* Allow read access to binaries even when mode 111 */
+2887: 	if (err == -EACCES && S_ISREG(inode->i_mode) &&
+2888: 	     (((acc & NFSD_MAY_MASK) == NFSD_MAY_READ) &&
+2889: 	      (acc & (NFSD_MAY_OWNER_OVERRIDE | NFSD_MAY_READ_IF_EXEC))))
+2890: 		err = inode_permission(&nop_mnt_idmap, inode, MAY_EXEC);
+2891: 
+
+===== FILE: fs/ocfs2/file.c =====
+
+--- lines 1187-1200 ---
+1187: 		 * VFS entry point in the call chain of recursive cluster
+1188: 		 * locking issue.
+1189: 		 *
+1190: 		 * For instance:
+1191: 		 * chmod_common()
+1192: 		 *  notify_change()
+1193: 		 *   ocfs2_setattr()
+1194: 		 *    posix_acl_chmod()
+1195: 		 *     ocfs2_iop_get_acl()
+1196: 		 *
+1197: 		 * But, we're not 100% sure if it's always true, because the
+1198: 		 * ordering of the VFS entry points in the call chain is out
+1199: 		 * of our control. So, we'd better dump the stack here to
+1200: 		 * catch the other cases of recursive locking.
+
+--- lines 1360-1373 ---
+1360: 	} else if (had_lock) {
+1361: 		/* See comments in ocfs2_setattr() for details.
+1362: 		 * The call chain of this case could be:
+1363: 		 * do_sys_open()
+1364: 		 *  may_open()
+1365: 		 *   inode_permission()
+1366: 		 *    ocfs2_permission()
+1367: 		 *     ocfs2_iop_get_acl()
+1368: 		 */
+1369: 		mlog(ML_ERROR, "Another case of recursive locking:\n");
+1370: 		dump_stack();
+1371: 	}
+1372: 
+1373: 	ret = generic_permission(&nop_mnt_idmap, inode, mask);
+
+===== FILE: fs/ocfs2/refcounttree.c =====
+
+--- lines 4328-4341 ---
+4328: {
+4329: 	if (d_really_is_positive(child))
+4330: 		return -EEXIST;
+4331: 	if (IS_DEADDIR(dir))
+4332: 		return -ENOENT;
+4333: 	return inode_permission(&nop_mnt_idmap, dir, MAY_WRITE | MAY_EXEC);
+4334: }
+4335: 
+4336: /**
+4337:  * ocfs2_vfs_reflink - Create a reference-counted link
+4338:  *
+4339:  * @old_dentry:        source dentry + inode
+4340:  * @dir:       directory to create the target
+4341:  * @new_dentry:        target dentry
+
+--- lines 4382-4395 ---
+4382: 	 * If the caller is modifying any aspect of the attributes, they
+4383: 	 * are not creating a snapshot.  They need read permission on the
+4384: 	 * file.
+4385: 	 */
+4386: 	if (!preserve) {
+4387: 		error = inode_permission(&nop_mnt_idmap, inode, MAY_READ);
+4388: 		if (error)
+4389: 			return error;
+4390: 	}
+4391: 
+4392: 	inode_lock(inode);
+4393: 	error = dquot_initialize(dir);
+4394: 	if (!error)
+4395: 		error = ocfs2_reflink(old_dentry, dir, new_dentry, preserve);
+
+===== FILE: fs/open.c =====
+
+--- lines 63-76 ---
+63: 	ret = inode_lock_killable(dentry->d_inode);
+64: 	if (ret)
+65: 		return ret;
+66: 
+67: 	/* Note any delegations or leases have already been broken: */
+68: 	ret = notify_change(idmap, dentry, &newattrs, NULL);
+69: 	inode_unlock(dentry->d_inode);
+70: 	return ret;
+71: }
+72: 
+73: int vfs_truncate(const struct path *path, loff_t length)
+74: {
+75: 	struct mnt_idmap *idmap;
+76: 	struct inode *inode;
+
+--- lines 83-96 ---
+83: 		return -EISDIR;
+84: 	if (!S_ISREG(inode->i_mode))
+85: 		return -EINVAL;
+86: 
+87: 	idmap = mnt_idmap(path->mnt);
+88: 	error = inode_permission(idmap, inode, MAY_WRITE);
+89: 	if (error)
+90: 		return error;
+91: 
+92: 	error = fsnotify_truncate_perm(path, length);
+93: 	if (error)
+94: 		return error;
+95: 
+96: 	error = mnt_want_write(path->mnt);
+
+--- lines 501-514 ---
+501: 		res = -EACCES;
+502: 		if (path_noexec(&path))
+503: 			goto out_path_release;
+504: 	}
+505: 
+506: 	res = inode_permission(mnt_idmap(path.mnt), inode, mode | MAY_ACCESS);
+507: 	/* SuS v2 requires we report a read only fs too */
+508: 	if (res || !(mode & S_IWOTH) || special_file(inode->i_mode))
+509: 		goto out_path_release;
+510: 	/*
+511: 	 * This is a rare case where using __mnt_is_readonly()
+512: 	 * is OK without a mnt_want/drop_write() pair.  Since
+513: 	 * no actual write to the fs is performed here, we do
+514: 	 * not need to telegraph to that to anyone.
+
+--- lines 634-647 ---
+634: 	error = security_path_chmod(path, mode);
+635: 	if (error)
+636: 		goto out_unlock;
+637: 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+638: 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+639: 	error = notify_change(mnt_idmap(path->mnt), path->dentry,
+640: 			      &newattrs, &delegated_inode);
+641: out_unlock:
+642: 	inode_unlock(inode);
+643: 	if (is_delegated(&delegated_inode)) {
+644: 		error = break_deleg_wait(&delegated_inode);
+645: 		if (!error)
+646: 			goto retry_deleg;
+647: 	}
+
+--- lines 773-786 ---
+773: 	error = security_path_chown(
+774: 		path,
+775: 		from_vfsuid(idmap, fs_userns, newattrs.ia_vfsuid),
+776: 		from_vfsgid(idmap, fs_userns, newattrs.ia_vfsgid));
+777: 	if (!error)
+778: 		error = notify_change(idmap, path->dentry, &newattrs,
+779: 				      &delegated_inode);
+780: 	inode_unlock(inode);
+781: 	if (is_delegated(&delegated_inode)) {
+782: 		error = break_deleg_wait(&delegated_inode);
+783: 		if (!error)
+784: 			goto retry_deleg;
+785: 	}
+786: 	return error;
+
+===== FILE: fs/overlayfs/copy_up.c =====
+
+--- lines 1134-1147 ---
+1134: 
+1135: 	if (WARN_ON(!ctx.workdir))
+1136: 		return -EROFS;
+1137: 
+1138: 	ovl_path_lower(dentry, &ctx.lowerpath);
+1139: 	err = vfs_getattr(&ctx.lowerpath, &ctx.stat,
+1140: 			  STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+1141: 	if (err)
+1142: 		return err;
+1143: 
+1144: 	if (!kuid_has_mapping(current_user_ns(), ctx.stat.uid) ||
+1145: 	    !kgid_has_mapping(current_user_ns(), ctx.stat.gid))
+1146: 		return -EOVERFLOW;
+1147: 
+
+--- lines 1160-1173 ---
+1160: 
+1161: 	if (parent) {
+1162: 		ovl_path_upper(parent, &parentpath);
+1163: 		ctx.destdir = parentpath.dentry;
+1164: 
+1165: 		err = vfs_getattr(&parentpath, &ctx.pstat,
+1166: 				  STATX_ATIME | STATX_MTIME,
+1167: 				  AT_STATX_SYNC_AS_STAT);
+1168: 		if (err)
+1169: 			return err;
+1170: 	}
+1171: 
+1172: 	/* maybe truncate regular file. this has no effect on dirs */
+1173: 	if (flags & O_TRUNC)
+
+===== FILE: fs/overlayfs/dir.c =====
+
+--- lines 396-409 ---
+396: 
+397: 	if (WARN_ON(!workdir))
+398: 		return ERR_PTR(-EROFS);
+399: 
+400: 	ovl_path_upper(dentry, &upperpath);
+401: 	err = vfs_getattr(&upperpath, &stat,
+402: 			  STATX_BASIC_STATS, AT_STATX_SYNC_AS_STAT);
+403: 	if (err)
+404: 		goto out;
+405: 
+406: 	err = -ESTALE;
+407: 	if (!S_ISDIR(stat.mode))
+408: 		goto out;
+409: 	upper = upperpath.dentry;
+
+===== FILE: fs/overlayfs/file.c =====
+
+--- lines 39-52 ---
+39: 	if (flags & O_APPEND)
+40: 		acc_mode |= MAY_APPEND;
+41: 
+42: 	with_ovl_creds(inode->i_sb) {
+43: 		real_idmap = mnt_idmap(realpath->mnt);
+44: 		err = inode_permission(real_idmap, realinode, MAY_OPEN | acc_mode);
+45: 		if (err) {
+46: 			realfile = ERR_PTR(err);
+47: 		} else {
+48: 			if (!inode_owner_or_capable(real_idmap, realinode))
+49: 				flags &= ~O_NOATIME;
+50: 
+51: 			realfile = backing_file_open(file_user_path(file),
+52: 						     flags, realpath, current_cred());
+
+===== FILE: fs/overlayfs/inode.c =====
+
+--- lines 229-242 ---
+229: 
+230: 			/*
+231: 			 * If we are querying a metacopy dentry and lower
+232: 			 * dentry is data dentry, then use the blocks we
+233: 			 * queried just now. We don't have to do additional
+234: 			 * vfs_getattr(). If lower itself is metacopy, then
+235: 			 * additional vfs_getattr() is unavoidable.
+236: 			 */
+237: 			if (metacopy_blocks &&
+238: 			    realpath.dentry == ovl_dentry_lowerdata(dentry)) {
+239: 				stat->blocks = lowerstat.blocks;
+240: 				metacopy_blocks = false;
+241: 			}
+242: 		}
+
+--- lines 316-329 ---
+316: 		/* Make sure mounter can read file for copy up later */
+317: 		mask |= MAY_READ;
+318: 	}
+319: 
+320: 	with_ovl_creds(inode->i_sb)
+321: 		return inode_permission(mnt_idmap(realpath.mnt), realinode, mask);
+322: }
+323: 
+324: static const char *ovl_get_link(struct dentry *dentry,
+325: 				struct inode *inode,
+326: 				struct delayed_call *done)
+327: {
+328: 	if (!dentry)
+329: 		return ERR_PTR(-ECHILD);
+
+===== FILE: fs/overlayfs/overlayfs.h =====
+
+--- lines 204-217 ---
+204:  */
+205: static inline int ovl_do_notify_change(struct ovl_fs *ofs,
+206: 				       struct dentry *upperdentry,
+207: 				       struct iattr *attr)
+208: {
+209: 	return notify_change(ovl_upper_mnt_idmap(ofs), upperdentry, attr, NULL);
+210: }
+211: 
+212: static inline int ovl_do_rmdir(struct ovl_fs *ofs,
+213: 			       struct inode *dir, struct dentry *dentry)
+214: {
+215: 	int err = vfs_rmdir(ovl_upper_mnt_idmap(ofs), dir, dentry, NULL);
+216: 
+217: 	pr_debug("rmdir(%pd2) = %i\n", dentry, err);
+
+--- lines 219-232 ---
+219: }
+220: 
+221: static inline int ovl_do_unlink(struct ovl_fs *ofs, struct inode *dir,
+222: 				struct dentry *dentry)
+223: {
+224: 	int err = vfs_unlink(ovl_upper_mnt_idmap(ofs), dir, dentry, NULL);
+225: 
+226: 	pr_debug("unlink(%pd2) = %i\n", dentry, err);
+227: 	return err;
+228: }
+229: 
+230: static inline int ovl_do_link(struct ovl_fs *ofs, struct dentry *old_dentry,
+231: 			      struct inode *dir, struct dentry *new_dentry)
+232: {
+
+--- lines 239-252 ---
+239: 
+240: static inline int ovl_do_create(struct ovl_fs *ofs,
+241: 				struct inode *dir, struct dentry *dentry,
+242: 				umode_t mode)
+243: {
+244: 	int err = vfs_create(ovl_upper_mnt_idmap(ofs), dentry, mode, NULL);
+245: 
+246: 	pr_debug("create(%pd2, 0%o) = %i\n", dentry, mode, err);
+247: 	return err;
+248: }
+249: 
+250: static inline struct dentry *ovl_do_mkdir(struct ovl_fs *ofs,
+251: 					  struct inode *dir,
+252: 					  struct dentry *dentry,
+
+--- lines 365-378 ---
+365: {
+366: 	int err;
+367: 
+368: 	pr_debug("rename(%pd2, %pd2, 0x%x)\n", rd->old_dentry, rd->new_dentry,
+369: 		 rd->flags);
+370: 	err = vfs_rename(rd);
+371: 	if (err) {
+372: 		pr_debug("...rename(%pd2, %pd2, ...) = %i\n",
+373: 			 rd->old_dentry, rd->new_dentry, err);
+374: 	}
+375: 	return err;
+376: }
+377: 
+378: static inline int ovl_do_rename(struct ovl_fs *ofs, struct dentry *olddir,
+
+===== FILE: fs/overlayfs/readdir.c =====
+
+--- lines 540-553 ---
+540:  * the uppermost real inode ino and should not call this function.
+541:  *
+542:  * When not all layer are on same fs, report real ino also for upper.
+543:  *
+544:  * When all layers are on the same fs, and upper has a reference to
+545:  * copy up origin, call vfs_getattr() on the overlay entry to make
+546:  * sure that d_ino will be consistent with st_ino from stat(2).
+547:  *
+548:  * Also checks the overlay.whiteout xattr by doing a full lookup which will return
+549:  * negative in this case.
+550:  */
+551: static int ovl_cache_update(const struct path *path, struct ovl_cache_entry *p, bool update_ino)
+552: 
+553: {
+
+--- lines 594-607 ---
+594: 	if (OVL_TYPE_ORIGIN(type)) {
+595: 		struct kstat stat;
+596: 		struct path statpath = *path;
+597: 
+598: 		statpath.dentry = this;
+599: 		err = vfs_getattr(&statpath, &stat, STATX_INO, 0);
+600: 		if (err)
+601: 			goto fail;
+602: 
+603: 		/*
+604: 		 * Directory inode is always on overlay st_dev.
+605: 		 * Non-dir with ovl_same_dev() could be on pseudo st_dev in case
+606: 		 * of xino bits overflow.
+607: 		 */
+
+--- lines 811-824 ---
+811: 	if (OVL_TYPE_MERGE(ovl_path_type(dir->d_parent))) {
+812: 		struct kstat stat;
+813: 		struct path statpath = file->f_path;
+814: 
+815: 		statpath.dentry = dir->d_parent;
+816: 		err = vfs_getattr(&statpath, &stat, STATX_INO, 0);
+817: 		if (err)
+818: 			return err;
+819: 
+820: 		WARN_ON_ONCE(dir->d_sb->s_dev != stat.dev);
+821: 		rdt.parent_ino = stat.ino;
+822: 	}
+823: 
+824: 	if (ovl_is_impure_dir(file)) {
+
+===== FILE: fs/overlayfs/util.c =====
+
+--- lines 672-685 ---
+672: 		break;
+673: 	default:
+674: 		BUG();
+675: 	}
+676: 
+677: 	err = inode_permission(real_idmap, inode, acc_mode | MAY_OPEN);
+678: 	if (err)
+679: 		return ERR_PTR(err);
+680: 
+681: 	/* O_NOATIME is an optimization, don't fail if not permitted */
+682: 	if (inode_owner_or_capable(real_idmap, inode))
+683: 		flags |= O_NOATIME;
+684: 
+685: 	return dentry_open(path, flags, current_cred());
+
+===== FILE: fs/pstore/platform.c =====
+
+--- lines 151-164 ---
+151: {
+152: 	/*
+153: 	 * In case of NMI path, pstore shouldn't be blocked
+154: 	 * regardless of reason.
+155: 	 */
+156: 	if (in_nmi())
+157: 		return true;
+158: 
+159: 	switch (reason) {
+160: 	/* In panic case, other cpus are stopped by smp_send_stop(). */
+161: 	case KMSG_DUMP_PANIC:
+162: 	/*
+163: 	 * Emergency restart shouldn't be blocked by spinning on
+164: 	 * pstore_info::buf_lock.
+
+--- lines 289-302 ---
+289: 	why = kmsg_dump_reason_str(detail->reason);
+290: 
+291: 	if (pstore_cannot_block_path(detail->reason)) {
+292: 		if (!raw_spin_trylock_irqsave(&psinfo->buf_lock, flags)) {
+293: 			pr_err("dump skipped in %s path because of concurrent dump\n",
+294: 					in_nmi() ? "NMI" : why);
+295: 			return;
+296: 		}
+297: 	} else {
+298: 		raw_spin_lock_irqsave(&psinfo->buf_lock, flags);
+299: 	}
+300: 
+301: 	kmsg_dump_rewind(&iter);
+302: 
+
+===== FILE: fs/remap_range.c =====
+
+--- lines 422-435 ---
+422: 		return true;
+423: 	if (file->f_mode & FMODE_WRITE)
+424: 		return true;
+425: 	if (vfsuid_eq_kuid(i_uid_into_vfsuid(idmap, inode), current_fsuid()))
+426: 		return true;
+427: 	if (!inode_permission(idmap, inode, MAY_WRITE))
+428: 		return true;
+429: 	return false;
+430: }
+431: 
+432: loff_t vfs_dedupe_file_range_one(struct file *src_file, loff_t src_pos,
+433: 				 struct file *dst_file, loff_t dst_pos,
+434: 				 loff_t len, unsigned int remap_flags)
+435: {
+
+===== FILE: fs/smb/server/smb2pdu.c =====
+
+--- lines 3305-3318 ---
+3305: 		/* FILE_READ_ATTRIBUTE is allowed without inode_permission,
+3306: 		 * because execute(search) permission on a parent directory,
+3307: 		 * is already granted.
+3308: 		 */
+3309: 		if (daccess & ~(FILE_READ_ATTRIBUTES_LE | FILE_READ_CONTROL_LE)) {
+3310: 			rc = inode_permission(idmap,
+3311: 					      d_inode(path.dentry),
+3312: 					      may_flags);
+3313: 			if (rc)
+3314: 				goto err_out;
+3315: 
+3316: 			if ((daccess & FILE_DELETE_LE) ||
+3317: 			    (req->CreateOptions & FILE_DELETE_ON_CLOSE_LE)) {
+3318: 				rc = inode_permission(idmap,
+
+--- lines 4419-4432 ---
+4419: 		rc = -EBADF;
+4420: 		goto err_out2;
+4421: 	}
+4422: 
+4423: 	if (!(dir_fp->daccess & FILE_LIST_DIRECTORY_LE) ||
+4424: 	    inode_permission(file_mnt_idmap(dir_fp->filp),
+4425: 			     file_inode(dir_fp->filp),
+4426: 			     MAY_READ | MAY_EXEC)) {
+4427: 		pr_err("no right to enumerate directory (%pD)\n", dir_fp->filp);
+4428: 		rc = -EACCES;
+4429: 		goto err_out2;
+4430: 	}
+4431: 
+4432: 	if (!S_ISDIR(file_inode(dir_fp->filp)->i_mode)) {
+
+--- lines 4867-4880 ---
+4867: 		pr_err("no right to read the attributes : 0x%x\n",
+4868: 		       fp->daccess);
+4869: 		return -EACCES;
+4870: 	}
+4871: 
+4872: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+4873: 			  AT_STATX_SYNC_AS_STAT);
+4874: 	if (ret)
+4875: 		return ret;
+4876: 
+4877: 	basic_info = (struct smb2_file_basic_info *)rsp->Buffer;
+4878: 	basic_info->CreationTime = cpu_to_le64(fp->create_time);
+4879: 	time = ksmbd_UnixTimeToNT(stat.atime);
+4880: 	basic_info->LastAccessTime = cpu_to_le64(time);
+
+--- lines 4895-4908 ---
+4895: 	struct smb2_file_standard_info *sinfo;
+4896: 	unsigned int delete_pending;
+4897: 	struct kstat stat;
+4898: 	int ret;
+4899: 
+4900: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+4901: 			  AT_STATX_SYNC_AS_STAT);
+4902: 	if (ret)
+4903: 		return ret;
+4904: 
+4905: 	sinfo = (struct smb2_file_standard_info *)rsp->Buffer;
+4906: 	delete_pending = ksmbd_inode_pending_delete(fp);
+4907: 
+4908: 	if (ksmbd_stream_fd(fp) == false) {
+
+--- lines 4965-4978 ---
+4965: 	if (buf_free_len < (filename_len + 1) * 2) {
+4966: 		kfree(filename);
+4967: 		return -EINVAL;
+4968: 	}
+4969: 
+4970: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+4971: 			  AT_STATX_SYNC_AS_STAT);
+4972: 	if (ret) {
+4973: 		kfree(filename);
+4974: 		return ret;
+4975: 	}
+4976: 
+4977: 	ksmbd_debug(SMB, "filename = %s\n", filename);
+4978: 	delete_pending = ksmbd_inode_pending_delete(fp);
+
+--- lines 5055-5068 ---
+5055: 	int nbytes = 0, streamlen, stream_name_len, next, idx = 0;
+5056: 	int buf_free_len;
+5057: 	struct smb2_query_info_req *req = ksmbd_req_buf_next(work);
+5058: 	int ret;
+5059: 
+5060: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+5061: 			  AT_STATX_SYNC_AS_STAT);
+5062: 	if (ret)
+5063: 		return ret;
+5064: 
+5065: 	file_info = (struct smb2_file_stream_info *)rsp->Buffer;
+5066: 
+5067: 	buf_free_len =
+5068: 		smb2_calc_max_out_buf_len(work,
+
+--- lines 5152-5165 ---
+5152: {
+5153: 	struct smb2_file_internal_info *file_info;
+5154: 	struct kstat stat;
+5155: 	int ret;
+5156: 
+5157: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+5158: 			  AT_STATX_SYNC_AS_STAT);
+5159: 	if (ret)
+5160: 		return ret;
+5161: 
+5162: 	file_info = (struct smb2_file_internal_info *)rsp->Buffer;
+5163: 	file_info->IndexNumber = cpu_to_le64(stat.ino);
+5164: 	rsp->OutputBufferLength =
+5165: 		cpu_to_le32(sizeof(struct smb2_file_internal_info));
+
+--- lines 5179-5192 ---
+5179: 		pr_err("no right to read the attributes : 0x%x\n",
+5180: 		       fp->daccess);
+5181: 		return -EACCES;
+5182: 	}
+5183: 
+5184: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+5185: 			  AT_STATX_SYNC_AS_STAT);
+5186: 	if (ret)
+5187: 		return ret;
+5188: 
+5189: 	file_info = (struct smb2_file_network_open_info *)rsp->Buffer;
+5190: 
+5191: 	file_info->CreationTime = cpu_to_le64(fp->create_time);
+5192: 	time = ksmbd_UnixTimeToNT(stat.atime);
+
+--- lines 5250-5263 ---
+5250: {
+5251: 	struct smb2_file_comp_info *file_info;
+5252: 	struct kstat stat;
+5253: 	int ret;
+5254: 
+5255: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+5256: 			  AT_STATX_SYNC_AS_STAT);
+5257: 	if (ret)
+5258: 		return ret;
+5259: 
+5260: 	file_info = (struct smb2_file_comp_info *)rsp->Buffer;
+5261: 	file_info->CompressedFileSize = cpu_to_le64(stat.blocks << 9);
+5262: 	file_info->CompressionFormat = COMPRESSION_FORMAT_NONE;
+5263: 	file_info->CompressionUnitShift = 0;
+
+--- lines 5301-5314 ---
+5301: 	struct kstat stat;
+5302: 	u64 time;
+5303: 	int out_buf_len = sizeof(struct smb311_posix_qinfo) + 32;
+5304: 	int ret;
+5305: 
+5306: 	ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+5307: 			  AT_STATX_SYNC_AS_STAT);
+5308: 	if (ret)
+5309: 		return ret;
+5310: 
+5311: 	file_info = (struct smb311_posix_qinfo *)rsp->Buffer;
+5312: 	file_info->CreationTime = cpu_to_le64(fp->create_time);
+5313: 	time = ksmbd_UnixTimeToNT(stat.atime);
+5314: 	file_info->LastAccessTime = cpu_to_le64(time);
+
+--- lines 6014-6027 ---
+6014: 		if (!fp) {
+6015: 			err = -ENOENT;
+6016: 			goto out;
+6017: 		}
+6018: 
+6019: 		ret = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+6020: 				  AT_STATX_SYNC_AS_STAT);
+6021: 		if (ret) {
+6022: 			ksmbd_fd_put(work, fp);
+6023: 			goto out;
+6024: 		}
+6025: 
+6026: 		rsp->Flags = SMB2_CLOSE_FLAG_POSTQUERY_ATTRIB;
+6027: 		rsp->AllocationSize = S_ISDIR(stat.mode) ? 0 :
+
+--- lines 6293-6306 ---
+6293: 
+6294: 		if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+6295: 			return -EACCES;
+6296: 
+6297: 		inode_lock(inode);
+6298: 		rc = notify_change(idmap, dentry, &attrs, NULL);
+6299: 		inode_unlock(inode);
+6300: 	}
+6301: 	return rc;
+6302: }
+6303: 
+6304: static int set_file_allocation_info(struct ksmbd_work *work,
+6305: 				    struct ksmbd_file *fp,
+6306: 				    struct smb2_file_alloc_info *file_alloc_info)
+
+--- lines 6320-6333 ---
+6320: 		return -EACCES;
+6321: 
+6322: 	if (ksmbd_stream_fd(fp) == true)
+6323: 		return 0;
+6324: 
+6325: 	rc = vfs_getattr(&fp->filp->f_path, &stat, STATX_BASIC_STATS,
+6326: 			 AT_STATX_SYNC_AS_STAT);
+6327: 	if (rc)
+6328: 		return rc;
+6329: 
+6330: 	alloc_blks = (le64_to_cpu(file_alloc_info->AllocationSize) + 511) >> 9;
+6331: 	inode = file_inode(fp->filp);
+6332: 
+6333: 	if (alloc_blks > stat.blocks) {
+
+===== FILE: fs/smb/server/smbacl.c =====
+
+--- lines 1500-1513 ---
+1500: 					    rc);
+1501: 		}
+1502: 	}
+1503: 
+1504: 	inode_lock(inode);
+1505: 	rc = notify_change(idmap, path->dentry, &newattrs, NULL);
+1506: 	inode_unlock(inode);
+1507: 	if (rc)
+1508: 		goto out;
+1509: 
+1510: 	/* Check it only calling from SD BUFFER context */
+1511: 	if (type_check && !(le16_to_cpu(pntsd->type) & DACL_PRESENT))
+1512: 		goto out;
+1513: 
+
+===== FILE: fs/smb/server/vfs.c =====
+
+--- lines 122-135 ---
+122: void ksmbd_vfs_query_maximal_access(struct mnt_idmap *idmap,
+123: 				   struct dentry *dentry, __le32 *daccess)
+124: {
+125: 	*daccess = cpu_to_le32(FILE_READ_ATTRIBUTES | READ_CONTROL);
+126: 
+127: 	if (!inode_permission(idmap, d_inode(dentry), MAY_OPEN | MAY_WRITE))
+128: 		*daccess |= cpu_to_le32(WRITE_DAC | WRITE_OWNER | SYNCHRONIZE |
+129: 				FILE_WRITE_DATA | FILE_APPEND_DATA |
+130: 				FILE_WRITE_EA | FILE_WRITE_ATTRIBUTES |
+131: 				FILE_DELETE_CHILD);
+132: 
+133: 	if (!inode_permission(idmap, d_inode(dentry), MAY_OPEN | MAY_READ))
+134: 		*daccess |= FILE_READ_DATA_LE | FILE_READ_EA_LE;
+135: 
+
+--- lines 163-176 ---
+163: 			       name, err);
+164: 		return err;
+165: 	}
+166: 
+167: 	mode |= S_IFREG;
+168: 	err = vfs_create(mnt_idmap(path.mnt), dentry, mode, NULL);
+169: 	if (!err) {
+170: 		ksmbd_vfs_inherit_owner(work, d_inode(path.dentry),
+171: 					d_inode(dentry));
+172: 	} else {
+173: 		pr_err("File(%s): creation failed (err:%d)\n", name, err);
+174: 	}
+175: 
+176: 	end_creating_path(&path, dentry);
+
+--- lines 533-546 ---
+533:  */
+534: int ksmbd_vfs_getattr(const struct path *path, struct kstat *stat)
+535: {
+536: 	int err;
+537: 
+538: 	err = vfs_getattr(path, stat, STATX_BASIC_STATS | STATX_BTIME,
+539: 			AT_STATX_SYNC_AS_STAT);
+540: 	if (err)
+541: 		pr_err("getattr failed, err %d\n", err);
+542: 	return err;
+543: }
+544: 
+545: /**
+546:  * ksmbd_vfs_fsync() - vfs helper for smb fsync
+
+--- lines 592-605 ---
+592: 	if (S_ISDIR(d_inode(path->dentry)->i_mode)) {
+593: 		err = vfs_rmdir(idmap, d_inode(parent), path->dentry, NULL);
+594: 		if (err && err != -ENOTEMPTY)
+595: 			ksmbd_debug(VFS, "rmdir failed, err %d\n", err);
+596: 	} else {
+597: 		err = vfs_unlink(idmap, d_inode(parent), path->dentry, NULL);
+598: 		if (err)
+599: 			ksmbd_debug(VFS, "unlink failed, err %d\n", err);
+600: 	}
+601: 
+602: out_err:
+603: 	ksmbd_revert_fsids(work);
+604: 	return err;
+605: }
+
+--- lines 715-728 ---
+715: 	if (d_is_symlink(rd.new_dentry)) {
+716: 		err = -EACCES;
+717: 		goto out3;
+718: 	}
+719: 
+720: 	err = vfs_rename(&rd);
+721: 	if (err)
+722: 		ksmbd_debug(VFS, "vfs_rename failed err %d\n", err);
+723: 
+724: out3:
+725: 	end_renaming(&rd);
+726: out_drop_write:
+727: 	mnt_drop_write(old_path->mnt);
+728: out2:
+
+--- lines 1024-1037 ---
+1024: 		goto out;
+1025: 
+1026: 	if (S_ISDIR(d_inode(dentry)->i_mode))
+1027: 		err = vfs_rmdir(idmap, d_inode(dir), dentry, NULL);
+1028: 	else
+1029: 		err = vfs_unlink(idmap, d_inode(dir), dentry, NULL);
+1030: 
+1031: 	end_removing(dentry);
+1032: 	if (err)
+1033: 		ksmbd_debug(VFS, "failed to delete, err %d\n", err);
+1034: out:
+1035: 	dput(dir);
+1036: 	mnt_drop_write(filp->f_path.mnt);
+1037: 
+
+--- lines 1622-1635 ---
+1622: 	struct path path = {
+1623: 		.mnt = share_conf->vfs_path.mnt,
+1624: 		.dentry = dentry,
+1625: 	};
+1626: 
+1627: 	rc = vfs_getattr(&path, ksmbd_kstat->kstat,
+1628: 			 STATX_BASIC_STATS | STATX_BTIME,
+1629: 			 AT_STATX_SYNC_AS_STAT);
+1630: 	if (rc)
+1631: 		return rc;
+1632: 
+1633: 	time = ksmbd_UnixTimeToNT(ksmbd_kstat->kstat->ctime);
+1634: 	ksmbd_kstat->create_time = time;
+1635: 
+
+===== FILE: fs/stat.c =====
+
+--- lines 249-262 ---
+249:  * anyway, but the value may be approximate, and, if remote, may not have been
+250:  * synchronised with the server.
+251:  *
+252:  * 0 will be returned on success, and a -ve error code if unsuccessful.
+253:  */
+254: int vfs_getattr(const struct path *path, struct kstat *stat,
+255: 		u32 request_mask, unsigned int query_flags)
+256: {
+257: 	int retval;
+258: 
+259: 	retval = security_inode_getattr(path);
+260: 	if (unlikely(retval))
+261: 		return retval;
+262: 	return vfs_getattr_nosec(path, stat, request_mask, query_flags);
+
+--- lines 266-279 ---
+266: /**
+267:  * vfs_fstat - Get the basic attributes by file descriptor
+268:  * @fd: The file descriptor referring to the file of interest
+269:  * @stat: The result structure to fill in.
+270:  *
+271:  * This function is a wrapper around vfs_getattr().  The main difference is
+272:  * that it uses a file descriptor to determine the file location.
+273:  *
+274:  * 0 will be returned on success, and a -ve error code if unsuccessful.
+275:  */
+276: int vfs_fstat(int fd, struct kstat *stat)
+277: {
+278: 	CLASS(fd_raw, f)(fd);
+279: 	if (fd_empty(f))
+
+--- lines 294-307 ---
+294: }
+295: 
+296: static int vfs_statx_path(const struct path *path, int flags, struct kstat *stat,
+297: 			  u32 request_mask)
+298: {
+299: 	int error = vfs_getattr(path, stat, request_mask, flags);
+300: 	if (error)
+301: 		return error;
+302: 
+303: 	if (request_mask & STATX_MNT_ID_UNIQUE) {
+304: 		stat->mnt_id = real_mount(path->mnt)->mnt_id_unique;
+305: 		stat->result_mask |= STATX_MNT_ID_UNIQUE;
+306: 	} else {
+307: 		stat->mnt_id = real_mount(path->mnt)->mnt_id;
+
+--- lines 329-342 ---
+329:  * @filename: The name of the file of interest
+330:  * @flags: Flags to control the query
+331:  * @stat: The result structure to fill in.
+332:  * @request_mask: STATX_xxx flags indicating what the caller wants
+333:  *
+334:  * This function is a wrapper around vfs_getattr().  The main difference is
+335:  * that it uses a filename and base directory to determine the file location.
+336:  * Additionally, the use of AT_SYMLINK_NOFOLLOW in flags will prevent a symlink
+337:  * at the given name from being referenced.
+338:  *
+339:  * 0 will be returned on success, and a -ve error code if unsuccessful.
+340:  */
+341: static int vfs_statx(int dfd, struct filename *filename, int flags,
+342: 	      struct kstat *stat, u32 request_mask)
+
+===== FILE: fs/utimes.c =====
+
+--- lines 62-75 ---
+62: 	} else {
+63: 		newattrs.ia_valid |= ATTR_TOUCH;
+64: 	}
+65: retry_deleg:
+66: 	inode_lock(inode);
+67: 	error = notify_change(mnt_idmap(path->mnt), path->dentry, &newattrs,
+68: 			      &delegated_inode);
+69: 	inode_unlock(inode);
+70: 	if (is_delegated(&delegated_inode)) {
+71: 		error = break_deleg_wait(&delegated_inode);
+72: 		if (!error)
+73: 			goto retry_deleg;
+74: 	}
+75: 
+
+===== FILE: fs/xattr.c =====
+
+--- lines 150-163 ---
+150: 		    (mask & MAY_WRITE) &&
+151: 		    !inode_owner_or_capable(idmap, inode))
+152: 			return -EPERM;
+153: 	}
+154: 
+155: 	return inode_permission(idmap, inode, mask);
+156: }
+157: 
+158: /*
+159:  * Look for any handler that deals with the specified namespace.
+160:  */
+161: int
+162: xattr_supports_user_prefix(struct inode *inode)
+163: {
+
+===== FILE: fs/xfs/xfs_ioctl.c =====
+
+--- lines 1206-1219 ---
+1206: 		return -ENOTTY;
+1207: 	case XFS_IOC_DIOINFO: {
+1208: 		struct kstat		st;
+1209: 		struct dioattr		da;
+1210: 
+1211: 		error = vfs_getattr(&filp->f_path, &st, STATX_DIOALIGN, 0);
+1212: 		if (error)
+1213: 			return error;
+1214: 
+1215: 		/*
+1216: 		 * Some userspace directly feeds the return value to
+1217: 		 * posix_memalign, which fails for values that are smaller than
+1218: 		 * the pointer size.  Round up the value to not break userspace.
+1219: 		 */
+
+===== FILE: include/kunit/run-in-irq-context.h =====
+
+--- lines 30-43 ---
+30: {
+31: 	struct kunit_irq_test_state *state =
+32: 		container_of(timer, typeof(*state), timer);
+33: 	int task_calls, hardirq_calls, softirq_calls;
+34: 
+35: 	WARN_ON_ONCE(!in_hardirq());
+36: 	task_calls = atomic_read(&state->task_func_calls);
+37: 	hardirq_calls = atomic_inc_return(&state->hardirq_func_calls);
+38: 	softirq_calls = atomic_read(&state->softirq_func_calls);
+39: 
+40: 	/*
+41: 	 * If the timer is firing too often for the softirq or task to ever have
+42: 	 * a chance to run, increase the timer interval.  This is needed on very
+43: 	 * slow systems.
+
+===== FILE: include/linux/fs.h =====
+
+--- lines 246-259 ---
+246:  */
+247: #define WHITEOUT_MODE 0
+248: #define WHITEOUT_DEV 0
+249: 
+250: /*
+251:  * This is the Inode Attributes structure, used for notify_change().  It
+252:  * uses the above definitions as flags, to know which values have changed.
+253:  * Also, in this manner, a Filesystem can look at only the values it cares
+254:  * about.  Basically, these are the attributes that the VFS layer can
+255:  * request to change from the FS layer.
+256:  *
+257:  * Derek Atkins <warlord@MIT.EDU> 94-10-20
+258:  */
+259: struct iattr {
+
+--- lines 1763-1776 ---
+1763: 			    const struct inode *inode);
+1764: 
+1765: /*
+1766:  * VFS helper functions..
+1767:  */
+1768: int vfs_create(struct mnt_idmap *, struct dentry *, umode_t,
+1769: 	       struct delegated_inode *);
+1770: struct dentry *vfs_mkdir(struct mnt_idmap *, struct inode *,
+1771: 			 struct dentry *, umode_t, struct delegated_inode *);
+1772: int vfs_mknod(struct mnt_idmap *, struct inode *, struct dentry *,
+1773: 	      umode_t, dev_t, struct delegated_inode *);
+1774: int vfs_symlink(struct mnt_idmap *, struct inode *,
+1775: 		struct dentry *, const char *, struct delegated_inode *);
+1776: int vfs_link(struct dentry *, struct mnt_idmap *, struct inode *,
+
+--- lines 1798-1811 ---
+1798: 	struct dentry *new_dentry;
+1799: 	struct delegated_inode *delegated_inode;
+1800: 	unsigned int flags;
+1801: } __randomize_layout;
+1802: 
+1803: int vfs_rename(struct renamedata *);
+1804: 
+1805: static inline int vfs_whiteout(struct mnt_idmap *idmap,
+1806: 			       struct inode *dir, struct dentry *dentry)
+1807: {
+1808: 	return vfs_mknod(idmap, dir, dentry, S_IFCHR | WHITEOUT_MODE,
+1809: 			 WHITEOUT_DEV, NULL);
+1810: }
+1811: 
+
+--- lines 1814-1827 ---
+1814: 				 umode_t mode, int open_flag,
+1815: 				 const struct cred *cred);
+1816: struct file *kernel_file_open(const struct path *path, int flags,
+1817: 			      const struct cred *cred);
+1818: 
+1819: int vfs_mkobj(struct dentry *, umode_t,
+1820: 		int (*f)(struct dentry *, umode_t, void *),
+1821: 		void *);
+1822: 
+1823: int vfs_fchown(struct file *file, uid_t user, gid_t group);
+1824: int vfs_fchmod(struct file *file, umode_t mode);
+1825: int vfs_utimes(const struct path *path, struct timespec64 *times);
+1826: 
+1827: #ifdef CONFIG_COMPAT
+
+--- lines 2662-2675 ---
+2662: {
+2663: 	return -EINVAL;
+2664: }
+2665: #endif
+2666: 
+2667: int notify_change(struct mnt_idmap *, struct dentry *,
+2668: 		  struct iattr *, struct delegated_inode *);
+2669: int inode_permission(struct mnt_idmap *, struct inode *, int);
+2670: int generic_permission(struct mnt_idmap *, struct inode *, int);
+2671: static inline int file_permission(struct file *file, int mask)
+2672: {
+2673: 	return inode_permission(file_mnt_idmap(file),
+2674: 				file_inode(file), mask);
+2675: }
+
+--- lines 3168-3181 ---
+3168: void generic_fill_statx_atomic_writes(struct kstat *stat,
+3169: 				      unsigned int unit_min,
+3170: 				      unsigned int unit_max,
+3171: 				      unsigned int unit_max_opt);
+3172: extern int vfs_getattr_nosec(const struct path *, struct kstat *, u32, unsigned int);
+3173: extern int vfs_getattr(const struct path *, struct kstat *, u32, unsigned int);
+3174: void __inode_add_bytes(struct inode *inode, loff_t bytes);
+3175: void inode_add_bytes(struct inode *inode, loff_t bytes);
+3176: void __inode_sub_bytes(struct inode *inode, loff_t bytes);
+3177: void inode_sub_bytes(struct inode *inode, loff_t bytes);
+3178: static inline loff_t __inode_get_bytes(struct inode *inode)
+3179: {
+3180: 	return (((loff_t)inode->i_blocks) << 9) + inode->i_bytes;
+3181: }
+
+===== FILE: include/linux/hardirq.h =====
+
+--- lines 50-63 ---
+50: 	} while (0)
+51: 
+52: /*
+53:  * Enter irq context (on NO_HZ, update jiffies):
+54:  */
+55: void irq_enter(void);
+56: /*
+57:  * Like irq_enter(), but RCU is already watching.
+58:  */
+59: void irq_enter_rcu(void);
+60: 
+61: /*
+62:  * Exit irq context without processing softirqs:
+63:  */
+
+--- lines 78-91 ---
+78: 	} while (0)
+79: 
+80: /*
+81:  * Exit irq context and process softirqs if needed:
+82:  */
+83: void irq_exit(void);
+84: 
+85: /*
+86:  * Like irq_exit(), but return with RCU watching.
+87:  */
+88: void irq_exit_rcu(void);
+89: 
+90: #ifndef arch_nmi_enter
+91: #define arch_nmi_enter()	do { } while (0)
+
+--- lines 95-108 ---
+95: /*
+96:  * NMI vs Tracing
+97:  * --------------
+98:  *
+99:  * We must not land in a tracer until (or after) we've changed preempt_count
+100:  * such that in_nmi() becomes true. To that effect all NMI C entry points must
+101:  * be marked 'notrace' and call nmi_enter() as soon as possible.
+102:  */
+103: 
+104: /*
+105:  * nmi_enter() can nest up to 15 times; see NMI_BITS.
+106:  */
+107: #define __nmi_enter()						\
+108: 	do {							\
+
+--- lines 110-123 ---
+110: 		arch_nmi_enter();				\
+111: 		BUG_ON(in_nmi() == NMI_MASK);			\
+112: 		__preempt_count_add(NMI_OFFSET + HARDIRQ_OFFSET);	\
+113: 	} while (0)
+114: 
+115: #define nmi_enter()						\
+116: 	do {							\
+117: 		__nmi_enter();					\
+118: 		lockdep_hardirq_enter();			\
+119: 		ct_nmi_enter();				\
+120: 		instrumentation_begin();			\
+121: 		ftrace_nmi_enter();				\
+122: 		instrumentation_end();				\
+123: 	} while (0)
+
+--- lines 128-141 ---
+128: 		__preempt_count_sub(NMI_OFFSET + HARDIRQ_OFFSET);	\
+129: 		arch_nmi_exit();				\
+130: 		lockdep_on();					\
+131: 	} while (0)
+132: 
+133: #define nmi_exit()						\
+134: 	do {							\
+135: 		instrumentation_begin();			\
+136: 		ftrace_nmi_exit();				\
+137: 		instrumentation_end();				\
+138: 		ct_nmi_exit();					\
+139: 		lockdep_hardirq_exit();				\
+140: 		__nmi_exit();					\
+141: 	} while (0)
+
+===== FILE: include/linux/kcov.h =====
+
+--- lines 62-75 ---
+62:  * https://bugzilla.kernel.org/show_bug.cgi?id=210337
+63:  */
+64: 
+65: static inline void kcov_remote_start_usb_softirq(u64 id)
+66: {
+67: 	if (in_serving_softirq() && !in_hardirq())
+68: 		kcov_remote_start_usb(id);
+69: }
+70: 
+71: static inline void kcov_remote_stop_softirq(void)
+72: {
+73: 	if (in_serving_softirq() && !in_hardirq())
+74: 		kcov_remote_stop();
+75: }
+
+===== FILE: include/linux/local_lock_internal.h =====
+
+--- lines 289-302 ---
+289: 
+290: #define __local_trylock(lock)					\
+291: 	__try_acquire_ctx_lock(lock, context_unsafe(({		\
+292: 		int __locked;					\
+293: 								\
+294: 		if (in_nmi() | in_hardirq()) {			\
+295: 			__locked = 0;				\
+296: 		} else {					\
+297: 			migrate_disable();			\
+298: 			__locked = spin_trylock((lock));	\
+299: 			if (!__locked)				\
+300: 				migrate_enable();		\
+301: 		}						\
+302: 		__locked;					\
+
+===== FILE: include/linux/lockdep.h =====
+
+--- lines 614-627 ---
+614:  * Much like in_softirq() - semantics are ambiguous, use carefully.
+615:  */
+616: #define lockdep_assert_in_softirq()					\
+617: do {									\
+618: 	WARN_ON_ONCE(__lockdep_enabled			&&		\
+619: 		     (!in_softirq() || in_hardirq() || in_nmi()));	\
+620: } while (0)
+621: 
+622: extern void lockdep_assert_in_softirq_func(void);
+623: 
+624: #else
+625: # define might_lock(lock) do { } while (0)
+626: # define might_lock_read(lock) do { } while (0)
+627: # define might_lock_nested(lock, subclass) do { } while (0)
+
+===== FILE: include/linux/netdevice.h =====
+
+--- lines 4197-4210 ---
+4197: void dev_kfree_skb_any_reason(struct sk_buff *skb, enum skb_drop_reason reason);
+4198: 
+4199: /*
+4200:  * It is not allowed to call kfree_skb() or consume_skb() from hardware
+4201:  * interrupt context or with hardware interrupts being disabled.
+4202:  * (in_hardirq() || irqs_disabled())
+4203:  *
+4204:  * We provide four helpers that can be used in following contexts :
+4205:  *
+4206:  * dev_kfree_skb_irq(skb) when caller drops a packet from irq context,
+4207:  *  replacing kfree_skb(skb)
+4208:  *
+4209:  * dev_consume_skb_irq(skb) when caller consumes a packet from irq context.
+4210:  *  Typically used in place of consume_skb(skb) in TX completion path
+
+===== FILE: include/linux/preempt.h =====
+
+--- lines 116-129 ---
+116: #endif
+117: 
+118: /*
+119:  * Macros to retrieve the current execution context:
+120:  *
+121:  * in_nmi()		- We're in NMI context
+122:  * in_hardirq()		- We're in hard IRQ context
+123:  * in_serving_softirq()	- We're in softirq context
+124:  * in_task()		- We're in task context
+125:  */
+126: #define in_nmi()		(nmi_count())
+127: #define in_hardirq()		(hardirq_count())
+128: #define in_serving_softirq()	(softirq_count() & SOFTIRQ_OFFSET)
+129: #ifdef CONFIG_PREEMPT_RT
+
+===== FILE: include/linux/security.h =====
+
+--- lines 402-415 ---
+402: 				 const struct qstr *qstr,
+403: 				 initxattrs initxattrs, void *fs_data);
+404: int security_inode_init_security_anon(struct inode *inode,
+405: 				      const struct qstr *name,
+406: 				      const struct inode *context_inode);
+407: int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+408: void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409: 					struct inode *inode);
+410: int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411: 			 struct dentry *new_dentry);
+412: int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+413: int security_inode_symlink(struct inode *dir, struct dentry *dentry,
+414: 			   const char *old_name);
+415: int security_inode_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode);
+
+--- lines 419-432 ---
+419: 			  struct inode *new_dir, struct dentry *new_dentry,
+420: 			  unsigned int flags);
+421: int security_inode_readlink(struct dentry *dentry);
+422: int security_inode_follow_link(struct dentry *dentry, struct inode *inode,
+423: 			       bool rcu);
+424: int security_inode_permission(struct inode *inode, int mask);
+425: int security_inode_setattr(struct mnt_idmap *idmap,
+426: 			   struct dentry *dentry, struct iattr *attr);
+427: void security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+428: 				 int ia_valid);
+429: int security_inode_getattr(const struct path *path);
+430: int security_inode_setxattr(struct mnt_idmap *idmap,
+431: 			    struct dentry *dentry, const char *name,
+432: 			    const void *value, size_t size, int flags);
+
+--- lines 894-907 ---
+894: 						    const struct inode *context_inode)
+895: {
+896: 	return 0;
+897: }
+898: 
+899: static inline int security_inode_create(struct inode *dir,
+900: 					 struct dentry *dentry,
+901: 					 umode_t mode)
+902: {
+903: 	return 0;
+904: }
+905: 
+906: static inline void
+907: security_inode_post_create_tmpfile(struct mnt_idmap *idmap, struct inode *inode)
+
+--- lines 912-925 ---
+912: 				       struct dentry *new_dentry)
+913: {
+914: 	return 0;
+915: }
+916: 
+917: static inline int security_inode_unlink(struct inode *dir,
+918: 					 struct dentry *dentry)
+919: {
+920: 	return 0;
+921: }
+922: 
+923: static inline int security_inode_symlink(struct inode *dir,
+924: 					  struct dentry *dentry,
+925: 					  const char *old_name)
+
+--- lines 945-958 ---
+945: 					int mode, dev_t dev)
+946: {
+947: 	return 0;
+948: }
+949: 
+950: static inline int security_inode_rename(struct inode *old_dir,
+951: 					 struct dentry *old_dentry,
+952: 					 struct inode *new_dir,
+953: 					 struct dentry *new_dentry,
+954: 					 unsigned int flags)
+955: {
+956: 	return 0;
+957: }
+958: 
+
+--- lines 966-979 ---
+966: 					     bool rcu)
+967: {
+968: 	return 0;
+969: }
+970: 
+971: static inline int security_inode_permission(struct inode *inode, int mask)
+972: {
+973: 	return 0;
+974: }
+975: 
+976: static inline int security_inode_setattr(struct mnt_idmap *idmap,
+977: 					 struct dentry *dentry,
+978: 					 struct iattr *attr)
+979: {
+
+--- lines 983-996 ---
+983: static inline void
+984: security_inode_post_setattr(struct mnt_idmap *idmap, struct dentry *dentry,
+985: 			    int ia_valid)
+986: { }
+987: 
+988: static inline int security_inode_getattr(const struct path *path)
+989: {
+990: 	return 0;
+991: }
+992: 
+993: static inline int security_inode_setxattr(struct mnt_idmap *idmap,
+994: 		struct dentry *dentry, const char *name, const void *value,
+995: 		size_t size, int flags)
+996: {
+
+===== FILE: include/linux/srcu.h =====
+
+--- lines 399-412 ---
+399:  * and srcu_read_lock_fast().  However, the same definition/initialization
+400:  * requirements called out for srcu_read_lock_safe() apply.
+401:  */
+402: static inline struct srcu_ctr __percpu *srcu_down_read_fast(struct srcu_struct *ssp) __acquires_shared(ssp)
+403: {
+404: 	WARN_ON_ONCE(IS_ENABLED(CONFIG_PROVE_RCU) && in_nmi());
+405: 	RCU_LOCKDEP_WARN(!rcu_is_watching(), "RCU must be watching srcu_down_read_fast().");
+406: 	srcu_check_read_flavor(ssp, SRCU_READ_FLAVOR_FAST_UPDOWN);
+407: 	return __srcu_read_lock_fast_updown(ssp);
+408: }
+409: 
+410: /**
+411:  * srcu_read_lock_nmisafe - register a new reader for an SRCU-protected structure.
+412:  * @ssp: srcu_struct in which to register the new reader.
+
+--- lines 464-477 ---
+464:  * used concurrently by srcu_down_read() and srcu_read_lock().
+465:  */
+466: static inline int srcu_down_read(struct srcu_struct *ssp)
+467: 	__acquires_shared(ssp)
+468: {
+469: 	WARN_ON_ONCE(in_nmi());
+470: 	srcu_check_read_flavor(ssp, SRCU_READ_FLAVOR_NORMAL);
+471: 	return __srcu_read_lock(ssp);
+472: }
+473: 
+474: /**
+475:  * srcu_read_unlock - unregister a old reader from an SRCU-protected structure.
+476:  * @ssp: srcu_struct in which to unregister the old reader.
+477:  * @idx: return value from corresponding srcu_read_lock().
+
+--- lines 540-553 ---
+540:  * the same context as the maching srcu_down_read_fast().
+541:  */
+542: static inline void srcu_up_read_fast(struct srcu_struct *ssp, struct srcu_ctr __percpu *scp)
+543: 	__releases_shared(ssp)
+544: {
+545: 	WARN_ON_ONCE(IS_ENABLED(CONFIG_PROVE_RCU) && in_nmi());
+546: 	srcu_check_read_flavor(ssp, SRCU_READ_FLAVOR_FAST_UPDOWN);
+547: 	__srcu_read_unlock_fast_updown(ssp, scp);
+548: 	RCU_LOCKDEP_WARN(!rcu_is_watching(), "RCU must be watching srcu_up_read_fast_updown().");
+549: }
+550: 
+551: /**
+552:  * srcu_read_unlock_nmisafe - unregister a old reader from an SRCU-protected structure.
+553:  * @ssp: srcu_struct in which to unregister the old reader.
+
+--- lines 582-595 ---
+582:  */
+583: static inline void srcu_up_read(struct srcu_struct *ssp, int idx)
+584: 	__releases_shared(ssp)
+585: {
+586: 	WARN_ON_ONCE(idx & ~0x1);
+587: 	WARN_ON_ONCE(in_nmi());
+588: 	srcu_check_read_flavor(ssp, SRCU_READ_FLAVOR_NORMAL);
+589: 	__srcu_read_unlock(ssp, idx);
+590: }
+591: 
+592: /**
+593:  * smp_mb__after_srcu_read_unlock - ensure full ordering after srcu_read_unlock
+594:  *
+595:  * Converts the preceding srcu_read_unlock into a two-way memory barrier.
+
+===== FILE: ipc/mqueue.c =====
+
+--- lines 870-883 ---
+870: 		if (!(oflag & O_CREAT))
+871: 			return -ENOENT;
+872: 		if (ro)
+873: 			return ro;
+874: 		audit_inode_parent_hidden(name, dentry->d_parent);
+875: 		return vfs_mkobj(dentry, mode & ~current_umask(),
+876: 				  mqueue_create_attr, attr);
+877: 	}
+878: 	/* it already existed */
+879: 	audit_inode(name, dentry, 0);
+880: 	if ((oflag & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
+881: 		return -EEXIST;
+882: 	if ((oflag & O_ACCMODE) == (O_RDWR | O_WRONLY))
+883: 		return -EINVAL;
+
+--- lines 959-972 ---
+959: 		goto out_drop_write;
+960: 	}
+961: 
+962: 	inode = d_inode(dentry);
+963: 	ihold(inode);
+964: 	err = vfs_unlink(&nop_mnt_idmap, d_inode(mnt->mnt_root),
+965: 			 dentry, NULL);
+966: 	end_removing(dentry);
+967: 	iput(inode);
+968: 
+969: out_drop_write:
+970: 	mnt_drop_write(mnt);
+971: 	return err;
+972: }
+
+===== FILE: kernel/bpf/helpers.c =====
+
+--- lines 1497-1510 ---
+1497: 	.arg2_type	= ARG_PTR_TO_FUNC,
+1498: };
+1499: 
+1500: static bool defer_timer_wq_op(void)
+1501: {
+1502: 	return in_hardirq() || irqs_disabled();
+1503: }
+1504: 
+1505: BPF_CALL_3(bpf_timer_start, struct bpf_async_kern *, async, u64, nsecs, u64, flags)
+1506: {
+1507: 	struct bpf_hrtimer *t;
+1508: 	u32 mode;
+1509: 
+1510: 	if (flags & ~(BPF_F_TIMER_ABS | BPF_F_TIMER_CPU_PIN))
+
+===== FILE: kernel/bpf/inode.c =====
+
+--- lines 452-465 ---
+452: 	if (ret)
+453: 		goto out;
+454: 
+455: 	switch (type) {
+456: 	case BPF_TYPE_PROG:
+457: 		ret = vfs_mkobj(dentry, mode, bpf_mkprog, raw);
+458: 		break;
+459: 	case BPF_TYPE_MAP:
+460: 		ret = vfs_mkobj(dentry, mode, bpf_mkmap, raw);
+461: 		break;
+462: 	case BPF_TYPE_LINK:
+463: 		ret = vfs_mkobj(dentry, mode, bpf_mklink, raw);
+464: 		break;
+465: 	default:
+
+--- lines 549-562 ---
+549: }
+550: 
+551: static struct bpf_prog *__get_prog_inode(struct inode *inode, enum bpf_prog_type type)
+552: {
+553: 	struct bpf_prog *prog;
+554: 	int ret = inode_permission(&nop_mnt_idmap, inode, MAY_READ);
+555: 	if (ret)
+556: 		return ERR_PTR(ret);
+557: 
+558: 	if (inode->i_op == &bpf_map_iops)
+559: 		return ERR_PTR(-EINVAL);
+560: 	if (inode->i_op == &bpf_link_iops)
+561: 		return ERR_PTR(-EINVAL);
+562: 	if (inode->i_op != &bpf_prog_iops)
+
+===== FILE: kernel/bpf/rqspinlock.c =====
+
+--- lines 468-481 ---
+468: 	 * any MCS node. Unlike qspinlock which cannot fail, we have the
+469: 	 * option of failing the slow path, and under contention, such a
+470: 	 * trylock spinning will likely be treated unfairly due to lack of
+471: 	 * queueing, hence do not spin.
+472: 	 */
+473: 	if (unlikely(idx >= _Q_MAX_NODES || (in_nmi() && idx > 0))) {
+474: 		lockevent_inc(lock_no_node);
+475: 		if (!queued_spin_trylock(lock)) {
+476: 			ret = -EDEADLK;
+477: 			goto err_release_node;
+478: 		}
+479: 		goto release;
+480: 	}
+481: 
+
+===== FILE: kernel/bpf/syscall.c =====
+
+--- lines 2313-2326 ---
+2313: 
+2314: 	if (WARN_ON_ONCE(op >= BPF_AUDIT_MAX))
+2315: 		return;
+2316: 	if (audit_enabled == AUDIT_OFF)
+2317: 		return;
+2318: 	if (!in_hardirq() && !irqs_disabled())
+2319: 		ctx = audit_context();
+2320: 	ab = audit_log_start(ctx, GFP_ATOMIC, AUDIT_BPF);
+2321: 	if (unlikely(!ab))
+2322: 		return;
+2323: 	audit_log_format(ab, "prog-id=%u op=%s",
+2324: 			 prog->aux->id, bpf_audit_str[op]);
+2325: 	audit_log_end(ab);
+2326: }
+
+--- lines 2411-2424 ---
+2411: static void __bpf_prog_put(struct bpf_prog *prog)
+2412: {
+2413: 	struct bpf_prog_aux *aux = prog->aux;
+2414: 
+2415: 	if (atomic64_dec_and_test(&aux->refcnt)) {
+2416: 		if (in_hardirq() || irqs_disabled()) {
+2417: 			INIT_WORK(&aux->work, bpf_prog_put_deferred);
+2418: 			schedule_work(&aux->work);
+2419: 		} else {
+2420: 			bpf_prog_put_deferred(&aux->work);
+2421: 		}
+2422: 	}
+2423: }
+2424: 
+
+===== FILE: kernel/cgroup/cgroup.c =====
+
+--- lines 5304-5317 ---
+5304: 
+5305: 	inode = kernfs_get_inode(sb, cgrp->procs_file.kn);
+5306: 	if (!inode)
+5307: 		return -ENOMEM;
+5308: 
+5309: 	ret = inode_permission(&nop_mnt_idmap, inode, MAY_WRITE);
+5310: 	iput(inode);
+5311: 	return ret;
+5312: }
+5313: 
+5314: static int cgroup_procs_write_permission(struct cgroup *src_cgrp,
+5315: 					 struct cgroup *dst_cgrp,
+5316: 					 struct super_block *sb,
+5317: 					 struct cgroup_namespace *ns)
+
+===== FILE: kernel/cgroup/rstat.c =====
+
+--- lines 85-98 ---
+85: 	/*
+86: 	 * For archs withnot nmi safe cmpxchg or percpu ops support, ignore
+87: 	 * the requests from nmi context.
+88: 	 */
+89: 	if ((!IS_ENABLED(CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG) ||
+90: 	     !IS_ENABLED(CONFIG_ARCH_HAS_NMI_SAFE_THIS_CPU_OPS)) && in_nmi())
+91: 		return;
+92: 
+93: 	rstatc = css_rstat_cpu(css, cpu);
+94: 	/*
+95: 	 * If already on list return. This check is racy and smp_mb() is needed
+96: 	 * to pair it with the smp_mb() in css_process_update_tree() if the
+97: 	 * guarantee that the updated stats are visible to concurrent flusher is
+98: 	 * needed.
+
+===== FILE: kernel/context_tracking.c =====
+
+--- lines 216-229 ---
+216: 
+217: 	// RCU is watching here ...
+218: 	ct_kernel_exit_state(CT_RCU_WATCHING);
+219: 	// ... but is no longer watching here.
+220: 
+221: 	if (!in_nmi())
+222: 		rcu_task_exit();
+223: }
+224: 
+225: /**
+226:  * ct_nmi_enter - inform RCU of entry to NMI context
+227:  *
+228:  * If the CPU was idle from RCU's viewpoint, update ct->state and
+229:  * ct->nmi_nesting to let the RCU grace-period handling know
+
+--- lines 250-263 ---
+250: 	 * to be in the outermost NMI handler that interrupted an RCU-idle
+251: 	 * period (observation due to Andy Lutomirski).
+252: 	 */
+253: 	if (!rcu_is_watching_curr_cpu()) {
+254: 
+255: 		if (!in_nmi())
+256: 			rcu_task_enter();
+257: 
+258: 		// RCU is not watching here ...
+259: 		ct_kernel_enter_state(CT_RCU_WATCHING);
+260: 		// ... but is watching here.
+261: 
+262: 		instrumentation_begin();
+263: 		// instrumentation for the noinstr rcu_is_watching_curr_cpu()
+
+--- lines 264-277 ---
+264: 		instrument_atomic_read(&ct->state, sizeof(ct->state));
+265: 		// instrumentation for the noinstr ct_kernel_enter_state()
+266: 		instrument_atomic_write(&ct->state, sizeof(ct->state));
+267: 
+268: 		incby = 1;
+269: 	} else if (!in_nmi()) {
+270: 		instrumentation_begin();
+271: 		rcu_irq_enter_check_tick();
+272: 	} else  {
+273: 		instrumentation_begin();
+274: 	}
+275: 
+276: 	trace_rcu_watching(incby == 1 ? TPS("Startirq") : TPS("++="),
+277: 			  ct_nmi_nesting(),
+
+--- lines 286-299 ---
+286:  * ct_idle_enter - inform RCU that current CPU is entering idle
+287:  *
+288:  * Enter idle mode, in other words, -leave- the mode in which RCU
+289:  * read-side critical sections can occur.  (Though RCU read-side
+290:  * critical sections can occur in irq handlers in idle, a possibility
+291:  * handled by irq_enter() and irq_exit().)
+292:  *
+293:  * If you add or remove a call to ct_idle_enter(), be sure to test with
+294:  * CONFIG_RCU_EQS_DEBUG=y.
+295:  */
+296: void noinstr ct_idle_enter(void)
+297: {
+298: 	WARN_ON_ONCE(IS_ENABLED(CONFIG_RCU_EQS_DEBUG) && !raw_irqs_disabled());
+299: 	ct_kernel_exit(false, CT_RCU_WATCHING + CT_STATE_IDLE);
+
+--- lines 328-341 ---
+328:  *
+329:  * Note that the Linux kernel is fully capable of entering an interrupt
+330:  * handler that it never exits, for example when doing upcalls to user mode!
+331:  * This code assumes that the idle loop never does upcalls to user mode.
+332:  * If your architecture's idle loop does do upcalls to user mode (or does
+333:  * anything else that results in unbalanced calls to the irq_enter() and
+334:  * irq_exit() functions), RCU will give you what you deserve, good and hard.
+335:  * But very infrequently and irreproducibly.
+336:  *
+337:  * Use things like work queues to work around this limitation.
+338:  *
+339:  * You have been warned.
+340:  *
+341:  * If you add or remove a call to ct_irq_enter(), be sure to test with
+
+--- lines 353-366 ---
+353:  * Exit from an interrupt handler, which might possibly result in entering
+354:  * idle mode, in other words, leaving the mode in which read-side critical
+355:  * sections can occur.  The caller must have disabled interrupts.
+356:  *
+357:  * This code assumes that the idle loop never does anything that might
+358:  * result in unbalanced calls to irq_enter() and irq_exit().  If your
+359:  * architecture's idle loop violates this assumption, RCU will give you what
+360:  * you deserve, good and hard.  But very infrequently and irreproducibly.
+361:  *
+362:  * Use things like work queues to work around this limitation.
+363:  *
+364:  * You have been warned.
+365:  *
+366:  * If you add or remove a call to ct_irq_exit(), be sure to test with
+
+===== FILE: kernel/debug/kdb/kdb_debugger.c =====
+
+--- lines 71-84 ---
+71: 		reason = KDB_REASON_KEYBOARD;
+72: 
+73: 	if (ks->err_code == KDB_REASON_SYSTEM_NMI && ks->signo == SIGTRAP)
+74: 		reason = KDB_REASON_SYSTEM_NMI;
+75: 
+76: 	else if (in_nmi())
+77: 		reason = KDB_REASON_NMI;
+78: 
+79: 	for (i = 0, bp = kdb_breakpoints; i < KDB_MAXBPT; i++, bp++) {
+80: 		if ((bp->bp_enabled) && (bp->bp_addr == addr)) {
+81: 			reason = KDB_REASON_BREAK;
+82: 			db_result = KDB_DB_BPT;
+83: 			if (addr != instruction_pointer(ks->linux_regs))
+84: 				kgdb_arch_set_pc(ks->linux_regs, addr);
+
+===== FILE: kernel/events/core.c =====
+
+--- lines 10726-10739 ---
+10726: 		enum task_work_notify_mode notify_mode;
+10727: 
+10728: 		if (regs)
+10729: 			pending_id = hash32_ptr((void *)instruction_pointer(regs)) ?: 1;
+10730: 
+10731: 		notify_mode = in_nmi() ? TWA_NMI_CURRENT : TWA_RESUME;
+10732: 
+10733: 		if (!event->pending_work &&
+10734: 		    !task_work_add(current, &event->pending_task, notify_mode)) {
+10735: 			event->pending_work = pending_id;
+10736: 			local_inc(&event->ctx->nr_no_switch_fast);
+10737: 			WARN_ON_ONCE(!atomic_long_inc_not_zero(&event->refcount));
+10738: 
+10739: 			event->pending_addr = 0;
+
+===== FILE: kernel/irq/handle.c =====
+
+--- lines 284-295 ---
+284:  */
+285: asmlinkage void noinstr generic_handle_arch_irq(struct pt_regs *regs)
+286: {
+287: 	struct pt_regs *old_regs;
+288: 
+289: 	irq_enter();
+290: 	old_regs = set_irq_regs(regs);
+291: 	handle_arch_irq(regs);
+292: 	set_irq_regs(old_regs);
+293: 	irq_exit();
+294: }
+295: #endif
+
+===== FILE: kernel/irq/irqdesc.c =====
+
+--- lines 667-680 ---
+667: 
+668: 	if (!desc)
+669: 		return -EINVAL;
+670: 
+671: 	data = irq_desc_get_irq_data(desc);
+672: 	if (WARN_ON_ONCE(!in_hardirq() && irqd_is_handle_enforce_irqctx(data)))
+673: 		return -EPERM;
+674: 
+675: 	generic_handle_irq_desc(desc);
+676: 	return 0;
+677: }
+678: 
+679: /**
+680:  * generic_handle_irq - Invoke the handler for a particular irq
+
+--- lines 767-780 ---
+767:  * 		This function must be called from an NMI context with irq regs
+768:  * 		initialized.
+769:  **/
+770: int generic_handle_domain_nmi(struct irq_domain *domain, irq_hw_number_t hwirq)
+771: {
+772: 	WARN_ON_ONCE(!in_nmi());
+773: 	return handle_irq_desc(irq_resolve_mapping(domain, hwirq));
+774: }
+775: 
+776: #ifdef CONFIG_SMP
+777: static bool demux_redirect_remote(struct irq_desc *desc)
+778: {
+779: 	guard(raw_spinlock)(&desc->lock);
+780: 	const struct cpumask *m = irq_data_get_effective_affinity_mask(&desc->irq_data);
+
+===== FILE: kernel/irq_work.c =====
+
+--- lines 150-163 ---
+150: 	kasan_record_aux_stack(work);
+151: 
+152: 	preempt_disable();
+153: 	if (cpu != smp_processor_id()) {
+154: 		/* Arch remote IPI send/receive backend aren't NMI safe */
+155: 		WARN_ON_ONCE(in_nmi());
+156: 
+157: 		/*
+158: 		 * On PREEMPT_RT the items which are not marked as
+159: 		 * IRQ_WORK_HARD_IRQ are added to the lazy list and a HARD work
+160: 		 * item is used on the remote CPU to wake the thread.
+161: 		 */
+162: 		if (IS_ENABLED(CONFIG_PREEMPT_RT) &&
+163: 		    !(atomic_read(&work->node.a_flags) & IRQ_WORK_HARD_IRQ)) {
+
+===== FILE: kernel/kcov.c =====
+
+--- lines 166-179 ---
+166:  * Unlike in_serving_softirq(), this function returns false when called during
+167:  * a hardirq or an NMI that happened in the softirq context.
+168:  */
+169: static __always_inline bool in_softirq_really(void)
+170: {
+171: 	return in_serving_softirq() && !in_hardirq() && !in_nmi();
+172: }
+173: 
+174: static notrace bool check_kcov_mode(enum kcov_mode needed_mode, struct task_struct *t)
+175: {
+176: 	unsigned int mode;
+177: 
+178: 	/*
+179: 	 * We are interested in code coverage as a function of a syscall inputs,
+
+===== FILE: kernel/locking/lockdep.c =====
+
+--- lines 4365-4378 ---
+4365: 		return;
+4366: 
+4367: 	/*
+4368: 	 * NMIs do not (and cannot) track lock dependencies, nothing to do.
+4369: 	 */
+4370: 	if (unlikely(in_nmi()))
+4371: 		return;
+4372: 
+4373: 	if (unlikely(this_cpu_read(lockdep_recursion)))
+4374: 		return;
+4375: 
+4376: 	if (unlikely(lockdep_hardirqs_enabled())) {
+4377: 		/*
+4378: 		 * Neither irq nor preemption are disabled here
+
+--- lines 4424-4437 ---
+4424: 	 * tracking state and hardware state are out of sync.
+4425: 	 *
+4426: 	 * NMIs must save lockdep_hardirqs_enabled() to restore IRQ state from,
+4427: 	 * and not rely on hardware state like normal interrupts.
+4428: 	 */
+4429: 	if (unlikely(in_nmi())) {
+4430: 		if (!IS_ENABLED(CONFIG_TRACE_IRQFLAGS_NMI))
+4431: 			return;
+4432: 
+4433: 		/*
+4434: 		 * Skip:
+4435: 		 *  - recursion check, because NMI can hit lockdep;
+4436: 		 *  - hardware state check, because above;
+4437: 		 *  - chain_key check, see lockdep_hardirqs_on_prepare().
+
+--- lines 4487-4500 ---
+4487: 	/*
+4488: 	 * Matching lockdep_hardirqs_on(), allow NMIs in the middle of lockdep;
+4489: 	 * they will restore the software state. This ensures the software
+4490: 	 * state is consistent inside NMIs as well.
+4491: 	 */
+4492: 	if (in_nmi()) {
+4493: 		if (!IS_ENABLED(CONFIG_TRACE_IRQFLAGS_NMI))
+4494: 			return;
+4495: 	} else if (__this_cpu_read(lockdep_recursion))
+4496: 		return;
+4497: 
+4498: 	/*
+4499: 	 * So we're supposed to get called after you mask local IRQs, but for
+4500: 	 * some reason the hardware doesn't quite think you did a proper job.
+
+--- lines 5796-5809 ---
+5796: static bool lockdep_nmi(void)
+5797: {
+5798: 	if (raw_cpu_read(lockdep_recursion))
+5799: 		return false;
+5800: 
+5801: 	if (!in_nmi())
+5802: 		return false;
+5803: 
+5804: 	return true;
+5805: }
+5806: 
+5807: /*
+5808:  * read_lock() is recursive if:
+5809:  * 1. We force lockdep think this way in selftests or
+
+===== FILE: kernel/printk/printk.c =====
+
+--- lines 2072-2085 ---
+2072:  * caller.
+2073:  */
+2074: static u8 *__printk_recursion_counter(void)
+2075: {
+2076: #ifdef CONFIG_HAVE_NMI
+2077: 	if (in_nmi()) {
+2078: 		if (printk_percpu_data_ready())
+2079: 			return this_cpu_ptr(&printk_count_nmi);
+2080: 		return &printk_count_nmi_early;
+2081: 	}
+2082: #endif
+2083: 	if (printk_percpu_data_ready())
+2084: 		return this_cpu_ptr(&printk_count);
+2085: 	return &printk_count_early;
+
+--- lines 3449-3462 ---
+3449: 	 * If @oops_in_progress is set, this may be an atomic context.
+3450: 	 * In that case, attempt a trylock as best-effort.
+3451: 	 */
+3452: 	if (oops_in_progress) {
+3453: 		/* Semaphores are not NMI-safe. */
+3454: 		if (in_nmi())
+3455: 			return;
+3456: 
+3457: 		/*
+3458: 		 * Attempting to trylock the console lock can deadlock
+3459: 		 * if another CPU was stopped while modifying the
+3460: 		 * semaphore. "Hope and pray" that this is not the
+3461: 		 * current situation.
+3462: 		 */
+
+===== FILE: kernel/printk/printk_safe.c =====
+
+--- lines 66-79 ---
+66: 	 * another CPU. For legacy printing, it could be the console_lock
+67: 	 * or the port lock.
+68: 	 */
+69: 	return (force_legacy_kthread() ||
+70: 		this_cpu_read(printk_context) ||
+71: 		in_nmi() ||
+72: 		is_printk_cpu_sync_owner());
+73: }
+74: 
+75: asmlinkage int vprintk(const char *fmt, va_list args)
+76: {
+77: #ifdef CONFIG_KGDB_KDB
+78: 	/* Allow to pass printk() to kdb but avoid a recursion. */
+79: 	if (unlikely(kdb_trap_printk && kdb_printf_cpu < 0))
+
+===== FILE: kernel/rcu/rcutorture.c =====
+
+--- lines 2043-2056 ---
+2043: #define ROEC_ARGS "%s %s: Current %#x  To add %#x  To remove %#x  preempt_count() %#x\n", __func__, s, curstate, new, old, preempt_count()
+2044: static void rcutorture_one_extend_check(char *s, int curstate, int new, int old)
+2045: {
+2046: 	int mask;
+2047: 
+2048: 	if (!IS_ENABLED(CONFIG_RCU_TORTURE_TEST_CHK_RDR_STATE) || in_nmi())
+2049: 		return;
+2050: 
+2051: 	WARN_ONCE(!(curstate & RCUTORTURE_RDR_IRQ) && irqs_disabled() && !in_hardirq(), ROEC_ARGS);
+2052: 	WARN_ONCE((curstate & RCUTORTURE_RDR_IRQ) && !irqs_disabled(), ROEC_ARGS);
+2053: 
+2054: 	// If CONFIG_PREEMPT_COUNT=n, further checks are unreliable.
+2055: 	if (!IS_ENABLED(CONFIG_PREEMPT_COUNT))
+2056: 		return;
+
+--- lines 2063-2076 ---
+2063: 		  (curstate & (RCUTORTURE_RDR_RCU_1 | RCUTORTURE_RDR_RCU_2)) &&
+2064: 		  cur_ops->readlock_nesting() == 0, ROEC_ARGS);
+2065: 
+2066: 	// Interrupt handlers have all sorts of stuff disabled, so ignore
+2067: 	// unintended disabling.
+2068: 	if (in_serving_softirq() || in_hardirq())
+2069: 		return;
+2070: 
+2071: 	WARN_ONCE(cur_ops->extendables &&
+2072: 		  !(curstate & (RCUTORTURE_RDR_BH | RCUTORTURE_RDR_RBH)) &&
+2073: 		  softirq_count(), ROEC_ARGS);
+2074: 
+2075: 	/*
+2076: 	 * non-preemptible RCU in a preemptible kernel uses preempt_disable()
+
+--- lines 2453-2466 ---
+2453:  * RCU implementation is broken.
+2454:  */
+2455: static void rcu_torture_timer(struct timer_list *unused)
+2456: {
+2457: 	WARN_ON_ONCE(!in_serving_softirq());
+2458: 	WARN_ON_ONCE(in_hardirq());
+2459: 	WARN_ON_ONCE(in_nmi());
+2460: 	atomic_long_inc(&n_rcu_torture_timers);
+2461: 	(void)rcu_torture_one_read(this_cpu_ptr(&rcu_torture_timer_rand), -1);
+2462: 
+2463: 	/* Test call_rcu() invocation from interrupt handler. */
+2464: 	if (cur_ops->call) {
+2465: 		struct rcu_head *rhp = kmalloc_obj(*rhp, GFP_NOWAIT);
+2466: 
+
+===== FILE: kernel/rcu/srcutree.c =====
+
+--- lines 761-774 ---
+761: 	int old_read_flavor;
+762: 	struct srcu_data *sdp;
+763: 
+764: 	/* NMI-unsafe use in NMI is a bad sign, as is multi-bit read_flavor values. */
+765: 	WARN_ON_ONCE(read_flavor != SRCU_READ_FLAVOR_NMI &&
+766: 		     read_flavor != SRCU_READ_FLAVOR_FAST && in_nmi());
+767: 	WARN_ON_ONCE(read_flavor & (read_flavor - 1));
+768: 
+769: 	sdp = raw_cpu_ptr(ssp->sda);
+770: 	old_read_flavor = READ_ONCE(sdp->srcu_reader_flavor);
+771: 	WARN_ON_ONCE(ssp->srcu_reader_flavor && read_flavor != ssp->srcu_reader_flavor);
+772: 	WARN_ON_ONCE(old_read_flavor && ssp->srcu_reader_flavor &&
+773: 		     old_read_flavor != ssp->srcu_reader_flavor);
+774: 	WARN_ON_ONCE(read_flavor == SRCU_READ_FLAVOR_FAST && !ssp->srcu_reader_flavor);
+
+===== FILE: kernel/rcu/tree.c =====
+
+--- lines 662-675 ---
+662: void __rcu_irq_enter_check_tick(void)
+663: {
+664: 	struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
+665: 
+666: 	// If we're here from NMI there's nothing to do.
+667: 	if (in_nmi())
+668: 		return;
+669: 
+670: 	RCU_LOCKDEP_WARN(!rcu_is_watching_curr_cpu(),
+671: 			 "Illegal rcu_irq_enter_check_tick() from extended quiescent state");
+672: 
+673: 	if (!tick_nohz_full_cpu(rdp->cpu) ||
+674: 	    !READ_ONCE(rdp->rcu_urgent_qs) ||
+675: 	    READ_ONCE(rdp->rcu_forced_tick)) {
+
+--- lines 1118-1131 ---
+1118:  */
+1119: static void rcu_gp_kthread_wake(void)
+1120: {
+1121: 	struct task_struct *t = READ_ONCE(rcu_state.gp_kthread);
+1122: 
+1123: 	if ((current == t && !in_hardirq() && !in_serving_softirq()) ||
+1124: 	    !READ_ONCE(rcu_state.gp_flags) || !t)
+1125: 		return;
+1126: 	WRITE_ONCE(rcu_state.gp_wake_time, jiffies);
+1127: 	WRITE_ONCE(rcu_state.gp_wake_seq, READ_ONCE(rcu_state.gp_seq));
+1128: 	swake_up_one(&rcu_state.gp_wq);
+1129: }
+1130: 
+1131: /*
+
+--- lines 4032-4045 ---
+4032: bool notrace rcu_lockdep_current_cpu_online(void)
+4033: {
+4034: 	struct rcu_data *rdp;
+4035: 	bool ret = false;
+4036: 
+4037: 	if (in_nmi() || !rcu_scheduler_fully_active)
+4038: 		return true;
+4039: 	preempt_disable_notrace();
+4040: 	rdp = this_cpu_ptr(&rcu_data);
+4041: 	/*
+4042: 	 * Strictly, we care here about the case where the current CPU is
+4043: 	 * in rcutree_report_cpu_starting() and thus has an excuse for rdp->grpmask
+4044: 	 * not being up to date. So arch_spin_is_locked() might have a
+4045: 	 * false positive if it's held by some *other* CPU, but that's
+
+===== FILE: kernel/rcu/tree_plugin.h =====
+
+--- lines 728-741 ---
+728: 	bool irqs_were_disabled;
+729: 	bool preempt_bh_were_disabled =
+730: 			!!(preempt_count() & (PREEMPT_MASK | SOFTIRQ_MASK));
+731: 
+732: 	/* NMI handlers cannot block and cannot safely manipulate state. */
+733: 	if (in_nmi())
+734: 		return;
+735: 
+736: 	local_irq_save(flags);
+737: 	irqs_were_disabled = irqs_disabled_flags(flags);
+738: 	if (preempt_bh_were_disabled || irqs_were_disabled) {
+739: 		bool needs_exp; // Expedited handling needed.
+740: 		struct rcu_data *rdp = this_cpu_ptr(&rcu_data);
+741: 		struct rcu_node *rnp = rdp->mynode;
+
+===== FILE: kernel/sched/core.c =====
+
+--- lines 1280-1293 ---
+1280: }
+1281: 
+1282: static bool wake_up_full_nohz_cpu(int cpu)
+1283: {
+1284: 	/*
+1285: 	 * We just need the target to call irq_exit() and re-evaluate
+1286: 	 * the next tick. The nohz full kick at least implies that.
+1287: 	 * If needed we can still optimize that later with an
+1288: 	 * empty IRQ.
+1289: 	 */
+1290: 	if (cpu_is_offline(cpu))
+1291: 		return true;  /* Don't try to wake offline CPUs. */
+1292: 	if (tick_nohz_full_cpu(cpu)) {
+1293: 		if (cpu != smp_processor_id() ||
+
+--- lines 10260-10273 ---
+10260: 
+10261: #endif /* CONFIG_CGROUP_SCHED */
+10262: 
+10263: void dump_cpu_task(int cpu)
+10264: {
+10265: 	if (in_hardirq() && cpu == smp_processor_id()) {
+10266: 		struct pt_regs *regs;
+10267: 
+10268: 		regs = get_irq_regs();
+10269: 		if (regs) {
+10270: 			show_regs(regs);
+10271: 			return;
+10272: 		}
+10273: 	}
+
+===== FILE: kernel/softirq.c =====
+
+--- lines 156-169 ---
+156: void __local_bh_disable_ip(unsigned long ip, unsigned int cnt)
+157: {
+158: 	unsigned long flags;
+159: 	int newcnt;
+160: 
+161: 	WARN_ON_ONCE(in_hardirq());
+162: 
+163: 	lock_map_acquire_read(&bh_lock_map);
+164: 
+165: 	/* First entry of a task into a BH disabled section? */
+166: 	if (!current->softirq_disable_cnt) {
+167: 		if (preemptible()) {
+168: 			if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK))
+169: 				local_lock(&softirq_ctrl.lock);
+
+--- lines 260-273 ---
+260: 	bool preempt_on = preemptible();
+261: 	unsigned long flags;
+262: 	u32 pending;
+263: 	int curcnt;
+264: 
+265: 	WARN_ON_ONCE(in_hardirq());
+266: 	lockdep_assert_irqs_enabled();
+267: 
+268: 	lock_map_release(&bh_lock_map);
+269: 
+270: 	local_irq_save(flags);
+271: 	if (IS_ENABLED(CONFIG_PREEMPT_RT_NEEDS_BH_LOCK))
+272: 		curcnt = this_cpu_read(softirq_ctrl.cnt);
+273: 	else
+
+--- lines 370-383 ---
+370: #ifdef CONFIG_TRACE_IRQFLAGS
+371: void __local_bh_disable_ip(unsigned long ip, unsigned int cnt)
+372: {
+373: 	unsigned long flags;
+374: 
+375: 	WARN_ON_ONCE(in_hardirq());
+376: 
+377: 	raw_local_irq_save(flags);
+378: 	/*
+379: 	 * The preempt tracer hooks into preempt_count_add and will break
+380: 	 * lockdep because it calls back into lockdep after SOFTIRQ_OFFSET
+381: 	 * is set and before current->softirq_enabled is cleared.
+382: 	 * We must manually increment preempt_count here and manually
+383: 	 * call the trace_preempt_off later.
+
+--- lines 417-430 ---
+417:  * Special-case - softirqs can safely be enabled by __do_softirq(),
+418:  * without processing still-pending softirqs:
+419:  */
+420: void _local_bh_enable(void)
+421: {
+422: 	WARN_ON_ONCE(in_hardirq());
+423: 	__local_bh_enable(SOFTIRQ_DISABLE_OFFSET);
+424: }
+425: EXPORT_SYMBOL(_local_bh_enable);
+426: 
+427: void __local_bh_enable_ip(unsigned long ip, unsigned int cnt)
+428: {
+429: 	WARN_ON_ONCE(in_hardirq());
+430: 	lockdep_assert_irqs_enabled();
+
+--- lines 494-507 ---
+494: 		 * at this stage.
+495: 		 */
+496: 		__do_softirq();
+497: #else
+498: 		/*
+499: 		 * Otherwise, irq_exit() is called on the task stack that can
+500: 		 * be potentially deep already. So call softirq in its own stack
+501: 		 * to prevent from any overrun.
+502: 		 */
+503: 		do_softirq_own_stack();
+504: #endif
+505: 	} else {
+506: 		wakeup_softirqd();
+507: 	}
+
+--- lines 543-556 ---
+543: #define MAX_SOFTIRQ_TIME  msecs_to_jiffies(2)
+544: #define MAX_SOFTIRQ_RESTART 10
+545: 
+546: #ifdef CONFIG_TRACE_IRQFLAGS
+547: /*
+548:  * When we run softirqs from irq_exit() and thus on the hardirq stack we need
+549:  * to keep the lockdep irq context tracking as tight as possible in order to
+550:  * not miss-qualify lock contexts and miss possible deadlocks.
+551:  */
+552: 
+553: static inline bool lockdep_softirq_start(void)
+554: {
+555: 	bool in_hardirq = false;
+556: 
+
+--- lines 671-684 ---
+671: }
+672: 
+673: /**
+674:  * irq_enter - Enter an interrupt context including RCU update
+675:  */
+676: void irq_enter(void)
+677: {
+678: 	ct_irq_enter();
+679: 	irq_enter_rcu();
+680: }
+681: 
+682: static inline void tick_irq_exit(void)
+683: {
+684: #ifdef CONFIG_NO_HZ_COMMON
+
+--- lines 721-734 ---
+721: 	preempt_count_sub(HARDIRQ_OFFSET);
+722: 	if (!in_interrupt() && local_softirq_pending())
+723: 		invoke_softirq();
+724: 
+725: 	if (IS_ENABLED(CONFIG_IRQ_FORCED_THREADING) && force_irqthreads() &&
+726: 	    local_timers_pending_force_th() && !(in_nmi() | in_hardirq()))
+727: 		wake_timersd();
+728: 
+729: 	tick_irq_exit();
+730: }
+731: 
+732: /**
+733:  * irq_exit_rcu() - Exit an interrupt context without updating RCU
+734:  *
+
+--- lines 744-757 ---
+744: /**
+745:  * irq_exit - Exit an interrupt context, update RCU and lockdep
+746:  *
+747:  * Also processes softirqs if needed and possible.
+748:  */
+749: void irq_exit(void)
+750: {
+751: 	__irq_exit_rcu();
+752: 	ct_irq_exit();
+753: 	 /* must be last! */
+754: 	lockdep_hardirq_exit();
+755: }
+756: 
+757: /*
+
+===== FILE: kernel/time/tick-broadcast.c =====
+
+--- lines 665-678 ---
+665: {
+666: 	clockevents_switch_state(bc, CLOCK_EVT_STATE_ONESHOT);
+667: }
+668: 
+669: /*
+670:  * Called from irq_enter() when idle was interrupted to reenable the
+671:  * per cpu device.
+672:  */
+673: void tick_check_oneshot_broadcast_this_cpu(void)
+674: {
+675: 	if (cpumask_test_cpu(smp_processor_id(), tick_broadcast_oneshot_mask)) {
+676: 		struct tick_device *td = this_cpu_ptr(&tick_cpu_device);
+677: 
+678: 		/*
+
+--- lines 913-926 ---
+913: 			 * broadcast handler, which did not run yet,
+914: 			 * will invoke the cpu local handler.
+915: 			 *
+916: 			 * We cannot call the handler directly from
+917: 			 * here, because we might be in a NOHZ phase
+918: 			 * and we did not go through the irq_enter()
+919: 			 * nohz fixups.
+920: 			 */
+921: 			now = ktime_get();
+922: 			if (dev->next_event <= now) {
+923: 				cpumask_set_cpu(cpu, tick_broadcast_force_mask);
+924: 				goto out;
+925: 			}
+926: 			/*
+
+===== FILE: kernel/time/tick-sched.c =====
+
+--- lines 540-553 ---
+540: 		/* Perf needs local kick that is NMI safe */
+541: 		if (cpu == smp_processor_id()) {
+542: 			tick_nohz_full_kick();
+543: 		} else {
+544: 			/* Remote IRQ work not NMI-safe */
+545: 			if (!WARN_ON_ONCE(in_nmi()))
+546: 				tick_nohz_full_kick_cpu(cpu);
+547: 		}
+548: 		preempt_enable();
+549: 	}
+550: }
+551: EXPORT_SYMBOL_GPL(tick_nohz_dep_set_cpu);
+552: 
+553: void tick_nohz_dep_clear_cpu(int cpu, enum tick_dep_bits bit)
+
+--- lines 1575-1588 ---
+1575: static inline void tick_nohz_activate(struct tick_sched *ts) { }
+1576: 
+1577: #endif /* CONFIG_NO_HZ_COMMON */
+1578: 
+1579: /*
+1580:  * Called from irq_enter() to notify about the possible interruption of idle()
+1581:  */
+1582: void tick_irq_enter(void)
+1583: {
+1584: 	tick_check_oneshot_broadcast_this_cpu();
+1585: 	tick_nohz_irq_enter();
+1586: }
+1587: 
+1588: static int sched_skew_tick;
+
+===== FILE: kernel/time/timer.c =====
+
+--- lines 1606-1619 ---
+1606: #endif
+1607: 	/*
+1608: 	 * don't use it in hardirq context, because it
+1609: 	 * could lead to deadlock.
+1610: 	 */
+1611: 	WARN_ON(in_hardirq() && !(timer->flags & TIMER_IRQSAFE));
+1612: 
+1613: 	/*
+1614: 	 * Must be able to sleep on PREEMPT_RT because of the slowpath in
+1615: 	 * del_timer_wait_running().
+1616: 	 */
+1617: 	if (IS_ENABLED(CONFIG_PREEMPT_RT) && !(timer->flags & TIMER_IRQSAFE))
+1618: 		lockdep_assert_preemption_enabled();
+1619: 
+
+--- lines 2471-2484 ---
+2471: 	/* Note: this timer irq context must be accounted for as well. */
+2472: 	account_process_tick(p, user_tick);
+2473: 	run_local_timers();
+2474: 	rcu_sched_clock_irq(user_tick);
+2475: #ifdef CONFIG_IRQ_WORK
+2476: 	if (in_hardirq())
+2477: 		irq_work_tick();
+2478: #endif
+2479: 	sched_tick();
+2480: 	if (IS_ENABLED(CONFIG_POSIX_TIMERS))
+2481: 		run_posix_cpu_timers();
+2482: }
+2483: 
+2484: #ifdef CONFIG_HOTPLUG_CPU
+
+===== FILE: kernel/trace/ring_buffer.c =====
+
+--- lines 4023-4036 ---
+4023: rb_irq_work_queue(struct rb_irq_work *irq_work)
+4024: {
+4025: 	int cpu;
+4026: 
+4027: 	/* irq_work_queue_on() is not NMI-safe */
+4028: 	if (unlikely(in_nmi()))
+4029: 		return irq_work_queue(&irq_work->work);
+4030: 
+4031: 	/*
+4032: 	 * If CPU isolation is not active, cpu is always the current
+4033: 	 * CPU, and the following is equivallent to irq_work_queue().
+4034: 	 */
+4035: 	cpu = housekeeping_any_cpu(HK_TYPE_KERNEL_NOISE);
+4036: 	return irq_work_queue_on(&irq_work->work, cpu);
+
+--- lines 4617-4630 ---
+4617: 	 * (which some archs use locking for atomic64), make sure this
+4618: 	 * is safe in NMI context
+4619: 	 */
+4620: 	if ((!IS_ENABLED(CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG) ||
+4621: 	     IS_ENABLED(CONFIG_GENERIC_ATOMIC64)) &&
+4622: 	    (unlikely(in_nmi()))) {
+4623: 		return NULL;
+4624: 	}
+4625: 
+4626: 	rb_start_commit(cpu_buffer);
+4627: 	/* The commit page can not change after this */
+4628: 
+4629: #ifdef CONFIG_RING_BUFFER_ALLOW_SWAP
+4630: 	/*
+
+--- lines 5821-5834 ---
+5821: }
+5822: EXPORT_SYMBOL_GPL(ring_buffer_iter_peek);
+5823: 
+5824: static inline bool rb_reader_lock(struct ring_buffer_per_cpu *cpu_buffer)
+5825: {
+5826: 	if (likely(!in_nmi())) {
+5827: 		raw_spin_lock(&cpu_buffer->reader_lock);
+5828: 		return true;
+5829: 	}
+5830: 
+5831: 	/*
+5832: 	 * If an NMI die dumps out the content of the ring buffer
+5833: 	 * trylock must be used to prevent a deadlock if the NMI
+5834: 	 * preempted a task that holds the ring buffer locks. If
+
+===== FILE: kernel/trace/rv/monitors/sleep/sleep.c =====
+
+--- lines 100-113 ---
+100: 	if (this_cpu_read(hardirq_context)) {
+101: 		ltl_atom_pulse(task, LTL_WOKEN_BY_HARDIRQ, true);
+102: 	} else if (in_task()) {
+103: 		if (current->prio <= task->prio)
+104: 			ltl_atom_pulse(task, LTL_WOKEN_BY_EQUAL_OR_HIGHER_PRIO, true);
+105: 	} else if (in_nmi()) {
+106: 		ltl_atom_pulse(task, LTL_WOKEN_BY_NMI, true);
+107: 	}
+108: }
+109: 
+110: static void handle_contention_begin(void *data, void *lock, unsigned int flags)
+111: {
+112: 	if (flags & LCB_F_RT)
+113: 		ltl_atom_update(current, LTL_BLOCK_ON_RT_MUTEX, true);
+
+===== FILE: kernel/trace/trace.c =====
+
+--- lines 810-823 ---
+810: static void tracing_snapshot_instance_cond(struct trace_array *tr,
+811: 					   void *cond_data)
+812: {
+813: 	unsigned long flags;
+814: 
+815: 	if (in_nmi()) {
+816: 		trace_array_puts(tr, "*** SNAPSHOT CALLED FROM NMI CONTEXT ***\n");
+817: 		trace_array_puts(tr, "*** snapshot is being ignored        ***\n");
+818: 		return;
+819: 	}
+820: 
+821: 	if (!tr->allocated_snapshot) {
+822: 		trace_array_puts(tr, "*** SNAPSHOT NOT ALLOCATED ***\n");
+823: 		trace_array_puts(tr, "*** stopping trace here!   ***\n");
+
+--- lines 2689-2702 ---
+2689: 	 * When an NMI triggers, RCU is enabled via ct_nmi_enter(),
+2690: 	 * but if the above rcu_is_watching() failed, then the NMI
+2691: 	 * triggered someplace critical, and ct_irq_enter() should
+2692: 	 * not be called from NMI.
+2693: 	 */
+2694: 	if (unlikely(in_nmi()))
+2695: 		return;
+2696: 
+2697: 	ct_irq_enter_irqson();
+2698: 	__ftrace_trace_stack(tr, buffer, trace_ctx, skip, NULL);
+2699: 	ct_irq_exit_irqson();
+2700: }
+2701: 
+2702: /**
+
+--- lines 2732-2745 ---
+2732: 
+2733: 	/*
+2734: 	 * NMIs can not handle page faults, even with fix ups.
+2735: 	 * The save user stack can (and often does) fault.
+2736: 	 */
+2737: 	if (unlikely(in_nmi()))
+2738: 		return;
+2739: 
+2740: 	/*
+2741: 	 * prevent recursion, since the user stack tracing may
+2742: 	 * trigger other kernel events.
+2743: 	 */
+2744: 	guard(preempt)();
+2745: 	if (__this_cpu_read(user_stack_count))
+
+===== FILE: kernel/trace/trace.h =====
+
+--- lines 1079-1092 ---
+1079: 		/*
+1080: 		 * If no irqs are to be traced, but a set_graph_function
+1081: 		 * is set, and called by an interrupt handler, we still
+1082: 		 * want to trace it.
+1083: 		 */
+1084: 		if (in_hardirq())
+1085: 			trace_recursion_set(TRACE_IRQ_BIT);
+1086: 		else
+1087: 			trace_recursion_clear(TRACE_IRQ_BIT);
+1088: 		ret = 1;
+1089: 	}
+1090: 
+1091: out:
+1092: 	preempt_enable_notrace();
+
+===== FILE: kernel/trace/trace_clock.c =====
+
+--- lines 121-134 ---
+121: 
+122: 	/*
+123: 	 * If in an NMI context then dont risk lockups and simply return
+124: 	 * the current time.
+125: 	 */
+126: 	if (unlikely(in_nmi()))
+127: 		goto out;
+128: 
+129: 	/* Tracing can cause strange recursion, always use a try lock */
+130: 	if (arch_spin_trylock(&trace_clock_struct.lock)) {
+131: 		/* Reread prev_time in case it was already updated */
+132: 		prev_time = READ_ONCE(trace_clock_struct.prev_time);
+133: 		if ((s64)(now - prev_time) < 0)
+134: 			now = prev_time;
+
+===== FILE: kernel/trace/trace_functions_graph.c =====
+
+--- lines 212-225 ---
+212: 		return 0;
+213: 
+214: 	if (tracer_flags_is_set(tr, TRACE_GRAPH_PRINT_IRQS))
+215: 		return 0;
+216: 
+217: 	return in_hardirq();
+218: }
+219: 
+220: struct fgraph_times {
+221: 	unsigned long long		calltime;
+222: 	unsigned long long		sleeptime; /* may be optional! */
+223: };
+224: 
+225: static int graph_entry(struct ftrace_graph_ent *trace,
+
+===== FILE: kernel/trace/trace_preemptirq.c =====
+
+--- lines 30-43 ---
+30: #else
+31: #define trace(point, args)					\
+32: 	do {							\
+33: 		if (trace_##point##_enabled()) {		\
+34: 			bool exit_rcu = false;			\
+35: 			if (in_nmi())				\
+36: 				break;				\
+37: 			if (!IS_ENABLED(CONFIG_TINY_RCU) &&	\
+38: 			    is_idle_task(current)) {		\
+39: 				ct_irq_enter();			\
+40: 				exit_rcu = true;		\
+41: 			}					\
+42: 			trace_##point(args);			\
+43: 			if (exit_rcu)				\
+
+===== FILE: kernel/trace/trace_stack.c =====
+
+--- lines 170-183 ---
+170: 	/* we do not handle interrupt stacks yet */
+171: 	if (!object_is_on_stack(stack))
+172: 		return;
+173: 
+174: 	/* Can't do this from NMI context (can cause deadlocks) */
+175: 	if (in_nmi())
+176: 		return;
+177: 
+178: 	local_irq_save(flags);
+179: 	arch_spin_lock(&stack_trace_max_lock);
+180: 
+181: 	/* In case another CPU set the tracer_frame on us */
+182: 	if (unlikely(!frame_size))
+183: 		this_size -= tracer_frame;
+
+===== FILE: kernel/unwind/deferred.c =====
+
+--- lines 243-256 ---
+243: 	/*
+244: 	 * NMI requires having safe cmpxchg operations.
+245: 	 * Trigger a warning to make it obvious that an architecture
+246: 	 * is using this in NMI when it should not be.
+247: 	 */
+248: 	if (in_nmi()) {
+249: 		if (WARN_ON_ONCE(!CAN_USE_IN_NMI))
+250: 			return -EINVAL;
+251: 		twa_mode = TWA_NMI_CURRENT;
+252: 	}
+253: 
+254: 	/* Do not allow cancelled works to request again */
+255: 	bit = READ_ONCE(work->bit);
+256: 	if (WARN_ON_ONCE(bit < 0))
+
+===== FILE: kernel/workqueue.c =====
+
+--- lines 4446-4459 ---
+4446: 	bool ret;
+4447: 
+4448: 	ret = __cancel_work(work, cflags | WORK_CANCEL_DISABLE);
+4449: 
+4450: 	if (*work_data_bits(work) & WORK_OFFQ_BH)
+4451: 		WARN_ON_ONCE(in_hardirq());
+4452: 	else
+4453: 		might_sleep();
+4454: 
+4455: 	/*
+4456: 	 * Skip __flush_work() during early boot when we know that @work isn't
+4457: 	 * executing. This allows canceling during early boot.
+4458: 	 */
+4459: 	if (wq_online)
+
+===== FILE: lib/genalloc.c =====
+
+--- lines 281-294 ---
+281: 	unsigned long addr = 0;
+282: 	int order = pool->min_alloc_order;
+283: 	unsigned long nbits, start_bit, end_bit, remain;
+284: 
+285: #ifndef CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG
+286: 	BUG_ON(in_nmi());
+287: #endif
+288: 
+289: 	if (owner)
+290: 		*owner = NULL;
+291: 
+292: 	if (size == 0)
+293: 		return 0;
+294: 
+
+--- lines 490-503 ---
+490: 	struct gen_pool_chunk *chunk;
+491: 	int order = pool->min_alloc_order;
+492: 	unsigned long start_bit, nbits, remain;
+493: 
+494: #ifndef CONFIG_ARCH_HAVE_NMI_SAFE_CMPXCHG
+495: 	BUG_ON(in_nmi());
+496: #endif
+497: 
+498: 	if (owner)
+499: 		*owner = NULL;
+500: 
+501: 	nbits = (size + (1UL << order) - 1) >> order;
+502: 	rcu_read_lock();
+503: 	list_for_each_entry_rcu(chunk, &pool->chunks, next_chunk) {
+
+===== FILE: lib/locking-selftest.c =====
+
+--- lines 200-213 ---
+200: 
+201: #define HARDIRQ_ENTER()				\
+202: 	local_irq_disable();			\
+203: 	__irq_enter();				\
+204: 	lockdep_hardirq_threaded();		\
+205: 	WARN_ON(!in_hardirq());
+206: 
+207: #define HARDIRQ_EXIT()				\
+208: 	__irq_exit();				\
+209: 	local_irq_enable();
+210: 
+211: #define SOFTIRQ_DISABLE		local_bh_disable
+212: #define SOFTIRQ_ENABLE		local_bh_enable
+213: 
+
+--- lines 2510-2523 ---
+2510: DEFINE_LOCK_GUARD_0(HARDIRQ, HARDIRQ_ENTER(), HARDIRQ_EXIT())
+2511: DEFINE_LOCK_GUARD_0(NOTTHREADED_HARDIRQ,
+2512: 	do {
+2513: 		local_irq_disable();
+2514: 		__irq_enter();
+2515: 		WARN_ON(!in_hardirq());
+2516: 	} while(0), HARDIRQ_EXIT())
+2517: DEFINE_LOCK_GUARD_0(SOFTIRQ, SOFTIRQ_ENTER(), SOFTIRQ_EXIT())
+2518: 
+2519: /* Define RCU guards, should go away when RCU has its own guard definitions */
+2520: DEFINE_LOCK_GUARD_0(RCU, rcu_read_lock(), rcu_read_unlock())
+2521: DEFINE_LOCK_GUARD_0(RCU_BH, rcu_read_lock_bh(), rcu_read_unlock_bh())
+2522: DEFINE_LOCK_GUARD_0(RCU_SCHED, rcu_read_lock_sched(), rcu_read_unlock_sched())
+2523: 
+
+===== FILE: lib/stackdepot.c =====
+
+--- lines 686-699 ---
+686: 				   DEPOT_POOL_ORDER);
+687: 		if (page)
+688: 			prealloc = page_address(page);
+689: 	}
+690: 
+691: 	if (in_nmi() || !allow_spin) {
+692: 		/* We can never allocate in NMI context. */
+693: 		WARN_ON_ONCE(can_alloc);
+694: 		/* Best effort; bail if we fail to take the lock. */
+695: 		if (!raw_spin_trylock_irqsave(&pool_lock, flags))
+696: 			goto exit;
+697: 	} else {
+698: 		raw_spin_lock_irqsave(&pool_lock, flags);
+699: 	}
+
+===== FILE: lib/vsprintf.c =====
+
+--- lines 871-884 ---
+871: 
+872: 		/*
+873: 		 * kptr_restrict==1 cannot be used in IRQ context
+874: 		 * because its test for CAP_SYSLOG would be meaningless.
+875: 		 */
+876: 		if (in_hardirq() || in_serving_softirq() || in_nmi()) {
+877: 			if (spec.field_width == -1)
+878: 				spec.field_width = 2 * sizeof(ptr);
+879: 			return error_string(buf, end, "pK-error", spec);
+880: 		}
+881: 
+882: 		/*
+883: 		 * Only print the real pointer value if the current
+884: 		 * process has CAP_SYSLOG and is running with the
+
+===== FILE: mm/highmem.c =====
+
+--- lines 473-486 ---
+473: # define KM_INCR	1
+474: #endif
+475: 
+476: static inline int kmap_local_idx_push(void)
+477: {
+478: 	WARN_ON_ONCE(in_hardirq() && !irqs_disabled());
+479: 	current->kmap_ctrl.idx += KM_INCR;
+480: 	BUG_ON(current->kmap_ctrl.idx >= KM_MAX_IDX);
+481: 	return current->kmap_ctrl.idx - 1;
+482: }
+483: 
+484: static inline int kmap_local_idx(void)
+485: {
+486: 	return current->kmap_ctrl.idx - 1;
+
+===== FILE: mm/kmemleak.c =====
+
+--- lines 678-691 ---
+678: 	object->count = 0;			/* white color initially */
+679: 	object->checksum = 0;
+680: 	object->del_state = 0;
+681: 
+682: 	/* task information */
+683: 	if (in_hardirq()) {
+684: 		object->pid = 0;
+685: 		strscpy(object->comm, "hardirq");
+686: 	} else if (in_serving_softirq()) {
+687: 		object->pid = 0;
+688: 		strscpy(object->comm, "softirq");
+689: 	} else {
+690: 		object->pid = current->pid;
+691: 		/*
+
+===== FILE: mm/kmsan/kmsan.h =====
+
+--- lines 99-112 ---
+99:  */
+100: static __always_inline bool kmsan_in_runtime(void)
+101: {
+102: 	if ((hardirq_count() >> HARDIRQ_SHIFT) > 1)
+103: 		return true;
+104: 	if (in_nmi())
+105: 		return true;
+106: 	return kmsan_get_context()->kmsan_in_runtime;
+107: }
+108: 
+109: static __always_inline void kmsan_enter_runtime(void)
+110: {
+111: 	struct kmsan_ctx *ctx;
+112: 
+
+===== FILE: mm/memcontrol.c =====
+
+--- lines 2574-2587 ---
+2574: 					 struct pglist_data *pgdat,
+2575: 					 enum node_stat_item idx, int nr)
+2576: {
+2577: 	struct lruvec *lruvec;
+2578: 
+2579: 	if (likely(!in_nmi())) {
+2580: 		lruvec = mem_cgroup_lruvec(memcg, pgdat);
+2581: 		mod_memcg_lruvec_state(lruvec, idx, nr);
+2582: 	} else {
+2583: 		struct mem_cgroup_per_node *pn = memcg->nodeinfo[pgdat->node_id];
+2584: 
+2585: 		/* preemption is disabled in_nmi(). */
+2586: 		css_rstat_updated(&memcg->css, smp_processor_id());
+2587: 		if (idx == NR_SLAB_RECLAIMABLE_B)
+
+--- lines 2733-2746 ---
+2733: __always_inline struct obj_cgroup *current_obj_cgroup(void)
+2734: {
+2735: 	struct mem_cgroup *memcg;
+2736: 	struct obj_cgroup *objcg;
+2737: 
+2738: 	if (IS_ENABLED(CONFIG_MEMCG_NMI_UNSAFE) && in_nmi())
+2739: 		return NULL;
+2740: 
+2741: 	if (in_task()) {
+2742: 		memcg = current->active_memcg;
+2743: 		if (unlikely(memcg))
+2744: 			goto from_memcg;
+2745: 
+2746: 		objcg = READ_ONCE(current->objcg);
+
+--- lines 2801-2814 ---
+2801: }
+2802: 
+2803: #ifdef CONFIG_MEMCG_NMI_SAFETY_REQUIRES_ATOMIC
+2804: static inline void account_kmem_nmi_safe(struct mem_cgroup *memcg, int val)
+2805: {
+2806: 	if (likely(!in_nmi())) {
+2807: 		mod_memcg_state(memcg, MEMCG_KMEM, val);
+2808: 	} else {
+2809: 		/* preemption is disabled in_nmi(). */
+2810: 		css_rstat_updated(&memcg->css, smp_processor_id());
+2811: 		atomic_add(val, &memcg->kmem_stat);
+2812: 	}
+2813: }
+2814: #else
+
+===== FILE: mm/page_alloc.c =====
+
+--- lines 2994-3007 ---
+2994: 		}
+2995: 		migratetype = MIGRATE_MOVABLE;
+2996: 	}
+2997: 
+2998: 	if (unlikely((fpi_flags & FPI_TRYLOCK) && IS_ENABLED(CONFIG_PREEMPT_RT)
+2999: 		     && (in_nmi() || in_hardirq()))) {
+3000: 		add_page_to_zone_llist(zone, page, order);
+3001: 		return;
+3002: 	}
+3003: 	pcp = pcp_spin_trylock(zone->per_cpu_pageset, UP_flags);
+3004: 	if (pcp) {
+3005: 		if (!free_frozen_page_commit(zone, pcp, page, migratetype,
+3006: 						order, fpi_flags, &UP_flags))
+3007: 			return;
+
+--- lines 7794-7807 ---
+7794: 	 * NMI.
+7795: 	 *
+7796: 	 * Note, irqs_disabled() case is ok. This function can be called
+7797: 	 * from raw_spin_lock_irqsave region.
+7798: 	 */
+7799: 	if (IS_ENABLED(CONFIG_PREEMPT_RT) && (in_nmi() || in_hardirq()))
+7800: 		return NULL;
+7801: 	if (!pcp_allowed_order(order))
+7802: 		return NULL;
+7803: 
+7804: 	/* Bailout, since _deferred_grow_zone() needs to take a lock */
+7805: 	if (deferred_pages_enabled())
+7806: 		return NULL;
+7807: 
+
+===== FILE: mm/slub.c =====
+
+--- lines 5299-5312 ---
+5299: 
+5300: 	/*
+5301: 	 * See the comment for the same check in
+5302: 	 * alloc_frozen_pages_nolock_noprof()
+5303: 	 */
+5304: 	if (IS_ENABLED(CONFIG_PREEMPT_RT) && (in_nmi() || in_hardirq()))
+5305: 		return NULL;
+5306: 
+5307: retry:
+5308: 	if (unlikely(size > KMALLOC_MAX_CACHE_SIZE))
+5309: 		return NULL;
+5310: 	s = kmalloc_slab(size, NULL, alloc_gfp, _RET_IP_);
+5311: 
+5312: 	if (!(s->flags & __CMPXCHG_DOUBLE) && !kmem_cache_debug(s))
+
+===== FILE: mm/vmalloc.c =====
+
+--- lines 3407-3420 ---
+3407:  */
+3408: void vfree_atomic(const void *addr)
+3409: {
+3410: 	struct vfree_deferred *p = raw_cpu_ptr(&vfree_deferred);
+3411: 
+3412: 	BUG_ON(in_nmi());
+3413: 	kmemleak_free(addr);
+3414: 
+3415: 	/*
+3416: 	 * Use raw_cpu_ptr() because this can be called from preemptible
+3417: 	 * context. Preemption is absolutely fine here, because the llist_add()
+3418: 	 * implementation is lockless, so it works even if we are adding to
+3419: 	 * another cpu's list. schedule_work() should be fine with this too.
+3420: 	 */
+
+--- lines 3447-3460 ---
+3447: 	if (unlikely(in_interrupt())) {
+3448: 		vfree_atomic(addr);
+3449: 		return;
+3450: 	}
+3451: 
+3452: 	BUG_ON(in_nmi());
+3453: 	kmemleak_free(addr);
+3454: 	might_sleep();
+3455: 
+3456: 	if (!addr)
+3457: 		return;
+3458: 
+3459: 	vm = remove_vm_area(addr);
+3460: 	if (unlikely(!vm)) {
+
+===== FILE: net/bluetooth/coredump.c =====
+
+--- lines 79-92 ---
+79: 
+80: /* Do not call with hci_dev_lock since this calls driver code. */
+81: static void hci_devcd_notify(struct hci_dev *hdev, int state)
+82: {
+83: 	if (hdev->dump.notify_change)
+84: 		hdev->dump.notify_change(hdev, state);
+85: }
+86: 
+87: /* Call with hci_dev_lock only. */
+88: void hci_devcd_reset(struct hci_dev *hdev)
+89: {
+90: 	hdev->dump.head = NULL;
+91: 	hdev->dump.tail = NULL;
+92: 	hdev->dump.alloc_size = 0;
+
+===== FILE: net/core/bpf_sk_storage.c =====
+
+--- lines 386-399 ---
+386: /* *gfp_flags* is a hidden argument provided by the verifier */
+387: BPF_CALL_5(bpf_sk_storage_get_tracing, struct bpf_map *, map, struct sock *, sk,
+388: 	   void *, value, u64, flags, gfp_t, gfp_flags)
+389: {
+390: 	WARN_ON_ONCE(!bpf_rcu_lock_held());
+391: 	if (in_hardirq() || in_nmi())
+392: 		return (unsigned long)NULL;
+393: 
+394: 	return (unsigned long)____bpf_sk_storage_get(map, sk, value, flags,
+395: 						     gfp_flags);
+396: }
+397: 
+398: BPF_CALL_2(bpf_sk_storage_delete_tracing, struct bpf_map *, map,
+399: 	   struct sock *, sk)
+
+===== FILE: net/core/dev.c =====
+
+--- lines 3461-3474 ---
+3461: }
+3462: EXPORT_SYMBOL(dev_kfree_skb_irq_reason);
+3463: 
+3464: void dev_kfree_skb_any_reason(struct sk_buff *skb, enum skb_drop_reason reason)
+3465: {
+3466: 	if (in_hardirq() || irqs_disabled())
+3467: 		dev_kfree_skb_irq_reason(skb, reason);
+3468: 	else
+3469: 		kfree_skb_reason(skb, reason);
+3470: }
+3471: EXPORT_SYMBOL(dev_kfree_skb_any_reason);
+3472: 
+3473: 
+3474: /**
+
+===== FILE: net/core/gen_stats.c =====
+
+--- lines 152-165 ---
+152: {
+153: 	unsigned int start;
+154: 	u64 bytes = 0;
+155: 	u64 packets = 0;
+156: 
+157: 	WARN_ON_ONCE((cpu || running) && in_hardirq());
+158: 
+159: 	if (cpu) {
+160: 		gnet_stats_add_basic_cpu(bstats, cpu);
+161: 		return;
+162: 	}
+163: 	do {
+164: 		if (running)
+165: 			start = u64_stats_fetch_begin(&b->syncp);
+
+===== FILE: net/core/skbuff.c =====
+
+--- lines 258-271 ---
+258: 
+259: void *__netdev_alloc_frag_align(unsigned int fragsz, unsigned int align_mask)
+260: {
+261: 	void *data;
+262: 
+263: 	if (in_hardirq() || irqs_disabled()) {
+264: 		struct page_frag_cache *nc = this_cpu_ptr(&netdev_alloc_cache);
+265: 
+266: 		fragsz = SKB_DATA_ALIGN(fragsz);
+267: 		data = __page_frag_alloc_align(nc, fragsz,
+268: 					       GFP_ATOMIC | __GFP_NOWARN,
+269: 					       align_mask);
+270: 	} else {
+271: 		local_bh_disable();
+
+--- lines 689-702 ---
+689: 
+690: 	if (flags & SKB_ALLOC_NAPI) {
+691: 		skb = napi_skb_cache_get(true);
+692: 		if (unlikely(!skb))
+693: 			return NULL;
+694: 	} else if (!in_hardirq() && !irqs_disabled()) {
+695: 		local_bh_disable();
+696: 		skb = napi_skb_cache_get(false);
+697: 		local_bh_enable();
+698: 	}
+699: 
+700: 	if (!skb) {
+701: fallback:
+702: 		skb = kmem_cache_alloc_node(cache, gfp_mask & ~GFP_DMA, node);
+
+--- lines 781-794 ---
+781: 	len = SKB_HEAD_ALIGN(len);
+782: 
+783: 	if (sk_memalloc_socks())
+784: 		gfp_mask |= __GFP_MEMALLOC;
+785: 
+786: 	if (in_hardirq() || irqs_disabled()) {
+787: 		nc = this_cpu_ptr(&netdev_alloc_cache);
+788: 		data = page_frag_alloc(nc, len, gfp_mask);
+789: 		pfmemalloc = page_frag_cache_is_pfmemalloc(nc);
+790: 	} else {
+791: 		local_bh_disable();
+792: 		local_lock_nested_bh(&napi_alloc_cache.bh_lock);
+793: 
+794: 		nc = this_cpu_ptr(&napi_alloc_cache.page);
+
+--- lines 1171-1184 ---
+1171: 
+1172: void skb_release_head_state(struct sk_buff *skb)
+1173: {
+1174: 	skb_dst_drop(skb);
+1175: 	if (skb->destructor) {
+1176: 		DEBUG_NET_WARN_ON_ONCE(in_hardirq());
+1177: #ifdef CONFIG_INET
+1178: 		INDIRECT_CALL_4(skb->destructor,
+1179: 				tcp_wfree, __sock_wfree, sock_wfree,
+1180: 				xsk_destruct_skb,
+1181: 				skb);
+1182: #else
+1183: 		INDIRECT_CALL_2(skb->destructor,
+1184: 				sock_wfree, xsk_destruct_skb,
+
+===== FILE: net/nfc/rawsock.c =====
+
+--- lines 150-163 ---
+150: static void rawsock_data_exchange_complete(void *context, struct sk_buff *skb,
+151: 					   int err)
+152: {
+153: 	struct sock *sk = (struct sock *) context;
+154: 
+155: 	BUG_ON(in_hardirq());
+156: 
+157: 	pr_debug("sk=%p err=%d\n", sk, err);
+158: 
+159: 	if (err)
+160: 		goto error;
+161: 
+162: 	err = rawsock_add_header(skb);
+163: 	if (err)
+
+===== FILE: net/unix/af_unix.c =====
+
+--- lines 1402-1415 ---
+1402: out_unlock:
+1403: 	mutex_unlock(&u->bindlock);
+1404: 	err = -EINVAL;
+1405: out_unlink:
+1406: 	/* failed after successful mknod?  unlink what we'd created... */
+1407: 	vfs_unlink(idmap, d_inode(parent.dentry), dentry, NULL);
+1408: out_path:
+1409: 	end_creating_path(&parent, dentry);
+1410: out:
+1411: 	unix_release_addr(addr);
+1412: 	return err == -EEXIST ? -EADDRINUSE : err;
+1413: }
+1414: 
+1415: static int unix_bind_abstract(struct sock *sk, struct sockaddr_un *sunaddr,
+
+===== FILE: security/integrity/evm/evm_main.c =====
+
+--- lines 952-965 ---
+952:  * @ia_valid: for the UID and GID status
+953:  *
+954:  * For now, update the HMAC stored in 'security.evm' to reflect UID/GID
+955:  * changes.
+956:  *
+957:  * This function is called from notify_change(), which expects the caller
+958:  * to lock the inode's i_mutex.
+959:  */
+960: static void evm_inode_post_setattr(struct mnt_idmap *idmap,
+961: 				   struct dentry *dentry, int ia_valid)
+962: {
+963: 	if (!evm_revalidate_status(NULL))
+964: 		return;
+965: 
+
+===== FILE: security/integrity/ima/ima_appraise.c =====
+
+--- lines 643-656 ---
+643:  * @dentry: pointer to the affected dentry
+644:  * @ia_valid: for the UID and GID status
+645:  *
+646:  * Changes to a dentry's metadata might result in needing to appraise.
+647:  *
+648:  * This function is called from notify_change(), which expects the caller
+649:  * to lock the inode's i_mutex.
+650:  */
+651: static void ima_inode_post_setattr(struct mnt_idmap *idmap,
+652: 				   struct dentry *dentry, int ia_valid)
+653: {
+654: 	struct inode *inode = d_backing_inode(dentry);
+655: 	struct ima_iint_cache *iint;
+656: 	int action;
+
+===== FILE: security/security.c =====
+
+--- lines 1212-1225 ---
+1212:  * inode's RCU protections it is possible that the resources will not be
+1213:  * fully released until after the current RCU grace period has elapsed.
+1214:  *
+1215:  * It is important for LSMs to note that despite being present in a call to
+1216:  * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217:  * and calls to security_inode_permission() may be made during, or after,
+1218:  * a call to security_inode_free().  For this reason the inode->i_security
+1219:  * field is released via a call_rcu() callback and any LSMs which need to
+1220:  * retain inode state for use in security_inode_permission() should only
+1221:  * release that state in the inode_free_security_rcu() LSM hook callback.
+1222:  */
+1223: void security_inode_free(struct inode *inode)
+1224: {
+1225: 	call_void_hook(inode_free_security, inode);
+
+--- lines 1586-1599 ---
+1586: 	return call_int_hook(path_chroot, path);
+1587: }
+1588: #endif /* CONFIG_SECURITY_PATH */
+1589: 
+1590: /**
+1591:  * security_inode_create() - Check if creating a file is allowed
+1592:  * @dir: the parent directory
+1593:  * @dentry: the file being created
+1594:  * @mode: requested file mode
+1595:  *
+1596:  * Check permission to create a regular file.
+1597:  *
+1598:  * Return: Returns 0 if permission is granted.
+1599:  */
+
+--- lines 1638-1651 ---
+1638: 		return 0;
+1639: 	return call_int_hook(inode_link, old_dentry, dir, new_dentry);
+1640: }
+1641: 
+1642: /**
+1643:  * security_inode_unlink() - Check if removing a hard link is allowed
+1644:  * @dir: parent directory
+1645:  * @dentry: file
+1646:  *
+1647:  * Check the permission to remove a hard link to a file.
+1648:  *
+1649:  * Return: Returns 0 if permission is granted.
+1650:  */
+1651: int security_inode_unlink(struct inode *dir, struct dentry *dentry)
+
+--- lines 1729-1742 ---
+1729: 		return 0;
+1730: 	return call_int_hook(inode_mknod, dir, dentry, mode, dev);
+1731: }
+1732: 
+1733: /**
+1734:  * security_inode_rename() - Check if renaming a file is allowed
+1735:  * @old_dir: parent directory of the old file
+1736:  * @old_dentry: the old file
+1737:  * @new_dir: parent directory of the new file
+1738:  * @new_dentry: the new file
+1739:  * @flags: flags
+1740:  *
+1741:  * Check for permission to rename a file or directory.
+1742:  *
+
+--- lines 1795-1808 ---
+1795: 		return 0;
+1796: 	return call_int_hook(inode_follow_link, dentry, inode, rcu);
+1797: }
+1798: 
+1799: /**
+1800:  * security_inode_permission() - Check if accessing an inode is allowed
+1801:  * @inode: inode
+1802:  * @mask: access mask
+1803:  *
+1804:  * Check permission before accessing an inode.  This hook is called by the
+1805:  * existing Linux permission function, so a security module can use it to
+1806:  * provide additional checking for existing Linux permission checks.  Notice
+1807:  * that this hook is called when a file is opened (as well as many other
+1808:  * operations), whereas the file_security_ops permission hook is called when
+
+--- lines 1816-1829 ---
+1816: 		return 0;
+1817: 	return call_int_hook(inode_permission, inode, mask);
+1818: }
+1819: 
+1820: /**
+1821:  * security_inode_setattr() - Check if setting file attributes is allowed
+1822:  * @idmap: idmap of the mount
+1823:  * @dentry: file
+1824:  * @attr: new attributes
+1825:  *
+1826:  * Check permission before setting file attributes.  Note that the kernel call
+1827:  * to notify_change is performed from several locations, whenever file
+1828:  * attributes change (such as when a file is truncated, chown/chmod operations,
+1829:  * transferring disk quotas, etc).
+
+--- lines 1854-1867 ---
+1854: 		return;
+1855: 	call_void_hook(inode_post_setattr, idmap, dentry, ia_valid);
+1856: }
+1857: 
+1858: /**
+1859:  * security_inode_getattr() - Check if getting file attributes is allowed
+1860:  * @path: file
+1861:  *
+1862:  * Check permission before obtaining file attributes.
+1863:  *
+1864:  * Return: Returns 0 if permission is granted.
+1865:  */
+1866: int security_inode_getattr(const struct path *path)
+1867: {
+
+===== FILE: security/tomoyo/tomoyo.c =====
+
+--- lines 110-123 ---
+110: 	return tomoyo_check_open_permission(s->domain_info,
+111: 					    &bprm->file->f_path, O_RDONLY);
+112: }
+113: 
+114: /**
+115:  * tomoyo_inode_getattr - Target for security_inode_getattr().
+116:  *
+117:  * @path: Pointer to "struct path".
+118:  *
+119:  * Returns 0 on success, negative value otherwise.
+120:  */
+121: static int tomoyo_inode_getattr(const struct path *path)
+122: {
+123: 	return tomoyo_path_perm(TOMOYO_TYPE_GETATTR, path, NULL);
+
+===== FILE: tools/testing/selftests/bpf/prog_tests/stacktrace_build_id_nmi.c =====
+
+--- lines 120-132 ---
+120: 		  "Didn't find expected build ID from the map\n"))
+121: 		goto cleanup;
+122: 
+123: 	/*
+124: 	 * We intentionally skip compare_stack_ips(). This is because we
+125: 	 * only support one in_nmi() ips-to-build_id translation per cpu
+126: 	 * at any time, thus stack_amap here will always fallback to
+127: 	 * BPF_STACK_BUILD_ID_IP;
+128: 	 */
+129: 
+130: cleanup:
+131: 	test_stacktrace_build_id__destroy(skel);
+132: }
