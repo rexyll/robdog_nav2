@@ -2628,3 +2628,1440 @@ kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c
 1376- * security_path_mknod() - Check if creating a special file is allowed
 1377- * @dir: parent directory
 1378- * @dentry: new file
+
+
+
+earl@earl-VMware-Virtual-Platform:~/workspace/robdog_nav2$ cd ~/workspace/robdog_nav2 
+
+ROOT="kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source"
+
+echo "===== 1. BPF INODE STORAGE FREE IMPLEMENTATION ====="
+rg -n -C 20 \
+  'bpf_inode_storage_free|bpf_local_storage_destroy|inode_storage_ptr' \
+  "$ROOT/kernel/bpf/bpf_inode_storage.c"
+
+echo
+echo "===== 2. INODE FREE HOOK REGISTRATION ====="
+  "$ROOT/Makefile"|PATCHLEVEL|SUBLEVEL|EXTRAVERSION) =' \m_unlink' \
+===== 1. BPF INODE STORAGE FREE IMPLEMENTATION =====
+4- * Copyright 2020 Google LLC.
+5- */
+6-
+7-#include <linux/rculist.h>
+8-#include <linux/list.h>
+9-#include <linux/hash.h>
+10-#include <linux/types.h>
+11-#include <linux/spinlock.h>
+12-#include <linux/bpf.h>
+13-#include <linux/bpf_local_storage.h>
+14-#include <net/sock.h>
+15-#include <uapi/linux/sock_diag.h>
+16-#include <uapi/linux/btf.h>
+17-#include <linux/bpf_lsm.h>
+18-#include <linux/btf_ids.h>
+19-#include <linux/rcupdate_trace.h>
+20-
+21-DEFINE_BPF_STORAGE_CACHE(inode_cache);
+22-
+23-static struct bpf_local_storage __rcu **
+24:inode_storage_ptr(void *owner)
+25-{
+26-	struct inode *inode = owner;
+27-	struct bpf_storage_blob *bsb;
+28-
+29-	bsb = bpf_inode(inode);
+30-	if (!bsb)
+31-		return NULL;
+32-	return &bsb->storage;
+33-}
+34-
+35-static struct bpf_local_storage_data *inode_storage_lookup(struct inode *inode,
+36-							   struct bpf_map *map,
+37-							   bool cacheit_lockit)
+38-{
+39-	struct bpf_local_storage *inode_storage;
+40-	struct bpf_local_storage_map *smap;
+41-	struct bpf_storage_blob *bsb;
+42-
+43-	bsb = bpf_inode(inode);
+44-	if (!bsb)
+45-		return NULL;
+46-
+47-	inode_storage =
+48-		rcu_dereference_check(bsb->storage, bpf_rcu_lock_held());
+49-	if (!inode_storage)
+50-		return NULL;
+51-
+52-	smap = (struct bpf_local_storage_map *)map;
+53-	return bpf_local_storage_lookup(inode_storage, smap, cacheit_lockit);
+54-}
+55-
+56:void bpf_inode_storage_free(struct inode *inode)
+57-{
+58-	struct bpf_local_storage *local_storage;
+59-	struct bpf_storage_blob *bsb;
+60-
+61-	bsb = bpf_inode(inode);
+62-	if (!bsb)
+63-		return;
+64-
+65-	rcu_read_lock_dont_migrate();
+66-
+67-	local_storage = rcu_dereference(bsb->storage);
+68-	if (!local_storage)
+69-		goto out;
+70-
+71:	bpf_local_storage_destroy(local_storage);
+72-out:
+73-	rcu_read_unlock_migrate();
+74-}
+75-
+76-static void *bpf_fd_inode_storage_lookup_elem(struct bpf_map *map, void *key)
+77-{
+78-	struct bpf_local_storage_data *sdata;
+79-	CLASS(fd_raw, f)(*(int *)key);
+80-
+81-	if (fd_empty(f))
+82-		return ERR_PTR(-EBADF);
+83-
+84-	sdata = inode_storage_lookup(file_inode(fd_file(f)), map, true);
+85-	return sdata ? sdata->data : NULL;
+86-}
+87-
+88-static long bpf_fd_inode_storage_update_elem(struct bpf_map *map, void *key,
+89-					     void *value, u64 map_flags)
+90-{
+91-	struct bpf_local_storage_data *sdata;
+92-	CLASS(fd_raw, f)(*(int *)key);
+93-
+94-	if (fd_empty(f))
+95-		return -EBADF;
+96:	if (!inode_storage_ptr(file_inode(fd_file(f))))
+97-		return -EBADF;
+98-
+99-	sdata = bpf_local_storage_update(file_inode(fd_file(f)),
+100-					 (struct bpf_local_storage_map *)map,
+101-					 value, map_flags, false, GFP_ATOMIC);
+102-	return PTR_ERR_OR_ZERO(sdata);
+103-}
+104-
+105-static int inode_storage_delete(struct inode *inode, struct bpf_map *map)
+106-{
+107-	struct bpf_local_storage_data *sdata;
+108-
+109-	sdata = inode_storage_lookup(inode, map, false);
+110-	if (!sdata)
+111-		return -ENOENT;
+112-
+113-	return bpf_selem_unlink(SELEM(sdata));
+114-}
+115-
+116-static long bpf_fd_inode_storage_delete_elem(struct bpf_map *map, void *key)
+117-{
+118-	CLASS(fd_raw, f)(*(int *)key);
+119-
+120-	if (fd_empty(f))
+121-		return -EBADF;
+122-	return inode_storage_delete(file_inode(fd_file(f)), map);
+123-}
+124-
+125-/* *gfp_flags* is a hidden argument provided by the verifier */
+126-BPF_CALL_5(bpf_inode_storage_get, struct bpf_map *, map, struct inode *, inode,
+127-	   void *, value, u64, flags, gfp_t, gfp_flags)
+128-{
+129-	struct bpf_local_storage_data *sdata;
+130-
+131-	WARN_ON_ONCE(!bpf_rcu_lock_held());
+132-	if (flags & ~(BPF_LOCAL_STORAGE_GET_F_CREATE))
+133-		return (unsigned long)NULL;
+134-
+135:	/* explicitly check that the inode_storage_ptr is not
+136-	 * NULL as inode_storage_lookup returns NULL in this case and
+137-	 * bpf_local_storage_update expects the owner to have a
+138-	 * valid storage pointer.
+139-	 */
+140:	if (!inode || !inode_storage_ptr(inode))
+141-		return (unsigned long)NULL;
+142-
+143-	sdata = inode_storage_lookup(inode, map, true);
+144-	if (sdata)
+145-		return (unsigned long)sdata->data;
+146-
+147-	/* This helper must only called from where the inode is guaranteed
+148-	 * to have a refcount and cannot be freed.
+149-	 */
+150-	if (flags & BPF_LOCAL_STORAGE_GET_F_CREATE) {
+151-		sdata = bpf_local_storage_update(
+152-			inode, (struct bpf_local_storage_map *)map, value,
+153-			BPF_NOEXIST, false, gfp_flags);
+154-		return IS_ERR(sdata) ? (unsigned long)NULL :
+155-					     (unsigned long)sdata->data;
+156-	}
+157-
+158-	return (unsigned long)NULL;
+159-}
+160-
+--
+182-	return bpf_local_storage_map_alloc(attr, &inode_cache, false);
+183-}
+184-
+185-static void inode_storage_map_free(struct bpf_map *map)
+186-{
+187-	bpf_local_storage_map_free(map, &inode_cache);
+188-}
+189-
+190-const struct bpf_map_ops inode_storage_map_ops = {
+191-	.map_meta_equal = bpf_map_meta_equal,
+192-	.map_alloc_check = bpf_local_storage_map_alloc_check,
+193-	.map_alloc = inode_storage_map_alloc,
+194-	.map_free = inode_storage_map_free,
+195-	.map_get_next_key = notsupp_get_next_key,
+196-	.map_lookup_elem = bpf_fd_inode_storage_lookup_elem,
+197-	.map_update_elem = bpf_fd_inode_storage_update_elem,
+198-	.map_delete_elem = bpf_fd_inode_storage_delete_elem,
+199-	.map_check_btf = bpf_local_storage_map_check_btf,
+200-	.map_mem_usage = bpf_local_storage_map_mem_usage,
+201-	.map_btf_id = &bpf_local_storage_map_btf_id[0],
+202:	.map_owner_storage_ptr = inode_storage_ptr,
+203-};
+204-
+205-BTF_ID_LIST_SINGLE(bpf_inode_storage_btf_ids, struct, inode)
+206-
+207-const struct bpf_func_proto bpf_inode_storage_get_proto = {
+208-	.func		= bpf_inode_storage_get,
+209-	.gpl_only	= false,
+210-	.ret_type	= RET_PTR_TO_MAP_VALUE_OR_NULL,
+211-	.arg1_type	= ARG_CONST_MAP_PTR,
+212-	.arg2_type	= ARG_PTR_TO_BTF_ID_OR_NULL,
+213-	.arg2_btf_id	= &bpf_inode_storage_btf_ids[0],
+214-	.arg3_type	= ARG_PTR_TO_MAP_VALUE_OR_NULL,
+215-	.arg4_type	= ARG_ANYTHING,
+216-};
+217-
+218-const struct bpf_func_proto bpf_inode_storage_delete_proto = {
+219-	.func		= bpf_inode_storage_delete,
+220-	.gpl_only	= false,
+221-	.ret_type	= RET_INTEGER,
+222-	.arg1_type	= ARG_CONST_MAP_PTR,
+
+===== 2. INODE FREE HOOK REGISTRATION =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/bpf/hooks.c
+7-#include <linux/bpf_lsm.h>
+8-#include <uapi/linux/lsm.h>
+9-
+10-static struct security_hook_list bpf_lsm_hooks[] __ro_after_init = {
+11-	#define LSM_HOOK(RET, DEFAULT, NAME, ...) \
+12-	LSM_HOOK_INIT(NAME, bpf_lsm_##NAME),
+13-	#include <linux/lsm_hook_defs.h>
+14-	#undef LSM_HOOK
+15:	LSM_HOOK_INIT(inode_free_security, bpf_inode_storage_free),
+16-};
+17-
+18-static const struct lsm_id bpf_lsmid = {
+19-	.name = "bpf",
+20-	.id = LSM_ID_BPF,
+21-};
+22-
+23-static int __init bpf_lsm_init(void)
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c
+1195-	if (unlikely(rc))
+1196-		security_inode_free(inode);
+1197-	return rc;
+1198-}
+1199-
+1200-static void inode_free_by_rcu(struct rcu_head *head)
+1201-{
+1202-	/* The rcu head is at the start of the inode blob */
+1203:	call_void_hook(inode_free_security_rcu, head);
+1204-	kmem_cache_free(lsm_inode_cache, head);
+1205-}
+1206-
+1207-/**
+1208- * security_inode_free() - Free an inode's LSM blob
+1209- * @inode: the inode
+1210- *
+1211- * Release any LSM resources associated with @inode, although due to the
+--
+1213- * fully released until after the current RCU grace period has elapsed.
+1214- *
+1215- * It is important for LSMs to note that despite being present in a call to
+1216- * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217- * and calls to security_inode_permission() may be made during, or after,
+1218- * a call to security_inode_free().  For this reason the inode->i_security
+1219- * field is released via a call_rcu() callback and any LSMs which need to
+1220- * retain inode state for use in security_inode_permission() should only
+1221: * release that state in the inode_free_security_rcu() LSM hook callback.
+1222- */
+1223-void security_inode_free(struct inode *inode)
+1224-{
+1225:	call_void_hook(inode_free_security, inode);
+1226-	if (!inode->i_security)
+1227-		return;
+1228-	call_rcu((struct rcu_head *)inode->i_security, inode_free_by_rcu);
+1229-}
+1230-
+1231-/**
+1232- * security_dentry_init_security() - Perform dentry initialization
+1233- * @dentry: the dentry to initialize
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/lsm_hook_defs.h
+108-LSM_HOOK(int, 0, path_chown, const struct path *path, kuid_t uid, kgid_t gid)
+109-LSM_HOOK(int, 0, path_chroot, const struct path *path)
+110-#endif /* CONFIG_SECURITY_PATH */
+111-
+112-/* Needed for inode based security check */
+113-LSM_HOOK(int, 0, path_notify, const struct path *path, u64 mask,
+114-	 unsigned int obj_type)
+115-LSM_HOOK(int, 0, inode_alloc_security, struct inode *inode)
+116:LSM_HOOK(void, LSM_RET_VOID, inode_free_security, struct inode *inode)
+117:LSM_HOOK(void, LSM_RET_VOID, inode_free_security_rcu, void *inode_security)
+118-LSM_HOOK(int, -EOPNOTSUPP, inode_init_security, struct inode *inode,
+119-	 struct inode *dir, const struct qstr *qstr, struct xattr *xattrs,
+120-	 int *xattr_count)
+121-LSM_HOOK(int, 0, inode_init_security_anon, struct inode *inode,
+122-	 const struct qstr *name, const struct inode *context_inode)
+123-LSM_HOOK(int, 0, inode_create, struct inode *dir, struct dentry *dentry,
+124-	 umode_t mode)
+125-LSM_HOOK(void, LSM_RET_VOID, inode_post_create_tmpfile, struct mnt_idmap *idmap,
+
+===== 3. __destroy_inode CALLERS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/xfs/xfs_icache.c
+736-	spin_unlock(&pag->pag_ici_lock);
+737-	radix_tree_preload_end();
+738-
+739-	*ipp = ip;
+740-	return 0;
+741-
+742-out_preload_end:
+743-	spin_unlock(&pag->pag_ici_lock);
+744-	radix_tree_preload_end();
+745-	if (lock_flags)
+746-		xfs_iunlock(ip, lock_flags);
+747-out_destroy:
+748:	__destroy_inode(VFS_I(ip));
+749-	xfs_inode_free(ip);
+750-	return error;
+751-}
+752-
+753-/*
+754- * Look up an inode by number in the given file system.  The inode is looked up
+755- * in the cache held in each AG.  If the inode is found in the cache, initialise
+756- * the vfs inode if necessary.
+757- *
+758- * If it is not in core, read it in from the file system's device, add it to the
+759- * cache and initialise the vfs inode.
+760- *
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/inode.c
+356-			ops->destroy_inode(inode);
+357-			if (!ops->free_inode)
+358-				return NULL;
+359-		}
+360-		inode->free_inode = ops->free_inode;
+361-		i_callback(&inode->i_rcu);
+362-		return NULL;
+363-	}
+364-
+365-	return inode;
+366-}
+367-
+368:void __destroy_inode(struct inode *inode)
+369-{
+370-	BUG_ON(inode_has_buffers(inode));
+371-	inode_detach_wb(inode);
+372-	security_inode_free(inode);
+373-	fsnotify_inode_delete(inode);
+374-	locks_free_lock_context(inode);
+375-	if (!inode->i_nlink) {
+376-		WARN_ON(atomic_long_read(&inode->i_sb->s_remove_count) == 0);
+377-		atomic_long_dec(&inode->i_sb->s_remove_count);
+378-	}
+379-
+380-#ifdef CONFIG_FS_POSIX_ACL
+--
+383-	if (inode->i_default_acl && !is_uncached_acl(inode->i_default_acl))
+384-		posix_acl_release(inode->i_default_acl);
+385-#endif
+386-	this_cpu_dec(nr_inodes);
+387-}
+388-EXPORT_SYMBOL(__destroy_inode);
+389-
+390-static void destroy_inode(struct inode *inode)
+391-{
+392-	const struct super_operations *ops = inode->i_sb->s_op;
+393-
+394-	BUG_ON(!list_empty(&inode->i_lru));
+395:	__destroy_inode(inode);
+396-	if (ops->destroy_inode) {
+397-		ops->destroy_inode(inode);
+398-		if (!ops->free_inode)
+399-			return;
+400-	}
+401-	inode->free_inode = ops->free_inode;
+402-	call_rcu(&inode->i_rcu, i_callback);
+403-}
+404-
+405-/**
+406- * drop_nlink - directly drop an inode's link count
+407- * @inode: inode
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/fs.h
+2987-{
+2988-	return (u32)ino == 0;
+2989-}
+2990-
+2991-static inline void __iget(struct inode *inode)
+2992-{
+2993-	lockdep_assert_held(&inode->i_lock);
+2994-	atomic_inc(&inode->i_count);
+2995-}
+2996-
+2997-extern void iget_failed(struct inode *);
+2998-extern void clear_inode(struct inode *);
+2999:extern void __destroy_inode(struct inode *);
+3000-struct inode *alloc_inode(struct super_block *sb);
+3001-static inline struct inode *new_inode_pseudo(struct super_block *sb)
+3002-{
+3003-	return alloc_inode(sb);
+3004-}
+3005-extern struct inode *new_inode(struct super_block *sb);
+3006-extern void free_inode_nonrcu(struct inode *inode);
+3007-extern int setattr_should_drop_suidgid(struct mnt_idmap *, struct inode *);
+3008-extern int file_remove_privs(struct file *);
+3009-int setattr_should_drop_sgid(struct mnt_idmap *idmap,
+3010-			     const struct inode *inode);
+3011-
+
+===== 4. SECURITY_INODE_FREE CALLERS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/inode.c
+360-		inode->free_inode = ops->free_inode;
+361-		i_callback(&inode->i_rcu);
+362-		return NULL;
+363-	}
+364-
+365-	return inode;
+366-}
+367-
+368-void __destroy_inode(struct inode *inode)
+369-{
+370-	BUG_ON(inode_has_buffers(inode));
+371-	inode_detach_wb(inode);
+372:	security_inode_free(inode);
+373-	fsnotify_inode_delete(inode);
+374-	locks_free_lock_context(inode);
+375-	if (!inode->i_nlink) {
+376-		WARN_ON(atomic_long_read(&inode->i_sb->s_remove_count) == 0);
+377-		atomic_long_dec(&inode->i_sb->s_remove_count);
+378-	}
+379-
+380-#ifdef CONFIG_FS_POSIX_ACL
+381-	if (inode->i_acl && !is_uncached_acl(inode->i_acl))
+382-		posix_acl_release(inode->i_acl);
+383-	if (inode->i_default_acl && !is_uncached_acl(inode->i_default_acl))
+384-		posix_acl_release(inode->i_default_acl);
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/include/linux/security.h
+388-int security_move_mount(const struct path *from_path, const struct path *to_path);
+389-int security_dentry_init_security(struct dentry *dentry, int mode,
+390-				  const struct qstr *name,
+391-				  const char **xattr_name,
+392-				  struct lsm_context *lsmcxt);
+393-int security_dentry_create_files_as(struct dentry *dentry, int mode,
+394-					const struct qstr *name,
+395-					const struct cred *old,
+396-					struct cred *new);
+397-int security_path_notify(const struct path *path, u64 mask,
+398-					unsigned int obj_type);
+399-int security_inode_alloc(struct inode *inode, gfp_t gfp);
+400:void security_inode_free(struct inode *inode);
+401-int security_inode_init_security(struct inode *inode, struct inode *dir,
+402-				 const struct qstr *qstr,
+403-				 initxattrs initxattrs, void *fs_data);
+404-int security_inode_init_security_anon(struct inode *inode,
+405-				      const struct qstr *name,
+406-				      const struct inode *context_inode);
+407-int security_inode_create(struct inode *dir, struct dentry *dentry, umode_t mode);
+408-void security_inode_post_create_tmpfile(struct mnt_idmap *idmap,
+409-					struct inode *inode);
+410-int security_inode_link(struct dentry *old_dentry, struct inode *dir,
+411-			 struct dentry *new_dentry);
+412-int security_inode_unlink(struct inode *dir, struct dentry *dentry);
+--
+850-
+851-static inline int security_path_notify(const struct path *path, u64 mask,
+852-				unsigned int obj_type)
+853-{
+854-	return 0;
+855-}
+856-
+857-static inline int security_inode_alloc(struct inode *inode, gfp_t gfp)
+858-{
+859-	return 0;
+860-}
+861-
+862:static inline void security_inode_free(struct inode *inode)
+863-{ }
+864-
+865-static inline int security_dentry_init_security(struct dentry *dentry,
+866-						 int mode,
+867-						 const struct qstr *name,
+868-						 const char **xattr_name,
+869-						 struct lsm_context *lsmcxt)
+870-{
+871-	return -EOPNOTSUPP;
+872-}
+873-
+874-static inline int security_dentry_create_files_as(struct dentry *dentry,
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/security/security.c
+1184- * allocated.
+1185- *
+1186- * Return: Return 0 if operation was successful.
+1187- */
+1188-int security_inode_alloc(struct inode *inode, gfp_t gfp)
+1189-{
+1190-	int rc = lsm_inode_alloc(inode, gfp);
+1191-
+1192-	if (unlikely(rc))
+1193-		return rc;
+1194-	rc = call_int_hook(inode_alloc_security, inode);
+1195-	if (unlikely(rc))
+1196:		security_inode_free(inode);
+1197-	return rc;
+1198-}
+1199-
+1200-static void inode_free_by_rcu(struct rcu_head *head)
+1201-{
+1202-	/* The rcu head is at the start of the inode blob */
+1203-	call_void_hook(inode_free_security_rcu, head);
+1204-	kmem_cache_free(lsm_inode_cache, head);
+1205-}
+1206-
+1207-/**
+1208: * security_inode_free() - Free an inode's LSM blob
+1209- * @inode: the inode
+1210- *
+1211- * Release any LSM resources associated with @inode, although due to the
+1212- * inode's RCU protections it is possible that the resources will not be
+1213- * fully released until after the current RCU grace period has elapsed.
+1214- *
+1215- * It is important for LSMs to note that despite being present in a call to
+1216: * security_inode_free(), @inode may still be referenced in a VFS path walk
+1217- * and calls to security_inode_permission() may be made during, or after,
+1218: * a call to security_inode_free().  For this reason the inode->i_security
+1219- * field is released via a call_rcu() callback and any LSMs which need to
+1220- * retain inode state for use in security_inode_permission() should only
+1221- * release that state in the inode_free_security_rcu() LSM hook callback.
+1222- */
+1223:void security_inode_free(struct inode *inode)
+1224-{
+1225-	call_void_hook(inode_free_security, inode);
+1226-	if (!inode->i_security)
+1227-		return;
+1228-	call_rcu((struct rcu_head *)inode->i_security, inode_free_by_rcu);
+1229-}
+1230-
+1231-/**
+1232- * security_dentry_init_security() - Perform dentry initialization
+1233- * @dentry: the dentry to initialize
+1234- * @mode: mode used to determine resource type
+1235- * @name: name of the last path component
+
+===== 5. INODE DESTRUCTION / EVICTION PATHS =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/fs/inode.c
+346-	if (ops->alloc_inode)
+347-		inode = ops->alloc_inode(sb);
+348-	else
+349-		inode = alloc_inode_sb(sb, inode_cachep, GFP_KERNEL);
+350-
+351-	if (!inode)
+352-		return NULL;
+353-
+354-	if (unlikely(inode_init_always(sb, inode))) {
+355-		if (ops->destroy_inode) {
+356:			ops->destroy_inode(inode);
+357-			if (!ops->free_inode)
+358-				return NULL;
+359-		}
+360-		inode->free_inode = ops->free_inode;
+361-		i_callback(&inode->i_rcu);
+362-		return NULL;
+363-	}
+364-
+365-	return inode;
+366-}
+--
+380-#ifdef CONFIG_FS_POSIX_ACL
+381-	if (inode->i_acl && !is_uncached_acl(inode->i_acl))
+382-		posix_acl_release(inode->i_acl);
+383-	if (inode->i_default_acl && !is_uncached_acl(inode->i_default_acl))
+384-		posix_acl_release(inode->i_default_acl);
+385-#endif
+386-	this_cpu_dec(nr_inodes);
+387-}
+388-EXPORT_SYMBOL(__destroy_inode);
+389-
+390:static void destroy_inode(struct inode *inode)
+391-{
+392-	const struct super_operations *ops = inode->i_sb->s_op;
+393-
+394-	BUG_ON(!list_empty(&inode->i_lru));
+395-	__destroy_inode(inode);
+396-	if (ops->destroy_inode) {
+397:		ops->destroy_inode(inode);
+398-		if (!ops->free_inode)
+399-			return;
+400-	}
+401-	inode->free_inode = ops->free_inode;
+402-	call_rcu(&inode->i_rcu, i_callback);
+403-}
+404-
+405-/**
+406- * drop_nlink - directly drop an inode's link count
+407- * @inode: inode
+--
+588-}
+589-
+590-/*
+591- * Add inode to LRU if needed (inode is unused and clean).
+592- */
+593-void inode_lru_list_add(struct inode *inode)
+594-{
+595-	__inode_lru_list_add(inode, false);
+596-}
+597-
+598:static void inode_lru_list_del(struct inode *inode)
+599-{
+600-	if (list_empty(&inode->i_lru))
+601-		return;
+602-
+603-	if (list_lru_del_obj(&inode->i_sb->s_inode_lru, &inode->i_lru))
+604-		this_cpu_dec(nr_unused);
+605-}
+606-
+607-static void inode_pin_lru_isolating(struct inode *inode)
+608-{
+--
+813- * is still in progress before finally destroying the inode.
+814- *
+815- * An inode must already be marked I_FREEING so that we avoid the inode being
+816- * moved back onto lists if we race with other code that manipulates the lists
+817- * (e.g. writeback_single_inode). The caller is responsible for setting this.
+818- *
+819- * An inode must already be removed from the LRU list before being evicted from
+820- * the cache. This should occur atomically with setting the I_FREEING state
+821- * flag, so no inodes here should ever be on the LRU when being evicted.
+822- */
+823:static void evict(struct inode *inode)
+824-{
+825-	const struct super_operations *op = inode->i_sb->s_op;
+826-
+827-	BUG_ON(!(inode_state_read_once(inode) & I_FREEING));
+828-	BUG_ON(!list_empty(&inode->i_lru));
+829-
+830-	inode_io_list_del(inode);
+831-	inode_sb_list_del(inode);
+832-
+833-	spin_lock(&inode->i_lock);
+--
+836-	/*
+837-	 * Wait for flusher thread to be done with the inode so that filesystem
+838-	 * does not start destroying it while writeback is still running. Since
+839-	 * the inode has I_FREEING set, flusher thread won't start new work on
+840-	 * the inode.  We just have to wait for running writeback to finish.
+841-	 */
+842-	inode_wait_for_writeback(inode);
+843-	spin_unlock(&inode->i_lock);
+844-
+845-	if (op->evict_inode) {
+846:		op->evict_inode(inode);
+847-	} else {
+848-		truncate_inode_pages_final(&inode->i_data);
+849-		clear_inode(inode);
+850-	}
+851-	if (S_ISCHR(inode->i_mode) && inode->i_cdev)
+852-		cd_forget(inode);
+853-
+854-	remove_inode_hash(inode);
+855-
+856-	/*
+--
+860-	 * accounted for before remove_inode_hash() acquires ->i_lock -- both
+861-	 * sides take the lock and sleep is aborted if the inode is found
+862-	 * unhashed. Thus either the sleeper wins and goes off CPU, or removal
+863-	 * wins and the sleeper aborts after testing with the lock.
+864-	 *
+865-	 * This also means we don't need any fences for the call below.
+866-	 */
+867-	inode_wake_up_bit(inode, __I_NEW);
+868-	BUG_ON(inode_state_read_once(inode) != (I_FREEING | I_CLEAR));
+869-
+870:	destroy_inode(inode);
+871-}
+872-
+873-/*
+874- * dispose_list - dispose of the contents of a local list
+875- * @head: the head of the list to free
+876- *
+877- * Dispose-list gets a local list with local inodes in it, so it doesn't
+878- * need to worry about list corruption and SMP locks.
+879- */
+880-static void dispose_list(struct list_head *head)
+881-{
+882-	while (!list_empty(head)) {
+883-		struct inode *inode;
+884-
+885-		inode = list_first_entry(head, struct inode, i_lru);
+886-		list_del_init(&inode->i_lru);
+887-
+888:		evict(inode);
+889-		cond_resched();
+890-	}
+891-}
+892-
+893-/**
+894- * evict_inodes	- evict all evictable inodes for a superblock
+895- * @sb:		superblock to operate on
+896- *
+897- * Make sure that no inodes with zero refcount are retained.  This is
+898- * called by superblock shutdown after having SB_ACTIVE flag removed,
+--
+914-		if (icount_read(inode)) {
+915-			spin_unlock(&inode->i_lock);
+916-			continue;
+917-		}
+918-		if (inode_state_read(inode) & (I_NEW | I_FREEING | I_WILL_FREE)) {
+919-			spin_unlock(&inode->i_lock);
+920-			continue;
+921-		}
+922-
+923-		inode_state_set(inode, I_FREEING);
+924:		inode_lru_list_del(inode);
+925-		spin_unlock(&inode->i_lock);
+926-		list_add(&inode->i_lru, &dispose);
+927-
+928-		/*
+929-		 * We can have a ton of inodes to evict at unmount time given
+930-		 * enough memory, check to see if we need to go to sleep for a
+931-		 * bit so we don't livelock.
+932-		 */
+933-		if (need_resched()) {
+934-			spin_unlock(&sb->s_inode_list_lock);
+--
+1383-		int (*set)(struct inode *, void *), void *data)
+1384-{
+1385-	struct inode *inode = ilookup5(sb, hashval, test, data);
+1386-
+1387-	if (!inode) {
+1388-		struct inode *new = alloc_inode(sb);
+1389-
+1390-		if (new) {
+1391-			inode = inode_insert5(new, hashval, test, set, data);
+1392-			if (unlikely(inode != new))
+1393:				destroy_inode(new);
+1394-		}
+1395-	}
+1396-	return inode;
+1397-}
+1398-EXPORT_SYMBOL(iget5_locked);
+1399-
+1400-/**
+1401- * iget5_locked_rcu - obtain an inode from a mounted file system
+1402- * @sb:		super block of file system
+1403- * @hashval:	hash value (usually inode number) to get
+--
+1429-			iput(inode);
+1430-			goto again;
+1431-		}
+1432-		return inode;
+1433-	}
+1434-
+1435-	new = alloc_inode(sb);
+1436-	if (new) {
+1437-		inode = inode_insert5(new, hashval, test, set, data);
+1438-		if (unlikely(inode != new))
+1439:			destroy_inode(new);
+1440-	}
+1441-	return inode;
+1442-}
+1443-EXPORT_SYMBOL_GPL(iget5_locked_rcu);
+1444-
+1445-/**
+1446- * iget_locked - obtain an inode from a mounted file system
+1447- * @sb:		super block of file system
+1448- * @ino:	inode number to get
+1449- *
+--
+1498-			 */
+1499-			return inode;
+1500-		}
+1501-
+1502-		/*
+1503-		 * Uhhuh, somebody else created the same inode under
+1504-		 * us. Use the old inode instead of the one we just
+1505-		 * allocated.
+1506-		 */
+1507-		spin_unlock(&inode_hash_lock);
+1508:		destroy_inode(inode);
+1509-		if (IS_ERR(old))
+1510-			return NULL;
+1511-		inode = old;
+1512-		if (unlikely(isnew))
+1513-			wait_on_new_inode(inode);
+1514-		if (unlikely(inode_unhashed(inode))) {
+1515-			iput(inode);
+1516-			goto again;
+1517-		}
+1518-	}
+--
+1953-		inode_state_set(inode, I_WILL_FREE);
+1954-		spin_unlock(&inode->i_lock);
+1955-
+1956-		write_inode_now(inode, 1);
+1957-
+1958-		spin_lock(&inode->i_lock);
+1959-		WARN_ON(inode_state_read(inode) & I_NEW);
+1960-		inode_state_replace(inode, I_WILL_FREE, I_FREEING);
+1961-	}
+1962-
+1963:	inode_lru_list_del(inode);
+1964-	spin_unlock(&inode->i_lock);
+1965-
+1966:	evict(inode);
+1967-}
+1968-
+1969-/**
+1970- *	iput	- put an inode
+1971- *	@inode: inode to put
+1972- *
+1973- *	Puts an inode, dropping its usage count. If the inode use count hits
+1974- *	zero, the inode is then freed and may also be destroyed.
+1975- *
+1976- *	Consequently, iput() can sleep.
+--
+2535- * will DTRT.
+2536- */
+2537-static void __wait_on_freeing_inode(struct inode *inode, bool hash_locked, bool rcu_locked)
+2538-{
+2539-	struct wait_bit_queue_entry wqe;
+2540-	struct wait_queue_head *wq_head;
+2541-
+2542-	VFS_BUG_ON(!hash_locked && !rcu_locked);
+2543-
+2544-	/*
+2545:	 * Handle racing against evict(), see that routine for more details.
+2546-	 */
+2547-	if (unlikely(inode_unhashed(inode))) {
+2548-		WARN_ON(hash_locked);
+2549-		spin_unlock(&inode->i_lock);
+2550-		return;
+2551-	}
+2552-
+2553-	wq_head = inode_bit_waitqueue(&wqe, inode, __I_NEW);
+2554-	prepare_to_wait_event(wq_head, &wqe.wq_entry, TASK_UNINTERRUPTIBLE);
+2555-	spin_unlock(&inode->i_lock);
+
+===== 6. INODE STORAGE DELETE IMPLEMENTATION =====
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_inode_storage.c
+87-
+88-static long bpf_fd_inode_storage_update_elem(struct bpf_map *map, void *key,
+89-					     void *value, u64 map_flags)
+90-{
+91-	struct bpf_local_storage_data *sdata;
+92-	CLASS(fd_raw, f)(*(int *)key);
+93-
+94-	if (fd_empty(f))
+95-		return -EBADF;
+96-	if (!inode_storage_ptr(file_inode(fd_file(f))))
+97-		return -EBADF;
+98-
+99-	sdata = bpf_local_storage_update(file_inode(fd_file(f)),
+100-					 (struct bpf_local_storage_map *)map,
+101-					 value, map_flags, false, GFP_ATOMIC);
+102-	return PTR_ERR_OR_ZERO(sdata);
+103-}
+104-
+105:static int inode_storage_delete(struct inode *inode, struct bpf_map *map)
+106-{
+107-	struct bpf_local_storage_data *sdata;
+108-
+109-	sdata = inode_storage_lookup(inode, map, false);
+110-	if (!sdata)
+111-		return -ENOENT;
+112-
+113:	return bpf_selem_unlink(SELEM(sdata));
+114-}
+115-
+116:static long bpf_fd_inode_storage_delete_elem(struct bpf_map *map, void *key)
+117-{
+118-	CLASS(fd_raw, f)(*(int *)key);
+119-
+120-	if (fd_empty(f))
+121-		return -EBADF;
+122:	return inode_storage_delete(file_inode(fd_file(f)), map);
+123-}
+124-
+125-/* *gfp_flags* is a hidden argument provided by the verifier */
+126-BPF_CALL_5(bpf_inode_storage_get, struct bpf_map *, map, struct inode *, inode,
+127-	   void *, value, u64, flags, gfp_t, gfp_flags)
+128-{
+129-	struct bpf_local_storage_data *sdata;
+130-
+131-	WARN_ON_ONCE(!bpf_rcu_lock_held());
+132-	if (flags & ~(BPF_LOCAL_STORAGE_GET_F_CREATE))
+133-		return (unsigned long)NULL;
+134-
+135-	/* explicitly check that the inode_storage_ptr is not
+136-	 * NULL as inode_storage_lookup returns NULL in this case and
+137-	 * bpf_local_storage_update expects the owner to have a
+138-	 * valid storage pointer.
+139-	 */
+140-	if (!inode || !inode_storage_ptr(inode))
+--
+143-	sdata = inode_storage_lookup(inode, map, true);
+144-	if (sdata)
+145-		return (unsigned long)sdata->data;
+146-
+147-	/* This helper must only called from where the inode is guaranteed
+148-	 * to have a refcount and cannot be freed.
+149-	 */
+150-	if (flags & BPF_LOCAL_STORAGE_GET_F_CREATE) {
+151-		sdata = bpf_local_storage_update(
+152-			inode, (struct bpf_local_storage_map *)map, value,
+153-			BPF_NOEXIST, false, gfp_flags);
+154-		return IS_ERR(sdata) ? (unsigned long)NULL :
+155-					     (unsigned long)sdata->data;
+156-	}
+157-
+158-	return (unsigned long)NULL;
+159-}
+160-
+161:BPF_CALL_2(bpf_inode_storage_delete,
+162-	   struct bpf_map *, map, struct inode *, inode)
+163-{
+164-	WARN_ON_ONCE(!bpf_rcu_lock_held());
+165-	if (!inode)
+166-		return -EINVAL;
+167-
+168-	/* This helper must only called from where the inode is guaranteed
+169-	 * to have a refcount and cannot be freed.
+170-	 */
+171:	return inode_storage_delete(inode, map);
+172-}
+173-
+174-static int notsupp_get_next_key(struct bpf_map *map, void *key,
+175-				void *next_key)
+176-{
+177-	return -ENOTSUPP;
+178-}
+179-
+180-static struct bpf_map *inode_storage_map_alloc(union bpf_attr *attr)
+181-{
+182-	return bpf_local_storage_map_alloc(attr, &inode_cache, false);
+183-}
+184-
+185-static void inode_storage_map_free(struct bpf_map *map)
+186-{
+187-	bpf_local_storage_map_free(map, &inode_cache);
+188-}
+189-
+190-const struct bpf_map_ops inode_storage_map_ops = {
+191-	.map_meta_equal = bpf_map_meta_equal,
+192-	.map_alloc_check = bpf_local_storage_map_alloc_check,
+193-	.map_alloc = inode_storage_map_alloc,
+194-	.map_free = inode_storage_map_free,
+195-	.map_get_next_key = notsupp_get_next_key,
+196-	.map_lookup_elem = bpf_fd_inode_storage_lookup_elem,
+197-	.map_update_elem = bpf_fd_inode_storage_update_elem,
+198:	.map_delete_elem = bpf_fd_inode_storage_delete_elem,
+199-	.map_check_btf = bpf_local_storage_map_check_btf,
+200-	.map_mem_usage = bpf_local_storage_map_mem_usage,
+201-	.map_btf_id = &bpf_local_storage_map_btf_id[0],
+202-	.map_owner_storage_ptr = inode_storage_ptr,
+203-};
+204-
+205-BTF_ID_LIST_SINGLE(bpf_inode_storage_btf_ids, struct, inode)
+206-
+207-const struct bpf_func_proto bpf_inode_storage_get_proto = {
+208-	.func		= bpf_inode_storage_get,
+209-	.gpl_only	= false,
+210-	.ret_type	= RET_PTR_TO_MAP_VALUE_OR_NULL,
+211-	.arg1_type	= ARG_CONST_MAP_PTR,
+212-	.arg2_type	= ARG_PTR_TO_BTF_ID_OR_NULL,
+213-	.arg2_btf_id	= &bpf_inode_storage_btf_ids[0],
+214-	.arg3_type	= ARG_PTR_TO_MAP_VALUE_OR_NULL,
+215-	.arg4_type	= ARG_ANYTHING,
+216-};
+217-
+218:const struct bpf_func_proto bpf_inode_storage_delete_proto = {
+219:	.func		= bpf_inode_storage_delete,
+220-	.gpl_only	= false,
+221-	.ret_type	= RET_INTEGER,
+222-	.arg1_type	= ARG_CONST_MAP_PTR,
+223-	.arg2_type	= ARG_PTR_TO_BTF_ID_OR_NULL,
+224-	.arg2_btf_id	= &bpf_inode_storage_btf_ids[0],
+225-};
+
+kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source/kernel/bpf/bpf_local_storage.c
+155-	}
+156-
+157-	if (reuse_now) {
+158-		call_rcu(&local_storage->rcu, bpf_local_storage_free_rcu);
+159-		return;
+160-	}
+161-
+162-	call_rcu_tasks_trace(&local_storage->rcu,
+163-			     bpf_local_storage_free_trace_rcu);
+164-}
+165-
+166-/* rcu callback for use_kmalloc_nolock == false */
+167-static void __bpf_selem_free_rcu(struct rcu_head *rcu)
+168-{
+169-	struct bpf_local_storage_elem *selem;
+170-	struct bpf_local_storage_map *smap;
+171-
+172-	selem = container_of(rcu, struct bpf_local_storage_elem, rcu);
+173:	/* bpf_selem_unlink_nofail may have already cleared smap and freed fields. */
+174-	smap = rcu_dereference_check(SDATA(selem)->smap, 1);
+175-
+176-	if (smap)
+177-		bpf_obj_free_fields(smap->map.record, SDATA(selem)->data);
+178-	kfree(selem);
+179-}
+180-
+181-/* rcu tasks trace callback for use_kmalloc_nolock == false */
+182-static void __bpf_selem_free_trace_rcu(struct rcu_head *rcu)
+183-{
+184-	/*
+185-	 * RCU Tasks Trace grace period implies RCU grace period, do
+186-	 * kfree() directly.
+187-	 */
+188-	__bpf_selem_free_rcu(rcu);
+189-}
+190-
+191-/* Handle use_kmalloc_nolock == false */
+--
+245-
+246-	call_rcu_tasks_trace(&selem->rcu, bpf_selem_free_trace_rcu);
+247-}
+248-
+249-static void bpf_selem_free_list(struct hlist_head *list, bool reuse_now)
+250-{
+251-	struct bpf_local_storage_elem *selem;
+252-	struct hlist_node *n;
+253-
+254-	/* The "_safe" iteration is needed.
+255-	 * The loop is not removing the selem from the list
+256-	 * but bpf_selem_free will use the selem->rcu_head
+257-	 * which is union-ized with the selem->free_node.
+258-	 */
+259-	hlist_for_each_entry_safe(selem, n, list, free_node)
+260-		bpf_selem_free(selem, reuse_now);
+261-}
+262-
+263:static void bpf_selem_unlink_storage_nolock_misc(struct bpf_local_storage_elem *selem,
+264-						 struct bpf_local_storage_map *smap,
+265-						 struct bpf_local_storage *local_storage,
+266-						 bool free_local_storage, bool pin_owner)
+267-{
+268-	void *owner = local_storage->owner;
+269-	u32 uncharge = smap->elem_size;
+270-
+271-	if (rcu_access_pointer(local_storage->cache[smap->cache_idx]) ==
+272-	    SDATA(selem))
+273-		RCU_INIT_POINTER(local_storage->cache[smap->cache_idx], NULL);
+274-
+275-	if (pin_owner && !refcount_inc_not_zero(&local_storage->owner_refcnt))
+276-		return;
+277-
+278-	uncharge += free_local_storage ? sizeof(*local_storage) : 0;
+279-	mem_uncharge(smap, local_storage->owner, uncharge);
+280-	local_storage->mem_charge -= uncharge;
+281-
+282-	if (free_local_storage) {
+283-		local_storage->owner = NULL;
+284-
+285-		/* After this RCU_INIT, owner may be freed and cannot be used */
+286-		RCU_INIT_POINTER(*owner_storage(smap, owner), NULL);
+287-	}
+288-
+289-	if (pin_owner)
+290-		refcount_dec(&local_storage->owner_refcnt);
+291-}
+292-
+293-/* local_storage->lock must be held and selem->local_storage == local_storage.
+294- * The caller must ensure selem->smap is still valid to be
+295- * dereferenced for its smap->elem_size and smap->cache_idx.
+296- */
+297:static bool bpf_selem_unlink_storage_nolock(struct bpf_local_storage *local_storage,
+298-					    struct bpf_local_storage_elem *selem,
+299-					    struct hlist_head *free_selem_list)
+300-{
+301-	struct bpf_local_storage_map *smap;
+302-	bool free_local_storage;
+303-
+304-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+305-
+306-	free_local_storage = hlist_is_singular_node(&selem->snode,
+307-						    &local_storage->list);
+308-
+309:	bpf_selem_unlink_storage_nolock_misc(selem, smap, local_storage,
+310-					     free_local_storage, false);
+311-
+312-	hlist_del_init_rcu(&selem->snode);
+313-
+314-	hlist_add_head(&selem->free_node, free_selem_list);
+315-
+316-	return free_local_storage;
+317-}
+318-
+319-void bpf_selem_link_storage_nolock(struct bpf_local_storage *local_storage,
+320-				   struct bpf_local_storage_elem *selem)
+321-{
+322-	struct bpf_local_storage_map *smap;
+323-
+324-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+325-	local_storage->mem_charge += smap->elem_size;
+326-
+327-	RCU_INIT_POINTER(selem->local_storage, local_storage);
+328-	hlist_add_head_rcu(&selem->snode, &local_storage->list);
+329-}
+330-
+331:static int bpf_selem_unlink_map(struct bpf_local_storage_elem *selem)
+332-{
+333-	struct bpf_local_storage *local_storage;
+334-	struct bpf_local_storage_map *smap;
+335-	struct bpf_local_storage_map_bucket *b;
+336-	unsigned long flags;
+337-	int err;
+338-
+339-	local_storage = rcu_dereference_check(selem->local_storage,
+340-					      bpf_rcu_lock_held());
+341-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+342-	b = select_bucket(smap, local_storage);
+343-	err = raw_res_spin_lock_irqsave(&b->lock, flags);
+344-	if (err)
+345-		return err;
+346-
+347-	hlist_del_init_rcu(&selem->map_node);
+348-	raw_res_spin_unlock_irqrestore(&b->lock, flags);
+349-
+350-	return 0;
+351-}
+352-
+353:static void bpf_selem_unlink_map_nolock(struct bpf_local_storage_elem *selem)
+354-{
+355-	hlist_del_init_rcu(&selem->map_node);
+356-}
+357-
+358-int bpf_selem_link_map(struct bpf_local_storage_map *smap,
+359-		       struct bpf_local_storage *local_storage,
+360-		       struct bpf_local_storage_elem *selem)
+361-{
+362-	struct bpf_local_storage_map_bucket *b;
+363-	unsigned long flags;
+364-	int err;
+365-
+366-	b = select_bucket(smap, local_storage);
+367-
+368-	err = raw_res_spin_lock_irqsave(&b->lock, flags);
+369-	if (err)
+370-		return err;
+371-
+372-	hlist_add_head_rcu(&selem->map_node, &b->list);
+373-	raw_res_spin_unlock_irqrestore(&b->lock, flags);
+374-
+375-	return 0;
+376-}
+377-
+378-static void bpf_selem_link_map_nolock(struct bpf_local_storage_map_bucket *b,
+379-				      struct bpf_local_storage_elem *selem)
+380-{
+381-	hlist_add_head_rcu(&selem->map_node, &b->list);
+382-}
+383-
+384-/*
+385- * Unlink an selem from map and local storage with lock held.
+386- * This is the common path used by local storages to delete an selem.
+387- */
+388:int bpf_selem_unlink(struct bpf_local_storage_elem *selem)
+389-{
+390-	struct bpf_local_storage *local_storage;
+391-	bool free_local_storage = false;
+392-	HLIST_HEAD(selem_free_list);
+393-	unsigned long flags;
+394-	int err;
+395-
+396-	if (unlikely(!selem_linked_to_storage_lockless(selem)))
+397-		/* selem has already been unlinked from sk */
+398-		return 0;
+399-
+400-	local_storage = rcu_dereference_check(selem->local_storage,
+401-					      bpf_rcu_lock_held());
+402-
+403-	err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+404-	if (err)
+405-		return err;
+406-
+407-	if (likely(selem_linked_to_storage(selem))) {
+408-		/* Always unlink from map before unlinking from local_storage
+409-		 * because selem will be freed after successfully unlinked from
+410-		 * the local_storage.
+411-		 */
+412:		err = bpf_selem_unlink_map(selem);
+413-		if (err)
+414-			goto out;
+415-
+416:		free_local_storage = bpf_selem_unlink_storage_nolock(
+417-			local_storage, selem, &selem_free_list);
+418-	}
+419-out:
+420-	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+421-
+422-	bpf_selem_free_list(&selem_free_list, false);
+423-
+424-	if (free_local_storage)
+425-		bpf_local_storage_free(local_storage, false);
+426-
+427-	return err;
+428-}
+429-
+430-/*
+431- * Unlink an selem from map and local storage with lockless fallback if callers
+432- * are racing or rqspinlock returns error. It should only be called by
+433- * bpf_local_storage_destroy() or bpf_local_storage_map_free().
+434- */
+435:static void bpf_selem_unlink_nofail(struct bpf_local_storage_elem *selem,
+436-				    struct bpf_local_storage_map_bucket *b)
+437-{
+438-	bool in_map_free = !!b, free_storage = false;
+439-	struct bpf_local_storage *local_storage;
+440-	struct bpf_local_storage_map *smap;
+441-	unsigned long flags;
+442-	int err, unlink = 0;
+443-
+444-	local_storage = rcu_dereference_check(selem->local_storage, bpf_rcu_lock_held());
+445-	smap = rcu_dereference_check(SDATA(selem)->smap, bpf_rcu_lock_held());
+446-
+447-	if (smap) {
+448-		b = b ? : select_bucket(smap, local_storage);
+449-		err = raw_res_spin_lock_irqsave(&b->lock, flags);
+450-		if (!err) {
+451-			/*
+452-			 * Call bpf_obj_free_fields() under b->lock to make sure it is done
+453-			 * exactly once for an selem. Safe to free special fields immediately
+--
+471-		 */
+472-		WARN_ON_ONCE(err && in_map_free);
+473-		if (!err || in_map_free)
+474-			RCU_INIT_POINTER(SDATA(selem)->smap, NULL);
+475-	}
+476-
+477-	if (local_storage) {
+478-		err = raw_res_spin_lock_irqsave(&local_storage->lock, flags);
+479-		if (!err) {
+480-			if (likely(selem_linked_to_storage(selem))) {
+481-				free_storage = hlist_is_singular_node(&selem->snode,
+482-								      &local_storage->list);
+483-				 /*
+484-				  * Okay to skip clearing owner_storage and storage->owner in
+485-				  * destroy() since the owner is going away. No user or bpf
+486-				  * programs should be able to reference it.
+487-				  */
+488-				if (smap && in_map_free)
+489:					bpf_selem_unlink_storage_nolock_misc(
+490-						selem, smap, local_storage,
+491-						free_storage, true);
+492-				hlist_del_init_rcu(&selem->snode);
+493-				unlink++;
+494-			}
+495-			raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+496-		}
+497-		if (!err || !in_map_free)
+498-			RCU_INIT_POINTER(selem->local_storage, NULL);
+499-	}
+500-
+501-	if (unlink != 2)
+502-		atomic_or(in_map_free ? SELEM_MAP_UNLINKED : SELEM_STORAGE_UNLINKED, &selem->state);
+503-
+504-	/*
+505-	 * Normally, an selem can be unlinked under local_storage->lock and b->lock, and
+506-	 * then freed after an RCU grace period. However, if destroy() and map_free() are
+507-	 * racing or rqspinlock returns errors in unlikely situations (unlink != 2), free
+--
+591-		goto uncharge;
+592-
+593-	bpf_selem_link_map_nolock(b, first_selem);
+594-
+595-	owner_storage_ptr =
+596-		(struct bpf_local_storage **)owner_storage(smap, owner);
+597-	/* Publish storage to the owner.
+598-	 * Instead of using any lock of the kernel object (i.e. owner),
+599-	 * cmpxchg will work with any kernel object regardless what
+600-	 * the running context is, bh, irq...etc.
+601-	 *
+602-	 * From now on, the owner->storage pointer (e.g. sk->sk_bpf_storage)
+603-	 * is protected by the storage->lock.  Hence, when freeing
+604-	 * the owner->storage, the storage->lock must be held before
+605-	 * setting owner->storage ptr to NULL.
+606-	 */
+607-	prev_storage = cmpxchg(owner_storage_ptr, NULL, storage);
+608-	if (unlikely(prev_storage)) {
+609:		bpf_selem_unlink_map_nolock(first_selem);
+610-		raw_res_spin_unlock_irqrestore(&b->lock, flags);
+611-		err = -EAGAIN;
+612-		goto uncharge;
+613-	}
+614-	raw_res_spin_unlock_irqrestore(&b->lock, flags);
+615-
+616-	return 0;
+617-
+618-uncharge:
+619-	bpf_local_storage_free(storage, true);
+620-	mem_uncharge(smap, owner, sizeof(*storage));
+621-	return err;
+622-}
+623-
+624-/* sk cannot be going away because it is linking new elem
+625- * to sk->sk_bpf_storage. (i.e. sk->sk_refcnt cannot be 0).
+626- * Otherwise, it will become a leak (and other memory issues
+627- * during map destruction).
+--
+721-		goto unlock;
+722-	}
+723-
+724-	b = select_bucket(smap, local_storage);
+725-
+726-	err = raw_res_spin_lock_irqsave(&b->lock, b_flags);
+727-	if (err)
+728-		goto unlock;
+729-
+730-	alloc_selem = NULL;
+731-	/* First, link the new selem to the map */
+732-	bpf_selem_link_map_nolock(b, selem);
+733-
+734-	/* Second, link (and publish) the new selem to local_storage */
+735-	bpf_selem_link_storage_nolock(local_storage, selem);
+736-
+737-	/* Third, remove old selem, SELEM(old_sdata) */
+738-	if (old_sdata) {
+739:		bpf_selem_unlink_map_nolock(SELEM(old_sdata));
+740:		bpf_selem_unlink_storage_nolock(local_storage, SELEM(old_sdata),
+741-						&old_selem_free_list);
+742-	}
+743-
+744-	raw_res_spin_unlock_irqrestore(&b->lock, b_flags);
+745-unlock:
+746-	raw_res_spin_unlock_irqrestore(&local_storage->lock, flags);
+747-free_selem:
+748-	bpf_selem_free_list(&old_selem_free_list, false);
+749-	if (alloc_selem) {
+750-		mem_uncharge(smap, owner, smap->elem_size);
+751-		bpf_selem_free(alloc_selem, true);
+752-	}
+753-	return err ? ERR_PTR(err) : SDATA(selem);
+754-}
+755-
+756-static u16 bpf_local_storage_cache_idx_get(struct bpf_local_storage_cache *cache)
+757-{
+758-	u64 min_usage = U64_MAX;
+--
+815-/*
+816- * Destroy local storage when the owner is going away. Caller must uncharge memory
+817- * if memory charging is used.
+818- */
+819-u32 bpf_local_storage_destroy(struct bpf_local_storage *local_storage)
+820-{
+821-	struct bpf_local_storage_elem *selem;
+822-
+823-	/* Neither the bpf_prog nor the bpf_map's syscall
+824-	 * could be modifying the local_storage->list now.
+825-	 * Thus, no elem can be added to or deleted from the
+826-	 * local_storage->list by the bpf_prog or by the bpf_map's syscall.
+827-	 *
+828-	 * It is racing with bpf_local_storage_map_free() alone
+829-	 * when unlinking elem from the local_storage->list and
+830-	 * the map's bucket->list.
+831-	 */
+832-	hlist_for_each_entry_rcu(selem, &local_storage->list, snode)
+833:		bpf_selem_unlink_nofail(selem, NULL);
+834-
+835-	if (!refcount_dec_and_test(&local_storage->owner_refcnt)) {
+836-		while (refcount_read(&local_storage->owner_refcnt))
+837-			cpu_relax();
+838-		/*
+839:		 * Paired with refcount_dec() in bpf_selem_unlink_nofail()
+840-		 * to make sure destroy() sees the correct local_storage->mem_charge.
+841-		 */
+842-		smp_mb();
+843-	}
+844-
+845-	return local_storage->mem_charge;
+846-}
+847-
+848-u64 bpf_local_storage_map_mem_usage(const struct bpf_map *map)
+849-{
+850-	struct bpf_local_storage_map *smap = (struct bpf_local_storage_map *)map;
+851-	u64 usage = sizeof(*smap);
+852-
+853-	/* The dynamically callocated selems are not counted currently. */
+854-	usage += sizeof(*smap->buckets) * (1ULL << smap->bucket_log);
+855-	return usage;
+856-}
+857-
+--
+923-	 */
+924-	synchronize_rcu();
+925-
+926-	/* bpf prog and the userspace can no longer access this map
+927-	 * now.  No new selem (of this map) can be added
+928-	 * to the owner->storage or to the map bucket's list.
+929-	 *
+930-	 * The elem of this map can be cleaned up here
+931-	 * or when the storage is freed e.g.
+932-	 * by bpf_sk_storage_free() during __sk_destruct().
+933-	 */
+934-	for (i = 0; i < (1U << smap->bucket_log); i++) {
+935-		b = &smap->buckets[i];
+936-
+937-		rcu_read_lock();
+938-		/* No one is adding to b->list now */
+939-restart:
+940-		hlist_for_each_entry_rcu(selem, &b->list, map_node) {
+941:			bpf_selem_unlink_nofail(selem, b);
+942-
+943-			if (need_resched()) {
+944-				cond_resched_rcu();
+945-				goto restart;
+946-			}
+947-		}
+948-		rcu_read_unlock();
+949-	}
+950-
+951-	/* While freeing the storage we may still need to access the map.
+952-	 *
+953-	 * e.g. when bpf_sk_storage_free() has unlinked selem from the map
+954-	 * which then made the above while((selem = ...)) loop
+955-	 * exit immediately.
+956-	 *
+957-	 * However, while freeing the storage one still needs to access the
+958-	 * smap->elem_size to do the uncharging in
+959:	 * bpf_selem_unlink_storage_nolock().
+960-	 *
+961-	 * Hence, wait another rcu grace period for the storage to be freed.
+962-	 */
+963-	synchronize_rcu();
+964-
+965-	/* smap remains in use regardless of kmalloc_nolock, so wait unconditionally. */
+966-	rcu_barrier_tasks_trace();
+967-	rcu_barrier();
+968-	kvfree(smap->buckets);
+969-	bpf_map_area_free(smap);
+970-}
+
+===== 7. SOURCE TREE IDENTITY =====
+VERSION = 7
+PATCHLEVEL = 0
+SUBLEVEL = 0
+EXTRAVERSION =
