@@ -1,0 +1,2094 @@
+SOURCE_ROOT=kernel-source-audit/linux-hwe-7.0-44/ubuntu-patched-source
+NOTE=Static source caller-context audit; absence of a match is not proof of impossibility.
+
+============================
+FILE: net/ipv4/tcp_input.c
+============================
+
+--- lines 5396-5432 ---
+5396: 		}
+5397: 	}
+5398: 	return 0;
+5399: }
+5400: 
+5401: static void tcp_data_queue_ofo(struct sock *sk, struct sk_buff *skb)
+5402: {
+5403: 	struct tcp_sock *tp = tcp_sk(sk);
+5404: 	struct rb_node **p, *parent;
+5405: 	struct sk_buff *skb1;
+5406: 	u32 seq, end_seq;
+5407: 	bool fragstolen;
+5408: 
+5409: 	tcp_save_lrcv_flowlabel(sk, skb);
+5410: 	tcp_data_ecn_check(sk, skb);
+5411: 
+5412: 	if (unlikely(tcp_try_rmem_schedule(sk, skb, skb->truesize))) {
+5413: 		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPOFODROP);
+5414: 		READ_ONCE(sk->sk_data_ready)(sk);
+5415: 		tcp_drop_reason(sk, skb, SKB_DROP_REASON_PROTO_MEM);
+5416: 		return;
+5417: 	}
+5418: 
+5419: 	tcp_measure_rcv_mss(sk, skb);
+5420: 	/* Disable header prediction. */
+5421: 	tp->pred_flags = 0;
+5422: 	inet_csk_schedule_ack(sk);
+5423: 
+5424: 	tp->rcv_ooopack += max_t(u16, 1, skb_shinfo(skb)->gso_segs);
+5425: 	NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPOFOQUEUE);
+5426: 	seq = TCP_SKB_CB(skb)->seq;
+5427: 	end_seq = TCP_SKB_CB(skb)->end_seq;
+5428: 
+5429: 	p = &tp->out_of_order_queue.rb_node;
+5430: 	if (RB_EMPTY_ROOT(&tp->out_of_order_queue)) {
+5431: 		/* Initial out of order segment, build 1 SACK. */
+5432: 		if (tcp_is_sack(tp)) {
+
+--- lines 5603-5642 ---
+5603: 
+5604: 	TCP_SKB_CB(skb)->seq = tcp_sk(sk)->rcv_nxt;
+5605: 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(skb)->seq + size;
+5606: 	TCP_SKB_CB(skb)->ack_seq = tcp_sk(sk)->snd_una - 1;
+5607: 
+5608: 	if (tcp_queue_rcv(sk, skb, &fragstolen)) {
+5609: 		WARN_ON_ONCE(fragstolen); /* should not happen */
+5610: 		__kfree_skb(skb);
+5611: 	}
+5612: 	return size;
+5613: 
+5614: err_free:
+5615: 	kfree_skb(skb);
+5616: err:
+5617: 	return err;
+5618: 
+5619: }
+5620: 
+5621: void tcp_data_ready(struct sock *sk)
+5622: {
+5623: 	if (tcp_epollin_ready(sk, sk->sk_rcvlowat) || sock_flag(sk, SOCK_DONE))
+5624: 		READ_ONCE(sk->sk_data_ready)(sk);
+5625: }
+5626: 
+5627: static void tcp_data_queue(struct sock *sk, struct sk_buff *skb)
+5628: {
+5629: 	struct tcp_sock *tp = tcp_sk(sk);
+5630: 	enum skb_drop_reason reason;
+5631: 	bool fragstolen;
+5632: 	int eaten;
+5633: 
+5634: 	/* If a subflow has been reset, the packet should not continue
+5635: 	 * to be processed, drop the packet.
+5636: 	 */
+5637: 	if (sk_is_mptcp(sk) && !mptcp_incoming_options(sk, skb)) {
+5638: 		__kfree_skb(skb);
+5639: 		return;
+5640: 	}
+5641: 
+5642: 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
+
+--- lines 5662-5732 ---
+5662: 			 * receive queue tail skb in most cases.
+5663: 			 */
+5664: 			if (!skb->len &&
+5665: 			    (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN))
+5666: 				goto queue_and_out;
+5667: 
+5668: 			reason = SKB_DROP_REASON_TCP_ZEROWINDOW;
+5669: 			NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPZEROWINDOWDROP);
+5670: 			goto out_of_window;
+5671: 		}
+5672: 
+5673: 		/* Ok. In sequence. In window. */
+5674: queue_and_out:
+5675: 		if (tcp_try_rmem_schedule(sk, skb, skb->truesize)) {
+5676: 			/* TODO: maybe ratelimit these WIN 0 ACK ? */
+5677: 			inet_csk(sk)->icsk_ack.pending |=
+5678: 					(ICSK_ACK_NOMEM | ICSK_ACK_NOW);
+5679: 			inet_csk_schedule_ack(sk);
+5680: 			READ_ONCE(sk->sk_data_ready)(sk);
+5681: 
+5682: 			if (skb_queue_len(&sk->sk_receive_queue) && skb->len) {
+5683: 				reason = SKB_DROP_REASON_PROTO_MEM;
+5684: 				NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPRCVQDROP);
+5685: 				goto drop;
+5686: 			}
+5687: 			sk_forced_mem_schedule(sk, skb->truesize);
+5688: 		}
+5689: 
+5690: 		eaten = tcp_queue_rcv(sk, skb, &fragstolen);
+5691: 		if (skb->len)
+5692: 			tcp_event_data_recv(sk, skb);
+5693: 		if (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
+5694: 			tcp_fin(sk);
+5695: 
+5696: 		if (!RB_EMPTY_ROOT(&tp->out_of_order_queue)) {
+5697: 			tcp_ofo_queue(sk);
+5698: 
+5699: 			/* RFC5681. 4.2. SHOULD send immediate ACK, when
+5700: 			 * gap in queue is filled.
+5701: 			 */
+5702: 			if (RB_EMPTY_ROOT(&tp->out_of_order_queue))
+5703: 				inet_csk(sk)->icsk_ack.pending |= ICSK_ACK_NOW;
+5704: 		}
+5705: 
+5706: 		if (tp->rx_opt.num_sacks)
+5707: 			tcp_sack_remove(tp);
+5708: 
+5709: 		tcp_fast_path_check(sk);
+5710: 
+5711: 		if (eaten > 0)
+5712: 			kfree_skb_partial(skb, fragstolen);
+5713: 		if (!sock_flag(sk, SOCK_DEAD))
+5714: 			tcp_data_ready(sk);
+5715: 		return;
+5716: 	}
+5717: 
+5718: 	if (!after(TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt)) {
+5719: 		tcp_rcv_spurious_retrans(sk, skb);
+5720: 		/* A retransmit, 2nd most common case.  Force an immediate ack. */
+5721: 		reason = SKB_DROP_REASON_TCP_OLD_DATA;
+5722: 		NET_INC_STATS(sock_net(sk), LINUX_MIB_DELAYEDACKLOST);
+5723: 		tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq);
+5724: 
+5725: out_of_window:
+5726: 		tcp_enter_quickack_mode(sk, TCP_MAX_QUICKACKS);
+5727: 		inet_csk_schedule_ack(sk);
+5728: drop:
+5729: 		tcp_drop_reason(sk, skb, reason);
+5730: 		return;
+5731: 	}
+5732: 
+
+--- lines 6298-6334 ---
+6298: 	struct tcp_sock *tp = tcp_sk(sk);
+6299: 
+6300: 	/* Check if we get a new urgent pointer - normally not. */
+6301: 	if (unlikely(th->urg))
+6302: 		tcp_check_urg(sk, th);
+6303: 
+6304: 	/* Do we wait for any urgent data? - normally not... */
+6305: 	if (unlikely(tp->urg_data == TCP_URG_NOTYET)) {
+6306: 		u32 ptr = tp->urg_seq - ntohl(th->seq) + (th->doff * 4) -
+6307: 			  th->syn;
+6308: 
+6309: 		/* Is the urgent pointer pointing into this packet? */
+6310: 		if (ptr < skb->len) {
+6311: 			u8 tmp;
+6312: 			if (skb_copy_bits(skb, ptr, &tmp, 1))
+6313: 				BUG();
+6314: 			WRITE_ONCE(tp->urg_data, TCP_URG_VALID | tmp);
+6315: 			if (!sock_flag(sk, SOCK_DEAD))
+6316: 				READ_ONCE(sk->sk_data_ready)(sk);
+6317: 		}
+6318: 	}
+6319: }
+6320: 
+6321: /* Accept RST for rcv_nxt - 1 after a FIN.
+6322:  * When tcp connections are abruptly terminated from Mac OSX (via ^C), a
+6323:  * FIN is sent followed by a RST packet. The RST is sent with the same
+6324:  * sequence number as the FIN, and thus according to RFC 5961 a challenge
+6325:  * ACK should be sent. However, Mac OSX rate limits replies to challenge
+6326:  * ACKs on the closed socket. In addition middleboxes can drop either the
+6327:  * challenge ACK or a subsequent RST.
+6328:  */
+6329: static bool tcp_reset_check(const struct sock *sk, const struct sk_buff *skb)
+6330: {
+6331: 	const struct tcp_sock *tp = tcp_sk(sk);
+6332: 
+6333: 	return unlikely(TCP_SKB_CB(skb)->seq == (tp->rcv_nxt - 1) &&
+6334: 			(1 << sk->sk_state) & (TCPF_CLOSE_WAIT | TCPF_LAST_ACK |
+
+--- lines 6501-6537 ---
+6501:  *	- A zero window was announced from us - zero window probing
+6502:  *        is only handled properly in the slow path.
+6503:  *	- Out of order segments arrived.
+6504:  *	- Urgent data is expected.
+6505:  *	- There is no buffer space left
+6506:  *	- Unexpected TCP flags/window values/header lengths are received
+6507:  *	  (detected by checking the TCP header against pred_flags)
+6508:  *	- Data is sent in both directions. Fast path only supports pure senders
+6509:  *	  or pure receivers (this means either the sequence number or the ack
+6510:  *	  value must stay constant)
+6511:  *	- Unexpected TCP option.
+6512:  *
+6513:  *	When these conditions are not satisfied it drops into a standard
+6514:  *	receive procedure patterned after RFC793 to handle all cases.
+6515:  *	The first three cases are guaranteed by proper pred_flags setting,
+6516:  *	the rest is checked inline. Fast processing is turned on in
+6517:  *	tcp_data_queue when everything is OK.
+6518:  */
+6519: void tcp_rcv_established(struct sock *sk, struct sk_buff *skb)
+6520: {
+6521: 	enum skb_drop_reason reason = SKB_DROP_REASON_NOT_SPECIFIED;
+6522: 	const struct tcphdr *th = (const struct tcphdr *)skb->data;
+6523: 	struct tcp_sock *tp = tcp_sk(sk);
+6524: 	unsigned int len = skb->len;
+6525: 
+6526: 	/* TCP congestion window tracking */
+6527: 	trace_tcp_probe(sk, skb);
+6528: 
+6529: 	tcp_mstamp_refresh(tp);
+6530: 	if (unlikely(!rcu_access_pointer(sk->sk_rx_dst)))
+6531: 		inet_csk(sk)->icsk_af_ops->sk_rx_dst_set(sk, skb);
+6532: 	/*
+6533: 	 *	Header prediction.
+6534: 	 *	The code loosely follows the one in the famous
+6535: 	 *	"30 instruction TCP receive" Van Jacobson mail.
+6536: 	 *
+6537: 	 *	Van's trick is to deposit buffers into socket queue
+
+--- lines 6655-6691 ---
+6655: 			eaten = tcp_queue_rcv(sk, skb, &fragstolen);
+6656: 
+6657: 			tcp_event_data_recv(sk, skb);
+6658: 
+6659: 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
+6660: 				/* Well, only one small jumplet in fast path... */
+6661: 				tcp_ack(sk, skb, flag | FLAG_DATA);
+6662: 				tcp_data_snd_check(sk);
+6663: 				if (!inet_csk_ack_scheduled(sk))
+6664: 					goto no_ack;
+6665: 			} else {
+6666: 				tcp_update_wl(tp, TCP_SKB_CB(skb)->seq);
+6667: 			}
+6668: 
+6669: 			__tcp_ack_snd_check(sk, 0);
+6670: no_ack:
+6671: 			if (eaten)
+6672: 				kfree_skb_partial(skb, fragstolen);
+6673: 			tcp_data_ready(sk);
+6674: 			return;
+6675: 		}
+6676: 	}
+6677: 
+6678: slow_path:
+6679: 	if (len < (th->doff << 2) || tcp_checksum_complete(skb))
+6680: 		goto csum_error;
+6681: 
+6682: 	if (!th->ack && !th->rst && !th->syn) {
+6683: 		reason = SKB_DROP_REASON_TCP_FLAGS;
+6684: 		goto discard;
+6685: 	}
+6686: 
+6687: 	/*
+6688: 	 *	Standard slow path.
+6689: 	 */
+6690: validate:
+6691: 	if (!tcp_validate_incoming(sk, skb, th, 1))
+
+--- lines 6705-6741 ---
+6705: 	tcp_urg(sk, skb, th);
+6706: 
+6707: 	/* step 7: process the segment text */
+6708: 	tcp_data_queue(sk, skb);
+6709: 
+6710: 	tcp_data_snd_check(sk);
+6711: 	tcp_ack_snd_check(sk);
+6712: 	return;
+6713: 
+6714: csum_error:
+6715: 	reason = SKB_DROP_REASON_TCP_CSUM;
+6716: 	trace_tcp_bad_csum(skb);
+6717: 	TCP_INC_STATS(sock_net(sk), TCP_MIB_CSUMERRORS);
+6718: 	TCP_INC_STATS(sock_net(sk), TCP_MIB_INERRS);
+6719: 
+6720: discard:
+6721: 	tcp_drop_reason(sk, skb, reason);
+6722: }
+6723: EXPORT_IPV6_MOD(tcp_rcv_established);
+6724: 
+6725: void tcp_init_transfer(struct sock *sk, int bpf_op, struct sk_buff *skb)
+6726: {
+6727: 	struct inet_connection_sock *icsk = inet_csk(sk);
+6728: 	struct tcp_sock *tp = tcp_sk(sk);
+6729: 
+6730: 	tcp_mtup_init(sk);
+6731: 	icsk->icsk_af_ops->rebuild_header(sk);
+6732: 	tcp_init_metrics(sk);
+6733: 
+6734: 	/* Initialize the congestion window to start the transfer.
+6735: 	 * Cut cwnd down to 1 per RFC5681 if SYN or SYN-ACK has been
+6736: 	 * retransmitted. In light of RFC6298 more aggressive 1sec
+6737: 	 * initRTO, we only reset cwnd when more than 1 SYN/SYN-ACK
+6738: 	 * retransmission has occurred.
+6739: 	 */
+6740: 	if (tp->total_retrans > 1 && tp->undo_marker)
+6741: 		tcp_snd_cwnd_set(tp, 1);
+
+--- lines 7769-7805 ---
+7769: 	tcp_rsk(req)->snt_isn = isn;
+7770: 	tcp_rsk(req)->txhash = net_tx_rndhash();
+7771: 	tcp_rsk(req)->syn_tos = TCP_SKB_CB(skb)->ip_dsfield;
+7772: 	tcp_openreq_init_rwin(req, sk, dst);
+7773: 	sk_rx_queue_set(req_to_sk(req), skb);
+7774: 	if (!want_cookie) {
+7775: 		tcp_reqsk_record_syn(sk, req, skb);
+7776: 		fastopen_sk = tcp_try_fastopen(sk, skb, req, &foc, dst);
+7777: 	}
+7778: 	if (fastopen_sk) {
+7779: 		af_ops->send_synack(fastopen_sk, dst, &fl, req,
+7780: 				    &foc, TCP_SYNACK_FASTOPEN, skb);
+7781: 		/* Add the child socket directly into the accept queue */
+7782: 		if (!inet_csk_reqsk_queue_add(sk, req, fastopen_sk)) {
+7783: 			bh_unlock_sock(fastopen_sk);
+7784: 			sock_put(fastopen_sk);
+7785: 			goto drop_and_free;
+7786: 		}
+7787: 		READ_ONCE(sk->sk_data_ready)(sk);
+7788: 		bh_unlock_sock(fastopen_sk);
+7789: 		sock_put(fastopen_sk);
+7790: 	} else {
+7791: 		tcp_rsk(req)->tfo_listener = false;
+7792: 		if (!want_cookie &&
+7793: 		    unlikely(!inet_csk_reqsk_queue_hash_add(sk, req))) {
+7794: 			reqsk_free(req);
+7795: 			dst_release(dst);
+7796: 			return 0;
+7797: 		}
+7798: 		af_ops->send_synack(sk, dst, &fl, req, &foc,
+7799: 				    !want_cookie ? TCP_SYNACK_NORMAL :
+7800: 						   TCP_SYNACK_COOKIE,
+7801: 				    skb);
+7802: 		if (want_cookie) {
+7803: 			reqsk_free(req);
+7804: 			return 0;
+7805: 		}
+
+============================
+FILE: net/ipv4/tcp_ipv4.c
+============================
+
+--- lines 1841-1877 ---
+1841: 	if (mss) {
+1842: 		*cookie = __cookie_v4_init_sequence(iph, th, &mss);
+1843: 		tcp_synq_overflow(sk);
+1844: 	}
+1845: #endif
+1846: 	return mss;
+1847: }
+1848: 
+1849: INDIRECT_CALLABLE_DECLARE(struct dst_entry *ipv4_dst_check(struct dst_entry *,
+1850: 							   u32));
+1851: /* The socket must have it's spinlock held when we get
+1852:  * here, unless it is a TCP_LISTEN socket.
+1853:  *
+1854:  * We have a potential double-lock case here, so even when
+1855:  * doing backlog processing we use the BH locking scheme.
+1856:  * This is because we cannot sleep with the original spinlock
+1857:  * held.
+1858:  */
+1859: int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
+1860: {
+1861: 	enum skb_drop_reason reason;
+1862: 	struct sock *rsk;
+1863: 
+1864: 	reason = psp_sk_rx_policy_check(sk, skb);
+1865: 	if (reason)
+1866: 		goto err_discard;
+1867: 
+1868: 	if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
+1869: 		struct dst_entry *dst;
+1870: 
+1871: 		dst = rcu_dereference_protected(sk->sk_rx_dst,
+1872: 						lockdep_sock_is_held(sk));
+1873: 
+1874: 		sock_rps_save_rxhash(sk, skb);
+1875: 		sk_mark_napi_id(sk, skb);
+1876: 		if (dst) {
+1877: 			if (sk->sk_rx_dst_ifindex != skb->skb_iif ||
+
+--- lines 1915-1951 ---
+1915: 	tcp_v4_send_reset(rsk, skb, sk_rst_convert_drop_reason(reason));
+1916: discard:
+1917: 	sk_skb_reason_drop(sk, skb, reason);
+1918: 	/* Be careful here. If this function gets more complicated and
+1919: 	 * gcc suffers from register pressure on the x86, sk (in %ebx)
+1920: 	 * might be destroyed here. This current version compiles correctly,
+1921: 	 * but you have been warned.
+1922: 	 */
+1923: 	return 0;
+1924: 
+1925: csum_err:
+1926: 	reason = SKB_DROP_REASON_TCP_CSUM;
+1927: 	trace_tcp_bad_csum(skb);
+1928: 	TCP_INC_STATS(sock_net(sk), TCP_MIB_CSUMERRORS);
+1929: err_discard:
+1930: 	TCP_INC_STATS(sock_net(sk), TCP_MIB_INERRS);
+1931: 	goto discard;
+1932: }
+1933: EXPORT_SYMBOL(tcp_v4_do_rcv);
+1934: 
+1935: int tcp_v4_early_demux(struct sk_buff *skb)
+1936: {
+1937: 	struct net *net = dev_net_rcu(skb->dev);
+1938: 	const struct iphdr *iph;
+1939: 	const struct tcphdr *th;
+1940: 	struct sock *sk;
+1941: 
+1942: 	if (skb->pkt_type != PACKET_HOST)
+1943: 		return 0;
+1944: 
+1945: 	if (!pskb_may_pull(skb, skb_transport_offset(skb) + sizeof(struct tcphdr)))
+1946: 		return 0;
+1947: 
+1948: 	iph = ip_hdr(skb);
+1949: 	th = tcp_hdr(skb);
+1950: 
+1951: 	if (th->doff < sizeof(struct tcphdr) / 4)
+
+--- lines 2129-2165 ---
+2129: 		sizeof(struct inet_skb_parm));
+2130: 	barrier();
+2131: 
+2132: 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
+2133: 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
+2134: 				    skb->len - th->doff * 4);
+2135: 	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
+2136: 	TCP_SKB_CB(skb)->tcp_flags = tcp_flags_ntohs(th);
+2137: 	TCP_SKB_CB(skb)->ip_dsfield = ipv4_get_dsfield(iph);
+2138: 	TCP_SKB_CB(skb)->sacked	 = 0;
+2139: 	TCP_SKB_CB(skb)->has_rxtstamp =
+2140: 			skb->tstamp || skb_hwtstamps(skb)->hwtstamp;
+2141: }
+2142: 
+2143: /*
+2144:  *	From tcp_input.c
+2145:  */
+2146: 
+2147: int tcp_v4_rcv(struct sk_buff *skb)
+2148: {
+2149: 	struct net *net = dev_net_rcu(skb->dev);
+2150: 	enum skb_drop_reason drop_reason;
+2151: 	enum tcp_tw_status tw_status;
+2152: 	int sdif = inet_sdif(skb);
+2153: 	int dif = inet_iif(skb);
+2154: 	const struct iphdr *iph;
+2155: 	const struct tcphdr *th;
+2156: 	struct sock *sk = NULL;
+2157: 	bool refcounted;
+2158: 	int ret;
+2159: 	u32 isn;
+2160: 
+2161: 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
+2162: 	if (skb->pkt_type != PACKET_HOST)
+2163: 		goto discard_it;
+2164: 
+2165: 	/* Count it even if it's bad */
+
+--- lines 2291-2337 ---
+2291: 
+2292: 	drop_reason = tcp_inbound_hash(sk, NULL, skb, &iph->saddr, &iph->daddr,
+2293: 				       AF_INET, dif, sdif);
+2294: 	if (drop_reason)
+2295: 		goto discard_and_relse;
+2296: 
+2297: 	nf_reset_ct(skb);
+2298: 
+2299: 	if (tcp_filter(sk, skb, &drop_reason))
+2300: 		goto discard_and_relse;
+2301: 
+2302: 	th = (const struct tcphdr *)skb->data;
+2303: 	iph = ip_hdr(skb);
+2304: 	tcp_v4_fill_cb(skb, iph, th);
+2305: 
+2306: 	skb->dev = NULL;
+2307: 
+2308: 	if (sk->sk_state == TCP_LISTEN) {
+2309: 		ret = tcp_v4_do_rcv(sk, skb);
+2310: 		goto put_and_return;
+2311: 	}
+2312: 
+2313: 	sk_incoming_cpu_update(sk);
+2314: 
+2315: 	bh_lock_sock_nested(sk);
+2316: 	tcp_segs_in(tcp_sk(sk), skb);
+2317: 	ret = 0;
+2318: 	if (!sock_owned_by_user(sk)) {
+2319: 		ret = tcp_v4_do_rcv(sk, skb);
+2320: 	} else {
+2321: 		if (tcp_add_backlog(sk, skb, &drop_reason))
+2322: 			goto discard_and_relse;
+2323: 	}
+2324: 	bh_unlock_sock(sk);
+2325: 
+2326: put_and_return:
+2327: 	if (refcounted)
+2328: 		sock_put(sk);
+2329: 
+2330: 	return ret;
+2331: 
+2332: no_tcp_socket:
+2333: 	drop_reason = SKB_DROP_REASON_NO_SOCKET;
+2334: 	if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb))
+2335: 		goto discard_it;
+2336: 
+2337: 	tcp_v4_fill_cb(skb, iph, th);
+
+--- lines 3417-3453 ---
+3417: 	.name			= "TCP",
+3418: 	.owner			= THIS_MODULE,
+3419: 	.close			= tcp_close,
+3420: 	.pre_connect		= tcp_v4_pre_connect,
+3421: 	.connect		= tcp_v4_connect,
+3422: 	.disconnect		= tcp_disconnect,
+3423: 	.accept			= inet_csk_accept,
+3424: 	.ioctl			= tcp_ioctl,
+3425: 	.init			= tcp_v4_init_sock,
+3426: 	.destroy		= tcp_v4_destroy_sock,
+3427: 	.shutdown		= tcp_shutdown,
+3428: 	.setsockopt		= tcp_setsockopt,
+3429: 	.getsockopt		= tcp_getsockopt,
+3430: 	.bpf_bypass_getsockopt	= tcp_bpf_bypass_getsockopt,
+3431: 	.keepalive		= tcp_set_keepalive,
+3432: 	.recvmsg		= tcp_recvmsg,
+3433: 	.sendmsg		= tcp_sendmsg,
+3434: 	.splice_eof		= tcp_splice_eof,
+3435: 	.backlog_rcv		= tcp_v4_do_rcv,
+3436: 	.release_cb		= tcp_release_cb,
+3437: 	.hash			= inet_hash,
+3438: 	.unhash			= inet_unhash,
+3439: 	.get_port		= inet_csk_get_port,
+3440: 	.put_port		= inet_put_port,
+3441: #ifdef CONFIG_BPF_SYSCALL
+3442: 	.psock_update_sk_prot	= tcp_bpf_update_proto,
+3443: #endif
+3444: 	.enter_memory_pressure	= tcp_enter_memory_pressure,
+3445: 	.leave_memory_pressure	= tcp_leave_memory_pressure,
+3446: 	.stream_memory_free	= tcp_stream_memory_free,
+3447: 	.sockets_allocated	= &tcp_sockets_allocated,
+3448: 
+3449: 	.memory_allocated	= &net_aligned_data.tcp_memory_allocated,
+3450: 	.per_cpu_fw_alloc	= &tcp_memory_per_cpu_fw_alloc,
+3451: 
+3452: 	.memory_pressure	= &tcp_memory_pressure,
+3453: 	.sysctl_mem		= sysctl_tcp_mem,
+
+============================
+FILE: net/ipv6/tcp_ipv6.c
+============================
+
+--- lines 62-98 ---
+62: #include <net/hotdata.h>
+63: #include <net/busy_poll.h>
+64: #include <net/rstreason.h>
+65: #include <net/psp.h>
+66: 
+67: #include <linux/proc_fs.h>
+68: #include <linux/seq_file.h>
+69: 
+70: #include <crypto/md5.h>
+71: #include <crypto/utils.h>
+72: 
+73: #include <trace/events/tcp.h>
+74: 
+75: static void tcp_v6_send_reset(const struct sock *sk, struct sk_buff *skb,
+76: 			      enum sk_rst_reason reason);
+77: static void	tcp_v6_reqsk_send_ack(const struct sock *sk, struct sk_buff *skb,
+78: 				      struct request_sock *req);
+79: 
+80: INDIRECT_CALLABLE_SCOPE int tcp_v6_do_rcv(struct sock *sk, struct sk_buff *skb);
+81: 
+82: static const struct inet_connection_sock_af_ops ipv6_mapped;
+83: const struct inet_connection_sock_af_ops ipv6_specific;
+84: #if defined(CONFIG_TCP_MD5SIG) || defined(CONFIG_TCP_AO)
+85: static const struct tcp_sock_af_ops tcp_sock_ipv6_specific;
+86: static const struct tcp_sock_af_ops tcp_sock_ipv6_mapped_specific;
+87: #endif
+88: 
+89: /* Helper returning the inet6 address from a given tcp socket.
+90:  * It can be used in TCP stack instead of inet6_sk(sk).
+91:  * This avoids a dereference and allow compiler optimizations.
+92:  * It is a specialized version of inet6_sk_generic().
+93:  */
+94: #define tcp_inet6_sk(sk) (&container_of_const(tcp_sk(sk), \
+95: 					      struct tcp6_sock, tcp)->inet6)
+96: 
+97: static void inet6_sk_rx_dst_set(struct sock *sk, const struct sk_buff *skb)
+98: {
+
+--- lines 229-265 ---
+229: 
+230: 		/* Paired with READ_ONCE() in tcp_(get|set)sockopt() */
+231: 		WRITE_ONCE(icsk->icsk_af_ops, &ipv6_mapped);
+232: 		if (sk_is_mptcp(sk))
+233: 			mptcpv6_handle_mapped(sk, true);
+234: 		sk->sk_backlog_rcv = tcp_v4_do_rcv;
+235: #if defined(CONFIG_TCP_MD5SIG) || defined(CONFIG_TCP_AO)
+236: 		tp->af_specific = &tcp_sock_ipv6_mapped_specific;
+237: #endif
+238: 
+239: 		err = tcp_v4_connect(sk, (struct sockaddr_unsized *)&sin, sizeof(sin));
+240: 
+241: 		if (err) {
+242: 			icsk->icsk_ext_hdr_len = exthdrlen;
+243: 			/* Paired with READ_ONCE() in tcp_(get|set)sockopt() */
+244: 			WRITE_ONCE(icsk->icsk_af_ops, &ipv6_specific);
+245: 			if (sk_is_mptcp(sk))
+246: 				mptcpv6_handle_mapped(sk, false);
+247: 			sk->sk_backlog_rcv = tcp_v6_do_rcv;
+248: #if defined(CONFIG_TCP_MD5SIG) || defined(CONFIG_TCP_AO)
+249: 			tp->af_specific = &tcp_sock_ipv6_specific;
+250: #endif
+251: 			goto failure;
+252: 		}
+253: 		np->saddr = sk->sk_v6_rcv_saddr;
+254: 
+255: 		return err;
+256: 	}
+257: 
+258: 	if (!ipv6_addr_any(&sk->sk_v6_rcv_saddr))
+259: 		saddr = &sk->sk_v6_rcv_saddr;
+260: 
+261: 	fl6->flowi6_proto = IPPROTO_TCP;
+262: 	fl6->daddr = sk->sk_v6_daddr;
+263: 	fl6->saddr = saddr ? *saddr : np->saddr;
+264: 	fl6->flowlabel = ip6_make_flowinfo(np->tclass, np->flow_label);
+265: 	fl6->flowi6_oif = sk->sk_bound_dev_if;
+
+--- lines 1515-1551 ---
+1515: 	return NULL;
+1516: put_and_exit:
+1517: 	inet_csk_prepare_forced_close(newsk);
+1518: 	tcp_done(newsk);
+1519: 	goto exit;
+1520: }
+1521: 
+1522: INDIRECT_CALLABLE_DECLARE(struct dst_entry *ipv4_dst_check(struct dst_entry *,
+1523: 							   u32));
+1524: /* The socket must have it's spinlock held when we get
+1525:  * here, unless it is a TCP_LISTEN socket.
+1526:  *
+1527:  * We have a potential double-lock case here, so even when
+1528:  * doing backlog processing we use the BH locking scheme.
+1529:  * This is because we cannot sleep with the original spinlock
+1530:  * held.
+1531:  */
+1532: INDIRECT_CALLABLE_SCOPE
+1533: int tcp_v6_do_rcv(struct sock *sk, struct sk_buff *skb)
+1534: {
+1535: 	struct ipv6_pinfo *np = tcp_inet6_sk(sk);
+1536: 	struct sk_buff *opt_skb = NULL;
+1537: 	enum skb_drop_reason reason;
+1538: 	struct tcp_sock *tp;
+1539: 
+1540: 	/* Imagine: socket is IPv6. IPv4 packet arrives,
+1541: 	   goes to IPv4 receive handler and backlogged.
+1542: 	   From backlog it always goes here. Kerboom...
+1543: 	   Fortunately, tcp_rcv_established and rcv_established
+1544: 	   handle them correctly, but it is not case with
+1545: 	   tcp_v6_hnd_req and tcp_v6_send_reset().   --ANK
+1546: 	 */
+1547: 
+1548: 	if (skb->protocol == htons(ETH_P_IP))
+1549: 		return tcp_v4_do_rcv(sk, skb);
+1550: 
+1551: 	reason = psp_sk_rx_policy_check(sk, skb);
+
+--- lines 1677-1713 ---
+1677: 	 * _decode_session6() uses IP6CB().
+1678: 	 * barrier() makes sure compiler won't play aliasing games.
+1679: 	 */
+1680: 	memmove(&TCP_SKB_CB(skb)->header.h6, IP6CB(skb),
+1681: 		sizeof(struct inet6_skb_parm));
+1682: 	barrier();
+1683: 
+1684: 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
+1685: 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
+1686: 				    skb->len - th->doff*4);
+1687: 	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
+1688: 	TCP_SKB_CB(skb)->tcp_flags = tcp_flags_ntohs(th);
+1689: 	TCP_SKB_CB(skb)->ip_dsfield = ipv6_get_dsfield(hdr);
+1690: 	TCP_SKB_CB(skb)->sacked = 0;
+1691: 	TCP_SKB_CB(skb)->has_rxtstamp =
+1692: 			skb->tstamp || skb_hwtstamps(skb)->hwtstamp;
+1693: }
+1694: 
+1695: INDIRECT_CALLABLE_SCOPE int tcp_v6_rcv(struct sk_buff *skb)
+1696: {
+1697: 	struct net *net = dev_net_rcu(skb->dev);
+1698: 	enum skb_drop_reason drop_reason;
+1699: 	enum tcp_tw_status tw_status;
+1700: 	int sdif = inet6_sdif(skb);
+1701: 	int dif = inet6_iif(skb);
+1702: 	const struct tcphdr *th;
+1703: 	const struct ipv6hdr *hdr;
+1704: 	struct sock *sk = NULL;
+1705: 	bool refcounted;
+1706: 	int ret;
+1707: 	u32 isn;
+1708: 
+1709: 	drop_reason = SKB_DROP_REASON_NOT_SPECIFIED;
+1710: 	if (skb->pkt_type != PACKET_HOST)
+1711: 		goto discard_it;
+1712: 
+1713: 	/*
+
+--- lines 1835-1881 ---
+1835: 
+1836: 	drop_reason = tcp_inbound_hash(sk, NULL, skb, &hdr->saddr, &hdr->daddr,
+1837: 				       AF_INET6, dif, sdif);
+1838: 	if (drop_reason)
+1839: 		goto discard_and_relse;
+1840: 
+1841: 	nf_reset_ct(skb);
+1842: 
+1843: 	if (tcp_filter(sk, skb, &drop_reason))
+1844: 		goto discard_and_relse;
+1845: 
+1846: 	th = (const struct tcphdr *)skb->data;
+1847: 	hdr = ipv6_hdr(skb);
+1848: 	tcp_v6_fill_cb(skb, hdr, th);
+1849: 
+1850: 	skb->dev = NULL;
+1851: 
+1852: 	if (sk->sk_state == TCP_LISTEN) {
+1853: 		ret = tcp_v6_do_rcv(sk, skb);
+1854: 		goto put_and_return;
+1855: 	}
+1856: 
+1857: 	sk_incoming_cpu_update(sk);
+1858: 
+1859: 	bh_lock_sock_nested(sk);
+1860: 	tcp_segs_in(tcp_sk(sk), skb);
+1861: 	ret = 0;
+1862: 	if (!sock_owned_by_user(sk)) {
+1863: 		ret = tcp_v6_do_rcv(sk, skb);
+1864: 	} else {
+1865: 		if (tcp_add_backlog(sk, skb, &drop_reason))
+1866: 			goto discard_and_relse;
+1867: 	}
+1868: 	bh_unlock_sock(sk);
+1869: put_and_return:
+1870: 	if (refcounted)
+1871: 		sock_put(sk);
+1872: 	return ret ? -1 : 0;
+1873: 
+1874: no_tcp_socket:
+1875: 	drop_reason = SKB_DROP_REASON_NO_SOCKET;
+1876: 	if (!xfrm6_policy_check(NULL, XFRM_POLICY_IN, skb))
+1877: 		goto discard_it;
+1878: 
+1879: 	tcp_v6_fill_cb(skb, hdr, th);
+1880: 
+1881: 	if (tcp_checksum_complete(skb)) {
+
+--- lines 2279-2315 ---
+2279: 	.name			= "TCPv6",
+2280: 	.owner			= THIS_MODULE,
+2281: 	.close			= tcp_close,
+2282: 	.pre_connect		= tcp_v6_pre_connect,
+2283: 	.connect		= tcp_v6_connect,
+2284: 	.disconnect		= tcp_disconnect,
+2285: 	.accept			= inet_csk_accept,
+2286: 	.ioctl			= tcp_ioctl,
+2287: 	.init			= tcp_v6_init_sock,
+2288: 	.destroy		= tcp_v4_destroy_sock,
+2289: 	.shutdown		= tcp_shutdown,
+2290: 	.setsockopt		= tcp_setsockopt,
+2291: 	.getsockopt		= tcp_getsockopt,
+2292: 	.bpf_bypass_getsockopt	= tcp_bpf_bypass_getsockopt,
+2293: 	.keepalive		= tcp_set_keepalive,
+2294: 	.recvmsg		= tcp_recvmsg,
+2295: 	.sendmsg		= tcp_sendmsg,
+2296: 	.splice_eof		= tcp_splice_eof,
+2297: 	.backlog_rcv		= tcp_v6_do_rcv,
+2298: 	.release_cb		= tcp_release_cb,
+2299: 	.hash			= inet_hash,
+2300: 	.unhash			= inet_unhash,
+2301: 	.get_port		= inet_csk_get_port,
+2302: 	.put_port		= inet_put_port,
+2303: #ifdef CONFIG_BPF_SYSCALL
+2304: 	.psock_update_sk_prot	= tcp_bpf_update_proto,
+2305: #endif
+2306: 	.enter_memory_pressure	= tcp_enter_memory_pressure,
+2307: 	.leave_memory_pressure	= tcp_leave_memory_pressure,
+2308: 	.stream_memory_free	= tcp_stream_memory_free,
+2309: 	.sockets_allocated	= &tcp_sockets_allocated,
+2310: 
+2311: 	.memory_allocated	= &net_aligned_data.tcp_memory_allocated,
+2312: 	.per_cpu_fw_alloc	= &tcp_memory_per_cpu_fw_alloc,
+2313: 
+2314: 	.memory_pressure	= &tcp_memory_pressure,
+2315: 	.sysctl_mem		= sysctl_tcp_mem,
+
+--- lines 2351-2387 ---
+2351: 	return res;
+2352: }
+2353: 
+2354: static void __net_exit tcpv6_net_exit(struct net *net)
+2355: {
+2356: 	inet_ctl_sock_destroy(net->ipv6.tcp_sk);
+2357: }
+2358: 
+2359: static struct pernet_operations tcpv6_net_ops = {
+2360: 	.init	    = tcpv6_net_init,
+2361: 	.exit	    = tcpv6_net_exit,
+2362: };
+2363: 
+2364: int __init tcpv6_init(void)
+2365: {
+2366: 	int ret;
+2367: 
+2368: 	net_hotdata.tcpv6_protocol = (struct inet6_protocol) {
+2369: 		.handler     = tcp_v6_rcv,
+2370: 		.err_handler = tcp_v6_err,
+2371: 		.flags	     = INET6_PROTO_NOPOLICY | INET6_PROTO_FINAL,
+2372: 	};
+2373: 	ret = inet6_add_protocol(&net_hotdata.tcpv6_protocol, IPPROTO_TCP);
+2374: 	if (ret)
+2375: 		goto out;
+2376: 
+2377: 	/* register inet6 protocol */
+2378: 	ret = inet6_register_protosw(&tcpv6_protosw);
+2379: 	if (ret)
+2380: 		goto out_tcpv6_protocol;
+2381: 
+2382: 	ret = register_pernet_subsys(&tcpv6_net_ops);
+2383: 	if (ret)
+2384: 		goto out_tcpv6_protosw;
+2385: 
+2386: 	ret = mptcpv6_init();
+2387: 	if (ret)
+
+============================
+FILE: net/core/sock.c
+============================
+
+--- lines 500-536 ---
+500: 		sk_drops_inc(sk);
+501: 		return -ENOBUFS;
+502: 	}
+503: 
+504: 	skb->dev = NULL;
+505: 	skb_set_owner_r(skb, sk);
+506: 
+507: 	/* we escape from rcu protected region, make sure we dont leak
+508: 	 * a norefcounted dst
+509: 	 */
+510: 	skb_dst_force(skb);
+511: 
+512: 	spin_lock_irqsave(&list->lock, flags);
+513: 	sock_skb_set_dropcount(sk, skb);
+514: 	__skb_queue_tail(list, skb);
+515: 	spin_unlock_irqrestore(&list->lock, flags);
+516: 
+517: 	if (!sock_flag(sk, SOCK_DEAD))
+518: 		sk->sk_data_ready(sk);
+519: 	return 0;
+520: }
+521: EXPORT_SYMBOL(__sock_queue_rcv_skb);
+522: 
+523: int sock_queue_rcv_skb_reason(struct sock *sk, struct sk_buff *skb,
+524: 			      enum skb_drop_reason *reason)
+525: {
+526: 	enum skb_drop_reason drop_reason;
+527: 	int err;
+528: 
+529: 	err = sk_filter_reason(sk, skb, &drop_reason);
+530: 	if (err)
+531: 		goto out;
+532: 
+533: 	err = __sock_queue_rcv_skb(sk, skb);
+534: 	switch (err) {
+535: 	case -ENOMEM:
+536: 		drop_reason = SKB_DROP_REASON_SOCKET_RCVBUFF;
+
+--- lines 3584-3620 ---
+3584: 	wq = rcu_dereference(sk->sk_wq);
+3585: 	if (skwq_has_sleeper(wq))
+3586: 		wake_up_interruptible_all(&wq->wait);
+3587: 	rcu_read_unlock();
+3588: }
+3589: 
+3590: static void sock_def_error_report(struct sock *sk)
+3591: {
+3592: 	struct socket_wq *wq;
+3593: 
+3594: 	rcu_read_lock();
+3595: 	wq = rcu_dereference(sk->sk_wq);
+3596: 	if (skwq_has_sleeper(wq))
+3597: 		wake_up_interruptible_poll(&wq->wait, EPOLLERR);
+3598: 	sk_wake_async_rcu(sk, SOCK_WAKE_IO, POLL_ERR);
+3599: 	rcu_read_unlock();
+3600: }
+3601: 
+3602: void sock_def_readable(struct sock *sk)
+3603: {
+3604: 	struct socket_wq *wq;
+3605: 
+3606: 	trace_sk_data_ready(sk);
+3607: 
+3608: 	rcu_read_lock();
+3609: 	wq = rcu_dereference(sk->sk_wq);
+3610: 	if (skwq_has_sleeper(wq))
+3611: 		wake_up_interruptible_sync_poll(&wq->wait, EPOLLIN | EPOLLPRI |
+3612: 						EPOLLRDNORM | EPOLLRDBAND);
+3613: 	sk_wake_async_rcu(sk, SOCK_WAKE_WAITD, POLL_IN);
+3614: 	rcu_read_unlock();
+3615: }
+3616: 
+3617: static void sock_def_write_space(struct sock *sk)
+3618: {
+3619: 	struct socket_wq *wq;
+3620: 
+
+--- lines 3704-3740 ---
+3704: 	sk->sk_rcvbuf		=	READ_ONCE(sysctl_rmem_default);
+3705: 	sk->sk_sndbuf		=	READ_ONCE(sysctl_wmem_default);
+3706: 	sk->sk_state		=	TCP_CLOSE;
+3707: 	sk->sk_use_task_frag	=	true;
+3708: 	sk_set_socket(sk, sock);
+3709: 
+3710: 	sock_set_flag(sk, SOCK_ZAPPED);
+3711: 
+3712: 	if (sock) {
+3713: 		sk->sk_type	=	sock->type;
+3714: 		RCU_INIT_POINTER(sk->sk_wq, &sock->wq);
+3715: 		sock->sk	=	sk;
+3716: 	} else {
+3717: 		RCU_INIT_POINTER(sk->sk_wq, NULL);
+3718: 	}
+3719: 	sk->sk_uid	=	uid;
+3720: 
+3721: 	sk->sk_state_change	=	sock_def_wakeup;
+3722: 	sk->sk_data_ready	=	sock_def_readable;
+3723: 	sk->sk_write_space	=	sock_def_write_space;
+3724: 	sk->sk_error_report	=	sock_def_error_report;
+3725: 	sk->sk_destruct		=	sock_def_destruct;
+3726: 
+3727: 	sk->sk_frag.page	=	NULL;
+3728: 	sk->sk_frag.offset	=	0;
+3729: 	sk->sk_peek_off		=	-1;
+3730: 
+3731: 	sk->sk_peer_pid 	=	NULL;
+3732: 	sk->sk_peer_cred	=	NULL;
+3733: 	spin_lock_init(&sk->sk_peer_lock);
+3734: 
+3735: 	sk->sk_write_pending	=	0;
+3736: 	sk->sk_rcvlowat		=	1;
+3737: 	sk->sk_rcvtimeo		=	MAX_SCHEDULE_TIMEOUT;
+3738: 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
+3739: 
+3740: 	sk->sk_stamp = SK_DEFAULT_STAMP;
+
+--- lines 4485-4521 ---
+4485: 	return sock_ioctl_out(sk, cmd, arg);
+4486: }
+4487: EXPORT_SYMBOL(sk_ioctl);
+4488: 
+4489: static int __init sock_struct_check(void)
+4490: {
+4491: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rx, sk_drops);
+4492: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rx, sk_peek_off);
+4493: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rx, sk_error_queue);
+4494: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rx, sk_receive_queue);
+4495: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rx, sk_backlog);
+4496: 
+4497: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rx_dst);
+4498: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rx_dst_ifindex);
+4499: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rx_dst_cookie);
+4500: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rcvbuf);
+4501: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_filter);
+4502: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_wq);
+4503: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_data_ready);
+4504: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rcvtimeo);
+4505: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rx, sk_rcvlowat);
+4506: 
+4507: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rxtx, sk_err);
+4508: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rxtx, sk_socket);
+4509: #ifdef CONFIG_MEMCG
+4510: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_read_rxtx, sk_memcg);
+4511: #endif
+4512: 
+4513: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rxtx, sk_lock);
+4514: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rxtx, sk_reserved_mem);
+4515: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rxtx, sk_forward_alloc);
+4516: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_rxtx, sk_tsflags);
+4517: 
+4518: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_tx, sk_omem_alloc);
+4519: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_tx, sk_omem_alloc);
+4520: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_tx, sk_err_soft);
+4521: 	CACHELINE_ASSERT_GROUP_MEMBER(struct sock, sock_write_tx, sk_wmem_queued);
+
+============================
+FILE: net/core/skmsg.c
+============================
+
+--- lines 1143-1226 ---
+1143: static int sk_psock_strp_parse(struct strparser *strp, struct sk_buff *skb)
+1144: {
+1145: 	struct sk_psock *psock = container_of(strp, struct sk_psock, strp);
+1146: 	struct bpf_prog *prog;
+1147: 	int ret = skb->len;
+1148: 
+1149: 	rcu_read_lock();
+1150: 	prog = READ_ONCE(psock->progs.stream_parser);
+1151: 	if (likely(prog)) {
+1152: 		skb->sk = psock->sk;
+1153: 		ret = bpf_prog_run_pin_on_cpu(prog, skb);
+1154: 		skb->sk = NULL;
+1155: 	}
+1156: 	rcu_read_unlock();
+1157: 	return ret;
+1158: }
+1159: 
+1160: /* Called with socket lock held. */
+1161: static void sk_psock_strp_data_ready(struct sock *sk)
+1162: {
+1163: 	struct sk_psock *psock;
+1164: 
+1165: 	trace_sk_data_ready(sk);
+1166: 
+1167: 	rcu_read_lock();
+1168: 	psock = sk_psock(sk);
+1169: 	if (likely(psock)) {
+1170: 		if (tls_sw_has_ctx_rx(sk)) {
+1171: 			psock->saved_data_ready(sk);
+1172: 		} else {
+1173: 			read_lock_bh(&sk->sk_callback_lock);
+1174: 			strp_data_ready(&psock->strp);
+1175: 			read_unlock_bh(&sk->sk_callback_lock);
+1176: 		}
+1177: 	}
+1178: 	rcu_read_unlock();
+1179: }
+1180: 
+1181: int sk_psock_init_strp(struct sock *sk, struct sk_psock *psock)
+1182: {
+1183: 	int ret;
+1184: 
+1185: 	static const struct strp_callbacks cb = {
+1186: 		.rcv_msg	= sk_psock_strp_read,
+1187: 		.read_sock_done	= sk_psock_strp_read_done,
+1188: 		.parse_msg	= sk_psock_strp_parse,
+1189: 	};
+1190: 
+1191: 	ret = strp_init(&psock->strp, sk, &cb);
+1192: 	if (!ret)
+1193: 		sk_psock_set_state(psock, SK_PSOCK_RX_STRP_ENABLED);
+1194: 
+1195: 	if (sk_is_tcp(sk)) {
+1196: 		psock->strp.cb.read_sock = tcp_bpf_strp_read_sock;
+1197: 		psock->copied_seq = tcp_sk(sk)->copied_seq;
+1198: 	}
+1199: 	return ret;
+1200: }
+1201: 
+1202: void sk_psock_start_strp(struct sock *sk, struct sk_psock *psock)
+1203: {
+1204: 	if (psock->saved_data_ready)
+1205: 		return;
+1206: 
+1207: 	psock->saved_data_ready = sk->sk_data_ready;
+1208: 	WRITE_ONCE(sk->sk_data_ready, sk_psock_strp_data_ready);
+1209: 	WRITE_ONCE(sk->sk_write_space, sk_psock_write_space);
+1210: }
+1211: 
+1212: void sk_psock_stop_strp(struct sock *sk, struct sk_psock *psock)
+1213: {
+1214: 	psock_set_prog(&psock->progs.stream_parser, NULL);
+1215: 
+1216: 	if (!psock->saved_data_ready)
+1217: 		return;
+1218: 
+1219: 	WRITE_ONCE(sk->sk_data_ready, psock->saved_data_ready);
+1220: 	WRITE_ONCE(psock->saved_data_ready, NULL);
+1221: 	strp_stop(&psock->strp);
+1222: }
+1223: 
+1224: static void sk_psock_done_strp(struct sk_psock *psock)
+1225: {
+1226: 	/* Parser has been stopped */
+
+============================
+FILE: net/strparser/strparser.c
+============================
+
+--- lines 246-282 ---
+246: 				strp_parser_err(strp, -EPROTO, desc);
+247: 				break;
+248: 			}
+249: 
+250: 			stm->strp.full_len = len;
+251: 		}
+252: 
+253: 		extra = (ssize_t)(stm->accum_len + cand_len) -
+254: 			stm->strp.full_len;
+255: 
+256: 		if (extra < 0) {
+257: 			/* Message not complete yet. */
+258: 			if (stm->strp.full_len - stm->accum_len >
+259: 			    strp_peek_len(strp)) {
+260: 				/* Don't have the whole message in the socket
+261: 				 * buffer. Set strp->need_bytes to wait for
+262: 				 * the rest of the message. Also, set "early
+263: 				 * eaten" since we've already buffered the skb
+264: 				 * but don't consume yet per strp_read_sock.
+265: 				 */
+266: 
+267: 				if (!stm->accum_len) {
+268: 					/* Start RX timer for new message */
+269: 					strp_start_timer(strp, timeo);
+270: 				}
+271: 
+272: 				stm->accum_len += cand_len;
+273: 				eaten += cand_len;
+274: 				strp->need_bytes = stm->strp.full_len -
+275: 						       stm->accum_len;
+276: 				STRP_STATS_ADD(strp->stats.bytes, cand_len);
+277: 				desc->count = 0; /* Stop reading socket */
+278: 				break;
+279: 			}
+280: 			stm->accum_len += cand_len;
+281: 			eaten += cand_len;
+282: 			WARN_ON(eaten != orig_len);
+
+--- lines 299-500 ---
+299: 
+300: 		/* Give skb to upper layer */
+301: 		strp->cb.rcv_msg(strp, head);
+302: 
+303: 		if (unlikely(strp->paused)) {
+304: 			/* Upper layer paused strp */
+305: 			break;
+306: 		}
+307: 	}
+308: 
+309: 	if (cloned_orig)
+310: 		kfree_skb(orig_skb);
+311: 
+312: 	STRP_STATS_ADD(strp->stats.bytes, eaten);
+313: 
+314: 	return eaten;
+315: }
+316: 
+317: int strp_process(struct strparser *strp, struct sk_buff *orig_skb,
+318: 		 unsigned int orig_offset, size_t orig_len,
+319: 		 size_t max_msg_size, long timeo)
+320: {
+321: 	read_descriptor_t desc; /* Dummy arg to strp_recv */
+322: 
+323: 	desc.arg.data = strp;
+324: 
+325: 	return __strp_recv(&desc, orig_skb, orig_offset, orig_len,
+326: 			   max_msg_size, timeo);
+327: }
+328: EXPORT_SYMBOL_GPL(strp_process);
+329: 
+330: static int strp_recv(read_descriptor_t *desc, struct sk_buff *orig_skb,
+331: 		     unsigned int orig_offset, size_t orig_len)
+332: {
+333: 	struct strparser *strp = (struct strparser *)desc->arg.data;
+334: 
+335: 	return __strp_recv(desc, orig_skb, orig_offset, orig_len,
+336: 			   strp->sk->sk_rcvbuf, READ_ONCE(strp->sk->sk_rcvtimeo));
+337: }
+338: 
+339: static int default_read_sock_done(struct strparser *strp, int err)
+340: {
+341: 	return err;
+342: }
+343: 
+344: /* Called with lock held on lower socket */
+345: static int strp_read_sock(struct strparser *strp)
+346: {
+347: 	struct socket *sock = strp->sk->sk_socket;
+348: 	read_descriptor_t desc;
+349: 
+350: 	if (unlikely(!sock || !sock->ops))
+351: 		return -EBUSY;
+352: 
+353: 	if (unlikely(!strp->cb.read_sock && !sock->ops->read_sock))
+354: 		return -EBUSY;
+355: 
+356: 	desc.arg.data = strp;
+357: 	desc.error = 0;
+358: 	desc.count = 1; /* give more than one skb per call */
+359: 
+360: 	/* sk should be locked here, so okay to do read_sock */
+361: 	if (strp->cb.read_sock)
+362: 		strp->cb.read_sock(strp, &desc, strp_recv);
+363: 	else
+364: 		sock->ops->read_sock(strp->sk, &desc, strp_recv);
+365: 
+366: 	desc.error = strp->cb.read_sock_done(strp, desc.error);
+367: 
+368: 	return desc.error;
+369: }
+370: 
+371: /* Lower sock lock held */
+372: void strp_data_ready(struct strparser *strp)
+373: {
+374: 	if (unlikely(strp->stopped) || strp->paused)
+375: 		return;
+376: 
+377: 	/* This check is needed to synchronize with do_strp_work.
+378: 	 * do_strp_work acquires a process lock (lock_sock) whereas
+379: 	 * the lock held here is bh_lock_sock. The two locks can be
+380: 	 * held by different threads at the same time, but bh_lock_sock
+381: 	 * allows a thread in BH context to safely check if the process
+382: 	 * lock is held. In this case, if the lock is held, queue work.
+383: 	 */
+384: 	if (sock_owned_by_user_nocheck(strp->sk)) {
+385: 		queue_work(strp_wq, &strp->work);
+386: 		return;
+387: 	}
+388: 
+389: 	if (strp->need_bytes) {
+390: 		if (strp_peek_len(strp) < strp->need_bytes)
+391: 			return;
+392: 	}
+393: 
+394: 	if (strp_read_sock(strp) == -ENOMEM)
+395: 		queue_work(strp_wq, &strp->work);
+396: }
+397: EXPORT_SYMBOL_GPL(strp_data_ready);
+398: 
+399: static void do_strp_work(struct strparser *strp)
+400: {
+401: 	/* We need the read lock to synchronize with strp_data_ready. We
+402: 	 * need the socket lock for calling strp_read_sock.
+403: 	 */
+404: 	strp->cb.lock(strp);
+405: 
+406: 	if (unlikely(strp->stopped))
+407: 		goto out;
+408: 
+409: 	if (strp->paused)
+410: 		goto out;
+411: 
+412: 	if (strp_read_sock(strp) == -ENOMEM)
+413: 		queue_work(strp_wq, &strp->work);
+414: 
+415: out:
+416: 	strp->cb.unlock(strp);
+417: }
+418: 
+419: static void strp_work(struct work_struct *w)
+420: {
+421: 	do_strp_work(container_of(w, struct strparser, work));
+422: }
+423: 
+424: static void strp_msg_timeout(struct work_struct *w)
+425: {
+426: 	struct strparser *strp = container_of(w, struct strparser,
+427: 					      msg_timer_work.work);
+428: 
+429: 	/* Message assembly timed out */
+430: 	STRP_STATS_INCR(strp->stats.msg_timeouts);
+431: 	strp->cb.lock(strp);
+432: 	strp->cb.abort_parser(strp, -ETIMEDOUT);
+433: 	strp->cb.unlock(strp);
+434: }
+435: 
+436: static void strp_sock_lock(struct strparser *strp)
+437: {
+438: 	lock_sock(strp->sk);
+439: }
+440: 
+441: static void strp_sock_unlock(struct strparser *strp)
+442: {
+443: 	release_sock(strp->sk);
+444: }
+445: 
+446: int strp_init(struct strparser *strp, struct sock *sk,
+447: 	      const struct strp_callbacks *cb)
+448: {
+449: 
+450: 	if (!cb || !cb->rcv_msg || !cb->parse_msg)
+451: 		return -EINVAL;
+452: 
+453: 	/* The sk (sock) arg determines the mode of the stream parser.
+454: 	 *
+455: 	 * If the sock is set then the strparser is in receive callback mode.
+456: 	 * The upper layer calls strp_data_ready to kick receive processing
+457: 	 * and strparser calls the read_sock function on the socket to
+458: 	 * get packets.
+459: 	 *
+460: 	 * If the sock is not set then the strparser is in general mode.
+461: 	 * The upper layer calls strp_process for each skb to be parsed.
+462: 	 */
+463: 
+464: 	if (!sk) {
+465: 		if (!cb->lock || !cb->unlock)
+466: 			return -EINVAL;
+467: 	}
+468: 
+469: 	memset(strp, 0, sizeof(*strp));
+470: 
+471: 	strp->sk = sk;
+472: 
+473: 	strp->cb.lock = cb->lock ? : strp_sock_lock;
+474: 	strp->cb.unlock = cb->unlock ? : strp_sock_unlock;
+475: 	strp->cb.rcv_msg = cb->rcv_msg;
+476: 	strp->cb.parse_msg = cb->parse_msg;
+477: 	strp->cb.read_sock = cb->read_sock;
+478: 	strp->cb.read_sock_done = cb->read_sock_done ? : default_read_sock_done;
+479: 	strp->cb.abort_parser = cb->abort_parser ? : strp_abort_strp;
+480: 
+481: 	INIT_DELAYED_WORK(&strp->msg_timer_work, strp_msg_timeout);
+482: 	INIT_WORK(&strp->work, strp_work);
+483: 
+484: 	return 0;
+485: }
+486: EXPORT_SYMBOL_GPL(strp_init);
+487: 
+488: void strp_unpause(struct strparser *strp)
+489: {
+490: 	strp->paused = 0;
+491: 
+492: 	/* Sync setting paused with RX work */
+493: 	smp_mb();
+494: 
+495: 	queue_work(strp_wq, &strp->work);
+496: }
+497: EXPORT_SYMBOL_GPL(strp_unpause);
+498: 
+499: /* strp must already be stopped so that strp_recv will no longer be called.
+500:  * Note that strp_done is not called with the lower socket held.
+
+============================
+FILE: net/core/dev.c
+============================
+
+--- lines 1628-1674 ---
+1628: /**
+1629:  * netdev_notify_peers - notify network peers about existence of @dev
+1630:  * @dev: network device
+1631:  *
+1632:  * Generate traffic such that interested network peers are aware of
+1633:  * @dev, such as by generating a gratuitous ARP. This may be used when
+1634:  * a device wants to inform the rest of the network about some sort of
+1635:  * reconfiguration such as a failover event or virtual machine
+1636:  * migration.
+1637:  */
+1638: void netdev_notify_peers(struct net_device *dev)
+1639: {
+1640: 	rtnl_lock();
+1641: 	__netdev_notify_peers(dev);
+1642: 	rtnl_unlock();
+1643: }
+1644: EXPORT_SYMBOL(netdev_notify_peers);
+1645: 
+1646: static int napi_threaded_poll(void *data);
+1647: 
+1648: static int napi_kthread_create(struct napi_struct *n)
+1649: {
+1650: 	int err = 0;
+1651: 
+1652: 	/* Create and wake up the kthread once to put it in
+1653: 	 * TASK_INTERRUPTIBLE mode to avoid the blocked task
+1654: 	 * warning and work with loadavg.
+1655: 	 */
+1656: 	n->thread = kthread_run(napi_threaded_poll, n, "napi/%s-%d",
+1657: 				n->dev->name, n->napi_id);
+1658: 	if (IS_ERR(n->thread)) {
+1659: 		err = PTR_ERR(n->thread);
+1660: 		pr_err("kthread_run failed with err %d\n", err);
+1661: 		n->thread = NULL;
+1662: 	}
+1663: 
+1664: 	return err;
+1665: }
+1666: 
+1667: static int __dev_open(struct net_device *dev, struct netlink_ext_ack *extack)
+1668: {
+1669: 	const struct net_device_ops *ops = dev->netdev_ops;
+1670: 	int ret;
+1671: 
+1672: 	ASSERT_RTNL();
+1673: 	dev_addr_check(dev);
+1674: 
+
+--- lines 4953-4989 ---
+4953: 		 * read on napi->thread. Only call
+4954: 		 * wake_up_process() when it's not NULL.
+4955: 		 */
+4956: 		thread = READ_ONCE(napi->thread);
+4957: 		if (thread) {
+4958: 			if (use_backlog_threads() && thread == raw_cpu_read(backlog_napi))
+4959: 				goto use_local_napi;
+4960: 
+4961: 			set_bit(NAPI_STATE_SCHED_THREADED, &napi->state);
+4962: 			wake_up_process(thread);
+4963: 			return;
+4964: 		}
+4965: 	}
+4966: 
+4967: use_local_napi:
+4968: 	DEBUG_NET_WARN_ON_ONCE(!list_empty(&napi->poll_list));
+4969: 	list_add_tail(&napi->poll_list, &sd->poll_list);
+4970: 	WRITE_ONCE(napi->list_owner, smp_processor_id());
+4971: 	/* If not called from net_rx_action()
+4972: 	 * we have to raise NET_RX_SOFTIRQ.
+4973: 	 */
+4974: 	if (!sd->in_net_rx_action)
+4975: 		raise_softirq_irqoff(NET_RX_SOFTIRQ);
+4976: }
+4977: 
+4978: #ifdef CONFIG_RPS
+4979: 
+4980: struct static_key_false rps_needed __read_mostly;
+4981: EXPORT_SYMBOL(rps_needed);
+4982: struct static_key_false rfs_needed __read_mostly;
+4983: EXPORT_SYMBOL(rfs_needed);
+4984: 
+4985: static u32 rfs_slot(u32 hash, const struct rps_dev_flow_table *flow_table)
+4986: {
+4987: 	return hash_32(hash, flow_table->log);
+4988: }
+4989: 
+
+--- lines 5233-5288 ---
+5233: }
+5234: 
+5235: #endif /* CONFIG_RPS */
+5236: 
+5237: /* Called from hardirq (IPI) context */
+5238: static void trigger_rx_softirq(void *data)
+5239: {
+5240: 	struct softnet_data *sd = data;
+5241: 
+5242: 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+5243: 	smp_store_release(&sd->defer_ipi_scheduled, 0);
+5244: }
+5245: 
+5246: /*
+5247:  * After we queued a packet into sd->input_pkt_queue,
+5248:  * we need to make sure this queue is serviced soon.
+5249:  *
+5250:  * - If this is another cpu queue, link it to our rps_ipi_list,
+5251:  *   and make sure we will process rps_ipi_list from net_rx_action().
+5252:  *
+5253:  * - If this is our own queue, NAPI schedule our backlog.
+5254:  *   Note that this also raises NET_RX_SOFTIRQ.
+5255:  */
+5256: static void napi_schedule_rps(struct softnet_data *sd)
+5257: {
+5258: 	struct softnet_data *mysd = this_cpu_ptr(&softnet_data);
+5259: 
+5260: #ifdef CONFIG_RPS
+5261: 	if (sd != mysd) {
+5262: 		if (use_backlog_threads()) {
+5263: 			__napi_schedule_irqoff(&sd->backlog);
+5264: 			return;
+5265: 		}
+5266: 
+5267: 		sd->rps_ipi_next = mysd->rps_ipi_list;
+5268: 		mysd->rps_ipi_list = sd;
+5269: 
+5270: 		/* If not called from net_rx_action() or napi_threaded_poll()
+5271: 		 * we have to raise NET_RX_SOFTIRQ.
+5272: 		 */
+5273: 		if (!mysd->in_net_rx_action && !mysd->in_napi_threaded_poll)
+5274: 			__raise_softirq_irqoff(NET_RX_SOFTIRQ);
+5275: 		return;
+5276: 	}
+5277: #endif /* CONFIG_RPS */
+5278: 	__napi_schedule_irqoff(&mysd->backlog);
+5279: }
+5280: 
+5281: void kick_defer_list_purge(unsigned int cpu)
+5282: {
+5283: 	struct softnet_data *sd = &per_cpu(softnet_data, cpu);
+5284: 	unsigned long flags;
+5285: 
+5286: 	if (use_backlog_threads()) {
+5287: 		backlog_lock_irq_save(sd, &flags);
+5288: 
+
+--- lines 5933-5969 ---
+5933: 			     int *ret, struct net_device *orig_dev)
+5934: {
+5935: 	if (nf_hook_ingress_active(skb)) {
+5936: 		int ingress_retval;
+5937: 
+5938: 		if (unlikely(*pt_prev)) {
+5939: 			*ret = deliver_skb(skb, *pt_prev, orig_dev);
+5940: 			*pt_prev = NULL;
+5941: 		}
+5942: 
+5943: 		rcu_read_lock();
+5944: 		ingress_retval = nf_hook_ingress(skb);
+5945: 		rcu_read_unlock();
+5946: 		return ingress_retval;
+5947: 	}
+5948: 	return 0;
+5949: }
+5950: 
+5951: static int __netif_receive_skb_core(struct sk_buff **pskb, bool pfmemalloc,
+5952: 				    struct packet_type **ppt_prev)
+5953: {
+5954: 	enum skb_drop_reason drop_reason = SKB_DROP_REASON_UNHANDLED_PROTO;
+5955: 	struct packet_type *ptype, *pt_prev;
+5956: 	rx_handler_func_t *rx_handler;
+5957: 	struct sk_buff *skb = *pskb;
+5958: 	struct net_device *orig_dev;
+5959: 	bool deliver_exact = false;
+5960: 	int ret = NET_RX_DROP;
+5961: 	__be16 type;
+5962: 
+5963: 	net_timestamp_check(!READ_ONCE(net_hotdata.tstamp_prequeue), skb);
+5964: 
+5965: 	trace_netif_receive_skb(skb);
+5966: 
+5967: 	orig_dev = skb->dev;
+5968: 
+5969: 	skb_reset_network_header(skb);
+
+--- lines 6161-6197 ---
+6161: 
+6162: out:
+6163: 	/* The invariant here is that if *ppt_prev is not NULL
+6164: 	 * then skb should also be non-NULL.
+6165: 	 *
+6166: 	 * Apparently *ppt_prev assignment above holds this invariant due to
+6167: 	 * skb dereferencing near it.
+6168: 	 */
+6169: 	*pskb = skb;
+6170: 	return ret;
+6171: }
+6172: 
+6173: static int __netif_receive_skb_one_core(struct sk_buff *skb, bool pfmemalloc)
+6174: {
+6175: 	struct net_device *orig_dev = skb->dev;
+6176: 	struct packet_type *pt_prev = NULL;
+6177: 	int ret;
+6178: 
+6179: 	ret = __netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+6180: 	if (pt_prev)
+6181: 		ret = INDIRECT_CALL_INET(pt_prev->func, ipv6_rcv, ip_rcv, skb,
+6182: 					 skb->dev, pt_prev, orig_dev);
+6183: 	return ret;
+6184: }
+6185: 
+6186: /**
+6187:  *	netif_receive_skb_core - special purpose version of netif_receive_skb
+6188:  *	@skb: buffer to process
+6189:  *
+6190:  *	More direct receive version of netif_receive_skb().  It should
+6191:  *	only be used by callers that have a need to skip RPS and Generic XDP.
+6192:  *	Caller must also take care of handling if ``(page_is_)pfmemalloc``.
+6193:  *
+6194:  *	This function may only be called from softirq context and interrupts
+6195:  *	should be enabled.
+6196:  *
+6197:  *	Return values (usually ignored):
+
+--- lines 6238-6274 ---
+6238: 	 * If either of these fails, we will end up doing some per-packet
+6239: 	 * processing in-line, then handling the 'last ptype' for the whole
+6240: 	 * sublist.  This can't cause out-of-order delivery to any single ptype,
+6241: 	 * because the 'last ptype' must be constant across the sublist, and all
+6242: 	 * other ptypes are handled per-packet.
+6243: 	 */
+6244: 	/* Current (common) ptype of sublist */
+6245: 	struct packet_type *pt_curr = NULL;
+6246: 	/* Current (common) orig_dev of sublist */
+6247: 	struct net_device *od_curr = NULL;
+6248: 	struct sk_buff *skb, *next;
+6249: 	LIST_HEAD(sublist);
+6250: 
+6251: 	list_for_each_entry_safe(skb, next, head, list) {
+6252: 		struct net_device *orig_dev = skb->dev;
+6253: 		struct packet_type *pt_prev = NULL;
+6254: 
+6255: 		skb_list_del_init(skb);
+6256: 		__netif_receive_skb_core(&skb, pfmemalloc, &pt_prev);
+6257: 		if (!pt_prev)
+6258: 			continue;
+6259: 		if (pt_curr != pt_prev || od_curr != orig_dev) {
+6260: 			/* dispatch old sublist */
+6261: 			__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
+6262: 			/* start new sublist */
+6263: 			INIT_LIST_HEAD(&sublist);
+6264: 			pt_curr = pt_prev;
+6265: 			od_curr = orig_dev;
+6266: 		}
+6267: 		list_add_tail(&skb->list, &sublist);
+6268: 	}
+6269: 
+6270: 	/* dispatch final sublist */
+6271: 	__netif_receive_skb_list_ptype(&sublist, pt_curr, od_curr);
+6272: }
+6273: 
+6274: static int __netif_receive_skb(struct sk_buff *skb)
+
+--- lines 6340-6376 ---
+6340: 
+6341: 		if (old && !new) {
+6342: 			static_branch_dec(&generic_xdp_needed_key);
+6343: 		} else if (new && !old) {
+6344: 			static_branch_inc(&generic_xdp_needed_key);
+6345: 			netif_disable_lro(dev);
+6346: 			dev_disable_gro_hw(dev);
+6347: 		}
+6348: 		break;
+6349: 
+6350: 	default:
+6351: 		ret = -EINVAL;
+6352: 		break;
+6353: 	}
+6354: 
+6355: 	return ret;
+6356: }
+6357: 
+6358: static int netif_receive_skb_internal(struct sk_buff *skb)
+6359: {
+6360: 	int ret;
+6361: 
+6362: 	net_timestamp_check(READ_ONCE(net_hotdata.tstamp_prequeue), skb);
+6363: 
+6364: 	if (skb_defer_rx_timestamp(skb))
+6365: 		return NET_RX_SUCCESS;
+6366: 
+6367: 	rcu_read_lock();
+6368: #ifdef CONFIG_RPS
+6369: 	if (static_branch_unlikely(&rps_needed)) {
+6370: 		struct rps_dev_flow voidflow, *rflow = &voidflow;
+6371: 		int cpu = get_rps_cpu(skb->dev, skb, &rflow);
+6372: 
+6373: 		if (cpu >= 0) {
+6374: 			ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
+6375: 			rcu_read_unlock();
+6376: 			return ret;
+
+--- lines 6421-6457 ---
+6421:  *
+6422:  *	netif_receive_skb() is the main receive data processing function.
+6423:  *	It always succeeds. The buffer may be dropped during processing
+6424:  *	for congestion control or by the protocol layers.
+6425:  *
+6426:  *	This function may only be called from softirq context and interrupts
+6427:  *	should be enabled.
+6428:  *
+6429:  *	Return values (usually ignored):
+6430:  *	NET_RX_SUCCESS: no congestion
+6431:  *	NET_RX_DROP: packet was dropped
+6432:  */
+6433: int netif_receive_skb(struct sk_buff *skb)
+6434: {
+6435: 	int ret;
+6436: 
+6437: 	trace_netif_receive_skb_entry(skb);
+6438: 
+6439: 	ret = netif_receive_skb_internal(skb);
+6440: 	trace_netif_receive_skb_exit(ret);
+6441: 
+6442: 	return ret;
+6443: }
+6444: EXPORT_SYMBOL(netif_receive_skb);
+6445: 
+6446: /**
+6447:  *	netif_receive_skb_list - process many receive buffers from network
+6448:  *	@head: list of skbs to process.
+6449:  *
+6450:  *	Since return value of netif_receive_skb() is normally ignored, and
+6451:  *	wouldn't be meaningful for a list, this function returns void.
+6452:  *
+6453:  *	This function may only be called from softirq context and interrupts
+6454:  *	should be enabled.
+6455:  */
+6456: void netif_receive_skb_list(struct list_head *head)
+6457: {
+
+--- lines 6605-6648 ---
+6605: 		local_irq_enable();
+6606: 
+6607: 		/* Send pending IPI's to kick RPS processing on remote cpus. */
+6608: 		net_rps_send_ipi(remsd);
+6609: 	} else
+6610: #endif
+6611: 		local_irq_enable();
+6612: }
+6613: 
+6614: static bool sd_has_rps_ipi_waiting(struct softnet_data *sd)
+6615: {
+6616: #ifdef CONFIG_RPS
+6617: 	return !use_backlog_threads() && sd->rps_ipi_list;
+6618: #else
+6619: 	return false;
+6620: #endif
+6621: }
+6622: 
+6623: static int process_backlog(struct napi_struct *napi, int quota)
+6624: {
+6625: 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
+6626: 	bool again = true;
+6627: 	int work = 0;
+6628: 
+6629: 	/* Check if we have pending ipi, its better to send them now,
+6630: 	 * not waiting net_rx_action() end.
+6631: 	 */
+6632: 	if (sd_has_rps_ipi_waiting(sd)) {
+6633: 		local_irq_disable();
+6634: 		net_rps_action_and_irq_enable(sd);
+6635: 	}
+6636: 
+6637: 	napi->weight = READ_ONCE(net_hotdata.dev_rx_weight);
+6638: 	while (again) {
+6639: 		struct sk_buff *skb;
+6640: 
+6641: 		local_lock_nested_bh(&softnet_data.process_queue_bh_lock);
+6642: 		while ((skb = __skb_dequeue(&sd->process_queue))) {
+6643: 			local_unlock_nested_bh(&softnet_data.process_queue_bh_lock);
+6644: 			rcu_read_lock();
+6645: 			__netif_receive_skb(skb);
+6646: 			rcu_read_unlock();
+6647: 			if (++work >= quota) {
+6648: 				rps_input_queue_head_add(sd, work);
+
+--- lines 7845-7908 ---
+7845: 		if (busy_poll_last_qs)
+7846: 			gro_flush_normal(&napi->gro, HZ >= 1000);
+7847: 		local_bh_enable();
+7848: 
+7849: 		/* Call cond_resched here to avoid watchdog warnings. */
+7850: 		if (repoll || busy_poll_last_qs) {
+7851: 			rcu_softirq_qs_periodic(last_qs);
+7852: 			cond_resched();
+7853: 		}
+7854: 
+7855: 		if (!repoll)
+7856: 			break;
+7857: 	}
+7858: 
+7859: 	if (busy_poll_last_qs)
+7860: 		*busy_poll_last_qs = last_qs;
+7861: }
+7862: 
+7863: static int napi_threaded_poll(void *data)
+7864: {
+7865: 	struct napi_struct *napi = data;
+7866: 	unsigned long last_qs = jiffies;
+7867: 	bool want_busy_poll;
+7868: 	bool in_busy_poll;
+7869: 	unsigned long val;
+7870: 
+7871: 	while (!napi_thread_wait(napi)) {
+7872: 		val = READ_ONCE(napi->state);
+7873: 
+7874: 		want_busy_poll = val & NAPIF_STATE_THREADED_BUSY_POLL;
+7875: 		in_busy_poll = val & NAPIF_STATE_IN_BUSY_POLL;
+7876: 
+7877: 		if (unlikely(val & NAPIF_STATE_DISABLE))
+7878: 			want_busy_poll = false;
+7879: 
+7880: 		if (want_busy_poll != in_busy_poll)
+7881: 			assign_bit(NAPI_STATE_IN_BUSY_POLL, &napi->state,
+7882: 				   want_busy_poll);
+7883: 
+7884: 		napi_threaded_poll_loop(napi, want_busy_poll ? &last_qs : NULL);
+7885: 	}
+7886: 
+7887: 	return 0;
+7888: }
+7889: 
+7890: static __latent_entropy void net_rx_action(void)
+7891: {
+7892: 	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
+7893: 	unsigned long time_limit = jiffies +
+7894: 		usecs_to_jiffies(READ_ONCE(net_hotdata.netdev_budget_usecs));
+7895: 	struct bpf_net_context __bpf_net_ctx, *bpf_net_ctx;
+7896: 	int budget = READ_ONCE(net_hotdata.netdev_budget);
+7897: 	LIST_HEAD(list);
+7898: 	LIST_HEAD(repoll);
+7899: 
+7900: 	bpf_net_ctx = bpf_net_ctx_set(&__bpf_net_ctx);
+7901: start:
+7902: 	sd->in_net_rx_action = true;
+7903: 	local_irq_disable();
+7904: 	list_splice_init(&sd->poll_list, &list);
+7905: 	local_irq_enable();
+7906: 
+7907: 	for (;;) {
+7908: 		struct napi_struct *n;
+
+--- lines 12710-12755 ---
+12710: 	oldsd = &per_cpu(softnet_data, oldcpu);
+12711: 
+12712: 	/* Find end of our completion_queue. */
+12713: 	list_skb = &sd->completion_queue;
+12714: 	while (*list_skb)
+12715: 		list_skb = &(*list_skb)->next;
+12716: 	/* Append completion queue from offline CPU. */
+12717: 	*list_skb = oldsd->completion_queue;
+12718: 	oldsd->completion_queue = NULL;
+12719: 
+12720: 	/* Append output queue from offline CPU. */
+12721: 	if (oldsd->output_queue) {
+12722: 		*sd->output_queue_tailp = oldsd->output_queue;
+12723: 		sd->output_queue_tailp = oldsd->output_queue_tailp;
+12724: 		oldsd->output_queue = NULL;
+12725: 		oldsd->output_queue_tailp = &oldsd->output_queue;
+12726: 	}
+12727: 	/* Append NAPI poll list from offline CPU, with one exception :
+12728: 	 * process_backlog() must be called by cpu owning percpu backlog.
+12729: 	 * We properly handle process_queue & input_pkt_queue later.
+12730: 	 */
+12731: 	while (!list_empty(&oldsd->poll_list)) {
+12732: 		struct napi_struct *napi = list_first_entry(&oldsd->poll_list,
+12733: 							    struct napi_struct,
+12734: 							    poll_list);
+12735: 
+12736: 		list_del_init(&napi->poll_list);
+12737: 		if (napi->poll == process_backlog)
+12738: 			napi->state &= NAPIF_STATE_THREADED;
+12739: 		else
+12740: 			____napi_schedule(sd, napi);
+12741: 	}
+12742: 
+12743: 	raise_softirq_irqoff(NET_TX_SOFTIRQ);
+12744: 	local_irq_enable();
+12745: 
+12746: 	if (!use_backlog_threads()) {
+12747: #ifdef CONFIG_RPS
+12748: 		remsd = oldsd->rps_ipi_list;
+12749: 		oldsd->rps_ipi_list = NULL;
+12750: #endif
+12751: 		/* send out pending IPI's on offline CPU */
+12752: 		net_rps_send_ipi(remsd);
+12753: 	}
+12754: 
+12755: 	/* Process offline CPU's input_pkt_queue */
+
+--- lines 13248-13317 ---
+13248: 
+13249: 	for_each_possible_cpu(i) {
+13250: 		struct softnet_data *sd = &per_cpu(softnet_data, i);
+13251: 
+13252: 		skb_queue_head_init(&sd->input_pkt_queue);
+13253: 		skb_queue_head_init(&sd->process_queue);
+13254: #ifdef CONFIG_XFRM_OFFLOAD
+13255: 		skb_queue_head_init(&sd->xfrm_backlog);
+13256: #endif
+13257: 		INIT_LIST_HEAD(&sd->poll_list);
+13258: 		sd->output_queue_tailp = &sd->output_queue;
+13259: #ifdef CONFIG_RPS
+13260: 		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
+13261: 		sd->cpu = i;
+13262: #endif
+13263: 		INIT_CSD(&sd->defer_csd, trigger_rx_softirq, sd);
+13264: 
+13265: 		gro_init(&sd->backlog.gro);
+13266: 		sd->backlog.poll = process_backlog;
+13267: 		sd->backlog.weight = weight_p;
+13268: 		INIT_LIST_HEAD(&sd->backlog.poll_list);
+13269: 
+13270: 		if (net_page_pool_create(i))
+13271: 			goto out;
+13272: 	}
+13273: 	net_hotdata.skb_defer_nodes =
+13274: 		 __alloc_percpu(sizeof(struct skb_defer_node) * nr_node_ids,
+13275: 				__alignof__(struct skb_defer_node));
+13276: 	if (!net_hotdata.skb_defer_nodes)
+13277: 		goto out;
+13278: 	if (use_backlog_threads())
+13279: 		smpboot_register_percpu_thread(&backlog_threads);
+13280: 
+13281: 	dev_boot_phase = 0;
+13282: 
+13283: 	/* The loopback device is special if any other network devices
+13284: 	 * is present in a network namespace the loopback device must
+13285: 	 * be present. Since we now dynamically allocate and free the
+13286: 	 * loopback device ensure this invariant is maintained by
+13287: 	 * keeping the loopback device as the first device on the
+13288: 	 * list of network devices.  Ensuring the loopback devices
+13289: 	 * is the first device that appears and the last network device
+13290: 	 * that disappears.
+13291: 	 */
+13292: 	if (register_pernet_device(&loopback_net_ops))
+13293: 		goto out;
+13294: 
+13295: 	if (register_pernet_device(&default_device_ops))
+13296: 		goto out;
+13297: 
+13298: 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
+13299: 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
+13300: 
+13301: 	rc = cpuhp_setup_state_nocalls(CPUHP_NET_DEV_DEAD, "net/dev:dead",
+13302: 				       NULL, dev_cpu_dead);
+13303: 	WARN_ON(rc < 0);
+13304: 	rc = 0;
+13305: 
+13306: 	/* avoid static key IPIs to isolated CPUs */
+13307: 	if (housekeeping_enabled(HK_TYPE_MISC))
+13308: 		net_enable_timestamp();
+13309: out:
+13310: 	if (rc < 0) {
+13311: 		for_each_possible_cpu(i) {
+13312: 			struct page_pool *pp_ptr;
+13313: 
+13314: 			pp_ptr = per_cpu(system_page_pool.pool, i);
+13315: 			if (!pp_ptr)
+13316: 				continue;
+13317: 
+
+============================
+FILE: net/ipv4/ip_input.c
+============================
+
+--- lines 171-207 ---
+171: 			if (last) {
+172: 				struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
+173: 				if (skb2)
+174: 					raw_rcv(last, skb2);
+175: 			}
+176: 			last = sk;
+177: 		}
+178: 	}
+179: 
+180: 	if (last) {
+181: 		raw_rcv(last, skb);
+182: 		return true;
+183: 	}
+184: 	return false;
+185: }
+186: 
+187: INDIRECT_CALLABLE_DECLARE(int udp_rcv(struct sk_buff *));
+188: INDIRECT_CALLABLE_DECLARE(int tcp_v4_rcv(struct sk_buff *));
+189: void ip_protocol_deliver_rcu(struct net *net, struct sk_buff *skb, int protocol)
+190: {
+191: 	const struct net_protocol *ipprot;
+192: 	int raw, ret;
+193: 
+194: resubmit:
+195: 	raw = raw_local_deliver(skb, protocol);
+196: 
+197: 	ipprot = rcu_dereference(inet_protos[protocol]);
+198: 	if (ipprot) {
+199: 		if (!ipprot->no_policy) {
+200: 			if (!xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
+201: 				kfree_skb_reason(skb,
+202: 						 SKB_DROP_REASON_XFRM_POLICY);
+203: 				return;
+204: 			}
+205: 			nf_reset_ct(skb);
+206: 		}
+207: 		ret = INDIRECT_CALL_2(ipprot->handler, tcp_v4_rcv, udp_rcv,
+
+--- lines 211-284 ---
+211: 			goto resubmit;
+212: 		}
+213: 		__IP_INC_STATS(net, IPSTATS_MIB_INDELIVERS);
+214: 	} else {
+215: 		if (!raw) {
+216: 			if (xfrm4_policy_check(NULL, XFRM_POLICY_IN, skb)) {
+217: 				__IP_INC_STATS(net, IPSTATS_MIB_INUNKNOWNPROTOS);
+218: 				icmp_send(skb, ICMP_DEST_UNREACH,
+219: 					  ICMP_PROT_UNREACH, 0);
+220: 			}
+221: 			kfree_skb_reason(skb, SKB_DROP_REASON_IP_NOPROTO);
+222: 		} else {
+223: 			__IP_INC_STATS(net, IPSTATS_MIB_INDELIVERS);
+224: 			consume_skb(skb);
+225: 		}
+226: 	}
+227: }
+228: 
+229: static int ip_local_deliver_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
+230: {
+231: 	if (unlikely(skb_orphan_frags_rx(skb, GFP_ATOMIC))) {
+232: 		__IP_INC_STATS(net, IPSTATS_MIB_INDISCARDS);
+233: 		kfree_skb_reason(skb, SKB_DROP_REASON_NOMEM);
+234: 		return 0;
+235: 	}
+236: 
+237: 	skb_clear_delivery_time(skb);
+238: 	__skb_pull(skb, skb_network_header_len(skb));
+239: 
+240: 	rcu_read_lock();
+241: 	ip_protocol_deliver_rcu(net, skb, ip_hdr(skb)->protocol);
+242: 	rcu_read_unlock();
+243: 
+244: 	return 0;
+245: }
+246: 
+247: /*
+248:  * 	Deliver IP Packets to the higher protocol layers.
+249:  */
+250: int ip_local_deliver(struct sk_buff *skb)
+251: {
+252: 	/*
+253: 	 *	Reassemble IP fragments.
+254: 	 */
+255: 	struct net *net = dev_net(skb->dev);
+256: 
+257: 	if (ip_is_fragment(ip_hdr(skb))) {
+258: 		if (ip_defrag(net, skb, IP_DEFRAG_LOCAL_DELIVER))
+259: 			return 0;
+260: 	}
+261: 
+262: 	return NF_HOOK(NFPROTO_IPV4, NF_INET_LOCAL_IN,
+263: 		       net, NULL, skb, skb->dev, NULL,
+264: 		       ip_local_deliver_finish);
+265: }
+266: EXPORT_SYMBOL(ip_local_deliver);
+267: 
+268: static inline enum skb_drop_reason
+269: ip_rcv_options(struct sk_buff *skb, struct net_device *dev)
+270: {
+271: 	const struct iphdr *iph;
+272: 	struct ip_options *opt;
+273: 
+274: 	/* It looks as overkill, because not all
+275: 	   IP options require packet mangling.
+276: 	   But it is the easiest for now, especially taking
+277: 	   into account that combination of IP options
+278: 	   and running sniffer is extremely rare condition.
+279: 					      --ANK (980813)
+280: 	*/
+281: 	if (skb_cow(skb, skb_headroom(skb))) {
+282: 		__IP_INC_STATS(dev_net(dev), IPSTATS_MIB_INDISCARDS);
+283: 		return SKB_DROP_REASON_NOMEM;
+284: 	}
+
+--- lines 546-582 ---
+546: 	return skb;
+547: 
+548: csum_error:
+549: 	drop_reason = SKB_DROP_REASON_IP_CSUM;
+550: 	__IP_INC_STATS(net, IPSTATS_MIB_CSUMERRORS);
+551: inhdr_error:
+552: 	if (drop_reason == SKB_DROP_REASON_NOT_SPECIFIED)
+553: 		drop_reason = SKB_DROP_REASON_IP_INHDR;
+554: 	__IP_INC_STATS(net, IPSTATS_MIB_INHDRERRORS);
+555: drop:
+556: 	kfree_skb_reason(skb, drop_reason);
+557: out:
+558: 	return NULL;
+559: }
+560: 
+561: /*
+562:  * IP receive entry point
+563:  */
+564: int ip_rcv(struct sk_buff *skb, struct net_device *dev, struct packet_type *pt,
+565: 	   struct net_device *orig_dev)
+566: {
+567: 	struct net *net = dev_net(dev);
+568: 
+569: 	skb = ip_rcv_core(skb, net);
+570: 	if (skb == NULL)
+571: 		return NET_RX_DROP;
+572: 
+573: 	return NF_HOOK(NFPROTO_IPV4, NF_INET_PRE_ROUTING,
+574: 		       net, NULL, skb, dev, NULL,
+575: 		       ip_rcv_finish);
+576: }
+577: 
+578: static void ip_sublist_rcv_finish(struct list_head *head)
+579: {
+580: 	struct sk_buff *skb, *next;
+581: 
+582: 	list_for_each_entry_safe(skb, next, head, list) {
+
+============================
+GLOBAL STRP CALLER SEARCH
+============================
+drivers/net/ovpn/tcp.c:477: strp_data_ready(&sock->peer->tcp.strp);
+net/kcm/kcmsock.c:360: strp_data_ready(&psock->strp);
+net/xfrm/espintcp.c:413: strp_data_ready(&ctx->strp);
+net/strparser/strparser.c:317: int strp_process(struct strparser *strp, struct sk_buff *orig_skb,
+net/strparser/strparser.c:372: void strp_data_ready(struct strparser *strp)
+net/core/skmsg.c:1161: static void sk_psock_strp_data_ready(struct sock *sk)
+net/core/skmsg.c:1174: strp_data_ready(&psock->strp);
